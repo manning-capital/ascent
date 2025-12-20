@@ -1,0 +1,115 @@
+import datetime
+from typing import TYPE_CHECKING, Optional
+
+from sqlalchemy import Engine, ForeignKey, String, func, select
+from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
+
+from summit.database.models.assets import Asset
+from summit.database.models.base import Base
+from summit.database.models.core_types import ProviderType
+
+if TYPE_CHECKING:
+    from summit.database.models.provider_assets import ProviderAsset
+
+
+class Provider(Base):
+    __tablename__ = "provider"
+    __table_args__ = {"comment": "The provider, e.g. data vendor, news, social media, etc."}
+
+    id: Mapped[int] = mapped_column(
+        primary_key=True, comment="The unique identifier of the provider"
+    )
+    provider_type_id: Mapped[int] = mapped_column(
+        ForeignKey("provider_type.id"),
+        nullable=False,
+        comment="The identifier of the provider type",
+    )
+    provider_type: Mapped["ProviderType"] = relationship("ProviderType")
+    name: Mapped[str] = mapped_column(
+        String(100), nullable=False, comment="The name of the provider"
+    )
+    description: Mapped[str | None] = mapped_column(
+        String(1000), nullable=True, comment="The description of the provider"
+    )
+    provider_external_code: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+        comment="The external code of the provider, this is used to identify the provider in the provider's system. For example, for a news provider, it could be the name of the provider or an internal ID.",
+    )
+    underlying_provider_id: Mapped[int | None] = mapped_column(
+        ForeignKey("provider.id"),
+        nullable=True,
+        comment="The identifier of the underlying provider",
+    )
+    underlying_provider: Mapped[Optional["Provider"]] = relationship("Provider", remote_side=[id])
+    derived_providers: Mapped[list["Provider"]] = relationship(
+        "Provider", remote_side=[underlying_provider_id], overlaps="underlying_provider"
+    )
+    url: Mapped[str | None] = mapped_column(
+        String(1000), nullable=True, comment="The URL of the provider"
+    )
+    image_url: Mapped[str | None] = mapped_column(
+        String(1000), nullable=True, comment="The URL of the provider's image"
+    )
+    is_active: Mapped[bool] = mapped_column(default=True, comment="Whether the provider is active")
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        nullable=False,
+        server_default=func.now(),
+        comment="The timestamp of the creation of the provider",
+    )
+    updated_at: Mapped[datetime.datetime | None] = mapped_column(
+        nullable=False,
+        server_onupdate=func.now(),
+        server_default=func.now(),
+        comment="The timestamp of the last update of the provider",
+    )
+
+    def __repr__(self):
+        return f"{Provider.__name__}({self.id}, {self.name})"
+
+    def get_all_assets(
+        self,
+        engine: Engine,
+        asset_ids: list[int] = None,
+    ) -> set["ProviderAsset"]:
+        from summit.database.models.provider_assets import ProviderAsset
+
+        if asset_ids is None:
+            asset_ids = []
+        with Session(engine) as session:
+            # Subquery to get the latest date for each provider_id, asset_id combination
+            latest_dates_subq = (
+                select(
+                    ProviderAsset.provider_id,
+                    ProviderAsset.asset_id,
+                    func.max(ProviderAsset.date).label("max_date"),
+                )
+                .where(ProviderAsset.provider_id == self.id, ProviderAsset.is_active)
+                .group_by(ProviderAsset.provider_id, ProviderAsset.asset_id)
+                .subquery()
+            )
+
+            # Query to get assets that have provider_asset entries with the latest dates
+            query = (
+                select(ProviderAsset)
+                .join(Asset, ProviderAsset.asset_id == Asset.id)
+                .join(
+                    latest_dates_subq,
+                    (ProviderAsset.provider_id == latest_dates_subq.c.provider_id)
+                    & (ProviderAsset.asset_id == latest_dates_subq.c.asset_id)
+                    & (ProviderAsset.date == latest_dates_subq.c.max_date),
+                )
+                .where(
+                    ProviderAsset.provider_id == self.id,
+                    ProviderAsset.is_active,
+                    Asset.is_active,
+                )
+            )
+
+            # Add asset ID filter if provided
+            if asset_ids:
+                query = query.where(ProviderAsset.asset_id.in_(asset_ids))
+
+            # Execute query and return results as a set
+            assets = session.scalars(query).all()
+            return set(assets)
