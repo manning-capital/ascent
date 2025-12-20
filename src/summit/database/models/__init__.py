@@ -15,7 +15,7 @@ from summit.database.models.attributes import Attribute, Period
 from summit.database.models.base import Base
 
 # Import core types
-from summit.database.models.core_types import (
+from summit.database.models.types import (
     AssetGroupType,
     AssetType,
     ContentType,

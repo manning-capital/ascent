@@ -6,7 +6,7 @@ from sqlalchemy.orm import Mapped, func, mapped_column, relationship
 from summit.database.models.assets import Asset
 from summit.database.models.attributes import Attribute, Period
 from summit.database.models.base import Base
-from summit.database.models.core_types import AssetGroupType
+from summit.database.models.types import AssetGroupType
 from summit.database.models.providers import Provider
 
 

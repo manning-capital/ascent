@@ -5,7 +5,7 @@ from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import Mapped, func, mapped_column, relationship
 
 from summit.database.models.base import Base
-from summit.database.models.core_types import AssetType
+from summit.database.models.types import AssetType
 
 
 class Asset(Base):

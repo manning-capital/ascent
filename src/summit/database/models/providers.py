@@ -6,7 +6,7 @@ from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
 
 from summit.database.models.assets import Asset
 from summit.database.models.base import Base
-from summit.database.models.core_types import ProviderType
+from summit.database.models.types import ProviderType
 
 if TYPE_CHECKING:
     from summit.database.models.provider_assets import ProviderAsset
