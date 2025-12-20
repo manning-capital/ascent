@@ -98,7 +98,8 @@ class ProviderAssetOrder(Base):
 class ProviderAssetAttribute(Base):
     __tablename__ = "provider_asset_attribute"
     __table_args__ = {
-        "comment": "Stores market data attributes for provider asset markets. Uses a flexible attribute-based design where each attribute value is stored as a separate row, allowing new market data attributes to be added without schema changes."
+        "comment": "Stores market data attributes for provider asset markets. Uses a flexible attribute-based design where each attribute value is stored as a separate row, allowing new market data attributes to be added without schema changes.",
+        "postgresql_partition_by": "HASH (attribute_id)",
     }
 
     timestamp: Mapped[datetime.datetime] = mapped_column(
@@ -146,7 +147,8 @@ class ProviderAssetAttribute(Base):
 class ProviderAssetPeriodAttribute(Base):
     __tablename__ = "provider_asset_period_attribute"
     __table_args__ = {
-        "comment": "Stores market data attributes for provider asset markets with time periods. Uses a flexible attribute-based design where each attribute value is stored as a separate row, allowing new market data attributes to be added without schema changes. Periods are defined in the Period table for reusability."
+        "comment": "Stores market data attributes for provider asset markets with time periods. Uses a flexible attribute-based design where each attribute value is stored as a separate row, allowing new market data attributes to be added without schema changes. Periods are defined in the Period table for reusability.",
+        "postgresql_partition_by": "HASH (attribute_id, period_id)",
     }
 
     timestamp: Mapped[datetime.datetime] = mapped_column(

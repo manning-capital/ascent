@@ -100,7 +100,8 @@ class ProviderAssetGroupMember(Base):
 class ProviderAssetGroupAttribute(Base):
     __tablename__ = "provider_asset_group_attribute"
     __table_args__ = {
-        "comment": "Stores attributes for provider asset groups without time periods. Uses a flexible attribute-based design where each attribute value is stored as a separate row, allowing new attributes to be added without schema changes."
+        "comment": "Stores attributes for provider asset groups without time periods. Uses a flexible attribute-based design where each attribute value is stored as a separate row, allowing new attributes to be added without schema changes.",
+        "postgresql_partition_by": "HASH (attribute_id)",
     }
 
     timestamp: Mapped[datetime.datetime] = mapped_column(
@@ -134,7 +135,8 @@ class ProviderAssetGroupAttribute(Base):
 class ProviderAssetGroupPeriodAttribute(Base):
     __tablename__ = "provider_asset_group_period_attribute"
     __table_args__ = {
-        "comment": "Stores aggregated statistical calculations for provider asset groups across multiple time periods. Uses a flexible attribute-based design where each attribute value is stored as a separate row, allowing new attributes to be added without schema changes. Periods are defined in the Period table for reusability."
+        "comment": "Stores aggregated statistical calculations for provider asset groups across multiple time periods. Uses a flexible attribute-based design where each attribute value is stored as a separate row, allowing new attributes to be added without schema changes. Periods are defined in the Period table for reusability.",
+        "postgresql_partition_by": "HASH (attribute_id, period_id)",
     }
 
     timestamp: Mapped[datetime.datetime] = mapped_column(

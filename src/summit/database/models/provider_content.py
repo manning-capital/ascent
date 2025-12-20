@@ -70,7 +70,8 @@ class ProviderContent(Base):
 class ProviderContentAttribute(Base):
     __tablename__ = "provider_content_attribute"
     __table_args__ = {
-        "comment": "Stores attributes for provider content (e.g., sentiment scores). Uses a flexible attribute-based design where each attribute value is stored as a separate row, allowing new content attributes to be added without schema changes."
+        "comment": "Stores attributes for provider content (e.g., sentiment scores). Uses a flexible attribute-based design where each attribute value is stored as a separate row, allowing new content attributes to be added without schema changes.",
+        "postgresql_partition_by": "HASH (attribute_id)",
     }
 
     provider_content_id: Mapped[int] = mapped_column(
