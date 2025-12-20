@@ -34,8 +34,10 @@ classifiers = [
 ]
 dependencies = [
     "alembic>=1.17.2",
+    "click>=8.3.1",
     "fastapi>=0.125.0",
     "prefect==3.6.7",
+    "rich>=14.2.0",
     "sqlalchemy>=2.0.45",
 ]
 
