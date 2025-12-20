@@ -14,17 +14,6 @@ from summit.database.models.assets import Asset
 from summit.database.models.attributes import Attribute, Period
 from summit.database.models.base import Base
 
-# Import core types
-from summit.database.models.types import (
-    AssetGroupType,
-    AssetType,
-    ContentType,
-    ProviderType,
-    SentimentType,
-    TransactionStatusType,
-    TransactionType,
-)
-
 # Import portfolio
 from summit.database.models.portfolio import Portfolio
 
@@ -52,6 +41,17 @@ from summit.database.models.transactions import (
     TransactionGroup,
     TransactionGroupMember,
     TransactionStatus,
+)
+
+# Import core types
+from summit.database.models.types import (
+    AssetGroupType,
+    AssetType,
+    ContentType,
+    ProviderType,
+    SentimentType,
+    TransactionStatusType,
+    TransactionType,
 )
 
 # Export all models for `from summit.database.models import *`

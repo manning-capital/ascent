@@ -6,8 +6,8 @@ from sqlalchemy.orm import Mapped, func, mapped_column, relationship
 from summit.database.models.assets import Asset
 from summit.database.models.attributes import Attribute
 from summit.database.models.base import Base
-from summit.database.models.types import ContentType, SentimentType
 from summit.database.models.providers import Provider
+from summit.database.models.types import ContentType, SentimentType
 
 
 class ProviderContent(Base):

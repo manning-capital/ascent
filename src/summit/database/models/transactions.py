@@ -6,8 +6,8 @@ from sqlalchemy.orm import Mapped, func, mapped_column, relationship
 
 from summit.database.models.assets import Asset
 from summit.database.models.base import Base
-from summit.database.models.types import TransactionStatusType, TransactionType
 from summit.database.models.portfolio import Portfolio
+from summit.database.models.types import TransactionStatusType, TransactionType
 
 
 class PortfolioTransaction(Base):
