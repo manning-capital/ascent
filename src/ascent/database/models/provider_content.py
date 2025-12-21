@@ -2,7 +2,8 @@ import datetime
 
 from sqlalchemy import ForeignKey, String
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, func, mapped_column, relationship
+from sqlalchemy import func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ascent.database.models.assets import Asset
 from ascent.database.models.base import Base
@@ -129,7 +130,7 @@ class ProviderContentMetadata(Base):
         primary_key=True,
         comment="The identifier of the metadata type (e.g., 'authors', 'title', 'description', 'content'). References the Metadata table for metadata type definitions.",
     )
-    metadata: Mapped["Metadata"] = relationship("Metadata")
+    metadata_type: Mapped["Metadata"] = relationship("Metadata")
     value: Mapped[dict | list | str | int | float | bool | None] = mapped_column(
         JSONB,
         nullable=False,
