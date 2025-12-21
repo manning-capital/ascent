@@ -4,8 +4,8 @@ from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import Mapped, func, mapped_column, relationship
 
 from summit.database.models.assets import Asset
-from summit.database.models.attributes import Attribute, Metadata, Period
 from summit.database.models.base import Base
+from summit.database.models.descriptors import Attribute, Metadata, Period
 from summit.database.models.providers import Provider
 
 

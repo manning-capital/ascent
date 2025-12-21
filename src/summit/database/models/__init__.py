@@ -9,10 +9,10 @@ from summit.database.models.asset_groups import (
 
 # Import assets
 from summit.database.models.assets import Asset
-
-# Import attribute system
-from summit.database.models.attributes import Attribute, Metadata, Period
 from summit.database.models.base import Base
+
+# Import descriptors (attributes, periods, metadata)
+from summit.database.models.descriptors import Attribute, Metadata, Period
 
 # Import orders
 from summit.database.models.orders import Order
