@@ -1,8 +1,7 @@
 import datetime
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import ForeignKey, String
-from sqlalchemy import func
+from sqlalchemy import ForeignKey, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ascent.database.models.assets import Asset

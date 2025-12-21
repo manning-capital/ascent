@@ -1,7 +1,6 @@
 import datetime
 
-from sqlalchemy import ForeignKey
-from sqlalchemy import func
+from sqlalchemy import ForeignKey, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ascent.database.models.assets import Asset

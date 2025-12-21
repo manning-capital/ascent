@@ -1,7 +1,6 @@
 import datetime
 
-from sqlalchemy import String
-from sqlalchemy import func
+from sqlalchemy import String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ascent.database.models.base import Base

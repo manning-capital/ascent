@@ -8,8 +8,8 @@ from sqlalchemy.orm import Session
 
 from ascent.database.models import (
     Asset,
-    Provider,
     AssetType,
+    Provider,
     ProviderType,
 )
 from ascent.database.testing.utilties import clear_database

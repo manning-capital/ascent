@@ -1,8 +1,7 @@
 import datetime
 
-from sqlalchemy import ForeignKey, String
+from sqlalchemy import ForeignKey, String, func
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy import func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ascent.database.models.assets import Asset

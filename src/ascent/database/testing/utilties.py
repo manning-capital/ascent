@@ -1,13 +1,13 @@
+import logging
 import os
+import socket
 import time
 import uuid
-import socket
-import logging
 from contextlib import contextmanager
 from urllib.parse import urlparse
 
 import docker
-from sqlalchemy import Engine, text, create_engine
+from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.exc import OperationalError
 
 import ascent.database.models as models
@@ -79,7 +79,7 @@ def _validate_test_database_connection(engine: Engine):
         if "production database" in str(e):
             raise
         # If we can't connect or query, that's also suspicious
-        raise ValueError(f"Cannot validate database safety: {e}")
+        raise ValueError(f"Cannot validate database safety: {e}") from e
 
 
 def clear_database(engine: Engine):
@@ -130,9 +130,7 @@ def _cleanup_old_test_containers():
                     LOGGER.info(f"Removed container: {container_name}")
 
                 except Exception as e:
-                    LOGGER.warning(
-                        f"Failed to clean up container {container.name}: {e}"
-                    )
+                    LOGGER.warning(f"Failed to clean up container {container.name}: {e}")
         else:
             LOGGER.info("No old test containers found to clean up")
 
@@ -206,9 +204,7 @@ def _wait_for_postgres(
 
 
 @contextmanager
-def postgres_test_harness(
-    prefect_server_startup_timeout: int = 30, use_prefect: bool = True
-):
+def postgres_test_harness(prefect_server_startup_timeout: int = 30, use_prefect: bool = True):
     """
     A test harness for testing the PostgreSQL database using Docker.
 
@@ -274,7 +270,7 @@ def postgres_test_harness(
             "  docker --version  # to check if Docker is installed\n"
             "  docker ps         # to check if Docker daemon is running\n"
             "If Docker is not available, you may need to install Docker Desktop or start the Docker daemon."
-        )
+        ) from e
 
     container = None
     engine = None
@@ -331,15 +327,11 @@ def postgres_test_harness(
 
             LOGGER.info("Container verification passed - confirmed test instance")
         except Exception as e:
-            raise ValueError(f"Failed to verify container safety: {e}")
+            raise ValueError(f"Failed to verify container safety: {e}") from e
 
         # Create database URL and engine
-        database_url = (
-            f"postgresql://{db_user}:{db_password}@localhost:{port}/{db_name}"
-        )
-        LOGGER.info(
-            f"Database URL: postgresql://{db_user}:***@localhost:{port}/{db_name}"
-        )
+        database_url = f"postgresql://{db_user}:{db_password}@localhost:{port}/{db_name}"
+        LOGGER.info(f"Database URL: postgresql://{db_user}:***@localhost:{port}/{db_name}")
         engine = create_engine(database_url)
 
         # Comprehensive validation that this is a safe test database
@@ -353,14 +345,12 @@ def postgres_test_harness(
 
         if use_prefect:
             # Lazy import Prefect only when needed
-            from prefect.settings import PREFECT_API_URL
             from prefect.blocks.system import Secret
+            from prefect.settings import PREFECT_API_URL
             from prefect.testing.utilities import prefect_test_harness
 
             # Initialize the Prefect test harness
-            with prefect_test_harness(
-                server_startup_timeout=prefect_server_startup_timeout
-            ):
+            with prefect_test_harness(server_startup_timeout=prefect_server_startup_timeout):
                 # Check if the PREFECT_API_URL environment variable is set to localhost
                 prefect_api_url = urlparse(PREFECT_API_URL.value())
                 print(f"URL hostname: {prefect_api_url.hostname}")
@@ -382,9 +372,7 @@ def postgres_test_harness(
 
                 # Check if the secret is the same as the database URL
                 if postgres_url_secret != database_url:
-                    raise ValueError(
-                        "The postgres-url secret is not the same as the database URL."
-                    )
+                    raise ValueError("The postgres-url secret is not the same as the database URL.")
 
                 yield
         else:

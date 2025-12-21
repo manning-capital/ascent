@@ -7,14 +7,14 @@ sys.path.append(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir, "s
 sys.path.append(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
 
 import docker
-from sqlalchemy import Engine, text, select
+from sqlalchemy import Engine, select, text
 from sqlalchemy.orm import Session
 
-from ascent.database.models import Base, AssetType
+from ascent.database.models import AssetType, Base
 from ascent.database.testing.utilties import (
     TEST_DB_NAME,
-    TEST_DB_USER,
     TEST_DB_PASSWORD,
+    TEST_DB_USER,
     clear_database,
     postgres_test_harness,
 )
@@ -51,12 +51,10 @@ class TestPostgresHarnessNoPrefect:
         """Test that all tables are created when using use_prefect=False."""
         with postgres_test_harness(use_prefect=False) as engine:
             # Check that tables exist
-            for table_name, table in Base.metadata.tables.items():
+            for _table_name, table in Base.metadata.tables.items():
                 stmt = select(table)
                 df = pd.read_sql(stmt, engine)
-                assert sorted(df.columns.tolist()) == sorted(
-                    [col.name for col in table.columns]
-                )
+                assert sorted(df.columns.tolist()) == sorted([col.name for col in table.columns])
 
     def test_can_insert_and_query_data(self):
         """Test that we can insert and query data using the yielded engine."""
@@ -135,8 +133,6 @@ class TestPostgresHarnessNoPrefect:
     def test_use_prefect_false_with_custom_timeout(self):
         """Test that prefect_server_startup_timeout is ignored when use_prefect=False."""
         # When use_prefect=False, prefect_server_startup_timeout should be ignored
-        with postgres_test_harness(
-            use_prefect=False, prefect_server_startup_timeout=999
-        ) as engine:
+        with postgres_test_harness(use_prefect=False, prefect_server_startup_timeout=999) as engine:
             assert engine is not None
             assert isinstance(engine, Engine)
