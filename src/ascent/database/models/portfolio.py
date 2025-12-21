@@ -4,11 +4,11 @@ from typing import TYPE_CHECKING, Optional
 from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import Mapped, func, mapped_column, relationship
 
-from summit.database.models.assets import Asset
-from summit.database.models.base import Base
+from ascent.database.models.assets import Asset
+from ascent.database.models.base import Base
 
 if TYPE_CHECKING:
-    from summit.database.models.transactions import Transaction
+    from ascent.database.models.transactions import Transaction
 
 
 class Portfolio(Base):

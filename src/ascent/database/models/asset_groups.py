@@ -3,11 +3,11 @@ import datetime
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, func, mapped_column, relationship
 
-from summit.database.models.assets import Asset
-from summit.database.models.base import Base
-from summit.database.models.descriptors import Attribute, Period
-from summit.database.models.providers import Provider
-from summit.database.models.types import AssetGroupType
+from ascent.database.models.assets import Asset
+from ascent.database.models.base import Base
+from ascent.database.models.descriptors import Attribute, Period
+from ascent.database.models.providers import Provider
+from ascent.database.models.types import AssetGroupType
 
 
 class ProviderAssetGroup(Base):

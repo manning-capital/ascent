@@ -4,10 +4,10 @@ from typing import Optional
 from sqlalchemy import Engine, ForeignKey, String, func, select
 from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
 
-from summit.database.models.assets import Asset
-from summit.database.models.base import Base
-from summit.database.models.descriptors import Metadata
-from summit.database.models.types import ProviderType
+from ascent.database.models.assets import Asset
+from ascent.database.models.base import Base
+from ascent.database.models.descriptors import Metadata
+from ascent.database.models.types import ProviderType
 
 
 class Provider(Base):
@@ -70,7 +70,7 @@ class Provider(Base):
         engine: Engine,
         asset_ids: list[int] = None,
     ) -> set[Asset]:
-        from summit.database.models.provider_assets import ProviderAssetMetadata
+        from ascent.database.models.provider_assets import ProviderAssetMetadata
 
         if asset_ids is None:
             asset_ids = []

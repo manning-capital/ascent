@@ -3,9 +3,9 @@ import datetime
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from summit.database.models.assets import Asset
-from summit.database.models.base import Base
-from summit.database.models.providers import Provider
+from ascent.database.models.assets import Asset
+from ascent.database.models.base import Base
+from ascent.database.models.providers import Provider
 
 
 class Order(Base):

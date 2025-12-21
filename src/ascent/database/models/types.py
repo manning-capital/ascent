@@ -3,7 +3,7 @@ import datetime
 from sqlalchemy import String
 from sqlalchemy.orm import Mapped, func, mapped_column
 
-from summit.database.models.base import Base
+from ascent.database.models.base import Base
 
 
 class AssetType(Base):

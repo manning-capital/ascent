@@ -1,6 +1,6 @@
 # Import base first
 # Import asset groups
-from summit.database.models.asset_groups import (
+from ascent.database.models.asset_groups import (
     ProviderAssetGroup,
     ProviderAssetGroupAttribute,
     ProviderAssetGroupMember,
@@ -8,27 +8,27 @@ from summit.database.models.asset_groups import (
 )
 
 # Import assets
-from summit.database.models.assets import Asset
-from summit.database.models.base import Base
+from ascent.database.models.assets import Asset
+from ascent.database.models.base import Base
 
 # Import descriptors (attributes, periods, metadata)
-from summit.database.models.descriptors import Attribute, Metadata, Period
+from ascent.database.models.descriptors import Attribute, Metadata, Period
 
 # Import orders
-from summit.database.models.orders import Order
+from ascent.database.models.orders import Order
 
 # Import portfolio
-from summit.database.models.portfolio import Portfolio, PortfolioAssetHolding
+from ascent.database.models.portfolio import Portfolio, PortfolioAssetHolding
 
 # Import provider assets
-from summit.database.models.provider_assets import (
+from ascent.database.models.provider_assets import (
     ProviderAssetAttribute,
     ProviderAssetMetadata,
     ProviderAssetPeriodAttribute,
 )
 
 # Import provider content
-from summit.database.models.provider_content import (
+from ascent.database.models.provider_content import (
     AssetContent,
     ProviderContent,
     ProviderContentAttribute,
@@ -36,10 +36,10 @@ from summit.database.models.provider_content import (
 )
 
 # Import providers
-from summit.database.models.providers import Provider
+from ascent.database.models.providers import Provider
 
 # Import transactions
-from summit.database.models.transactions import (
+from ascent.database.models.transactions import (
     Transaction,
     TransactionGroup,
     TransactionGroupMember,
@@ -47,7 +47,7 @@ from summit.database.models.transactions import (
 )
 
 # Import core types
-from summit.database.models.types import (
+from ascent.database.models.types import (
     AssetGroupType,
     AssetType,
     ContentType,
@@ -57,7 +57,7 @@ from summit.database.models.types import (
     TransactionType,
 )
 
-# Export all models for `from summit.database.models import *`
+# Export all models for `from ascent.database.models import *`
 __all__ = [
     # Base
     "Base",

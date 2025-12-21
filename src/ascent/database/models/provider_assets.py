@@ -4,10 +4,10 @@ from sqlalchemy import ForeignKey
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, func, mapped_column, relationship
 
-from summit.database.models.assets import Asset
-from summit.database.models.base import Base
-from summit.database.models.descriptors import Attribute, Metadata, Period
-from summit.database.models.providers import Provider
+from ascent.database.models.assets import Asset
+from ascent.database.models.base import Base
+from ascent.database.models.descriptors import Attribute, Metadata, Period
+from ascent.database.models.providers import Provider
 
 
 class ProviderAssetAttribute(Base):

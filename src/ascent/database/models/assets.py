@@ -4,8 +4,8 @@ from typing import Optional
 from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import Mapped, func, mapped_column, relationship
 
-from summit.database.models.base import Base
-from summit.database.models.types import AssetType
+from ascent.database.models.base import Base
+from ascent.database.models.types import AssetType
 
 
 class Asset(Base):
