@@ -1,6 +1,7 @@
 import datetime
 
 from sqlalchemy import ForeignKey, String
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, func, mapped_column, relationship
 
 from summit.database.models.assets import Asset
@@ -162,6 +163,7 @@ class ProviderAssetMetadata(Base):
     __tablename__ = "provider_asset_metadata"
     __table_args__ = {
         "comment": "Stores text/metadata attributes for provider assets (e.g., symbols like 'BTC' vs 'XBT', exchange codes, provider-specific identifiers). Replaces the original ProviderAsset table's asset_code field with a flexible attribute-based design. Each metadata value is stored as a separate row, allowing new metadata attributes to be added without schema changes. Similar to ProviderAssetAttribute but for text values instead of numerical values. Tracks metadata history through time-series snapshots.",
+        "postgresql_partition_by": "HASH (metadata_id)",
     }
 
     timestamp: Mapped[datetime.datetime] = mapped_column(
@@ -190,10 +192,10 @@ class ProviderAssetMetadata(Base):
         comment="The identifier of the metadata type (e.g., 'symbol', 'exchange_code', 'provider_ticker'). References the Metadata table for metadata type definitions.",
     )
     metadata: Mapped["Metadata"] = relationship("Metadata")
-    text_value: Mapped[str] = mapped_column(
-        String(1000),
+    value: Mapped[dict | list | str | int | float | bool | None] = mapped_column(
+        JSONB,
         nullable=False,
-        comment="The text value of the metadata attribute for this provider asset. For example, 'BTC' or 'XBT' for Bitcoin symbol depending on the exchange.",
+        comment="The JSON value of the metadata attribute for this provider asset. Can store text, numbers, booleans, objects, or arrays. For example, 'BTC' or 'XBT' for Bitcoin symbol, or more complex structured data.",
     )
     created_at: Mapped[datetime.datetime] = mapped_column(
         nullable=False,
@@ -208,4 +210,4 @@ class ProviderAssetMetadata(Base):
     )
 
     def __repr__(self):
-        return f"{ProviderAssetMetadata.__name__}(timestamp={self.timestamp}, provider_id={self.provider_id}, asset_id={self.asset_id}, metadata_id={self.metadata_id}, text_value={self.text_value})"
+        return f"{ProviderAssetMetadata.__name__}(timestamp={self.timestamp}, provider_id={self.provider_id}, asset_id={self.asset_id}, metadata_id={self.metadata_id}, value={self.value})"

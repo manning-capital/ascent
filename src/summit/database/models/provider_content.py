@@ -1,6 +1,7 @@
 import datetime
 
 from sqlalchemy import ForeignKey, String
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, func, mapped_column, relationship
 
 from summit.database.models.assets import Asset
@@ -107,6 +108,7 @@ class ProviderContentMetadata(Base):
     __tablename__ = "provider_content_metadata"
     __table_args__ = {
         "comment": "Stores text/metadata attributes for provider content (e.g., authors, title, description, content). Uses a flexible metadata-based design where each metadata value is stored as a separate row, allowing new content metadata to be added without schema changes. Similar to ProviderAssetMetadata but for content text fields.",
+        "postgresql_partition_by": "HASH (metadata_id)",
     }
 
     timestamp: Mapped[datetime.datetime] = mapped_column(
@@ -128,10 +130,10 @@ class ProviderContentMetadata(Base):
         comment="The identifier of the metadata type (e.g., 'authors', 'title', 'description', 'content'). References the Metadata table for metadata type definitions.",
     )
     metadata: Mapped["Metadata"] = relationship("Metadata")
-    text_value: Mapped[str] = mapped_column(
-        String(),
+    value: Mapped[dict | list | str | int | float | bool | None] = mapped_column(
+        JSONB,
         nullable=False,
-        comment="The text value of the metadata attribute for this provider content. For example, the actual title, description, or content text.",
+        comment="The JSON value of the metadata attribute for this provider content. Can store text, numbers, booleans, objects, or arrays. For example, the actual title, description, or content text, or more complex structured data.",
     )
     created_at: Mapped[datetime.datetime] = mapped_column(
         nullable=False,
@@ -146,7 +148,7 @@ class ProviderContentMetadata(Base):
     )
 
     def __repr__(self):
-        return f"{ProviderContentMetadata.__name__}(timestamp={self.timestamp}, provider_content_id={self.provider_content_id}, metadata_id={self.metadata_id}, text_value={self.text_value})"
+        return f"{ProviderContentMetadata.__name__}(timestamp={self.timestamp}, provider_content_id={self.provider_content_id}, metadata_id={self.metadata_id}, value={self.value})"
 
 
 class AssetContent(Base):

@@ -85,7 +85,7 @@ class Period(Base):
 class Metadata(Base):
     __tablename__ = "metadata"
     __table_args__ = {
-        "comment": "Stores metadata type definitions for non-numerical categorical data (e.g., symbol, exchange_code, provider_ticker). Metadata categorizes items as-of a particular time and represents non-numerical characteristics. This table allows extending metadata types without changing the database schema, as new metadata types can be added as rows rather than columns. Separate from Attribute table to distinguish between numerical temporal state values (attributes) and categorical classification data (metadata)."
+        "comment": "Stores metadata type definitions for categorical and structured data (e.g., symbol, exchange_code, provider_ticker). Metadata categorizes items as-of a particular time and represents non-numerical characteristics stored as JSON values. Values can be text, numbers, booleans, objects, or arrays, allowing for dynamic and structured data. This table allows extending metadata types without changing the database schema, as new metadata types can be added as rows rather than columns. Separate from Attribute table to distinguish between numerical temporal state values (attributes) and categorical/structured classification data (metadata)."
     }
 
     id: Mapped[int] = mapped_column(
@@ -94,13 +94,13 @@ class Metadata(Base):
     name: Mapped[str] = mapped_column(
         String(100),
         nullable=False,
-        comment="The name of the metadata type, e.g. symbol, exchange_code, provider_ticker, etc. These represent non-numerical categorical classifications as-of a particular time.",
+        comment="The name of the metadata type, e.g. symbol, exchange_code, provider_ticker, etc. These represent categorical classifications or structured data as-of a particular time, stored as JSON values.",
         unique=True,
     )
     description: Mapped[str | None] = mapped_column(
         String(1000),
         nullable=True,
-        comment="The description of the metadata type, explaining what categorical classification it represents and how it is used. Metadata is non-numerical data that categorizes items as-of a particular time.",
+        comment="The description of the metadata type, explaining what categorical classification or structured data it represents and how it is used. Metadata values are stored as JSON (text, numbers, booleans, objects, or arrays) that categorizes or describes items as-of a particular time.",
     )
     is_active: Mapped[bool] = mapped_column(
         default=True, comment="Whether the metadata type is active"
