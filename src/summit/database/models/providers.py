@@ -1,5 +1,5 @@
 import datetime
-from typing import TYPE_CHECKING, Optional
+from typing import Optional
 
 from sqlalchemy import Engine, ForeignKey, String, func, select
 from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
@@ -8,9 +8,6 @@ from summit.database.models.assets import Asset
 from summit.database.models.base import Base
 from summit.database.models.descriptors import Metadata
 from summit.database.models.types import ProviderType
-
-if TYPE_CHECKING:
-    from summit.database.models.provider_assets import ProviderAssetMetadata
 
 
 class Provider(Base):
@@ -86,7 +83,7 @@ class Provider(Base):
                 return set()
 
             # Subquery to get the latest timestamp for each provider_id, asset_id combination
-            # where is_active is True
+            # where is_active is True (JSON boolean true)
             latest_timestamps_subq = (
                 select(
                     ProviderAssetMetadata.provider_id,
@@ -96,7 +93,7 @@ class Provider(Base):
                 .where(
                     ProviderAssetMetadata.provider_id == self.id,
                     ProviderAssetMetadata.metadata_id == is_active_metadata,
-                    ProviderAssetMetadata.value.astext.cast(bool) == True,  # JSON value is True
+                    ProviderAssetMetadata.value.astext == "true",  # JSON boolean true as text
                 )
                 .group_by(ProviderAssetMetadata.provider_id, ProviderAssetMetadata.asset_id)
                 .subquery()
@@ -119,7 +116,7 @@ class Provider(Base):
                 .where(
                     ProviderAssetMetadata.provider_id == self.id,
                     ProviderAssetMetadata.metadata_id == is_active_metadata,
-                    ProviderAssetMetadata.value.astext.cast(bool) == True,
+                    ProviderAssetMetadata.value.astext == "true",  # JSON boolean true as text
                     Asset.is_active,
                 )
             )
