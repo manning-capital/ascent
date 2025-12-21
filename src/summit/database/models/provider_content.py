@@ -5,14 +5,16 @@ from sqlalchemy.orm import Mapped, func, mapped_column, relationship
 
 from summit.database.models.assets import Asset
 from summit.database.models.base import Base
-from summit.database.models.descriptors import Attribute
+from summit.database.models.descriptors import Attribute, Metadata
 from summit.database.models.providers import Provider
 from summit.database.models.types import ContentType, SentimentType
 
 
 class ProviderContent(Base):
     __tablename__ = "provider_content"
-    __table_args__ = {"comment": "The provider content, will store content data for a provider."}
+    __table_args__ = {
+        "comment": "Stores provider content records. Text fields (authors, title, description, content) are stored in ProviderContentMetadata using the flexible metadata descriptor pattern."
+    }
 
     id: Mapped[int] = mapped_column(
         primary_key=True, comment="The unique identifier of the provider content"
@@ -37,20 +39,6 @@ class ProviderContent(Base):
         comment="The identifier of the content type",
     )
     content_type: Mapped["ContentType"] = relationship("ContentType")
-    authors: Mapped[str | None] = mapped_column(
-        String(1000), nullable=True, comment="The authors of the provider content"
-    )
-    title: Mapped[str | None] = mapped_column(
-        String(1000), nullable=True, comment="The title of the provider content"
-    )
-    description: Mapped[str | None] = mapped_column(
-        String(5000),
-        nullable=True,
-        comment="A short description of the provider content",
-    )
-    content: Mapped[str] = mapped_column(
-        String(), nullable=False, comment="The content of the provider content"
-    )
     created_at: Mapped[datetime.datetime] = mapped_column(
         nullable=False,
         server_default=func.now(),
@@ -113,6 +101,52 @@ class ProviderContentAttribute(Base):
 
     def __repr__(self):
         return f"{ProviderContentAttribute.__name__}(provider_content_id={self.provider_content_id}, sentiment_type_id={self.sentiment_type_id}, attribute_id={self.attribute_id}, attribute_value={self.attribute_value})"
+
+
+class ProviderContentMetadata(Base):
+    __tablename__ = "provider_content_metadata"
+    __table_args__ = {
+        "comment": "Stores text/metadata attributes for provider content (e.g., authors, title, description, content). Uses a flexible metadata-based design where each metadata value is stored as a separate row, allowing new content metadata to be added without schema changes. Similar to ProviderAssetMetadata but for content text fields.",
+    }
+
+    timestamp: Mapped[datetime.datetime] = mapped_column(
+        primary_key=True,
+        nullable=False,
+        comment="The timestamp when this metadata snapshot is valid. Part of the primary key to enable time-series metadata tracking and historical reconciliation.",
+    )
+    provider_content_id: Mapped[int] = mapped_column(
+        ForeignKey("provider_content.id"),
+        nullable=False,
+        primary_key=True,
+        comment="The identifier of the provider content",
+    )
+    provider_content: Mapped["ProviderContent"] = relationship("ProviderContent")
+    metadata_id: Mapped[int] = mapped_column(
+        ForeignKey("metadata.id"),
+        nullable=False,
+        primary_key=True,
+        comment="The identifier of the metadata type (e.g., 'authors', 'title', 'description', 'content'). References the Metadata table for metadata type definitions.",
+    )
+    metadata: Mapped["Metadata"] = relationship("Metadata")
+    text_value: Mapped[str] = mapped_column(
+        String(),
+        nullable=False,
+        comment="The text value of the metadata attribute for this provider content. For example, the actual title, description, or content text.",
+    )
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        nullable=False,
+        server_default=func.now(),
+        comment="The timestamp of the creation of the metadata record",
+    )
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        nullable=False,
+        server_onupdate=func.now(),
+        server_default=func.now(),
+        comment="The timestamp of the last update of the metadata record",
+    )
+
+    def __repr__(self):
+        return f"{ProviderContentMetadata.__name__}(timestamp={self.timestamp}, provider_content_id={self.provider_content_id}, metadata_id={self.metadata_id}, text_value={self.text_value})"
 
 
 class AssetContent(Base):

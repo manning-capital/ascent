@@ -33,6 +33,7 @@ from summit.database.models.provider_content import (
     AssetContent,
     ProviderContent,
     ProviderContentAttribute,
+    ProviderContentMetadata,
 )
 
 # Import providers
@@ -88,6 +89,7 @@ __all__ = [
     # Provider Content
     "ProviderContent",
     "ProviderContentAttribute",
+    "ProviderContentMetadata",
     "AssetContent",
     # Asset Groups
     "ProviderAssetGroup",
