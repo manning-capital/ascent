@@ -53,45 +53,6 @@ class ProviderAssetStatus(Base):
         return f"{ProviderAssetStatus.__name__}(timestamp={self.timestamp}, provider_id={self.provider_id}, asset_id={self.asset_id}, is_active={self.is_active})"
 
 
-class ProviderAssetOrder(Base):
-    __tablename__ = "provider_asset_order"
-    __table_args__ = {
-        "comment": "The provider asset order, will store order data for an asset from a provider."
-    }
-
-    id: Mapped[int] = mapped_column(
-        primary_key=True, comment="The unique identifier of the provider asset order"
-    )
-    timestamp: Mapped[datetime.datetime] = mapped_column(
-        nullable=False, comment="The timestamp of the provider asset order"
-    )
-    provider_id: Mapped[int] = mapped_column(
-        ForeignKey("provider.id"),
-        nullable=False,
-        comment="The identifier of the provider",
-    )
-    provider: Mapped["Provider"] = relationship("Provider")
-    from_asset_id: Mapped[int] = mapped_column(
-        ForeignKey("asset.id"),
-        nullable=False,
-        comment="The identifier of the from asset",
-    )
-    from_asset: Mapped["Asset"] = relationship("Asset", foreign_keys=[from_asset_id])
-    to_asset_id: Mapped[int] = mapped_column(
-        ForeignKey("asset.id"), nullable=False, comment="The identifier of the to asset"
-    )
-    to_asset: Mapped["Asset"] = relationship("Asset", foreign_keys=[to_asset_id])
-    price: Mapped[float] = mapped_column(
-        nullable=True, comment="The price of the provider asset order"
-    )
-    volume: Mapped[float] = mapped_column(
-        nullable=True, comment="The volume of the provider asset order"
-    )
-
-    def __repr__(self):
-        return f"{ProviderAssetOrder.__name__}(id={self.id}, timestamp={self.timestamp}, provider_id={self.provider_id}, from_asset_id={self.from_asset_id}, to_asset_id={self.to_asset_id}, price={self.price}, volume={self.volume})"
-
-
 class ProviderAssetAttribute(Base):
     __tablename__ = "provider_asset_attribute"
     __table_args__ = {

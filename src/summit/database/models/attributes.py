@@ -9,7 +9,7 @@ from summit.database.models.base import Base
 class Attribute(Base):
     __tablename__ = "attribute"
     __table_args__ = {
-        "comment": "Stores attribute definitions for provider asset groups. This table allows extending attributes without changing the database schema, as new attributes can be added as rows rather than columns."
+        "comment": "Stores attribute type definitions for numerical/temporal floating point values. Attributes represent the numerical state of an item at a point in time (e.g., close price, volume, cointegration_p_value, ou_mu, linear_fit_alpha). This table allows extending attributes without changing the database schema, as new attributes can be added as rows rather than columns."
     }
 
     id: Mapped[int] = mapped_column(
@@ -18,13 +18,13 @@ class Attribute(Base):
     name: Mapped[str] = mapped_column(
         String(100),
         nullable=False,
-        comment="The name of the attribute, e.g. cointegration_p_value, ou_mu, linear_fit_alpha, etc.",
+        comment="The name of the attribute, e.g. cointegration_p_value, ou_mu, linear_fit_alpha, close_price, volume, etc. These represent numerical state values at a point in time.",
         unique=True,
     )
     description: Mapped[str | None] = mapped_column(
         String(1000),
         nullable=True,
-        comment="The description of the attribute, explaining what it represents and how it is calculated",
+        comment="The description of the attribute, explaining what numerical state it represents and how it is calculated. Attributes are temporal floating point values representing the state of an item at a specific time.",
     )
     is_active: Mapped[bool] = mapped_column(default=True, comment="Whether the attribute is active")
     created_at: Mapped[datetime.datetime] = mapped_column(
@@ -46,24 +46,24 @@ class Attribute(Base):
 class Period(Base):
     __tablename__ = "period"
     __table_args__ = {
-        "comment": "Defines time periods that can be reused across different tables. Allows dynamic period definitions without schema changes."
+        "comment": "Defines time periods that extend attributes to represent lookback periods. When an attribute is used with a period, it signifies that the attribute applies to the timestamp or a lookback period (e.g., 1 hour, 1 day, 1 week). Allows dynamic period definitions without schema changes."
     }
 
     id: Mapped[int] = mapped_column(primary_key=True, comment="The unique identifier of the period")
     name: Mapped[str] = mapped_column(
         String(100),
         nullable=False,
-        comment="The name of the period, e.g. '1 hour', '1 day', '1 week', etc.",
+        comment="The name of the period following pandas/datetime timedelta conventions, e.g. '1H' (1 hour), '1D' (1 day), '1W' (1 week), '1M' (1 month), '1Y' (1 year). When used with an attribute, this represents the lookback period for that attribute calculation.",
         unique=True,
     )
     duration_nanoseconds: Mapped[int] = mapped_column(
         nullable=False,
-        comment="The duration of the period in nanoseconds",
+        comment="The duration of the period in nanoseconds. Defines the lookback window when the period is used with an attribute.",
     )
     description: Mapped[str | None] = mapped_column(
         String(1000),
         nullable=True,
-        comment="The description of the period, explaining its purpose and usage",
+        comment="The description of the period, explaining its purpose and usage. Periods extend attributes to apply them over a lookback window rather than just at a single timestamp.",
     )
     is_active: Mapped[bool] = mapped_column(default=True, comment="Whether the period is active")
     created_at: Mapped[datetime.datetime] = mapped_column(
@@ -85,7 +85,7 @@ class Period(Base):
 class Metadata(Base):
     __tablename__ = "metadata"
     __table_args__ = {
-        "comment": "Stores metadata type definitions for provider assets (e.g., symbol, exchange_code, provider_ticker). This table allows extending metadata types without changing the database schema, as new metadata types can be added as rows rather than columns. Separate from Attribute table to distinguish between numerical attributes and text metadata."
+        "comment": "Stores metadata type definitions for non-numerical categorical data (e.g., symbol, exchange_code, provider_ticker). Metadata categorizes items as-of a particular time and represents non-numerical characteristics. This table allows extending metadata types without changing the database schema, as new metadata types can be added as rows rather than columns. Separate from Attribute table to distinguish between numerical temporal state values (attributes) and categorical classification data (metadata)."
     }
 
     id: Mapped[int] = mapped_column(
@@ -94,13 +94,13 @@ class Metadata(Base):
     name: Mapped[str] = mapped_column(
         String(100),
         nullable=False,
-        comment="The name of the metadata type, e.g. symbol, exchange_code, provider_ticker, etc.",
+        comment="The name of the metadata type, e.g. symbol, exchange_code, provider_ticker, etc. These represent non-numerical categorical classifications as-of a particular time.",
         unique=True,
     )
     description: Mapped[str | None] = mapped_column(
         String(1000),
         nullable=True,
-        comment="The description of the metadata type, explaining what it represents and how it is used",
+        comment="The description of the metadata type, explaining what categorical classification it represents and how it is used. Metadata is non-numerical data that categorizes items as-of a particular time.",
     )
     is_active: Mapped[bool] = mapped_column(
         default=True, comment="Whether the metadata type is active"
