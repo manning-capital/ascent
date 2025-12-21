@@ -11,18 +11,19 @@ from summit.database.models.asset_groups import (
 from summit.database.models.assets import Asset
 
 # Import attribute system
-from summit.database.models.attributes import Attribute, Period
+from summit.database.models.attributes import Attribute, Metadata, Period
 from summit.database.models.base import Base
 
 # Import portfolio
-from summit.database.models.portfolio import Portfolio
+from summit.database.models.portfolio import Portfolio, PortfolioAssetHolding
 
 # Import provider assets
 from summit.database.models.provider_assets import (
-    ProviderAsset,
     ProviderAssetAttribute,
+    ProviderAssetMetadata,
     ProviderAssetOrder,
     ProviderAssetPeriodAttribute,
+    ProviderAssetStatus,
 )
 
 # Import provider content
@@ -37,7 +38,7 @@ from summit.database.models.providers import Provider
 
 # Import transactions
 from summit.database.models.transactions import (
-    PortfolioTransaction,
+    Transaction,
     TransactionGroup,
     TransactionGroupMember,
     TransactionStatus,
@@ -72,14 +73,17 @@ __all__ = [
     "Provider",
     # Portfolio
     "Portfolio",
+    "PortfolioAssetHolding",
     # Attribute System
     "Attribute",
+    "Metadata",
     "Period",
     # Provider Assets
-    "ProviderAsset",
+    "ProviderAssetStatus",
     "ProviderAssetOrder",
     "ProviderAssetAttribute",
     "ProviderAssetPeriodAttribute",
+    "ProviderAssetMetadata",
     # Provider Content
     "ProviderContent",
     "ProviderContentAttribute",
@@ -90,7 +94,7 @@ __all__ = [
     "ProviderAssetGroupAttribute",
     "ProviderAssetGroupPeriodAttribute",
     # Transactions
-    "PortfolioTransaction",
+    "Transaction",
     "TransactionGroup",
     "TransactionGroupMember",
     "TransactionStatus",

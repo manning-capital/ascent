@@ -9,7 +9,7 @@ from summit.database.models.base import Base
 from summit.database.models.types import ProviderType
 
 if TYPE_CHECKING:
-    from summit.database.models.provider_assets import ProviderAsset
+    from summit.database.models.provider_assets import ProviderAssetStatus
 
 
 class Provider(Base):
@@ -71,44 +71,44 @@ class Provider(Base):
         self,
         engine: Engine,
         asset_ids: list[int] = None,
-    ) -> set["ProviderAsset"]:
-        from summit.database.models.provider_assets import ProviderAsset
+    ) -> set["ProviderAssetStatus"]:
+        from summit.database.models.provider_assets import ProviderAssetStatus
 
         if asset_ids is None:
             asset_ids = []
         with Session(engine) as session:
-            # Subquery to get the latest date for each provider_id, asset_id combination
-            latest_dates_subq = (
+            # Subquery to get the latest timestamp for each provider_id, asset_id combination
+            latest_timestamps_subq = (
                 select(
-                    ProviderAsset.provider_id,
-                    ProviderAsset.asset_id,
-                    func.max(ProviderAsset.date).label("max_date"),
+                    ProviderAssetStatus.provider_id,
+                    ProviderAssetStatus.asset_id,
+                    func.max(ProviderAssetStatus.timestamp).label("max_timestamp"),
                 )
-                .where(ProviderAsset.provider_id == self.id, ProviderAsset.is_active)
-                .group_by(ProviderAsset.provider_id, ProviderAsset.asset_id)
+                .where(ProviderAssetStatus.provider_id == self.id, ProviderAssetStatus.is_active)
+                .group_by(ProviderAssetStatus.provider_id, ProviderAssetStatus.asset_id)
                 .subquery()
             )
 
-            # Query to get assets that have provider_asset entries with the latest dates
+            # Query to get assets that have provider_asset_status entries with the latest timestamps
             query = (
-                select(ProviderAsset)
-                .join(Asset, ProviderAsset.asset_id == Asset.id)
+                select(ProviderAssetStatus)
+                .join(Asset, ProviderAssetStatus.asset_id == Asset.id)
                 .join(
-                    latest_dates_subq,
-                    (ProviderAsset.provider_id == latest_dates_subq.c.provider_id)
-                    & (ProviderAsset.asset_id == latest_dates_subq.c.asset_id)
-                    & (ProviderAsset.date == latest_dates_subq.c.max_date),
+                    latest_timestamps_subq,
+                    (ProviderAssetStatus.provider_id == latest_timestamps_subq.c.provider_id)
+                    & (ProviderAssetStatus.asset_id == latest_timestamps_subq.c.asset_id)
+                    & (ProviderAssetStatus.timestamp == latest_timestamps_subq.c.max_timestamp),
                 )
                 .where(
-                    ProviderAsset.provider_id == self.id,
-                    ProviderAsset.is_active,
+                    ProviderAssetStatus.provider_id == self.id,
+                    ProviderAssetStatus.is_active,
                     Asset.is_active,
                 )
             )
 
             # Add asset ID filter if provided
             if asset_ids:
-                query = query.where(ProviderAsset.asset_id.in_(asset_ids))
+                query = query.where(ProviderAssetStatus.asset_id.in_(asset_ids))
 
             # Execute query and return results as a set
             assets = session.scalars(query).all()

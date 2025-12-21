@@ -1,5 +1,4 @@
 import datetime
-from typing import Optional
 
 from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, func, mapped_column, relationship
@@ -10,8 +9,8 @@ from summit.database.models.portfolio import Portfolio
 from summit.database.models.types import TransactionStatusType, TransactionType
 
 
-class PortfolioTransaction(Base):
-    __tablename__ = "portfolio_transaction"
+class Transaction(Base):
+    __tablename__ = "transaction"
     __table_args__ = {
         "comment": "Represents individual portfolio transactions including buys, sells, and transfers. Used to track all asset movements within and between portfolios."
     }
@@ -34,34 +33,24 @@ class PortfolioTransaction(Base):
         comment="The identifier of the portfolio this transaction belongs to",
     )
     portfolio: Mapped["Portfolio"] = relationship("Portfolio", back_populates="transactions")
-    from_asset_id: Mapped[int | None] = mapped_column(
+    from_asset_id: Mapped[int] = mapped_column(
         ForeignKey("asset.id"),
-        nullable=True,
-        comment="The identifier of the source asset in the transaction (e.g., cash for buys, the asset being sold for sells)",
+        nullable=False,
+        comment="The identifier of the source asset in the exchange. Represents the asset being exchanged from.",
     )
-    from_asset: Mapped[Optional["Asset"]] = relationship("Asset", foreign_keys=[from_asset_id])
-    to_asset_id: Mapped[int | None] = mapped_column(
+    from_asset: Mapped["Asset"] = relationship("Asset", foreign_keys=[from_asset_id])
+    to_asset_id: Mapped[int] = mapped_column(
         ForeignKey("asset.id"),
-        nullable=True,
-        comment="The identifier of the destination asset in the transaction (e.g., the asset being bought for buys, cash for sells)",
+        nullable=False,
+        comment="The identifier of the destination asset in the exchange. Represents the asset being exchanged to.",
     )
-    to_asset: Mapped[Optional["Asset"]] = relationship("Asset", foreign_keys=[to_asset_id])
+    to_asset: Mapped["Asset"] = relationship("Asset", foreign_keys=[to_asset_id])
     quantity: Mapped[float] = mapped_column(
         nullable=False, comment="The number of units/shares in the transaction"
     )
     price: Mapped[float] = mapped_column(
-        nullable=False, comment="The price per unit at which the transaction occurred"
-    )
-    created_at: Mapped[datetime.datetime] = mapped_column(
         nullable=False,
-        server_default=func.now(),
-        comment="The timestamp of the creation of the transaction",
-    )
-    updated_at: Mapped[datetime.datetime] = mapped_column(
-        nullable=False,
-        server_onupdate=func.now(),
-        server_default=func.now(),
-        comment="The timestamp of the last update of the transaction",
+        comment="The exchange price from the from_asset to the to_asset. Represents the price per unit of the to_asset in terms of the from_asset. For example, if buying 1 BTC with 50000 USD, price would be 50000 (1 BTC costs 50000 USD).",
     )
 
     # Relationship to groups
@@ -74,12 +63,12 @@ class PortfolioTransaction(Base):
     # Relationship to status history
     statuses: Mapped[list["TransactionStatus"]] = relationship(
         "TransactionStatus",
-        back_populates="portfolio_transaction",
+        back_populates="transaction",
         order_by="TransactionStatus.timestamp.asc()",
     )
 
     def __repr__(self):
-        return f"{PortfolioTransaction.__name__}(id={self.id}, timestamp={self.timestamp}, transaction_type={self.transaction_type}, portfolio_id={self.portfolio_id})"
+        return f"{Transaction.__name__}(id={self.id}, timestamp={self.timestamp}, transaction_type={self.transaction_type}, portfolio_id={self.portfolio_id})"
 
 
 class TransactionGroup(Base):
@@ -98,8 +87,8 @@ class TransactionGroup(Base):
     )
 
     # Relationship to transactions
-    transactions: Mapped[list["PortfolioTransaction"]] = relationship(
-        "PortfolioTransaction",
+    transactions: Mapped[list["Transaction"]] = relationship(
+        "Transaction",
         secondary="transaction_group_member",
         back_populates="groups",
     )
@@ -123,15 +112,13 @@ class TransactionGroupMember(Base):
     transaction_group: Mapped["TransactionGroup"] = relationship(
         "TransactionGroup", overlaps="transactions"
     )
-    portfolio_transaction_id: Mapped[int] = mapped_column(
-        ForeignKey("portfolio_transaction.id"),
+    transaction_id: Mapped[int] = mapped_column(
+        ForeignKey("transaction.id"),
         primary_key=True,
         nullable=False,
-        comment="The identifier of the portfolio transaction",
+        comment="The identifier of the transaction",
     )
-    portfolio_transaction: Mapped["PortfolioTransaction"] = relationship(
-        "PortfolioTransaction", overlaps="groups"
-    )
+    transaction: Mapped["Transaction"] = relationship("Transaction", overlaps="groups")
     created_at: Mapped[datetime.datetime] = mapped_column(
         nullable=False,
         server_default=func.now(),
@@ -139,13 +126,13 @@ class TransactionGroupMember(Base):
     )
 
     def __repr__(self):
-        return f"{TransactionGroupMember.__name__}(transaction_group_id={self.transaction_group_id}, portfolio_transaction_id={self.portfolio_transaction_id})"
+        return f"{TransactionGroupMember.__name__}(transaction_group_id={self.transaction_group_id}, transaction_id={self.transaction_id})"
 
 
 class TransactionStatus(Base):
     __tablename__ = "transaction_status"
     __table_args__ = {
-        "comment": "Time series table storing status updates for portfolio transactions. Tracks the status history of transactions over time, allowing for audit trails and status change monitoring."
+        "comment": "Time series table storing status updates for transactions. Tracks the status history of transactions over time, allowing for audit trails and status change monitoring."
     }
 
     timestamp: Mapped[datetime.datetime] = mapped_column(
@@ -153,15 +140,13 @@ class TransactionStatus(Base):
         primary_key=True,
         comment="The timestamp when the status was recorded",
     )
-    portfolio_transaction_id: Mapped[int] = mapped_column(
-        ForeignKey("portfolio_transaction.id"),
+    transaction_id: Mapped[int] = mapped_column(
+        ForeignKey("transaction.id"),
         nullable=False,
         primary_key=True,
-        comment="The identifier of the portfolio transaction",
+        comment="The identifier of the transaction",
     )
-    portfolio_transaction: Mapped["PortfolioTransaction"] = relationship(
-        "PortfolioTransaction", back_populates="statuses"
-    )
+    transaction: Mapped["Transaction"] = relationship("Transaction", back_populates="statuses")
     transaction_status_type_id: Mapped[int] = mapped_column(
         ForeignKey("transaction_status_type.id"),
         nullable=False,
@@ -170,4 +155,4 @@ class TransactionStatus(Base):
     transaction_status_type: Mapped["TransactionStatusType"] = relationship("TransactionStatusType")
 
     def __repr__(self):
-        return f"{TransactionStatus.__name__}(timestamp={self.timestamp}, portfolio_transaction_id={self.portfolio_transaction_id}, transaction_status_type_id={self.transaction_status_type_id})"
+        return f"{TransactionStatus.__name__}(timestamp={self.timestamp}, transaction_id={self.transaction_id}, transaction_status_type_id={self.transaction_status_type_id})"

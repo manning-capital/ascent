@@ -80,3 +80,42 @@ class Period(Base):
 
     def __repr__(self):
         return f"{Period.__name__}({self.id}, {self.name})"
+
+
+class Metadata(Base):
+    __tablename__ = "metadata"
+    __table_args__ = {
+        "comment": "Stores metadata type definitions for provider assets (e.g., symbol, exchange_code, provider_ticker). This table allows extending metadata types without changing the database schema, as new metadata types can be added as rows rather than columns. Separate from Attribute table to distinguish between numerical attributes and text metadata."
+    }
+
+    id: Mapped[int] = mapped_column(
+        primary_key=True, comment="The unique identifier of the metadata type"
+    )
+    name: Mapped[str] = mapped_column(
+        String(100),
+        nullable=False,
+        comment="The name of the metadata type, e.g. symbol, exchange_code, provider_ticker, etc.",
+        unique=True,
+    )
+    description: Mapped[str | None] = mapped_column(
+        String(1000),
+        nullable=True,
+        comment="The description of the metadata type, explaining what it represents and how it is used",
+    )
+    is_active: Mapped[bool] = mapped_column(
+        default=True, comment="Whether the metadata type is active"
+    )
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        nullable=False,
+        server_default=func.now(),
+        comment="The timestamp of the creation of the metadata type",
+    )
+    updated_at: Mapped[datetime.datetime | None] = mapped_column(
+        nullable=False,
+        server_onupdate=func.now(),
+        server_default=func.now(),
+        comment="The timestamp of the last update of the metadata type",
+    )
+
+    def __repr__(self):
+        return f"{Metadata.__name__}({self.id}, {self.name})"

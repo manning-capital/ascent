@@ -4,19 +4,21 @@ from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import Mapped, func, mapped_column, relationship
 
 from summit.database.models.assets import Asset
-from summit.database.models.attributes import Attribute, Period
+from summit.database.models.attributes import Attribute, Metadata, Period
 from summit.database.models.base import Base
 from summit.database.models.providers import Provider
 
 
-class ProviderAsset(Base):
-    __tablename__ = "provider_asset"
+class ProviderAssetStatus(Base):
+    __tablename__ = "provider_asset_status"
     __table_args__ = {
-        "comment": "The provider asset, is meant to map our internal definitions to the provider's definitions."
+        "comment": "Tracks the status (active/inactive) of provider-asset relationships over time. This is a minimal table that works alongside ProviderAssetMetadata to replace the original ProviderAsset table. The asset_code and other metadata are now stored in ProviderAssetMetadata as flexible attributes."
     }
 
-    date: Mapped[datetime.date] = mapped_column(
-        primary_key=True, comment="The date of the provider asset"
+    timestamp: Mapped[datetime.datetime] = mapped_column(
+        primary_key=True,
+        nullable=False,
+        comment="The timestamp when this status snapshot is valid. Part of the primary key to enable time-series status tracking.",
     )
     provider_id: Mapped[int] = mapped_column(
         ForeignKey("provider.id"),
@@ -32,28 +34,23 @@ class ProviderAsset(Base):
         comment="The identifier of the asset",
     )
     asset: Mapped["Asset"] = relationship("Asset")
-    asset_code: Mapped[str] = mapped_column(
-        String(100),
-        nullable=False,
-        comment="The code of the asset, this is used to identify the asset in the provider's system. For example, for a stock, it could be the ticker symbol or an internal ID.",
-    )
     is_active: Mapped[bool] = mapped_column(
         default=True, comment="Whether the provider asset is active"
     )
     created_at: Mapped[datetime.datetime] = mapped_column(
         nullable=False,
         server_default=func.now(),
-        comment="The timestamp of the creation of the provider asset",
+        comment="The timestamp of the creation of the status record",
     )
     updated_at: Mapped[datetime.datetime] = mapped_column(
         nullable=False,
         server_onupdate=func.now(),
         server_default=func.now(),
-        comment="The timestamp of the last update of the provider asset",
+        comment="The timestamp of the last update of the status record",
     )
 
     def __repr__(self):
-        return f"{ProviderAsset.__name__}({self.date}, {self.provider_id}, {self.asset_id})"
+        return f"{ProviderAssetStatus.__name__}(timestamp={self.timestamp}, provider_id={self.provider_id}, asset_id={self.asset_id}, is_active={self.is_active})"
 
 
 class ProviderAssetOrder(Base):
@@ -198,3 +195,56 @@ class ProviderAssetPeriodAttribute(Base):
 
     def __repr__(self):
         return f"{ProviderAssetPeriodAttribute.__name__}(timestamp={self.timestamp}, provider_id={self.provider_id}, from_asset_id={self.from_asset_id}, to_asset_id={self.to_asset_id}, period_id={self.period_id}, attribute_id={self.attribute_id}, attribute_value={self.attribute_value})"
+
+
+class ProviderAssetMetadata(Base):
+    __tablename__ = "provider_asset_metadata"
+    __table_args__ = {
+        "comment": "Stores text/metadata attributes for provider assets (e.g., symbols like 'BTC' vs 'XBT', exchange codes, provider-specific identifiers). Replaces the original ProviderAsset table's asset_code field with a flexible attribute-based design. Each metadata value is stored as a separate row, allowing new metadata attributes to be added without schema changes. Similar to ProviderAssetAttribute but for text values instead of numerical values. Tracks metadata history through time-series snapshots.",
+    }
+
+    timestamp: Mapped[datetime.datetime] = mapped_column(
+        primary_key=True,
+        nullable=False,
+        comment="The timestamp when this metadata snapshot is valid. Part of the primary key to enable time-series metadata tracking and historical reconciliation.",
+    )
+    provider_id: Mapped[int] = mapped_column(
+        ForeignKey("provider.id"),
+        nullable=False,
+        primary_key=True,
+        comment="The identifier of the provider",
+    )
+    provider: Mapped["Provider"] = relationship("Provider")
+    asset_id: Mapped[int] = mapped_column(
+        ForeignKey("asset.id"),
+        nullable=False,
+        primary_key=True,
+        comment="The identifier of the asset",
+    )
+    asset: Mapped["Asset"] = relationship("Asset")
+    metadata_id: Mapped[int] = mapped_column(
+        ForeignKey("metadata.id"),
+        nullable=False,
+        primary_key=True,
+        comment="The identifier of the metadata type (e.g., 'symbol', 'exchange_code', 'provider_ticker'). References the Metadata table for metadata type definitions.",
+    )
+    metadata: Mapped["Metadata"] = relationship("Metadata")
+    text_value: Mapped[str] = mapped_column(
+        String(1000),
+        nullable=False,
+        comment="The text value of the metadata attribute for this provider asset. For example, 'BTC' or 'XBT' for Bitcoin symbol depending on the exchange.",
+    )
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        nullable=False,
+        server_default=func.now(),
+        comment="The timestamp of the creation of the metadata record",
+    )
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        nullable=False,
+        server_onupdate=func.now(),
+        server_default=func.now(),
+        comment="The timestamp of the last update of the metadata record",
+    )
+
+    def __repr__(self):
+        return f"{ProviderAssetMetadata.__name__}(timestamp={self.timestamp}, provider_id={self.provider_id}, asset_id={self.asset_id}, metadata_id={self.metadata_id}, text_value={self.text_value})"
