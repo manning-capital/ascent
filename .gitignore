@@ -205,3 +205,14 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Cursor/VSCode
+.vscode/
+.cursor/
+.cursorignore
+.cursorindexingignore
+.cursorrules
+.cursorignore
+.cursorindexingignore
+.cursorrules
+.DS_Store
