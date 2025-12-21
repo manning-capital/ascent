@@ -10,50 +10,6 @@ from summit.database.models.descriptors import Attribute, Metadata, Period
 from summit.database.models.providers import Provider
 
 
-class ProviderAssetStatus(Base):
-    __tablename__ = "provider_asset_status"
-    __table_args__ = {
-        "comment": "Tracks the status (active/inactive) of provider-asset relationships over time. This is a minimal table that works alongside ProviderAssetMetadata to replace the original ProviderAsset table. The asset_code and other metadata are now stored in ProviderAssetMetadata as flexible attributes."
-    }
-
-    timestamp: Mapped[datetime.datetime] = mapped_column(
-        primary_key=True,
-        nullable=False,
-        comment="The timestamp when this status snapshot is valid. Part of the primary key to enable time-series status tracking.",
-    )
-    provider_id: Mapped[int] = mapped_column(
-        ForeignKey("provider.id"),
-        nullable=False,
-        primary_key=True,
-        comment="The identifier of the provider",
-    )
-    provider: Mapped["Provider"] = relationship("Provider")
-    asset_id: Mapped[int] = mapped_column(
-        ForeignKey("asset.id"),
-        nullable=False,
-        primary_key=True,
-        comment="The identifier of the asset",
-    )
-    asset: Mapped["Asset"] = relationship("Asset")
-    is_active: Mapped[bool] = mapped_column(
-        default=True, comment="Whether the provider asset is active"
-    )
-    created_at: Mapped[datetime.datetime] = mapped_column(
-        nullable=False,
-        server_default=func.now(),
-        comment="The timestamp of the creation of the status record",
-    )
-    updated_at: Mapped[datetime.datetime] = mapped_column(
-        nullable=False,
-        server_onupdate=func.now(),
-        server_default=func.now(),
-        comment="The timestamp of the last update of the status record",
-    )
-
-    def __repr__(self):
-        return f"{ProviderAssetStatus.__name__}(timestamp={self.timestamp}, provider_id={self.provider_id}, asset_id={self.asset_id}, is_active={self.is_active})"
-
-
 class ProviderAssetAttribute(Base):
     __tablename__ = "provider_asset_attribute"
     __table_args__ = {

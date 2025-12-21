@@ -25,7 +25,6 @@ from summit.database.models.provider_assets import (
     ProviderAssetAttribute,
     ProviderAssetMetadata,
     ProviderAssetPeriodAttribute,
-    ProviderAssetStatus,
 )
 
 # Import provider content
@@ -82,7 +81,6 @@ __all__ = [
     "Metadata",
     "Period",
     # Provider Assets
-    "ProviderAssetStatus",
     "ProviderAssetAttribute",
     "ProviderAssetPeriodAttribute",
     "ProviderAssetMetadata",

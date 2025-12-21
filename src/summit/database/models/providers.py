@@ -6,10 +6,11 @@ from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
 
 from summit.database.models.assets import Asset
 from summit.database.models.base import Base
+from summit.database.models.descriptors import Metadata
 from summit.database.models.types import ProviderType
 
 if TYPE_CHECKING:
-    from summit.database.models.provider_assets import ProviderAssetStatus
+    from summit.database.models.provider_assets import ProviderAssetMetadata
 
 
 class Provider(Base):
@@ -71,44 +72,61 @@ class Provider(Base):
         self,
         engine: Engine,
         asset_ids: list[int] = None,
-    ) -> set["ProviderAssetStatus"]:
-        from summit.database.models.provider_assets import ProviderAssetStatus
+    ) -> set[Asset]:
+        from summit.database.models.provider_assets import ProviderAssetMetadata
 
         if asset_ids is None:
             asset_ids = []
         with Session(engine) as session:
+            # Get the metadata_id for "is_active"
+            is_active_metadata = session.scalar(
+                select(Metadata.id).where(Metadata.name == "is_active")
+            )
+            if is_active_metadata is None:
+                return set()
+
             # Subquery to get the latest timestamp for each provider_id, asset_id combination
+            # where is_active is True
             latest_timestamps_subq = (
                 select(
-                    ProviderAssetStatus.provider_id,
-                    ProviderAssetStatus.asset_id,
-                    func.max(ProviderAssetStatus.timestamp).label("max_timestamp"),
+                    ProviderAssetMetadata.provider_id,
+                    ProviderAssetMetadata.asset_id,
+                    func.max(ProviderAssetMetadata.timestamp).label("max_timestamp"),
                 )
-                .where(ProviderAssetStatus.provider_id == self.id, ProviderAssetStatus.is_active)
-                .group_by(ProviderAssetStatus.provider_id, ProviderAssetStatus.asset_id)
+                .where(
+                    ProviderAssetMetadata.provider_id == self.id,
+                    ProviderAssetMetadata.metadata_id == is_active_metadata,
+                    ProviderAssetMetadata.value.astext.cast(bool) == True,  # JSON value is True
+                )
+                .group_by(ProviderAssetMetadata.provider_id, ProviderAssetMetadata.asset_id)
                 .subquery()
             )
 
-            # Query to get assets that have provider_asset_status entries with the latest timestamps
+            # Query to get assets that have provider_asset_metadata entries with is_active=True
+            # at the latest timestamps
             query = (
-                select(ProviderAssetStatus)
-                .join(Asset, ProviderAssetStatus.asset_id == Asset.id)
+                select(Asset)
+                .join(
+                    ProviderAssetMetadata,
+                    Asset.id == ProviderAssetMetadata.asset_id,
+                )
                 .join(
                     latest_timestamps_subq,
-                    (ProviderAssetStatus.provider_id == latest_timestamps_subq.c.provider_id)
-                    & (ProviderAssetStatus.asset_id == latest_timestamps_subq.c.asset_id)
-                    & (ProviderAssetStatus.timestamp == latest_timestamps_subq.c.max_timestamp),
+                    (ProviderAssetMetadata.provider_id == latest_timestamps_subq.c.provider_id)
+                    & (ProviderAssetMetadata.asset_id == latest_timestamps_subq.c.asset_id)
+                    & (ProviderAssetMetadata.timestamp == latest_timestamps_subq.c.max_timestamp),
                 )
                 .where(
-                    ProviderAssetStatus.provider_id == self.id,
-                    ProviderAssetStatus.is_active,
+                    ProviderAssetMetadata.provider_id == self.id,
+                    ProviderAssetMetadata.metadata_id == is_active_metadata,
+                    ProviderAssetMetadata.value.astext.cast(bool) == True,
                     Asset.is_active,
                 )
             )
 
             # Add asset ID filter if provided
             if asset_ids:
-                query = query.where(ProviderAssetStatus.asset_id.in_(asset_ids))
+                query = query.where(Asset.id.in_(asset_ids))
 
             # Execute query and return results as a set
             assets = session.scalars(query).all()
