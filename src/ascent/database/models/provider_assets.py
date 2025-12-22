@@ -11,10 +11,10 @@ from ascent.database.models.providers import Provider
 
 
 class ProviderAssetAttribute(Base):
+    # TODO: Re-add partitioning when needed. Previously partitioned by HASH (attribute_id)
     __tablename__ = "provider_asset_attribute"
     __table_args__ = {
         "comment": "Stores market data attributes for provider asset markets. Uses a flexible attribute-based design where each attribute value is stored as a separate row, allowing new market data attributes to be added without schema changes.",
-        "postgresql_partition_by": "HASH (attribute_id)",
     }
 
     timestamp: Mapped[datetime.datetime] = mapped_column(
@@ -60,10 +60,10 @@ class ProviderAssetAttribute(Base):
 
 
 class ProviderAssetPeriodAttribute(Base):
+    # TODO: Re-add partitioning when needed. Previously partitioned by HASH (attribute_id, period_id)
     __tablename__ = "provider_asset_period_attribute"
     __table_args__ = {
         "comment": "Stores market data attributes for provider asset markets with time periods. Uses a flexible attribute-based design where each attribute value is stored as a separate row, allowing new market data attributes to be added without schema changes. Periods are defined in the Period table for reusability.",
-        "postgresql_partition_by": "HASH (attribute_id, period_id)",
     }
 
     timestamp: Mapped[datetime.datetime] = mapped_column(
@@ -116,10 +116,10 @@ class ProviderAssetPeriodAttribute(Base):
 
 
 class ProviderAssetMetadata(Base):
+    # TODO: Re-add partitioning when needed. Previously partitioned by HASH (metadata_id)
     __tablename__ = "provider_asset_metadata"
     __table_args__ = {
         "comment": "Stores text/metadata attributes for provider assets (e.g., symbols like 'BTC' vs 'XBT', exchange codes, provider-specific identifiers). Replaces the original ProviderAsset table's asset_code field with a flexible attribute-based design. Each metadata value is stored as a separate row, allowing new metadata attributes to be added without schema changes. Similar to ProviderAssetAttribute but for text values instead of numerical values. Tracks metadata history through time-series snapshots.",
-        "postgresql_partition_by": "HASH (metadata_id)",
     }
 
     timestamp: Mapped[datetime.datetime] = mapped_column(

@@ -57,10 +57,10 @@ class ProviderContent(Base):
 
 
 class ProviderContentAttribute(Base):
+    # TODO: Re-add partitioning when needed. Previously partitioned by HASH (attribute_id)
     __tablename__ = "provider_content_attribute"
     __table_args__ = {
         "comment": "Stores attributes for provider content (e.g., sentiment scores). Uses a flexible attribute-based design where each attribute value is stored as a separate row, allowing new content attributes to be added without schema changes.",
-        "postgresql_partition_by": "HASH (attribute_id)",
     }
 
     provider_content_id: Mapped[int] = mapped_column(
@@ -105,10 +105,10 @@ class ProviderContentAttribute(Base):
 
 
 class ProviderContentMetadata(Base):
+    # TODO: Re-add partitioning when needed. Previously partitioned by HASH (metadata_id)
     __tablename__ = "provider_content_metadata"
     __table_args__ = {
         "comment": "Stores text/metadata attributes for provider content (e.g., authors, title, description, content). Uses a flexible metadata-based design where each metadata value is stored as a separate row, allowing new content metadata to be added without schema changes. Similar to ProviderAssetMetadata but for content text fields.",
-        "postgresql_partition_by": "HASH (metadata_id)",
     }
 
     timestamp: Mapped[datetime.datetime] = mapped_column(
