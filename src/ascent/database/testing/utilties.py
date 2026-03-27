@@ -241,7 +241,7 @@ def postgres_test_harness(prefect_server_startup_timeout: int = 30, use_prefect:
     _cleanup_old_test_volumes()
 
     # Get PostgreSQL version from environment variable or default to latest
-    postgres_version = os.getenv("POSTGRES_VERSION", "latest")
+    os.getenv("POSTGRES_VERSION", "latest")
 
     # Generate unique names with distinctive prefix to avoid confusion
     unique_id = uuid.uuid4().hex[:8]
@@ -276,15 +276,15 @@ def postgres_test_harness(prefect_server_startup_timeout: int = 30, use_prefect:
     engine = None
     volume = None
     try:
-        # Start PostgreSQL container
+        # Start TimescaleDB container (PostgreSQL + timeseries extensions)
         LOGGER.info(
-            f"Starting PostgreSQL container '{container_name}' with image postgres:{postgres_version}..."
+            f"Starting TimescaleDB container '{container_name}' with image timescale/timescaledb:latest-pg17..."
         )
 
-        # Start PostgreSQL container with named ephemeral volume
+        # Start TimescaleDB container with named ephemeral volume
         # Mount the parent directory to prevent anonymous volume creation
         container = client.containers.run(
-            f"postgres:{postgres_version}",
+            "timescale/timescaledb:latest-pg17",
             name=container_name,
             environment={
                 "POSTGRES_USER": db_user,
@@ -339,8 +339,14 @@ def postgres_test_harness(prefect_server_startup_timeout: int = 30, use_prefect:
         _validate_test_database_connection(engine)
         LOGGER.info("Database connection validation passed - safe for testing")
 
+        # Enable TimescaleDB extension before creating tables
+        LOGGER.info("Enabling TimescaleDB extension...")
+        with engine.connect() as conn:
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS timescaledb"))
+            conn.commit()
+
         # Create all models in the database
-        LOGGER.info("Creating all tables in the PostgreSQL database...")
+        LOGGER.info("Creating all tables in the database...")
         models.Base.metadata.create_all(engine)
 
         if use_prefect:

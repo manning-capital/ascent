@@ -1,7 +1,8 @@
 import datetime
+import uuid
 from typing import Optional
 
-from sqlalchemy import Engine, ForeignKey, String, func, select
+from sqlalchemy import Engine, ForeignKey, String, Uuid, func, select
 from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
 
 from ascent.database.models.assets import Asset
@@ -14,10 +15,11 @@ class Provider(Base):
     __tablename__ = "provider"
     __table_args__ = {"comment": "The provider, e.g. data vendor, news, social media, etc."}
 
-    id: Mapped[int] = mapped_column(
-        primary_key=True, comment="The unique identifier of the provider"
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, primary_key=True, default=uuid.uuid4, comment="The unique identifier of the provider"
     )
-    provider_type_id: Mapped[int] = mapped_column(
+    provider_type_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("provider_type.id"),
         nullable=False,
         comment="The identifier of the provider type",
@@ -34,7 +36,8 @@ class Provider(Base):
         nullable=True,
         comment="The external code of the provider, this is used to identify the provider in the provider's system. For example, for a news provider, it could be the name of the provider or an internal ID.",
     )
-    underlying_provider_id: Mapped[int | None] = mapped_column(
+    underlying_provider_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
         ForeignKey("provider.id"),
         nullable=True,
         comment="The identifier of the underlying provider",
@@ -68,7 +71,7 @@ class Provider(Base):
     def get_all_assets(
         self,
         engine: Engine,
-        asset_ids: list[int] = None,
+        asset_ids: list[uuid.UUID] = None,
     ) -> set[Asset]:
         from ascent.database.models.provider_assets import ProviderAssetMetadata
 

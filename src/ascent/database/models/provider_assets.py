@@ -1,6 +1,7 @@
 import datetime
+import uuid
 
-from sqlalchemy import ForeignKey, func
+from sqlalchemy import ForeignKey, Uuid, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -22,28 +23,32 @@ class ProviderAssetAttribute(Base):
         primary_key=True,
         comment="The timestamp of the provider asset market",
     )
-    provider_id: Mapped[int] = mapped_column(
+    provider_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("provider.id"),
         nullable=False,
         primary_key=True,
         comment="The identifier of the provider",
     )
     provider: Mapped["Provider"] = relationship("Provider")
-    from_asset_id: Mapped[int] = mapped_column(
+    from_asset_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("asset.id"),
         nullable=False,
         primary_key=True,
         comment="The identifier of the from asset. This is also called the base asset.",
     )
     from_asset: Mapped["Asset"] = relationship("Asset", foreign_keys=[from_asset_id])
-    to_asset_id: Mapped[int] = mapped_column(
+    to_asset_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("asset.id"),
         nullable=False,
         primary_key=True,
         comment="The identifier of the to asset. This is also called the quote asset.",
     )
     to_asset: Mapped["Asset"] = relationship("Asset", foreign_keys=[to_asset_id])
-    attribute_id: Mapped[int] = mapped_column(
+    attribute_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("attribute.id"),
         nullable=False,
         primary_key=True,
@@ -71,35 +76,40 @@ class ProviderAssetPeriodAttribute(Base):
         primary_key=True,
         comment="The timestamp of the provider asset market",
     )
-    provider_id: Mapped[int] = mapped_column(
+    provider_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("provider.id"),
         nullable=False,
         primary_key=True,
         comment="The identifier of the provider",
     )
     provider: Mapped["Provider"] = relationship("Provider")
-    from_asset_id: Mapped[int] = mapped_column(
+    from_asset_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("asset.id"),
         nullable=False,
         primary_key=True,
         comment="The identifier of the from asset. This is also called the base asset.",
     )
     from_asset: Mapped["Asset"] = relationship("Asset", foreign_keys=[from_asset_id])
-    to_asset_id: Mapped[int] = mapped_column(
+    to_asset_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("asset.id"),
         nullable=False,
         primary_key=True,
         comment="The identifier of the to asset. This is also called the quote asset.",
     )
     to_asset: Mapped["Asset"] = relationship("Asset", foreign_keys=[to_asset_id])
-    period_id: Mapped[int] = mapped_column(
+    period_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("period.id"),
         nullable=False,
         primary_key=True,
         comment="The identifier of the period used for the calculation",
     )
     period: Mapped["Period"] = relationship("Period")
-    attribute_id: Mapped[int] = mapped_column(
+    attribute_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("attribute.id"),
         nullable=False,
         primary_key=True,
@@ -127,21 +137,24 @@ class ProviderAssetMetadata(Base):
         nullable=False,
         comment="The timestamp when this metadata snapshot is valid. Part of the primary key to enable time-series metadata tracking and historical reconciliation.",
     )
-    provider_id: Mapped[int] = mapped_column(
+    provider_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("provider.id"),
         nullable=False,
         primary_key=True,
         comment="The identifier of the provider",
     )
     provider: Mapped["Provider"] = relationship("Provider")
-    asset_id: Mapped[int] = mapped_column(
+    asset_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("asset.id"),
         nullable=False,
         primary_key=True,
         comment="The identifier of the asset",
     )
     asset: Mapped["Asset"] = relationship("Asset")
-    metadata_id: Mapped[int] = mapped_column(
+    metadata_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("metadata.id"),
         nullable=False,
         primary_key=True,

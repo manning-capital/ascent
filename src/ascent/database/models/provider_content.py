@@ -1,6 +1,7 @@
 import datetime
+import uuid
 
-from sqlalchemy import ForeignKey, String, func
+from sqlalchemy import ForeignKey, String, Uuid, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -17,13 +18,17 @@ class ProviderContent(Base):
         "comment": "Stores provider content records. Text fields (authors, title, description, content) are stored in ProviderContentMetadata using the flexible metadata descriptor pattern."
     }
 
-    id: Mapped[int] = mapped_column(
-        primary_key=True, comment="The unique identifier of the provider content"
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        primary_key=True,
+        default=uuid.uuid4,
+        comment="The unique identifier of the provider content",
     )
     timestamp: Mapped[datetime.datetime] = mapped_column(
         nullable=False, comment="The timestamp of the provider content"
     )
-    provider_id: Mapped[int] = mapped_column(
+    provider_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("provider.id"),
         nullable=False,
         comment="The identifier of the provider",
@@ -34,7 +39,8 @@ class ProviderContent(Base):
         nullable=False,
         comment="This is the external identifier for the content and will depend on the content provider and the type of content. For example, for a news article, it could be the URL of the article and for a social media post, it could be the post ID.",
     )
-    content_type_id: Mapped[int] = mapped_column(
+    content_type_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("content_type.id"),
         nullable=False,
         comment="The identifier of the content type",
@@ -63,21 +69,24 @@ class ProviderContentAttribute(Base):
         "comment": "Stores attributes for provider content (e.g., sentiment scores). Uses a flexible attribute-based design where each attribute value is stored as a separate row, allowing new content attributes to be added without schema changes.",
     }
 
-    provider_content_id: Mapped[int] = mapped_column(
+    provider_content_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("provider_content.id"),
         primary_key=True,
         nullable=False,
         comment="The identifier of the provider content",
     )
     provider_content: Mapped["ProviderContent"] = relationship("ProviderContent")
-    sentiment_type_id: Mapped[int] = mapped_column(
+    sentiment_type_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("sentiment_type.id"),
         primary_key=True,
         nullable=False,
         comment="The identifier of the sentiment type",
     )
     sentiment_type: Mapped["SentimentType"] = relationship("SentimentType")
-    attribute_id: Mapped[int] = mapped_column(
+    attribute_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("attribute.id"),
         nullable=False,
         primary_key=True,
@@ -116,14 +125,16 @@ class ProviderContentMetadata(Base):
         nullable=False,
         comment="The timestamp when this metadata snapshot is valid. Part of the primary key to enable time-series metadata tracking and historical reconciliation.",
     )
-    provider_content_id: Mapped[int] = mapped_column(
+    provider_content_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("provider_content.id"),
         nullable=False,
         primary_key=True,
         comment="The identifier of the provider content",
     )
     provider_content: Mapped["ProviderContent"] = relationship("ProviderContent")
-    metadata_id: Mapped[int] = mapped_column(
+    metadata_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("metadata.id"),
         nullable=False,
         primary_key=True,
@@ -157,14 +168,16 @@ class AssetContent(Base):
         "comment": "The asset content, will store the relationship between an asset and a provider content."
     }
 
-    content_id: Mapped[int] = mapped_column(
+    content_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("provider_content.id"),
         primary_key=True,
         nullable=False,
         comment="The identifier of the provider content",
     )
     provider_content: Mapped["ProviderContent"] = relationship("ProviderContent")
-    asset_id: Mapped[int] = mapped_column(
+    asset_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("asset.id"),
         primary_key=True,
         nullable=False,

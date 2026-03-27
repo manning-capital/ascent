@@ -1,7 +1,8 @@
 import datetime
+import uuid
 from typing import Optional
 
-from sqlalchemy import ForeignKey, String, func
+from sqlalchemy import ForeignKey, String, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ascent.database.models.base import Base
@@ -12,8 +13,11 @@ class Asset(Base):
     __tablename__ = "asset"
     __table_args__ = {"comment": "The asset, e.g. stock, bond, currency, etc."}
 
-    id: Mapped[int] = mapped_column(primary_key=True, comment="The unique identifier of the asset")
-    asset_type_id: Mapped[int] = mapped_column(
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, primary_key=True, default=uuid.uuid4, comment="The unique identifier of the asset"
+    )
+    asset_type_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("asset_type.id"),
         nullable=False,
         comment="The identifier of the asset type",
@@ -26,7 +30,8 @@ class Asset(Base):
     symbol: Mapped[str | None] = mapped_column(
         String(100), nullable=True, comment="The symbol of the asset"
     )
-    underlying_asset_id: Mapped[int | None] = mapped_column(
+    underlying_asset_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
         ForeignKey("asset.id"),
         nullable=True,
         comment="The identifier of the underlying asset",

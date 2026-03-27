@@ -1,6 +1,7 @@
 import datetime
+import uuid
 
-from sqlalchemy import String, func
+from sqlalchemy import String, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ascent.database.models.base import Base
@@ -12,8 +13,8 @@ class Attribute(Base):
         "comment": "Stores attribute type definitions for numerical/temporal floating point values. Attributes represent the numerical state of an item at a point in time (e.g., close price, volume, cointegration_p_value, ou_mu, linear_fit_alpha). This table allows extending attributes without changing the database schema, as new attributes can be added as rows rather than columns."
     }
 
-    id: Mapped[int] = mapped_column(
-        primary_key=True, comment="The unique identifier of the attribute"
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, primary_key=True, default=uuid.uuid4, comment="The unique identifier of the attribute"
     )
     name: Mapped[str] = mapped_column(
         String(100),
@@ -49,7 +50,9 @@ class Period(Base):
         "comment": "Defines time periods that extend attributes to represent lookback periods. When an attribute is used with a period, it signifies that the attribute applies to the timestamp or a lookback period (e.g., 1 hour, 1 day, 1 week). Allows dynamic period definitions without schema changes."
     }
 
-    id: Mapped[int] = mapped_column(primary_key=True, comment="The unique identifier of the period")
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, primary_key=True, default=uuid.uuid4, comment="The unique identifier of the period"
+    )
     name: Mapped[str] = mapped_column(
         String(100),
         nullable=False,
@@ -88,8 +91,11 @@ class Metadata(Base):
         "comment": "Stores metadata type definitions for categorical and structured data (e.g., symbol, exchange_code, provider_ticker). Metadata categorizes items as-of a particular time and represents non-numerical characteristics stored as JSON values. Values can be text, numbers, booleans, objects, or arrays, allowing for dynamic and structured data. This table allows extending metadata types without changing the database schema, as new metadata types can be added as rows rather than columns. Separate from Attribute table to distinguish between numerical temporal state values (attributes) and categorical/structured classification data (metadata)."
     }
 
-    id: Mapped[int] = mapped_column(
-        primary_key=True, comment="The unique identifier of the metadata type"
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        primary_key=True,
+        default=uuid.uuid4,
+        comment="The unique identifier of the metadata type",
     )
     name: Mapped[str] = mapped_column(
         String(100),
@@ -101,6 +107,12 @@ class Metadata(Base):
         String(1000),
         nullable=True,
         comment="The description of the metadata type, explaining what categorical classification or structured data it represents and how it is used. Metadata values are stored as JSON (text, numbers, booleans, objects, or arrays) that categorizes or describes items as-of a particular time.",
+    )
+    value_type: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        server_default="string",
+        comment="The data type for this metadata's value. One of: string, number, boolean, json, date. Controls how the form renders in the UI.",
     )
     is_active: Mapped[bool] = mapped_column(
         default=True, comment="Whether the metadata type is active"

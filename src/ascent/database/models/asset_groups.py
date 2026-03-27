@@ -1,13 +1,13 @@
 import datetime
+import uuid
 
-from sqlalchemy import ForeignKey, func
+from sqlalchemy import ForeignKey, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ascent.database.models.assets import Asset
 from ascent.database.models.base import Base
 from ascent.database.models.descriptors import Attribute, Period
 from ascent.database.models.providers import Provider
-from ascent.database.models.types import AssetGroupType
 
 
 class ProviderAssetGroup(Base):
@@ -16,15 +16,12 @@ class ProviderAssetGroup(Base):
         "comment": "Groups provider assets for calculating aggregated statistical values between members. Each group contains provider asset pairs that share statistical relationships for cointegration analysis, mean reversion modeling, and linear regression calculations."
     }
 
-    id: Mapped[int] = mapped_column(
-        primary_key=True, comment="The unique identifier of the asset group"
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        primary_key=True,
+        default=uuid.uuid4,
+        comment="The unique identifier of the asset group",
     )
-    asset_group_type_id: Mapped[int] = mapped_column(
-        ForeignKey("asset_group_type.id"),
-        nullable=False,
-        comment="The identifier of the asset group type",
-    )
-    asset_group_type: Mapped["AssetGroupType"] = relationship("AssetGroupType")
     members: Mapped[list["ProviderAssetGroupMember"]] = relationship(
         "ProviderAssetGroupMember",
         cascade="all, delete-orphan",
@@ -55,27 +52,31 @@ class ProviderAssetGroupMember(Base):
         "comment": "Maps provider asset pairs to statistical groups for aggregated calculations. Each record represents a pair of assets (from_asset_id, to_asset_id) from a specific provider that belong to a statistical group. Optional order field allows sequencing within groups for hierarchical analysis."
     }
 
-    provider_asset_group_id: Mapped[int] = mapped_column(
+    provider_asset_group_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("provider_asset_group.id"),
         primary_key=True,
         nullable=False,
         comment="The identifier of the provider asset group",
     )
-    provider_id: Mapped[int] = mapped_column(
+    provider_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("provider.id"),
         primary_key=True,
         nullable=False,
         comment="The identifier of the provider",
     )
     provider: Mapped["Provider"] = relationship("Provider")
-    from_asset_id: Mapped[int] = mapped_column(
+    from_asset_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("asset.id"),
         primary_key=True,
         nullable=False,
         comment="The identifier of the from asset (base asset)",
     )
     from_asset: Mapped["Asset"] = relationship("Asset", foreign_keys=[from_asset_id])
-    to_asset_id: Mapped[int] = mapped_column(
+    to_asset_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("asset.id"),
         primary_key=True,
         nullable=False,
@@ -109,14 +110,16 @@ class ProviderAssetGroupAttribute(Base):
         primary_key=True,
         comment="The timestamp of the provider asset group attributes",
     )
-    provider_asset_group_id: Mapped[int] = mapped_column(
+    provider_asset_group_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("provider_asset_group.id"),
         nullable=False,
         primary_key=True,
         comment="The identifier of the provider asset group",
     )
     provider_asset_group: Mapped["ProviderAssetGroup"] = relationship("ProviderAssetGroup")
-    attribute_id: Mapped[int] = mapped_column(
+    attribute_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("attribute.id"),
         nullable=False,
         primary_key=True,
@@ -144,21 +147,24 @@ class ProviderAssetGroupPeriodAttribute(Base):
         primary_key=True,
         comment="The timestamp of the provider asset group attributes",
     )
-    provider_asset_group_id: Mapped[int] = mapped_column(
+    provider_asset_group_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("provider_asset_group.id"),
         nullable=False,
         primary_key=True,
         comment="The identifier of the provider asset group",
     )
     provider_asset_group: Mapped["ProviderAssetGroup"] = relationship("ProviderAssetGroup")
-    period_id: Mapped[int] = mapped_column(
+    period_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("period.id"),
         nullable=False,
         primary_key=True,
         comment="The identifier of the period used for the calculation",
     )
     period: Mapped["Period"] = relationship("Period")
-    attribute_id: Mapped[int] = mapped_column(
+    attribute_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("attribute.id"),
         nullable=False,
         primary_key=True,

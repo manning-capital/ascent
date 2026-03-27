@@ -1,11 +1,13 @@
 import datetime
+import uuid
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import ForeignKey, String, func
+from sqlalchemy import ForeignKey, String, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ascent.database.models.assets import Asset
 from ascent.database.models.base import Base
+from ascent.database.models.providers import Provider
 
 if TYPE_CHECKING:
     from ascent.database.models.transactions import Transaction
@@ -17,8 +19,8 @@ class Portfolio(Base):
         "comment": "The portfolio, represents a collection of assets and their transactions for tracking investment strategies and performance."
     }
 
-    id: Mapped[int] = mapped_column(
-        primary_key=True, comment="The unique identifier of the portfolio"
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid, primary_key=True, default=uuid.uuid4, comment="The unique identifier of the portfolio"
     )
     name: Mapped[str] = mapped_column(
         String(100), nullable=False, comment="The name of the portfolio"
@@ -26,6 +28,22 @@ class Portfolio(Base):
     description: Mapped[str | None] = mapped_column(
         String(1000), nullable=True, comment="The description of the portfolio"
     )
+    base_currency_asset_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("asset.id"),
+        nullable=True,
+        comment="The identifier of the base currency asset for P&L denomination. All P&L calculations for this portfolio are expressed in this currency.",
+    )
+    base_currency_asset: Mapped[Optional["Asset"]] = relationship(
+        "Asset", foreign_keys="[Portfolio.base_currency_asset_id]"
+    )
+    pricing_provider_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("provider.id"),
+        nullable=True,
+        comment="The identifier of the provider whose prices are used for mark-to-market and unrealized P&L calculations.",
+    )
+    pricing_provider: Mapped[Optional["Provider"]] = relationship("Provider")
     is_active: Mapped[bool] = mapped_column(default=True, comment="Whether the portfolio is active")
     created_at: Mapped[datetime.datetime] = mapped_column(
         nullable=False,
@@ -64,14 +82,16 @@ class PortfolioAssetHolding(Base):
         nullable=False,
         comment="The timestamp when this position snapshot is valid. Part of the primary key to enable time-series position tracking and historical reconciliation.",
     )
-    portfolio_id: Mapped[int] = mapped_column(
+    portfolio_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("portfolio.id"),
         primary_key=True,
         nullable=False,
         comment="The identifier of the portfolio",
     )
     portfolio: Mapped["Portfolio"] = relationship("Portfolio", back_populates="holdings")
-    asset_id: Mapped[int] = mapped_column(
+    asset_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("asset.id"),
         primary_key=True,
         nullable=False,
@@ -86,7 +106,8 @@ class PortfolioAssetHolding(Base):
         nullable=True,
         comment="The average cost per unit for this position at this timestamp. Used for calculating unrealized P&L. Calculated as the weighted average of all purchase prices.",
     )
-    last_transaction_id: Mapped[int | None] = mapped_column(
+    last_transaction_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
         ForeignKey("transaction.id"),
         nullable=True,
         comment="The identifier of the last transaction that updated this position. Used for reconciliation and audit trail purposes.",

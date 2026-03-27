@@ -1,6 +1,7 @@
 import datetime
+import uuid
 
-from sqlalchemy import ForeignKey, func
+from sqlalchemy import ForeignKey, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ascent.database.models.assets import Asset
@@ -15,31 +16,38 @@ class Transaction(Base):
         "comment": "Represents individual portfolio transactions including buys, sells, and transfers. Used to track all asset movements within and between portfolios."
     }
 
-    id: Mapped[int] = mapped_column(
-        primary_key=True, comment="The unique identifier of the transaction"
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        primary_key=True,
+        default=uuid.uuid4,
+        comment="The unique identifier of the transaction",
     )
     timestamp: Mapped[datetime.datetime] = mapped_column(
         nullable=False, comment="The date and time when the transaction occurred"
     )
-    transaction_type_id: Mapped[int] = mapped_column(
+    transaction_type_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("transaction_type.id"),
         nullable=False,
         comment="The identifier of the transaction type",
     )
     transaction_type: Mapped["TransactionType"] = relationship("TransactionType")
-    portfolio_id: Mapped[int] = mapped_column(
+    portfolio_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("portfolio.id"),
         nullable=False,
         comment="The identifier of the portfolio this transaction belongs to",
     )
     portfolio: Mapped["Portfolio"] = relationship("Portfolio", back_populates="transactions")
-    from_asset_id: Mapped[int] = mapped_column(
+    from_asset_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("asset.id"),
         nullable=False,
         comment="The identifier of the source asset in the exchange. Represents the asset being exchanged from.",
     )
     from_asset: Mapped["Asset"] = relationship("Asset", foreign_keys=[from_asset_id])
-    to_asset_id: Mapped[int] = mapped_column(
+    to_asset_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("asset.id"),
         nullable=False,
         comment="The identifier of the destination asset in the exchange. Represents the asset being exchanged to.",
@@ -52,6 +60,17 @@ class Transaction(Base):
         nullable=False,
         comment="The exchange price from the from_asset to the to_asset. Represents the price per unit of the to_asset in terms of the from_asset. For example, if buying 1 BTC with 50000 USD, price would be 50000 (1 BTC costs 50000 USD).",
     )
+    fee_amount: Mapped[float | None] = mapped_column(
+        nullable=True,
+        comment="The fee/commission charged for this transaction. Null if no fee or fee not tracked.",
+    )
+    fee_asset_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("asset.id"),
+        nullable=True,
+        comment="The identifier of the asset in which the fee was charged. Null if no fee.",
+    )
+    fee_asset: Mapped["Asset"] = relationship("Asset", foreign_keys=[fee_asset_id])
 
     # Relationship to groups
     groups: Mapped[list["TransactionGroup"]] = relationship(
@@ -77,8 +96,11 @@ class TransactionGroup(Base):
         "comment": "Groups related transactions together for market neutral and paired trading strategies. Used to link offsetting long and short positions."
     }
 
-    id: Mapped[int] = mapped_column(
-        primary_key=True, comment="The unique identifier of the transaction group"
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        primary_key=True,
+        default=uuid.uuid4,
+        comment="The unique identifier of the transaction group",
     )
     created_at: Mapped[datetime.datetime] = mapped_column(
         nullable=False,
@@ -103,22 +125,24 @@ class TransactionGroupMember(Base):
         "comment": "Junction table linking transactions to their groups. Enables many-to-many relationship between transactions and groups."
     }
 
-    transaction_group_id: Mapped[int] = mapped_column(
+    transaction_group_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("transaction_group.id"),
         primary_key=True,
         nullable=False,
         comment="The identifier of the transaction group",
     )
     transaction_group: Mapped["TransactionGroup"] = relationship(
-        "TransactionGroup", overlaps="transactions"
+        "TransactionGroup", overlaps="transactions,groups"
     )
-    transaction_id: Mapped[int] = mapped_column(
+    transaction_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("transaction.id"),
         primary_key=True,
         nullable=False,
         comment="The identifier of the transaction",
     )
-    transaction: Mapped["Transaction"] = relationship("Transaction", overlaps="groups")
+    transaction: Mapped["Transaction"] = relationship("Transaction", overlaps="groups,transactions")
     created_at: Mapped[datetime.datetime] = mapped_column(
         nullable=False,
         server_default=func.now(),
@@ -140,14 +164,16 @@ class TransactionStatus(Base):
         primary_key=True,
         comment="The timestamp when the status was recorded",
     )
-    transaction_id: Mapped[int] = mapped_column(
+    transaction_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("transaction.id"),
         nullable=False,
         primary_key=True,
         comment="The identifier of the transaction",
     )
     transaction: Mapped["Transaction"] = relationship("Transaction", back_populates="statuses")
-    transaction_status_type_id: Mapped[int] = mapped_column(
+    transaction_status_type_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
         ForeignKey("transaction_status_type.id"),
         nullable=False,
         comment="The identifier of the transaction status type",
