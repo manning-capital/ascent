@@ -1,0 +1,37 @@
+<div class="p-6 max-w-7xl mx-auto">
+  <h1 class="text-2xl font-bold mb-6">Feeds</h1>
+
+  @if (feedService.loading()) {
+    <app-loading/>
+  } @else {
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      @for (feed of feedService.feeds(); track feed.id) {
+        <a [routerLink]="['/feeds', feed.id]"
+           class="rounded-xl border border-edge bg-surface/50 p-5 hover:bg-elevated/50 transition-colors block">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="font-semibold truncate">{{ feed.name }}</h3>
+            <span class="w-2.5 h-2.5 rounded-full shrink-0" [class]="feed.is_active ? 'bg-positive' : 'bg-fg-faint'"></span>
+          </div>
+          @if (feed.description) {
+            <p class="text-xs text-fg-faint mb-4 line-clamp-2">{{ feed.description }}</p>
+          }
+
+          <div class="grid grid-cols-3 gap-3 mb-4">
+            <app-stat-card label="Schedule" [value]="scheduleLabel(feed.schedule)" variant="flat" size="sm" align="center"/>
+            <app-stat-card label="Total Runs" [value]="'' + feed.total_runs" variant="flat" size="md" align="center"/>
+            <app-stat-card label="Last Status" [value]="feed.last_run_status ?? 'N/A'" [valueClass]="statusClass(feed.last_run_status)" variant="flat" size="sm" align="center"/>
+          </div>
+
+          <div class="flex items-center justify-between text-xs text-fg-faint">
+            <span class="truncate" title="{{ feed.channel }}">{{ feed.channel }}</span>
+            @if (feed.last_run_at) {
+              <span class="shrink-0 ml-2">{{ feed.last_run_at | date:'short' }}</span>
+            }
+          </div>
+        </a>
+      } @empty {
+        <div class="col-span-full text-center text-fg-faint py-12">No feeds found.</div>
+      }
+    </div>
+  }
+</div>

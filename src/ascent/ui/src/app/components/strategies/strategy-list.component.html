@@ -1,0 +1,35 @@
+<div class="p-6 max-w-7xl mx-auto">
+  <h1 class="text-2xl font-bold mb-6">Strategies</h1>
+
+  @if (strategyService.loading()) {
+    <app-loading/>
+  } @else {
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      @for (strategy of strategyService.strategies(); track strategy.id) {
+        <a [routerLink]="['/strategies', strategy.id]"
+           class="rounded-xl border border-edge bg-surface/50 p-5 hover:bg-elevated/50 transition-colors block">
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="font-semibold">{{ strategy.name }}</h3>
+            <span class="w-2.5 h-2.5 rounded-full" [class]="strategy.is_active ? 'bg-positive' : 'bg-fg-faint'"></span>
+          </div>
+          <p class="text-xs text-fg-muted mb-1">{{ strategy.strategy_type }}</p>
+          @if (strategy.description) {
+            <p class="text-xs text-fg-faint mb-4 line-clamp-2">{{ strategy.description }}</p>
+          }
+          <div class="grid grid-cols-3 gap-3 mb-4">
+            <app-stat-card label="Trades" [value]="'' + strategy.total_trades" variant="flat" size="md" align="center"/>
+            <app-stat-card label="Win Rate" [value]="strategy.win_rate + '%'" variant="flat" size="md" align="center"/>
+            <app-stat-card label="Open" [value]="'' + strategy.open_trades" variant="flat" size="md" align="center"/>
+          </div>
+          <div class="grid grid-cols-3 gap-3">
+            <app-stat-card label="Total P&L" [value]="formatCurrency(strategy.total_pnl)" [valueClass]="pnlClass(strategy.total_pnl)" variant="flat" size="sm" align="center"/>
+            <app-stat-card label="Avg Win" [value]="formatCurrency(strategy.avg_win)" valueClass="text-positive" variant="flat" size="sm" align="center"/>
+            <app-stat-card label="Avg Loss" [value]="formatCurrency(strategy.avg_loss)" valueClass="text-negative" variant="flat" size="sm" align="center"/>
+          </div>
+        </a>
+      } @empty {
+        <div class="col-span-full text-center text-fg-faint py-12">No strategies found.</div>
+      }
+    </div>
+  }
+</div>

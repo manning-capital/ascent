@@ -1,0 +1,341 @@
+@if (providerService.loading()) {
+  <div class="flex items-center justify-center h-[calc(100vh-3.5rem)]">
+    <app-loading/>
+  </div>
+} @else {
+  @let provider = providerService.selectedProvider();
+  @if (provider) {
+  <div class="flex flex-col h-[calc(100vh-3.5rem)]">
+    <!-- Header Bar -->
+    <div class="flex items-center gap-3 px-4 py-2 border-b border-edge shrink-0 bg-surface/30">
+      <a routerLink="/settings/providers" class="text-sm text-info hover:underline">&larr; Providers</a>
+      <span class="text-fg/20">|</span>
+      <h1 class="text-lg font-bold truncate">{{ provider.name }}</h1>
+      <span class="w-2 h-2 rounded-full shrink-0" [class]="provider.is_active ? 'bg-positive' : 'bg-fg-faint'"></span>
+      @if (provider.provider_type_name) {
+        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wider bg-info/15 text-info">{{ provider.provider_type_name }}</span>
+      }
+      <div class="ml-auto flex items-center gap-2">
+        @if (!editing()) {
+          <button (click)="startEdit()" class="px-3 py-1 rounded-lg text-xs text-fg-muted hover:text-fg hover:bg-fg/5 transition-colors">Edit</button>
+          <button (click)="deleteProvider()" class="px-3 py-1 rounded-lg text-xs text-negative/70 hover:text-negative hover:bg-negative/10 transition-colors">Delete</button>
+        }
+      </div>
+    </div>
+
+    <app-panel-tabs [tabs]="tabs" [(activeTab)]="activeTab"/>
+
+    <div class="flex-1 overflow-hidden">
+
+      <!-- Overview Tab -->
+      @if (activeTab() === 'Overview') {
+        <div class="max-w-3xl mx-auto p-6 space-y-6 overflow-y-auto h-full">
+          @if (editing()) {
+            <div class="rounded-xl border border-info/50 bg-surface/50 p-5">
+              <h3 class="font-semibold text-sm mb-4">Edit Provider</h3>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs text-fg-muted mb-1">Name *</label>
+                  <input type="text" [(ngModel)]="editName" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info"/>
+                </div>
+                <div>
+                  <label class="block text-xs text-fg-muted mb-1">External Code</label>
+                  <input type="text" [(ngModel)]="editExternalCode" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info"/>
+                </div>
+                <div>
+                  <label class="block text-xs text-fg-muted mb-1">URL</label>
+                  <input type="text" [(ngModel)]="editUrl" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info"/>
+                </div>
+                <div>
+                  <label class="block text-xs text-fg-muted mb-1">Description</label>
+                  <textarea [(ngModel)]="editDescription" rows="2" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info"></textarea>
+                </div>
+                <div class="flex items-center gap-2">
+                  <input type="checkbox" [(ngModel)]="editIsActive" id="editActive" class="accent-info"/>
+                  <label for="editActive" class="text-sm text-fg-muted">Active</label>
+                </div>
+              </div>
+              <div class="flex gap-2 mt-4">
+                <button (click)="submitEdit()" class="px-4 py-2 rounded-lg bg-positive/15 text-positive text-sm font-medium hover:bg-positive/25 transition-colors">Save</button>
+                <button (click)="cancelEdit()" class="px-4 py-2 rounded-lg bg-fg/5 text-fg-muted text-sm font-medium hover:bg-fg/10 transition-colors">Cancel</button>
+              </div>
+            </div>
+          } @else {
+            <div class="rounded-xl border border-edge bg-surface/50 p-5">
+              <h3 class="font-semibold text-sm mb-3">Info</h3>
+              <div class="space-y-2 text-sm">
+                <div class="flex justify-between"><span class="text-fg-muted">Name</span><span class="font-medium">{{ provider.name }}</span></div>
+                @if (provider.provider_type_name) {
+                  <div class="flex justify-between"><span class="text-fg-muted">Type</span><span>{{ provider.provider_type_name }}</span></div>
+                }
+                @if (provider.provider_external_code) {
+                  <div class="flex justify-between"><span class="text-fg-muted">External Code</span><span class="font-mono text-xs">{{ provider.provider_external_code }}</span></div>
+                }
+                @if (provider.url) {
+                  <div class="flex justify-between"><span class="text-fg-muted">URL</span><a [href]="provider.url" target="_blank" class="text-info hover:underline text-xs truncate max-w-xs">{{ provider.url }}</a></div>
+                }
+                <div class="flex justify-between"><span class="text-fg-muted">Active</span><span>{{ provider.is_active ? 'Yes' : 'No' }}</span></div>
+                @if (provider.created_at) {
+                  <div class="flex justify-between"><span class="text-fg-muted">Created</span><span>{{ provider.created_at | date:'mediumDate' }}</span></div>
+                }
+              </div>
+            </div>
+            @if (provider.description) {
+              <div class="rounded-xl border border-edge bg-surface/50 p-5">
+                <h3 class="font-semibold text-sm mb-3">Description</h3>
+                <p class="text-sm text-fg-muted">{{ provider.description }}</p>
+              </div>
+            }
+            @if (provider.image_url) {
+              <div class="rounded-xl border border-edge bg-surface/50 p-5">
+                <h3 class="font-semibold text-sm mb-3">Image</h3>
+                <img [src]="provider.image_url" [alt]="provider.name" class="max-w-xs rounded-lg"/>
+              </div>
+            }
+          }
+        </div>
+      }
+
+      <!-- Metadata Tab -->
+      @if (activeTab() === 'Metadata') {
+        <div class="overflow-y-auto h-full p-6 max-w-4xl mx-auto">
+
+          <!-- History Panel -->
+          @if (historyMetadataId()) {
+            <div class="mb-6 rounded-xl border border-info/30 bg-info/5 p-5">
+              <div class="flex items-center justify-between mb-3">
+                <h4 class="font-semibold text-sm">History: {{ historyMetadataName() }}</h4>
+                <button (click)="closeHistory()" class="text-xs text-fg-muted hover:text-fg transition-colors">Close</button>
+              </div>
+              <div class="rounded-lg border border-edge bg-surface/50 overflow-hidden">
+                <table class="w-full text-sm">
+                  <thead>
+                    <tr class="border-b border-edge text-left text-xs text-fg-muted uppercase tracking-wider">
+                      <th class="px-4 py-2">Timestamp</th>
+                      <th class="px-4 py-2">Value</th>
+                      <th class="px-4 py-2 w-36"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (h of historyEntries(); track h.timestamp) {
+                      @if (editingHistoryTimestamp() === h.timestamp) {
+                        <tr class="border-b border-edge/50 bg-info/5">
+                          <td class="px-4 py-2">
+                            <input type="datetime-local" [(ngModel)]="editHistoryTimestamp" class="px-2 py-1 rounded bg-canvas border border-edge text-fg text-xs font-mono focus:outline-none focus:border-info w-full"/>
+                          </td>
+                          <td class="px-4 py-2">
+                            <input type="text" [(ngModel)]="editHistoryValue" class="px-2 py-1 rounded bg-canvas border border-edge text-fg text-xs font-mono focus:outline-none focus:border-info w-full"/>
+                          </td>
+                          <td class="px-4 py-2">
+                            <div class="flex items-center gap-2">
+                              <button (click)="submitEditHistory()" class="text-xs text-positive hover:text-positive/80 transition-colors font-medium">Save</button>
+                              <button (click)="cancelEditHistory()" class="text-xs text-fg-muted hover:text-fg transition-colors">Cancel</button>
+                            </div>
+                          </td>
+                        </tr>
+                      } @else {
+                        <tr class="border-b border-edge/50 hover:bg-elevated/30 transition-colors">
+                          <td class="px-4 py-2 text-xs text-fg-muted font-mono">{{ h.timestamp | date:'medium' }}</td>
+                          <td class="px-4 py-2 font-mono text-xs">{{ formatValue(h.value) }}</td>
+                          <td class="px-4 py-2">
+                            <div class="flex items-center gap-2">
+                              <button (click)="startEditHistory(h)" class="text-xs text-info/70 hover:text-info transition-colors">Edit</button>
+                              <button (click)="deleteHistoryEntry(h)" class="text-xs text-negative/70 hover:text-negative transition-colors">Delete</button>
+                            </div>
+                          </td>
+                        </tr>
+                      }
+                    } @empty {
+                      <tr><td colspan="3" class="px-4 py-6 text-center text-fg-faint text-xs">No history.</td></tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          }
+
+          <!-- Provider Type Fields (structured form) -->
+          @if (providerTypeFields().length > 0) {
+            <div class="mb-8">
+              <div class="mb-4">
+                <h3 class="font-semibold text-sm">{{ provider.provider_type_name }} Fields</h3>
+                <p class="text-xs text-fg-faint mt-1">Required and optional metadata fields defined for this provider type.</p>
+              </div>
+              <div class="rounded-xl border border-edge bg-surface/50 overflow-hidden">
+                @for (field of providerTypeFields(); track field.metadata_id) {
+                  @let currentValue = fieldValue(field.metadata_id);
+                  <div class="px-5 py-3 border-b border-edge/50 last:border-b-0 space-y-2">
+                    <!-- Row: Label + Current Value + History/Clear -->
+                    <div class="flex items-center gap-4">
+                      <div class="w-40 shrink-0">
+                        <span class="text-sm font-medium">{{ field.metadata_name }}</span>
+                        @if (field.is_required) {
+                          <span class="text-negative text-xs ml-1">*</span>
+                        }
+                        @if (field.metadata_description) {
+                          <p class="text-xs text-fg-faint mt-0.5 line-clamp-1">{{ field.metadata_description }}</p>
+                        }
+                      </div>
+                      <div class="flex-1 min-w-0">
+                        @if (currentValue !== null) {
+                          <span class="font-mono text-sm">{{ formatValue(currentValue) }}</span>
+                        } @else {
+                          <span class="text-fg-faint text-sm italic">Not set</span>
+                        }
+                      </div>
+                      <div class="flex items-center gap-2 shrink-0">
+                        <button (click)="showFieldHistory(field)" class="text-xs text-info/70 hover:text-info transition-colors">History</button>
+                        @if (currentValue !== null) {
+                          <button (click)="deleteFieldMetadata(field.metadata_id)" class="text-xs text-negative/70 hover:text-negative transition-colors">Clear</button>
+                        }
+                      </div>
+                    </div>
+                    <!-- Row: Input to set/update value -->
+                    <div class="flex items-center gap-2 pl-40">
+                      @if (field.value_type === 'boolean') {
+                        <select [(ngModel)]="fieldInputValues[field.metadata_id]" class="w-full md:w-48 px-3 py-1.5 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info">
+                          <option value="">-- select --</option>
+                          <option value="true">True</option>
+                          <option value="false">False</option>
+                        </select>
+                      } @else if (field.value_type === 'number') {
+                        <input [(ngModel)]="fieldInputValues[field.metadata_id]" type="number" placeholder="Enter number..."
+                               class="w-full md:w-48 px-3 py-1.5 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info"/>
+                      } @else if (field.value_type === 'json') {
+                        <input [(ngModel)]="fieldInputValues[field.metadata_id]" type="text" placeholder='{"key": "value"}'
+                               class="w-full px-3 py-1.5 rounded-lg bg-canvas border border-edge text-fg text-sm font-mono focus:outline-none focus:border-info"/>
+                      } @else if (field.value_type === 'date') {
+                        <input [(ngModel)]="fieldInputValues[field.metadata_id]" type="date"
+                               class="w-full md:w-48 px-3 py-1.5 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info"/>
+                      } @else {
+                        <input [(ngModel)]="fieldInputValues[field.metadata_id]" type="text" placeholder="Enter value..."
+                               class="w-full md:w-48 px-3 py-1.5 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info"/>
+                      }
+                      <input [(ngModel)]="fieldTimestampValues[field.metadata_id]" type="datetime-local" title="As-of timestamp (leave blank for now)"
+                             class="w-48 px-2 py-1.5 rounded-lg bg-canvas border border-edge text-fg text-xs focus:outline-none focus:border-info shrink-0"/>
+                      <button (click)="submitFieldValue(field)" class="px-3 py-1.5 rounded-lg bg-positive/15 text-positive text-xs font-medium hover:bg-positive/25 transition-colors shrink-0">Set</button>
+                    </div>
+                  </div>
+                }
+              </div>
+            </div>
+          }
+
+          <!-- Additional Metadata -->
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="font-semibold text-sm">Additional Metadata</h3>
+              <p class="text-xs text-fg-faint mt-1">Extra key-value metadata tracked over time.</p>
+            </div>
+            <button (click)="openMetadataForm()" class="px-4 py-2 rounded-lg bg-info/15 text-info text-sm font-medium hover:bg-info/25 transition-colors">
+              + Add
+            </button>
+          </div>
+
+          @if (showMetadataForm()) {
+            <div class="mb-6 rounded-xl border border-edge bg-surface/50 p-5">
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label class="block text-xs text-fg-muted mb-1">Metadata Type</label>
+                  <select [(ngModel)]="newMetadataId" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info">
+                    @for (mt of assetService.metadataTypes(); track mt.id) {
+                      <option [value]="mt.id">{{ mt.name }}</option>
+                    }
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs text-fg-muted mb-1">Value</label>
+                  <input [(ngModel)]="newMetadataValue" type="text" placeholder="Enter value..."
+                         class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info"/>
+                </div>
+                <div>
+                  <label class="block text-xs text-fg-muted mb-1">As-of Timestamp <span class="text-fg-faint">(optional)</span></label>
+                  <input [(ngModel)]="newMetadataTimestamp" type="datetime-local"
+                         class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info"/>
+                </div>
+              </div>
+              <div class="flex gap-2 mt-4">
+                <button (click)="submitMetadata()" class="px-4 py-2 rounded-lg bg-positive/15 text-positive text-sm font-medium hover:bg-positive/25 transition-colors">Add</button>
+                <button (click)="cancelMetadataForm()" class="px-4 py-2 rounded-lg bg-fg/5 text-fg-muted text-sm font-medium hover:bg-fg/10 transition-colors">Cancel</button>
+              </div>
+            </div>
+          }
+
+          @if (extraMetadata().length > 0) {
+            <div class="rounded-xl border border-edge bg-surface/50 overflow-hidden">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="border-b border-edge text-left text-xs text-fg-muted uppercase tracking-wider">
+                    <th class="px-4 py-3">Key</th>
+                    <th class="px-4 py-3">Value</th>
+                    <th class="px-4 py-3">As Of</th>
+                    <th class="px-4 py-3 w-32"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (entry of extraMetadata(); track entry.metadata_id) {
+                    <tr class="border-b border-edge/50 hover:bg-elevated/30 transition-colors">
+                      <td class="px-4 py-3 font-medium">{{ entry.metadata_name }}</td>
+                      <td class="px-4 py-3 font-mono text-xs">{{ formatValue(entry.value) }}</td>
+                      <td class="px-4 py-3 text-xs text-fg-muted">{{ entry.timestamp | date:'medium' }}</td>
+                      <td class="px-4 py-3">
+                        <div class="flex items-center gap-2">
+                          <button (click)="showHistory(entry)" class="text-xs text-info/70 hover:text-info transition-colors">History</button>
+                          <button (click)="deleteMetadata(entry)" class="text-xs text-negative/70 hover:text-negative transition-colors">Remove</button>
+                        </div>
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          } @else if (providerTypeFields().length === 0) {
+            <div class="rounded-xl border border-edge bg-surface/50 p-12 text-center text-fg-faint text-sm">
+              No metadata defined. Click + Add to create entries.
+            </div>
+          }
+        </div>
+      }
+
+      <!-- Assets Tab -->
+      @if (activeTab() === 'Assets') {
+        <div class="overflow-y-auto h-full p-6 max-w-4xl mx-auto">
+          <div class="mb-4">
+            <h3 class="font-semibold text-sm">Mapped Assets</h3>
+            <p class="text-xs text-fg-faint mt-1">Assets this provider has mappings for.</p>
+          </div>
+          <div class="rounded-xl border border-edge bg-surface/50 overflow-hidden">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-edge text-left text-xs text-fg-muted uppercase tracking-wider">
+                  <th class="px-4 py-3">Asset</th>
+                  <th class="px-4 py-3">Symbol</th>
+                  <th class="px-4 py-3">Identifier</th>
+                  <th class="px-4 py-3">Created</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (link of provider.asset_links; track link.asset_id) {
+                  <tr class="border-b border-edge/50 hover:bg-elevated/30 transition-colors">
+                    <td class="px-4 py-3">
+                      <a [routerLink]="['/settings/assets', link.asset_id]" class="text-info hover:underline font-medium">{{ link.asset_name }}</a>
+                    </td>
+                    <td class="px-4 py-3 font-mono text-xs">{{ link.asset_symbol || '-' }}</td>
+                    <td class="px-4 py-3 font-mono text-xs">{{ link.identifier }}</td>
+                    <td class="px-4 py-3 text-xs text-fg-muted">{{ link.created_at | date:'mediumDate' }}</td>
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td colspan="4" class="px-4 py-12 text-center text-fg-faint">No asset mappings for this provider.</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      }
+
+    </div>
+  </div>
+  }
+}

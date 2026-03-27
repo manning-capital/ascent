@@ -1,0 +1,477 @@
+@if (strategyService.loading()) {
+  <div class="flex items-center justify-center h-[calc(100vh-3.5rem)]">
+    <app-loading/>
+  </div>
+} @else {
+  @let strategy = strategyService.selectedStrategy();
+  @if (strategy) {
+  <div class="flex flex-col h-[calc(100vh-3.5rem)]">
+    <!-- Header Bar -->
+    <div class="flex items-center gap-3 px-4 py-2 border-b border-edge shrink-0 bg-surface/30">
+      <a routerLink="/strategies" class="text-sm text-info hover:underline">&larr; Strategies</a>
+      <span class="text-fg/20">|</span>
+      <h1 class="text-lg font-bold truncate">{{ strategy.name }}</h1>
+      <span class="w-2 h-2 rounded-full shrink-0" [class]="strategy.is_active ? 'bg-positive' : 'bg-fg-faint'"></span>
+      <span class="text-xs text-fg-muted shrink-0">{{ strategy.strategy_type }}</span>
+    </div>
+
+    <!-- Tab Bar -->
+    <app-panel-tabs [tabs]="tabs" [(activeTab)]="activeTab"/>
+
+    <!-- Tab Content -->
+    <div class="flex-1 overflow-hidden">
+
+      <!-- Performance Tab -->
+      @if (activeTab() === 'Performance') {
+        <div class="overflow-y-auto h-full">
+          @if (strategyService.allTradesLoading()) {
+            <div class="flex items-center justify-center h-32">
+              <app-loading/>
+            </div>
+          } @else {
+            <!-- Stat Cards -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 p-6 pb-0">
+              <app-stat-card label="Total Trades" [value]="'' + strategy.total_trades" [subtitle]="strategy.open_trades + ' open'" size="lg"/>
+              <app-stat-card label="Win Rate" [value]="strategy.win_rate + '%'" size="lg"/>
+              <app-stat-card label="Total P&L" [value]="formatCurrency(strategy.total_pnl)" [valueClass]="pnlClass(strategy.total_pnl)" size="lg"/>
+              <app-stat-card label="Avg Win / Loss" [value]="formatCurrency(strategy.avg_win)" [subtitle]="'Loss: ' + formatCurrency(strategy.avg_loss)" size="lg"/>
+            </div>
+
+            <!-- Two Column: Charts left, Trades right -->
+            <div class="grid grid-cols-1 xl:grid-cols-[1fr_520px] gap-6 p-6">
+              <!-- Left: Charts -->
+              <div class="space-y-6 min-w-0">
+                <!-- Cumulative P&L -->
+                <div class="rounded-xl border border-edge bg-surface/50 p-4">
+                  <h3 class="font-semibold text-sm mb-3">Cumulative P&L</h3>
+                  <div class="h-64">
+                    <app-cumulative-pnl-chart [data]="cumulativePnlData()"/>
+                  </div>
+                </div>
+
+                <!-- Win/Loss + Monthly side by side -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div class="rounded-xl border border-edge bg-surface/50 p-4">
+                    <h3 class="font-semibold text-sm mb-3">Win / Loss</h3>
+                    <div class="h-56">
+                      <app-win-loss-chart
+                        [wins]="wins()"
+                        [losses]="losses()"
+                        [breakeven]="breakeven()"/>
+                    </div>
+                  </div>
+                  <div class="rounded-xl border border-edge bg-surface/50 p-4">
+                    <h3 class="font-semibold text-sm mb-3">Monthly P&L</h3>
+                    <div class="h-56">
+                      <app-monthly-pnl-chart [data]="monthlyPnlData()"/>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Per-trade P&L -->
+                <div class="rounded-xl border border-edge bg-surface/50 p-4">
+                  <h3 class="font-semibold text-sm mb-3">Trade P&L</h3>
+                  <div class="h-56">
+                    <app-trade-pnl-chart [trades]="sortedTrades()"/>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Right: Trade History -->
+              <div class="rounded-xl border border-edge bg-surface/50 overflow-hidden h-fit">
+                <div class="flex items-center justify-between px-4 py-3 border-b border-edge">
+                  <h3 class="font-semibold text-sm">Trade History</h3>
+                  <a [routerLink]="['/trades']" [queryParams]="{strategy_id: strategy.id}" class="text-xs text-info hover:underline">View All</a>
+                </div>
+                <app-trade-table
+                  [trades]="strategyService.strategyTrades()"
+                  [showStrategy]="false"
+                  [page]="page()"
+                  [totalPages]="1"
+                  (pageChange)="onPageChange($event)"/>
+              </div>
+            </div>
+          }
+        </div>
+      }
+
+      <!-- Universe Tab -->
+      @if (activeTab() === 'Universe') {
+        <div class="overflow-y-auto h-full p-6 max-w-4xl mx-auto">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="font-semibold text-sm">Asset Universe</h3>
+              <p class="text-xs text-fg-faint mt-1">Provider-asset pairs and groups this strategy monitors.</p>
+            </div>
+            <button (click)="openUniverseForm()" class="px-4 py-2 rounded-lg bg-info/15 text-info text-sm font-medium hover:bg-info/25 transition-colors">
+              + Add
+            </button>
+          </div>
+
+          <!-- Add Form -->
+          @if (showUniverseForm()) {
+            <div class="mb-6 rounded-xl border border-edge bg-surface/50 p-5">
+              <!-- Mode Toggle -->
+              <div class="flex items-center gap-2 mb-4">
+                <button (click)="universeAddMode.set('individual')"
+                        class="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                        [class]="universeAddMode() === 'individual' ? 'bg-info/20 text-info' : 'text-fg-muted hover:text-fg hover:bg-fg/5'">
+                  Individual Pair
+                </button>
+                <button (click)="universeAddMode.set('group')"
+                        class="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                        [class]="universeAddMode() === 'group' ? 'bg-info/20 text-info' : 'text-fg-muted hover:text-fg hover:bg-fg/5'">
+                  From Group
+                </button>
+              </div>
+
+              @if (universeAddMode() === 'individual') {
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label class="block text-xs text-fg-muted mb-1">Provider</label>
+                    <select [(ngModel)]="uniProviderId" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info">
+                      @for (p of providerService.providers(); track p.id) {
+                        <option [value]="p.id">{{ p.name }}</option>
+                      }
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-xs text-fg-muted mb-1">From Asset (Base)</label>
+                    <select [(ngModel)]="uniFromAssetId" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info">
+                      @for (a of assetService.assets(); track a.id) {
+                        <option [value]="a.id">{{ a.symbol || a.name }}</option>
+                      }
+                    </select>
+                  </div>
+                  <div>
+                    <label class="block text-xs text-fg-muted mb-1">To Asset (Quote)</label>
+                    <select [(ngModel)]="uniToAssetId" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info">
+                      @for (a of assetService.assets(); track a.id) {
+                        <option [value]="a.id">{{ a.symbol || a.name }}</option>
+                      }
+                    </select>
+                  </div>
+                </div>
+                <div class="flex gap-2 mt-4">
+                  <button (click)="submitUniverseItem()" class="px-4 py-2 rounded-lg bg-positive/15 text-positive text-sm font-medium hover:bg-positive/25 transition-colors">Add</button>
+                  <button (click)="cancelUniverseForm()" class="px-4 py-2 rounded-lg bg-fg/5 text-fg-muted text-sm font-medium hover:bg-fg/10 transition-colors">Cancel</button>
+                </div>
+              }
+
+              @if (universeAddMode() === 'group') {
+                <div>
+                  <label class="block text-xs text-fg-muted mb-1">Asset Group</label>
+                  <select [(ngModel)]="uniGroupId" class="w-full md:w-96 px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info">
+                    <option value="">Select a group...</option>
+                    @for (g of assetService.assetGroups(); track g.id) {
+                      <option [value]="g.id">Group ({{ g.members.length }} members)</option>
+                    }
+                  </select>
+                </div>
+                <div class="flex gap-2 mt-4">
+                  <button (click)="addGroupToUniverse()" class="px-4 py-2 rounded-lg bg-positive/15 text-positive text-sm font-medium hover:bg-positive/25 transition-colors">Add All Members</button>
+                  <button (click)="cancelUniverseForm()" class="px-4 py-2 rounded-lg bg-fg/5 text-fg-muted text-sm font-medium hover:bg-fg/10 transition-colors">Cancel</button>
+                </div>
+              }
+            </div>
+          }
+
+          <!-- Universe Items Table -->
+          <div class="rounded-xl border border-edge bg-surface/50 overflow-hidden">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-edge text-left text-xs text-fg-muted uppercase tracking-wider">
+                  <th class="px-4 py-3 w-12">#</th>
+                  <th class="px-4 py-3">Provider</th>
+                  <th class="px-4 py-3">Base Asset</th>
+                  <th class="px-4 py-3">Quote Asset</th>
+                  <th class="px-4 py-3">Group</th>
+                  <th class="px-4 py-3 w-20"></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (item of universeItems(); track item.provider_id + item.from_asset_id + item.to_asset_id) {
+                  <tr class="border-b border-edge/50 hover:bg-elevated/30 transition-colors">
+                    <td class="px-4 py-3 text-fg-muted font-mono text-xs">{{ item.order }}</td>
+                    <td class="px-4 py-3 font-medium">{{ item.provider_name }}</td>
+                    <td class="px-4 py-3 font-mono">{{ item.from_asset_symbol }}</td>
+                    <td class="px-4 py-3 font-mono">{{ item.to_asset_symbol }}</td>
+                    <td class="px-4 py-3">
+                      @if (item.provider_asset_group_id) {
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wider bg-info/15 text-info">Group</span>
+                      } @else {
+                        <span class="text-fg-faint text-xs">—</span>
+                      }
+                    </td>
+                    <td class="px-4 py-3">
+                      <button (click)="removeUniverseItem(item)" class="text-xs text-negative/70 hover:text-negative transition-colors">Remove</button>
+                    </td>
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td colspan="6" class="px-4 py-12 text-center text-fg-faint">No assets in universe. Add individual pairs or import from a group.</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      }
+
+      <!-- Runs Tab -->
+      @if (activeTab() === 'Runs') {
+        <app-split-pane class="h-full block">
+          <!-- Left: DAG + Run Detail -->
+          <div left class="h-full flex flex-col">
+            @if (selectedStrategyRun(); as run) {
+              <!-- Top: Feed DAG -->
+              <div class="flex-1 min-h-0 overflow-hidden p-2">
+                <div class="h-full rounded-xl border border-edge bg-surface/50 overflow-hidden">
+                  <app-feed-dag
+                    [dag]="feedDag()"
+                    [strategyName]="strategy.name"
+                    [feedRunStatuses]="selectedRunFeedStatuses()"/>
+                </div>
+              </div>
+              <!-- Bottom: Run Detail -->
+              <div class="shrink-0 px-2 pb-2">
+                <app-run-detail-card
+                  [run]="strategyRunDetailItem()!"
+                  [extraFields]="strategyRunExtraFields"/>
+              </div>
+            } @else {
+              <!-- No run selected: single placeholder block -->
+              <div class="flex-1 m-2 rounded-xl border border-edge bg-surface/50 flex items-center justify-center">
+                <span class="text-sm text-fg-faint">Select a run to view details</span>
+              </div>
+            }
+          </div>
+
+          <!-- Right: Run List with Filters -->
+          <div right class="h-full flex flex-col">
+            <!-- Filter bar -->
+            <div class="px-3 py-2 border-b border-edge shrink-0 space-y-2">
+              <div class="flex items-center gap-1.5">
+                <span class="text-[11px] text-fg-faint mr-1">Filter:</span>
+                <button
+                  (click)="setRunsFilterMode('none')"
+                  class="px-2 py-0.5 rounded text-[11px] transition-colors"
+                  [class]="runsFilterMode() === 'none' ? 'bg-info/20 text-info' : 'text-fg-muted hover:text-fg hover:bg-fg/5'">
+                  All
+                </button>
+                <button
+                  (click)="setRunsFilterMode('range')"
+                  class="px-2 py-0.5 rounded text-[11px] transition-colors"
+                  [class]="runsFilterMode() === 'range' ? 'bg-info/20 text-info' : 'text-fg-muted hover:text-fg hover:bg-fg/5'">
+                  Range
+                </button>
+                <button
+                  (click)="setRunsFilterMode('around')"
+                  class="px-2 py-0.5 rounded text-[11px] transition-colors"
+                  [class]="runsFilterMode() === 'around' ? 'bg-info/20 text-info' : 'text-fg-muted hover:text-fg hover:bg-fg/5'">
+                  Around
+                </button>
+              </div>
+              @if (runsFilterMode() === 'range') {
+                <div class="space-y-1.5">
+                  <div class="flex items-center gap-2">
+                    <label class="text-[10px] text-fg-faint w-10 shrink-0">From</label>
+                    <input
+                      type="datetime-local"
+                      [ngModel]="runsRangeFrom()"
+                      (ngModelChange)="runsRangeFrom.set($event)"
+                      class="flex-1 bg-elevated border border-edge rounded px-2 py-1 text-[11px] text-fg focus:outline-none focus:border-info/50"/>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <label class="text-[10px] text-fg-faint w-10 shrink-0">To</label>
+                    <input
+                      type="datetime-local"
+                      [ngModel]="runsRangeTo()"
+                      (ngModelChange)="runsRangeTo.set($event)"
+                      class="flex-1 bg-elevated border border-edge rounded px-2 py-1 text-[11px] text-fg focus:outline-none focus:border-info/50"/>
+                  </div>
+                  <div class="flex gap-1.5">
+                    <button
+                      (click)="applyRunsFilter()"
+                      class="flex-1 py-1 rounded text-[11px] bg-info/20 text-info hover:bg-info/30 transition-colors">
+                      Apply
+                    </button>
+                    <button
+                      (click)="clearRunsFilter()"
+                      class="px-2 py-1 rounded text-[11px] text-fg-muted hover:text-fg hover:bg-fg/5 transition-colors">
+                      Clear
+                    </button>
+                  </div>
+                </div>
+              }
+              @if (runsFilterMode() === 'around') {
+                <div class="space-y-1.5">
+                  <input
+                    type="datetime-local"
+                    [ngModel]="runsAroundDatetime()"
+                    (ngModelChange)="runsAroundDatetime.set($event)"
+                    class="w-full bg-elevated border border-edge rounded px-2 py-1 text-[11px] text-fg focus:outline-none focus:border-info/50"/>
+                  <div class="flex items-center gap-1">
+                    <span class="text-[10px] text-fg-faint shrink-0">&plusmn;</span>
+                    @for (r of runsRadiusOptions; track r) {
+                      <button
+                        (click)="runsAroundRadius.set(r)"
+                        class="px-2 py-0.5 rounded text-[11px] transition-colors"
+                        [class]="runsAroundRadius() === r ? 'bg-info/20 text-info' : 'text-fg-muted hover:text-fg hover:bg-fg/5'">
+                        {{ runsRadiusLabel(r) }}
+                      </button>
+                    }
+                  </div>
+                  <div class="flex gap-1.5">
+                    <button
+                      (click)="applyRunsFilter()"
+                      class="flex-1 py-1 rounded text-[11px] bg-info/20 text-info hover:bg-info/30 transition-colors">
+                      Apply
+                    </button>
+                    <button
+                      (click)="clearRunsFilter()"
+                      class="px-2 py-1 rounded text-[11px] text-fg-muted hover:text-fg hover:bg-fg/5 transition-colors">
+                      Clear
+                    </button>
+                  </div>
+                </div>
+              }
+            </div>
+
+            <!-- Run count -->
+            <div class="px-3 py-2 border-b border-edge shrink-0">
+              <p class="text-[11px] text-fg-faint">{{ runsTotal() }} runs</p>
+            </div>
+
+            <!-- Run list -->
+            <div class="flex-1 overflow-y-auto">
+              @for (run of strategyRuns(); track run.id) {
+                <div
+                  (click)="selectStrategyRun(run)"
+                  class="px-3 py-2.5 border-b border-edge-dim cursor-pointer transition-colors"
+                  [class]="selectedStrategyRun()?.id === run.id ? 'bg-info/10 border-l-2 border-l-info' : 'hover:bg-fg/[.03]'">
+                  <div class="flex items-center justify-between mb-0.5">
+                    <div class="flex items-center gap-1.5">
+                      <span class="w-2 h-2 rounded-full shrink-0" [class]="runStatusDotClass(run.status)"></span>
+                      <span class="text-[11px] font-medium" [class]="runStatusClass(run.status)">{{ run.status }}</span>
+                    </div>
+                    <span class="text-[10px] text-fg-faint">#{{ run.id }}</span>
+                  </div>
+                  <div class="text-[10px] text-fg-faint flex items-center justify-between">
+                    <span>{{ run.started_at | date:'MMM d, h:mm:ss a' }}</span>
+                    <span>{{ runDurationLabel(run) }}</span>
+                  </div>
+                  @if (run.error_message) {
+                    <p class="text-[10px] text-negative mt-0.5 line-clamp-1">{{ run.error_message }}</p>
+                  }
+                </div>
+              } @empty {
+                <div class="flex items-center justify-center h-32 text-sm text-fg-faint">No runs found.</div>
+              }
+            </div>
+
+            <!-- Pagination -->
+            <div class="flex items-center justify-between px-3 py-2 border-t border-edge shrink-0 text-[11px] text-fg-muted">
+              <span>Page {{ runsPage() }} / {{ runsTotalPages() || 1 }}</span>
+              <div class="flex items-center gap-1.5">
+                <button
+                  [disabled]="runsPage() <= 1"
+                  (click)="onRunsPageChange(runsPage() - 1)"
+                  class="px-2 py-0.5 rounded border border-edge hover:bg-fg/10 disabled:opacity-30 transition-colors">
+                  Prev
+                </button>
+                <button
+                  [disabled]="runsPage() >= runsTotalPages()"
+                  (click)="onRunsPageChange(runsPage() + 1)"
+                  class="px-2 py-0.5 rounded border border-edge hover:bg-fg/10 disabled:opacity-30 transition-colors">
+                  Next
+                </button>
+              </div>
+            </div>
+          </div>
+        </app-split-pane>
+      }
+
+      <!-- Feeds Tab -->
+      @if (activeTab() === 'Feeds') {
+        <div class="h-full p-2">
+          <div class="h-full rounded-xl border border-edge bg-surface/50 overflow-hidden">
+            <app-feed-dag [dag]="feedDag()" [strategyName]="strategy.name"/>
+          </div>
+        </div>
+      }
+
+      <!-- Configuration Tab -->
+      @if (activeTab() === 'Configuration') {
+        <div class="max-w-3xl mx-auto p-6 space-y-6 overflow-y-auto h-full">
+          <!-- Info Card -->
+          <div class="rounded-xl border border-edge bg-surface/50 p-5">
+            <h3 class="font-semibold text-sm mb-3">Info</h3>
+            <div class="space-y-2 text-sm">
+              <div class="flex justify-between"><span class="text-fg-muted">Portfolio</span><span>{{ strategy.portfolio_name }}</span></div>
+              <div class="flex justify-between"><span class="text-fg-muted">Strategy</span><span>{{ strategy.strategy_class }}</span></div>
+              <div class="flex justify-between"><span class="text-fg-muted">Active</span><span>{{ strategy.is_active ? 'Yes' : 'No' }}</span></div>
+              @if (strategy.created_at) {
+                <div class="flex justify-between"><span class="text-fg-muted">Created</span><span>{{ strategy.created_at | date:'mediumDate' }}</span></div>
+              }
+              @if (strategy.last_trade_at) {
+                <div class="flex justify-between"><span class="text-fg-muted">Last Trade</span><span>{{ strategy.last_trade_at | date:'medium' }}</span></div>
+              }
+            </div>
+          </div>
+
+          <!-- Description -->
+          @if (strategy.description) {
+            <div class="rounded-xl border border-edge bg-surface/50 p-5">
+              <h3 class="font-semibold text-sm mb-3">Description</h3>
+              <p class="text-sm text-fg-muted">{{ strategy.description }}</p>
+            </div>
+          }
+
+          <!-- Parameters -->
+          @if (strategy.parameters) {
+            <div class="rounded-xl border border-edge bg-surface/50 p-5">
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="font-semibold text-sm">Parameters</h3>
+                @if (strategy.parameter_schema) {
+                  @if (!editing()) {
+                    <button
+                      (click)="startEditing()"
+                      class="text-xs text-info hover:underline">
+                      Edit
+                    </button>
+                  } @else {
+                    <div class="flex items-center gap-2">
+                      <button
+                        (click)="cancelEditing()"
+                        class="text-xs text-fg-muted hover:text-fg px-2 py-1 rounded border border-edge hover:border-fg/20 transition-colors">
+                        Cancel
+                      </button>
+                      <button
+                        (click)="saveParameters()"
+                        [disabled]="strategyService.saving()"
+                        class="text-xs text-fg bg-info hover:bg-info/80 px-3 py-1 rounded transition-colors disabled:opacity-50">
+                        {{ strategyService.saving() ? 'Saving...' : 'Save' }}
+                      </button>
+                    </div>
+                  }
+                }
+              </div>
+              @if (strategy.parameter_schema) {
+                <app-schema-form
+                  [schema]="strategy.parameter_schema"
+                  [data]="editing() ? editedParameters() : strategy.parameters"
+                  [readonly]="!editing()"
+                  (valuesChange)="onParametersChange($event)"/>
+              } @else {
+                <pre class="text-xs text-fg-muted overflow-x-auto">{{ strategy.parameters | json }}</pre>
+              }
+            </div>
+          }
+        </div>
+      }
+
+    </div>
+  </div>
+  }
+}

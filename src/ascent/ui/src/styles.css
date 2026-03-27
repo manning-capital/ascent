@@ -1,0 +1,179 @@
+@import "tailwindcss";
+
+@variant dark (&:where(.dark, .dark *));
+
+/* ── Semantic layout tokens — switch automatically with light/dark ── */
+@layer base {
+  :root {
+    --canvas: #fff9eb;
+    --surface: #fffdf5;
+    --elevated: #f3e7ca;
+    --fg: #2b2921;
+    --fg-muted: #66604e;
+    --fg-faint: #948c78;
+    --edge: rgba(43, 41, 33, 0.12);
+    --edge-dim: rgba(43, 41, 33, 0.06);
+    --overlay: rgba(31, 27, 22, 0.5);
+  }
+
+  .dark {
+    --canvas: #19181a;
+    --surface: #2d2a2e;
+    --elevated: #403e41;
+    --fg: #fcfcfa;
+    --fg-muted: #939293;
+    --fg-faint: #727072;
+    --edge: rgba(252, 252, 250, 0.1);
+    --edge-dim: rgba(252, 252, 250, 0.05);
+    --overlay: rgba(25, 24, 26, 0.8);
+  }
+
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    font-family: var(--font-sans);
+  }
+
+  /* ── Date / datetime-local inputs — theme the native browser chrome ── */
+  input[type="date"],
+  input[type="datetime-local"] {
+    color-scheme: light;
+    appearance: none;
+    -webkit-appearance: none;
+    position: relative;
+  }
+
+  .dark input[type="date"],
+  .dark input[type="datetime-local"] {
+    color-scheme: dark;
+  }
+
+  /* Calendar / clock icon */
+  input[type="date"]::-webkit-calendar-picker-indicator,
+  input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.5;
+    filter: var(--date-icon-filter, none);
+    border-radius: 3px;
+    padding: 2px;
+    transition: opacity 0.15s ease, background 0.15s ease;
+  }
+
+  input[type="date"]::-webkit-calendar-picker-indicator:hover,
+  input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
+    background: var(--edge);
+  }
+
+  .dark input[type="date"]::-webkit-calendar-picker-indicator,
+  .dark input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    filter: invert(1);
+  }
+
+  /* Inner text styling (Webkit) */
+  input[type="date"]::-webkit-datetime-edit,
+  input[type="datetime-local"]::-webkit-datetime-edit {
+    font-family: var(--font-sans);
+  }
+
+  input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+  input[type="datetime-local"]::-webkit-datetime-edit-fields-wrapper {
+    padding: 0;
+  }
+
+  input[type="date"]::-webkit-datetime-edit-text {
+    color: var(--fg-faint);
+    padding: 0 1px;
+  }
+
+  input[type="datetime-local"]::-webkit-datetime-edit-text {
+    color: var(--fg-faint);
+    padding: 0 1px;
+  }
+
+  /* Placeholder / empty state */
+  input[type="date"]:invalid,
+  input[type="datetime-local"]:invalid {
+    color: var(--fg-faint);
+  }
+
+  /* Firefox: remove inner buttons */
+  input[type="date"]::-moz-focus-inner,
+  input[type="datetime-local"]::-moz-focus-inner {
+    border: 0;
+    padding: 0;
+  }
+
+  /* Scrollbar — uses semantic edge token */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--edge);
+    border-radius: 3px;
+  }
+}
+
+@theme {
+  /* ── Monokai Pro accent colors ── */
+  --color-positive: #a9dc76;
+  --color-negative: #ff6188;
+  --color-warning: #fc9867;
+  --color-info: #78dce8;
+  --color-carrot-orange: #fc9867;
+  --color-tuscan-sun: #ffd866;
+  --color-blue-slate: #ab9df2;
+
+  /* ── Monokai Pro neutral overrides (safety net for un-migrated code) ── */
+  --color-white: #fcfcfa;
+  --color-black: #19181a;
+  --color-zinc-50:  #fcfcfa;
+  --color-zinc-100: #e3e1e4;
+  --color-zinc-200: #c1c0c0;
+  --color-zinc-300: #939293;
+  --color-zinc-400: #727072;
+  --color-zinc-500: #5b595c;
+  --color-zinc-600: #403e41;
+  --color-zinc-700: #363437;
+  --color-zinc-800: #2d2a2e;
+  --color-zinc-900: #221f22;
+  --color-zinc-950: #19181a;
+
+  /* ── Semantic layout tokens ── */
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-elevated: var(--elevated);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-faint: var(--fg-faint);
+  --color-edge: var(--edge);
+  --color-edge-dim: var(--edge-dim);
+  --color-overlay: var(--overlay);
+
+  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+}
+
+@layer utilities {
+  .glass {
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+}
+
+@keyframes pulse-live {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.animate-pulse-live {
+  animation: pulse-live 2s ease-in-out infinite;
+}

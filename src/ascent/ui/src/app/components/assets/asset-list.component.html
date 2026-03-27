@@ -1,0 +1,289 @@
+<div class="p-6 max-w-7xl mx-auto">
+  <h1 class="text-2xl font-bold mb-6">Assets</h1>
+
+  <!-- Tabs -->
+  <div class="flex items-center gap-1 mb-6 border-b border-edge">
+    <button (click)="setTab('assets')" class="px-4 py-2 text-sm font-medium transition-colors"
+            [class]="activeTab() === 'assets' ? 'text-fg border-b-2 border-info' : 'text-fg-muted hover:text-fg'">
+      Assets
+    </button>
+    <button (click)="setTab('mappings')" class="px-4 py-2 text-sm font-medium transition-colors"
+            [class]="activeTab() === 'mappings' ? 'text-fg border-b-2 border-info' : 'text-fg-muted hover:text-fg'">
+      Provider Mappings
+    </button>
+    <button (click)="setTab('groups')" class="px-4 py-2 text-sm font-medium transition-colors"
+            [class]="activeTab() === 'groups' ? 'text-fg border-b-2 border-info' : 'text-fg-muted hover:text-fg'">
+      Groups
+    </button>
+  </div>
+
+  <!-- ============== ASSETS TAB ============== -->
+  @if (activeTab() === 'assets') {
+    <!-- Asset Type Filter -->
+    <div class="flex items-center gap-2 mb-4 flex-wrap">
+      <button (click)="setTypeFilter(null)"
+              class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
+              [class]="selectedTypeId() === null ? 'bg-info/20 text-info' : 'bg-fg/5 text-fg-muted hover:bg-fg/10'">
+        All
+      </button>
+      @for (t of assetService.assetTypes(); track t.id) {
+        <button (click)="setTypeFilter(t.id)"
+                class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
+                [class]="selectedTypeId() === t.id ? 'bg-info/20 text-info' : 'bg-fg/5 text-fg-muted hover:bg-fg/10'">
+          {{ t.name }}
+        </button>
+      }
+    </div>
+
+    <div class="flex items-center justify-between mb-4">
+      <input type="text" placeholder="Search assets..." [ngModel]="search()" (ngModelChange)="search.set($event)"
+             class="w-full md:w-80 px-3 py-2 rounded-lg bg-surface border border-edge text-fg text-sm placeholder:text-fg-faint focus:outline-none focus:border-info"/>
+      <button (click)="openAssetCreate()" class="ml-4 px-4 py-2 rounded-lg bg-info/15 text-info text-sm font-medium hover:bg-info/25 transition-colors shrink-0">
+        + New Asset
+      </button>
+    </div>
+
+    <!-- Create Form -->
+    @if (showAssetForm()) {
+      <div class="mb-6 rounded-xl border border-edge bg-surface/50 p-5">
+        <h3 class="font-semibold mb-4">New Asset</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs text-fg-muted mb-1">Name *</label>
+            <input type="text" [(ngModel)]="newAssetName" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info"/>
+          </div>
+          <div>
+            <label class="block text-xs text-fg-muted mb-1">Symbol</label>
+            <input type="text" [(ngModel)]="newAssetSymbol" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info"/>
+          </div>
+          <div>
+            <label class="block text-xs text-fg-muted mb-1">Type *</label>
+            <select [(ngModel)]="newAssetTypeId" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info">
+              @for (t of assetService.assetTypes(); track t.id) {
+                <option [value]="t.id">{{ t.name }}</option>
+              }
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-fg-muted mb-1">Description</label>
+            <input type="text" [(ngModel)]="newAssetDescription" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info"/>
+          </div>
+        </div>
+        <div class="flex gap-2 mt-4">
+          <button (click)="submitAssetCreate()" class="px-4 py-2 rounded-lg bg-positive/15 text-positive text-sm font-medium hover:bg-positive/25 transition-colors">Create</button>
+          <button (click)="cancelAssetCreate()" class="px-4 py-2 rounded-lg bg-fg/5 text-fg-muted text-sm font-medium hover:bg-fg/10 transition-colors">Cancel</button>
+        </div>
+      </div>
+    }
+
+    @if (assetService.loading()) {
+      <app-loading/>
+    } @else {
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        @for (asset of filteredAssets(); track asset.id) {
+          <a [routerLink]="['/settings/assets', asset.id]" class="block rounded-xl border border-edge bg-surface/50 p-5 hover:bg-elevated/50 hover:border-info/30 transition-colors cursor-pointer">
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="font-semibold truncate">{{ asset.name }}</h3>
+              <span class="w-2.5 h-2.5 rounded-full shrink-0" [class]="asset.is_active ? 'bg-positive' : 'bg-fg-faint'"></span>
+            </div>
+            <div class="space-y-1">
+              @if (asset.symbol) {
+                <div class="flex items-center justify-between text-xs">
+                  <span class="text-fg-muted">Symbol</span>
+                  <span class="text-fg font-mono font-medium">{{ asset.symbol }}</span>
+                </div>
+              }
+              <div class="flex items-center justify-between text-xs">
+                <span class="text-fg-muted">Type</span>
+                <span class="text-fg font-medium">{{ asset.asset_type_name ?? 'Unknown' }}</span>
+              </div>
+              @if (asset.description) {
+                <p class="text-xs text-fg-faint line-clamp-2 mt-1">{{ asset.description }}</p>
+              }
+            </div>
+          </a>
+        } @empty {
+          <div class="col-span-full text-center text-fg-faint py-12">No assets found.</div>
+        }
+      </div>
+    }
+  }
+
+  <!-- ============== PROVIDER MAPPINGS TAB ============== -->
+  @if (activeTab() === 'mappings') {
+    <div class="flex items-center justify-between mb-4">
+      <input type="text" placeholder="Search mappings..." [ngModel]="search()" (ngModelChange)="search.set($event)"
+             class="w-full md:w-80 px-3 py-2 rounded-lg bg-surface border border-edge text-fg text-sm placeholder:text-fg-faint focus:outline-none focus:border-info"/>
+      <button (click)="openLinkCreate()" class="ml-4 px-4 py-2 rounded-lg bg-info/15 text-info text-sm font-medium hover:bg-info/25 transition-colors shrink-0">
+        + New Mapping
+      </button>
+    </div>
+
+    <!-- Create Form -->
+    @if (showLinkForm()) {
+      <div class="mb-6 rounded-xl border border-edge bg-surface/50 p-5">
+        <h3 class="font-semibold mb-4">Map Asset to Provider</h3>
+        <p class="text-xs text-fg-faint mb-4">Link an asset to a provider with its provider-specific identifier (e.g., BTC on Coinbase, XBT on Kraken).</p>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label class="block text-xs text-fg-muted mb-1">Provider *</label>
+            <select [(ngModel)]="newLinkProviderId" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info">
+              @for (p of providerService.providers(); track p.id) {
+                <option [value]="p.id">{{ p.name }}</option>
+              }
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-fg-muted mb-1">Asset *</label>
+            <select [(ngModel)]="newLinkAssetId" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info">
+              @for (a of assetService.assets(); track a.id) {
+                <option [value]="a.id">{{ a.symbol || a.name }}</option>
+              }
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-fg-muted mb-1">Provider Identifier *</label>
+            <input type="text" [(ngModel)]="newLinkIdentifier" placeholder="e.g. XBT, BTC, AAPL" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info"/>
+          </div>
+        </div>
+        <div class="flex gap-2 mt-4">
+          <button (click)="submitLinkCreate()" class="px-4 py-2 rounded-lg bg-positive/15 text-positive text-sm font-medium hover:bg-positive/25 transition-colors">Create</button>
+          <button (click)="cancelLinkCreate()" class="px-4 py-2 rounded-lg bg-fg/5 text-fg-muted text-sm font-medium hover:bg-fg/10 transition-colors">Cancel</button>
+        </div>
+      </div>
+    }
+
+    <!-- Mappings Table -->
+    <div class="rounded-xl border border-edge bg-surface/50 overflow-hidden">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="border-b border-edge text-left text-xs text-fg-muted uppercase tracking-wider">
+            <th class="px-4 py-3">Provider</th>
+            <th class="px-4 py-3">Asset</th>
+            <th class="px-4 py-3">Asset Symbol</th>
+            <th class="px-4 py-3">Provider Identifier</th>
+            <th class="px-4 py-3 w-20"></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (link of filteredLinks(); track link.provider_id + link.asset_id) {
+            <tr class="border-b border-edge/50 hover:bg-elevated/30 transition-colors">
+              <td class="px-4 py-3 font-medium"><a [routerLink]="['/settings/providers', link.provider_id]" class="text-info hover:underline">{{ link.provider_name }}</a></td>
+              <td class="px-4 py-3"><a [routerLink]="['/settings/assets', link.asset_id]" class="text-info hover:underline">{{ link.asset_name }}</a></td>
+              <td class="px-4 py-3 font-mono text-fg-muted">{{ link.asset_symbol }}</td>
+              <td class="px-4 py-3 font-mono font-medium text-info">{{ link.identifier }}</td>
+              <td class="px-4 py-3">
+                <button (click)="deleteLink(link)" class="text-xs text-negative/70 hover:text-negative transition-colors">Remove</button>
+              </td>
+            </tr>
+          } @empty {
+            <tr>
+              <td colspan="5" class="px-4 py-12 text-center text-fg-faint">No provider-asset mappings found.</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <!-- ============== GROUPS TAB ============== -->
+  @if (activeTab() === 'groups') {
+    <div class="flex items-center justify-end mb-4">
+      <button (click)="openGroupCreate()" class="px-4 py-2 rounded-lg bg-info/15 text-info text-sm font-medium hover:bg-info/25 transition-colors">
+        + New Group
+      </button>
+    </div>
+
+    <!-- Create Form -->
+    @if (showGroupForm()) {
+      <div class="mb-6 rounded-xl border border-edge bg-surface/50 p-5">
+        <h3 class="font-semibold mb-4">New Asset Group</h3>
+        <p class="text-xs text-fg-faint mb-4">Create a group of provider asset pairs for compound calculations (e.g., spreads, cointegration, hedge ratios).</p>
+        <!-- Members -->
+        <h4 class="text-sm font-medium mb-2">Members</h4>
+        @if (newGroupMembers.length > 0) {
+          <div class="mb-3 space-y-2">
+            @for (m of newGroupMembers; track m.order; let i = $index) {
+              <div class="flex items-center gap-3 text-sm px-3 py-2 rounded-lg bg-canvas/50 border border-edge/50">
+                <span class="text-fg-muted font-mono text-xs w-6">{{ m.order }}.</span>
+                <span class="font-medium">{{ providerName(m.provider_id) }}</span>
+                <span class="text-fg-muted">:</span>
+                <span>{{ assetName(m.from_asset_id) }}</span>
+                <span class="text-fg-faint">/</span>
+                <span>{{ assetName(m.to_asset_id) }}</span>
+                <button (click)="removeTempMember(i)" class="ml-auto text-xs text-negative/70 hover:text-negative transition-colors">Remove</button>
+              </div>
+            }
+          </div>
+        }
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+          <div>
+            <label class="block text-xs text-fg-muted mb-1">Provider</label>
+            <select [(ngModel)]="tmpMemberProviderId" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info">
+              @for (p of providerService.providers(); track p.id) {
+                <option [value]="p.id">{{ p.name }}</option>
+              }
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-fg-muted mb-1">From Asset (Base)</label>
+            <select [(ngModel)]="tmpMemberFromAssetId" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info">
+              @for (a of assetService.assets(); track a.id) {
+                <option [value]="a.id">{{ a.symbol || a.name }}</option>
+              }
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-fg-muted mb-1">To Asset (Quote)</label>
+            <select [(ngModel)]="tmpMemberToAssetId" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info">
+              @for (a of assetService.assets(); track a.id) {
+                <option [value]="a.id">{{ a.symbol || a.name }}</option>
+              }
+            </select>
+          </div>
+          <div>
+            <button (click)="addTempMember()" class="w-full px-3 py-2 rounded-lg bg-fg/5 text-fg text-sm font-medium hover:bg-fg/10 transition-colors">Add Member</button>
+          </div>
+        </div>
+
+        <div class="flex gap-2 mt-4">
+          <button (click)="submitGroupCreate()" class="px-4 py-2 rounded-lg bg-positive/15 text-positive text-sm font-medium hover:bg-positive/25 transition-colors">Create Group</button>
+          <button (click)="cancelGroupCreate()" class="px-4 py-2 rounded-lg bg-fg/5 text-fg-muted text-sm font-medium hover:bg-fg/10 transition-colors">Cancel</button>
+        </div>
+      </div>
+    }
+
+    <!-- Groups List -->
+    <div class="space-y-4">
+      @for (group of assetService.assetGroups(); track group.id) {
+        <a [routerLink]="['/settings/asset-groups', group.id]" class="block rounded-xl border border-edge bg-surface/50 p-5 hover:bg-elevated/50 hover:border-info/30 transition-colors cursor-pointer">
+          <div class="flex items-center gap-3 mb-3">
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wider bg-info/15 text-info">
+              Group
+            </span>
+            <span class="w-2.5 h-2.5 rounded-full" [class]="group.is_active ? 'bg-positive' : 'bg-fg-faint'"></span>
+            <span class="text-xs text-fg-muted ml-auto">{{ group.members.length }} members</span>
+          </div>
+          @if (group.members.length > 0) {
+            <div class="space-y-1">
+              @for (m of group.members; track m.order) {
+                <div class="flex items-center gap-3 text-sm px-3 py-2 rounded-lg bg-canvas/30">
+                  <span class="text-fg-muted font-mono text-xs w-6">{{ m.order }}.</span>
+                  <span class="font-medium text-fg-muted">{{ m.provider_name }}</span>
+                  <span class="text-fg-faint">:</span>
+                  <span class="font-medium">{{ m.from_asset_symbol }}</span>
+                  <span class="text-fg-faint">/</span>
+                  <span class="font-medium">{{ m.to_asset_symbol }}</span>
+                </div>
+              }
+            </div>
+          } @else {
+            <p class="text-xs text-fg-faint">No members in this group.</p>
+          }
+        </a>
+      } @empty {
+        <div class="text-center text-fg-faint py-12">No asset groups found.</div>
+      }
+    </div>
+  }
+</div>

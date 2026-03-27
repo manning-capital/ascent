@@ -1,0 +1,98 @@
+<div class="p-6 max-w-7xl mx-auto">
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-bold flex items-center gap-3">
+      Trades
+      <span class="w-2 h-2 rounded-full bg-positive animate-pulse-live"></span>
+    </h1>
+    <span class="text-sm text-fg-muted">{{ tradeService.totalTrades() }} total</span>
+  </div>
+
+  <!-- Filters -->
+  <div class="rounded-xl border border-edge bg-surface/50 p-4 mb-6">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+      <!-- Search -->
+      <input
+        type="text"
+        placeholder="Search symbol..."
+        [ngModel]="search()"
+        (ngModelChange)="onSearch($event)"
+        class="bg-elevated border border-edge rounded-lg px-3 py-2 text-sm placeholder-fg-faint focus:outline-none focus:border-info transition-colors">
+
+      <!-- Status -->
+      <select
+        [ngModel]="status()"
+        (ngModelChange)="onStatusChange($event)"
+        class="bg-elevated border border-edge rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-info transition-colors">
+        <option value="">All Statuses</option>
+        <option value="OPEN">Open</option>
+        <option value="CLOSED">Closed</option>
+        <option value="PENDING">Pending</option>
+      </select>
+
+      <!-- Strategy -->
+      <select
+        [ngModel]="selectedStrategyId() ?? ''"
+        (ngModelChange)="onStrategyChange($event)"
+        class="bg-elevated border border-edge rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-info transition-colors">
+        <option value="">All Strategies</option>
+        @for (strategy of strategyService.strategies(); track strategy.id) {
+          <option [value]="strategy.id">{{ strategy.name }}</option>
+        }
+      </select>
+
+      <!-- Clear -->
+      <button
+        (click)="clearFilters()"
+        class="bg-elevated border border-edge rounded-lg px-3 py-2 text-sm hover:bg-elevated transition-colors">
+        Clear Filters
+      </button>
+    </div>
+
+    <!-- Date Range -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+      <div class="flex items-center gap-2">
+        <label class="text-xs text-fg-muted shrink-0">From:</label>
+        <input
+          type="date"
+          [ngModel]="startDate()"
+          (ngModelChange)="startDate.set($event); page.set(1)"
+          class="bg-elevated border border-edge rounded-lg px-3 py-2 text-sm flex-1 focus:outline-none focus:border-info transition-colors">
+      </div>
+      <div class="flex items-center gap-2">
+        <label class="text-xs text-fg-muted shrink-0">To:</label>
+        <input
+          type="date"
+          [ngModel]="endDate()"
+          (ngModelChange)="endDate.set($event); page.set(1)"
+          class="bg-elevated border border-edge rounded-lg px-3 py-2 text-sm flex-1 focus:outline-none focus:border-info transition-colors">
+      </div>
+    </div>
+
+    <!-- Tags -->
+    <div class="flex items-center gap-2">
+      <span class="text-xs text-fg-muted">Tags:</span>
+      @for (tag of availableTags; track tag) {
+        <button
+          (click)="toggleTag(tag)"
+          class="px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors"
+          [class]="selectedTags().includes(tag) ? 'border-info bg-info/15 text-info' : 'border-edge text-fg-muted hover:border-fg/20'">
+          {{ tag }}
+        </button>
+      }
+    </div>
+  </div>
+
+  <!-- Trade Table -->
+  @if (tradeService.loading()) {
+    <app-loading/>
+  } @else {
+    <div class="rounded-xl border border-edge bg-surface/50 overflow-hidden">
+      <app-trade-table
+        [trades]="tradeService.trades()"
+        [showStrategy]="true"
+        [page]="page()"
+        [totalPages]="tradeService.totalPages()"
+        (pageChange)="onPageChange($event)"/>
+    </div>
+  }
+</div>

@@ -1,0 +1,46 @@
+<div class="p-6 max-w-5xl mx-auto">
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-2xl font-bold">Provider Types</h1>
+      <p class="text-sm text-fg-muted mt-1">Define provider classifications and their required metadata fields.</p>
+    </div>
+    <button (click)="openCreate()" class="px-4 py-2 rounded-lg bg-info/15 text-info text-sm font-medium hover:bg-info/25 transition-colors">
+      + New Type
+    </button>
+  </div>
+
+  @if (showCreateForm()) {
+    <div class="mb-6 rounded-xl border border-edge bg-surface/50 p-5">
+      <h3 class="font-semibold mb-4">New Provider Type</h3>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs text-fg-muted mb-1">Name *</label>
+          <input type="text" [(ngModel)]="newName" placeholder="e.g. Exchange, Broker, Data Provider"
+                 class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info"/>
+        </div>
+        <div>
+          <label class="block text-xs text-fg-muted mb-1">Description</label>
+          <input type="text" [(ngModel)]="newDescription" placeholder="Optional description"
+                 class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info"/>
+        </div>
+      </div>
+      <div class="flex gap-2 mt-4">
+        <button (click)="submitCreate()" class="px-4 py-2 rounded-lg bg-positive/15 text-positive text-sm font-medium hover:bg-positive/25 transition-colors">Create</button>
+        <button (click)="cancelCreate()" class="px-4 py-2 rounded-lg bg-fg/5 text-fg-muted text-sm font-medium hover:bg-fg/10 transition-colors">Cancel</button>
+      </div>
+    </div>
+  }
+
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    @for (t of providerService.providerTypes(); track t.id) {
+      <a [routerLink]="['/settings/provider-types', t.id]" class="block rounded-xl border border-edge bg-surface/50 p-5 hover:bg-elevated/50 hover:border-info/30 transition-colors cursor-pointer">
+        <h3 class="font-semibold truncate mb-1">{{ t.name }}</h3>
+        @if (t.description) {
+          <p class="text-xs text-fg-faint line-clamp-2">{{ t.description }}</p>
+        }
+      </a>
+    } @empty {
+      <div class="col-span-full text-center text-fg-faint py-12">No provider types defined.</div>
+    }
+  </div>
+</div>

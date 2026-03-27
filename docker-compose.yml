@@ -1,0 +1,55 @@
+services:
+  db:
+    image: timescale/timescaledb:latest-pg17
+    environment:
+      POSTGRES_DB: ascent
+      POSTGRES_USER: ascent
+      POSTGRES_PASSWORD: ascent
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ascent -d ascent"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis-init:
+    image: busybox:latest
+    command: ["sh", "-c", "chown -R 65532:65532 /data"]
+    volumes:
+      - redisdata:/data
+
+  redis:
+    image: dhi.io/redis:8.6.1-debian13
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    depends_on:
+      redis-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  server:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      ASCENT_DATABASE_URL: postgresql://ascent:ascent@db:5432/ascent
+      ASCENT_REDIS_URL: redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  redisdata:

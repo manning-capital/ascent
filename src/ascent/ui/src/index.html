@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="utf-8">
+  <title>Ascent</title>
+  <base href="/">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <meta name="dashlane-disable-autofill" content="true">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body class="bg-canvas text-fg min-h-screen transition-colors duration-300">
+  <app-root></app-root>
+  <script>
+    // Prevent password managers (Dashlane, LastPass, 1Password) from autofilling
+    // non-credential form inputs. Runs on every DOM mutation to cover lazy-loaded components.
+    new MutationObserver(function() {
+      document.querySelectorAll(
+        'input:not([type=password]):not([type=email]):not([data-naf]), select:not([data-naf]), textarea:not([data-naf])'
+      ).forEach(function(el) {
+        el.setAttribute('autocomplete', 'off');
+        el.setAttribute('data-form-type', 'other');
+        el.setAttribute('data-lpignore', 'true');
+        el.setAttribute('data-naf', '');
+      });
+    }).observe(document.body, { childList: true, subtree: true });
+  </script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ ! -f \"$CLAUDE_PROJECT_DIR/llms.txt\" ]; then echo 'Warning: llms.txt not found in project root'; fi"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,136 @@
+@let type = assetType();
+@if (type) {
+<div class="p-6 max-w-4xl mx-auto">
+  <!-- Header -->
+  <div class="flex items-center gap-3 mb-6">
+    <a routerLink="/settings/asset-types" class="text-sm text-info hover:underline">&larr; Asset Types</a>
+    <span class="text-fg/20">|</span>
+    <h1 class="text-2xl font-bold">{{ type.name }}</h1>
+  </div>
+
+  @if (type.description) {
+    <p class="text-sm text-fg-muted mb-6">{{ type.description }}</p>
+  }
+
+  <!-- Metadata Fields -->
+  <div class="flex items-center justify-between mb-4">
+    <div>
+      <h2 class="text-lg font-semibold">Metadata Fields</h2>
+      <p class="text-xs text-fg-faint mt-1">Define which metadata fields are available for assets of this type. Required fields must be filled when managing an asset.</p>
+    </div>
+    <button (click)="openAddField()" class="px-4 py-2 rounded-lg bg-info/15 text-info text-sm font-medium hover:bg-info/25 transition-colors">
+      + Add Field
+    </button>
+  </div>
+
+  <!-- Add Field Form -->
+  @if (showAddField()) {
+    <div class="mb-6 rounded-xl border border-edge bg-surface/50 p-5">
+      <h3 class="font-semibold mb-4">Add Metadata Field</h3>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+        <div>
+          <label class="block text-xs text-fg-muted mb-1">Metadata Type *</label>
+          <select [(ngModel)]="newFieldMetadataId" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info">
+            @for (mt of availableMetadataTypes(); track mt.id) {
+              <option [value]="mt.id">{{ mt.name }} ({{ mt.value_type }})</option>
+            }
+          </select>
+        </div>
+        <div class="flex items-center gap-2">
+          <input type="checkbox" [(ngModel)]="newFieldRequired" id="fieldRequired" class="accent-info"/>
+          <label for="fieldRequired" class="text-sm text-fg-muted">Required</label>
+        </div>
+        <div>
+          <button (click)="openCreateMetadata()" class="text-xs text-info hover:underline">or create new metadata type...</button>
+        </div>
+      </div>
+
+      <!-- Inline Create Metadata Type -->
+      @if (showCreateMetadata()) {
+        <div class="mt-4 p-4 rounded-lg bg-canvas/50 border border-edge/50">
+          <h4 class="font-medium text-sm mb-3">New Metadata Type</h4>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label class="block text-xs text-fg-muted mb-1">Name *</label>
+              <input type="text" [(ngModel)]="newMetaName" placeholder="e.g. exchange, sector"
+                     class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info"/>
+            </div>
+            <div>
+              <label class="block text-xs text-fg-muted mb-1">Value Type *</label>
+              <select [(ngModel)]="newMetaValueType" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info">
+                <option value="string">Text</option>
+                <option value="number">Number</option>
+                <option value="boolean">Boolean</option>
+                <option value="json">JSON</option>
+                <option value="date">Date</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs text-fg-muted mb-1">Description</label>
+              <input type="text" [(ngModel)]="newMetaDescription" placeholder="Optional"
+                     class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info"/>
+            </div>
+          </div>
+          <div class="flex gap-2 mt-3">
+            <button (click)="submitCreateMetadata()" class="px-3 py-1.5 rounded-lg bg-positive/15 text-positive text-xs font-medium hover:bg-positive/25 transition-colors">Create</button>
+            <button (click)="cancelCreateMetadata()" class="px-3 py-1.5 rounded-lg bg-fg/5 text-fg-muted text-xs font-medium hover:bg-fg/10 transition-colors">Cancel</button>
+          </div>
+        </div>
+      }
+
+      <div class="flex gap-2 mt-4">
+        <button (click)="submitAddField()" class="px-4 py-2 rounded-lg bg-positive/15 text-positive text-sm font-medium hover:bg-positive/25 transition-colors">Add</button>
+        <button (click)="cancelAddField()" class="px-4 py-2 rounded-lg bg-fg/5 text-fg-muted text-sm font-medium hover:bg-fg/10 transition-colors">Cancel</button>
+      </div>
+    </div>
+  }
+
+  <!-- Fields Table -->
+  <div class="rounded-xl border border-edge bg-surface/50 overflow-hidden">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-edge text-left text-xs text-fg-muted uppercase tracking-wider">
+          <th class="px-4 py-3 w-10">#</th>
+          <th class="px-4 py-3">Field Name</th>
+          <th class="px-4 py-3">Value Type</th>
+          <th class="px-4 py-3">Required</th>
+          <th class="px-4 py-3">Description</th>
+          <th class="px-4 py-3 w-20"></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (field of fields(); track field.metadata_id; let i = $index) {
+          <tr class="border-b border-edge/50 hover:bg-elevated/30 transition-colors">
+            <td class="px-4 py-3 text-fg-muted font-mono text-xs">{{ i + 1 }}</td>
+            <td class="px-4 py-3 font-medium">{{ field.metadata_name }}</td>
+            <td class="px-4 py-3">
+              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-fg/5 text-fg-muted">
+                {{ valueTypeLabel(field.value_type) }}
+              </span>
+            </td>
+            <td class="px-4 py-3">
+              @if (field.is_required) {
+                <span class="text-xs text-negative font-medium">Required</span>
+              } @else {
+                <span class="text-xs text-fg-faint">Optional</span>
+              }
+            </td>
+            <td class="px-4 py-3 text-xs text-fg-faint">{{ field.metadata_description || '-' }}</td>
+            <td class="px-4 py-3">
+              <button (click)="removeField(field.metadata_id)" class="text-xs text-negative/70 hover:text-negative transition-colors">Remove</button>
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="6" class="px-4 py-12 text-center text-fg-faint">No metadata fields defined. Click + Add Field to get started.</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</div>
+} @else {
+  <div class="flex items-center justify-center h-[calc(100vh-3.5rem)]">
+    <app-loading/>
+  </div>
+}

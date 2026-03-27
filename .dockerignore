@@ -1,0 +1,13 @@
+.venv
+.git
+.mypy_cache
+.pytest_cache
+.ruff_cache
+__pycache__
+*.pyc
+node_modules
+src/ascent/ui/node_modules
+src/ascent/ui/dist
+src/ascent/ui/.angular
+htmlcov
+.coverage

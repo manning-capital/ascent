@@ -1,0 +1,220 @@
+@if (tradeService.loading()) {
+  <app-loading/>
+} @else {
+  @let trade = tradeService.selectedTrade();
+  @if (trade) {
+  <div class="p-6 max-w-7xl mx-auto">
+    <!-- Back Link -->
+    <a routerLink="/trades" class="text-sm text-info hover:underline mb-4 inline-block">&larr; Back to Trades</a>
+
+    <!-- Header -->
+    <div class="flex flex-wrap items-center gap-3 mb-6">
+      <h1 class="text-2xl font-bold">{{ trade.display_symbol }}</h1>
+      <div class="flex gap-2">
+        @for (tag of trade.tags; track tag) {
+          <app-badge [label]="tag"/>
+        }
+        @if (trade.current_status) {
+          <app-badge [label]="trade.current_status" variant="status"/>
+        }
+      </div>
+    </div>
+
+    <!-- Two Column Layout -->
+    <div class="grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-6">
+
+      <!-- Main Column -->
+      <div class="space-y-6">
+        <!-- Key Metrics -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <app-stat-card label="Total P&L" [value]="tradeService.formatCurrency(trade.total_realized_pnl)" [valueClass]="tradeService.getPnlClass(trade.total_realized_pnl)" size="lg"/>
+          <app-stat-card label="Unrealized P&L" [value]="tradeService.formatCurrency(trade.total_unrealized_pnl)" [valueClass]="tradeService.getPnlClass(trade.total_unrealized_pnl)" size="lg"/>
+          <app-stat-card label="Total Fees" [value]="tradeService.formatCurrency(trade.total_fees)" size="lg"/>
+          <app-stat-card label="Legs" [value]="'' + trade.legs.length" size="lg"/>
+        </div>
+
+        <!-- Trade Legs Table -->
+        <div class="rounded-xl border border-edge bg-surface/50 overflow-hidden">
+          <div class="px-4 py-3 border-b border-edge">
+            <h3 class="font-semibold text-sm">Trade Legs</h3>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead>
+                <tr class="border-b border-edge text-left text-xs font-medium text-fg-muted uppercase tracking-wider">
+                  <th class="px-4 py-3">Pair</th>
+                  <th class="px-4 py-3">Direction</th>
+                  <th class="px-4 py-3">Quantity</th>
+                  <th class="px-4 py-3">Entry</th>
+                  <th class="px-4 py-3">Exit</th>
+                  <th class="px-4 py-3 text-right">P&L</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-edge-dim">
+                @for (leg of trade.legs; track leg.id) {
+                  <tr>
+                    <td class="px-4 py-3 text-sm font-medium">{{ leg.from_asset_symbol }}/{{ leg.to_asset_symbol }}</td>
+                    <td class="px-4 py-3"><app-badge [label]="leg.direction"/></td>
+                    <td class="px-4 py-3 text-sm">{{ leg.quantity }}</td>
+                    <td class="px-4 py-3 text-sm">
+                      {{ tradeService.formatCurrency(leg.entry_price) }}
+                      @if (leg.expected_entry_price) {
+                        <span class="text-xs text-fg-faint ml-1">(exp: {{ tradeService.formatCurrency(leg.expected_entry_price) }})</span>
+                      }
+                    </td>
+                    <td class="px-4 py-3 text-sm">
+                      {{ tradeService.formatCurrency(leg.exit_price) }}
+                    </td>
+                    <td class="px-4 py-3 text-sm text-right">
+                      <span [class]="tradeService.getPnlClass(leg.realized_pnl)">
+                        {{ tradeService.formatCurrency(leg.realized_pnl) }}
+                      </span>
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Strategy Conditions -->
+        @if (trade.conditions.length > 0) {
+          <div class="rounded-xl border border-edge bg-surface/50 overflow-hidden">
+            <div class="px-4 py-3 border-b border-edge">
+              <h3 class="font-semibold text-sm">Strategy Conditions</h3>
+            </div>
+            <div class="divide-y divide-edge-dim">
+              @for (cond of trade.conditions; track cond.id) {
+                <div class="px-4 py-3 flex items-center justify-between">
+                  <div>
+                    <span class="text-xs font-semibold uppercase tracking-wider px-2 py-0.5 rounded mr-2"
+                          [class]="cond.condition_type === 'ENTRY' ? 'bg-positive/15 text-positive' :
+                                   cond.condition_type === 'EXIT' ? 'bg-info/15 text-info' :
+                                   cond.condition_type === 'STOP_LOSS' ? 'bg-negative/15 text-negative' :
+                                   'bg-warning/15 text-warning'">
+                      {{ cond.condition_type }}
+                    </span>
+                    <span class="text-sm">{{ cond.attribute_name }} {{ cond.operator }} {{ cond.threshold_value }}</span>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    @if (cond.is_met) {
+                      <span class="w-2 h-2 rounded-full bg-positive"></span>
+                      <span class="text-xs text-fg-muted">{{ cond.met_at | date:'short' }}</span>
+                    } @else {
+                      <span class="w-2 h-2 rounded-full bg-fg-faint"></span>
+                      <span class="text-xs text-fg-faint">Pending</span>
+                    }
+                  </div>
+                </div>
+              }
+            </div>
+          </div>
+        }
+
+        <!-- Snapshots -->
+        @if (trade.snapshots.length > 0) {
+          <div class="rounded-xl border border-edge bg-surface/50 overflow-hidden">
+            <div class="px-4 py-3 border-b border-edge">
+              <h3 class="font-semibold text-sm">Signal Snapshots</h3>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full">
+                <thead>
+                  <tr class="border-b border-edge text-left text-xs font-medium text-fg-muted uppercase tracking-wider">
+                    <th class="px-4 py-3">Type</th>
+                    <th class="px-4 py-3">Attribute</th>
+                    <th class="px-4 py-3">Value</th>
+                    <th class="px-4 py-3">Timestamp</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-edge-dim">
+                  @for (snap of trade.snapshots; track $index) {
+                    <tr>
+                      <td class="px-4 py-3"><app-badge [label]="snap.snapshot_type"/></td>
+                      <td class="px-4 py-3 text-sm">{{ snap.attribute_name }}</td>
+                      <td class="px-4 py-3 text-sm font-mono">{{ snap.attribute_value }}</td>
+                      <td class="px-4 py-3 text-sm text-fg-muted">{{ snap.timestamp | date:'medium' }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </div>
+        }
+      </div>
+
+      <!-- Sidebar -->
+      <div class="space-y-6">
+        <!-- Trade Info -->
+        <div class="rounded-xl border border-edge bg-surface/50 p-5">
+          <h3 class="font-semibold text-sm mb-4">Trade Info</h3>
+          <div class="space-y-3">
+            <div class="flex justify-between text-sm">
+              <span class="text-fg-muted">Strategy</span>
+              <a [routerLink]="['/strategies', trade.strategy_id]" class="text-info hover:underline">{{ trade.strategy_name }}</a>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-fg-muted">Paper</span>
+              <span>{{ trade.is_paper ? 'Yes' : 'No' }}</span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-fg-muted">Entry</span>
+              <span>{{ trade.entry_at | date:'medium' }}</span>
+            </div>
+            @if (trade.exit_at) {
+              <div class="flex justify-between text-sm">
+                <span class="text-fg-muted">Exit</span>
+                <span>{{ trade.exit_at | date:'medium' }}</span>
+              </div>
+            }
+            @if (trade.close_reason) {
+              <div class="flex justify-between text-sm">
+                <span class="text-fg-muted">Close Reason</span>
+                <span>{{ trade.close_reason }}</span>
+              </div>
+            }
+          </div>
+        </div>
+
+        <!-- Status History -->
+        @if (trade.statuses.length > 0) {
+          <div class="rounded-xl border border-edge bg-surface/50 p-5">
+            <h3 class="font-semibold text-sm mb-4">Status History</h3>
+            <div class="space-y-2">
+              @for (s of trade.statuses; track $index) {
+                <div class="flex items-center justify-between text-sm">
+                  <app-badge [label]="s.status" variant="status"/>
+                  <span class="text-xs text-fg-muted">{{ s.timestamp | date:'short' }}</span>
+                </div>
+              }
+            </div>
+          </div>
+        }
+
+        <!-- Parameters -->
+        @if (trade.parameters) {
+          <div class="rounded-xl border border-edge bg-surface/50 p-5">
+            <h3 class="font-semibold text-sm mb-4">Parameters</h3>
+            <pre class="text-xs text-fg-muted overflow-x-auto">{{ trade.parameters | json }}</pre>
+          </div>
+        }
+
+        <!-- Data Series -->
+        @if (trade.data_series.length > 0) {
+          <div class="rounded-xl border border-edge bg-surface/50 p-5">
+            <h3 class="font-semibold text-sm mb-4">Data Series</h3>
+            <div class="space-y-2">
+              @for (ds of trade.data_series; track ds.id) {
+                <div class="flex justify-between text-sm">
+                  <span>{{ ds.label || ds.attribute_name }}</span>
+                  <span class="text-xs text-fg-faint">{{ ds.data_source }}</span>
+                </div>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    </div>
+  </div>
+  }
+}

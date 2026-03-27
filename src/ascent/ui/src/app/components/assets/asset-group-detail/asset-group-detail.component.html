@@ -1,0 +1,132 @@
+@if (loading()) {
+  <div class="flex items-center justify-center h-[calc(100vh-3.5rem)]">
+    <app-loading/>
+  </div>
+} @else {
+  @let g = group();
+  @if (g) {
+  <div class="flex flex-col h-[calc(100vh-3.5rem)]">
+    <!-- Header Bar -->
+    <div class="flex items-center gap-3 px-4 py-2 border-b border-edge shrink-0 bg-surface/30">
+      <a routerLink="/settings/assets" class="text-sm text-info hover:underline">&larr; Assets</a>
+      <span class="text-fg/20">|</span>
+      <h1 class="text-lg font-bold truncate">Asset Group</h1>
+      <span class="w-2 h-2 rounded-full shrink-0" [class]="g.is_active ? 'bg-positive' : 'bg-fg-faint'"></span>
+      <span class="text-xs text-fg-muted">{{ g.members.length }} members</span>
+    </div>
+
+    <!-- Tab Bar -->
+    <app-panel-tabs [tabs]="tabs" [(activeTab)]="activeTab"/>
+
+    <!-- Tab Content -->
+    <div class="flex-1 overflow-hidden">
+
+      <!-- Overview Tab -->
+      @if (activeTab() === 'Overview') {
+        <div class="max-w-3xl mx-auto p-6 space-y-6 overflow-y-auto h-full">
+          <div class="rounded-xl border border-edge bg-surface/50 p-5">
+            <h3 class="font-semibold text-sm mb-3">Info</h3>
+            <div class="space-y-2 text-sm">
+              <div class="flex justify-between"><span class="text-fg-muted">Active</span><span>{{ g.is_active ? 'Yes' : 'No' }}</span></div>
+              <div class="flex justify-between"><span class="text-fg-muted">Members</span><span>{{ g.members.length }}</span></div>
+              @if (g.created_at) {
+                <div class="flex justify-between"><span class="text-fg-muted">Created</span><span>{{ g.created_at | date:'mediumDate' }}</span></div>
+              }
+            </div>
+          </div>
+        </div>
+      }
+
+      <!-- Members Tab -->
+      @if (activeTab() === 'Members') {
+        <div class="overflow-y-auto h-full p-6 max-w-4xl mx-auto">
+          <div class="flex items-center justify-between mb-4">
+            <div>
+              <h3 class="font-semibold text-sm">Group Members</h3>
+              <p class="text-xs text-fg-faint mt-1">Ordered provider-asset pairs in this group.</p>
+            </div>
+            <button (click)="openMemberForm()" class="px-4 py-2 rounded-lg bg-info/15 text-info text-sm font-medium hover:bg-info/25 transition-colors">
+              + Add Member
+            </button>
+          </div>
+
+          <!-- Add Member Form -->
+          @if (showMemberForm()) {
+            <div class="mb-6 rounded-xl border border-edge bg-surface/50 p-5">
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label class="block text-xs text-fg-muted mb-1">Provider</label>
+                  <select [(ngModel)]="newProviderId" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info">
+                    @for (p of providerService.providers(); track p.id) {
+                      <option [value]="p.id">{{ p.name }}</option>
+                    }
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs text-fg-muted mb-1">From Asset (Base)</label>
+                  <select [(ngModel)]="newFromAssetId" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info">
+                    @for (a of assetService.assets(); track a.id) {
+                      <option [value]="a.id">{{ a.symbol || a.name }}</option>
+                    }
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs text-fg-muted mb-1">To Asset (Quote)</label>
+                  <select [(ngModel)]="newToAssetId" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info">
+                    @for (a of assetService.assets(); track a.id) {
+                      <option [value]="a.id">{{ a.symbol || a.name }}</option>
+                    }
+                  </select>
+                </div>
+              </div>
+              <div class="flex gap-2 mt-4">
+                <button (click)="submitMember()" class="px-4 py-2 rounded-lg bg-positive/15 text-positive text-sm font-medium hover:bg-positive/25 transition-colors">Add</button>
+                <button (click)="cancelMemberForm()" class="px-4 py-2 rounded-lg bg-fg/5 text-fg-muted text-sm font-medium hover:bg-fg/10 transition-colors">Cancel</button>
+              </div>
+            </div>
+          }
+
+          <!-- Members Table -->
+          <div class="rounded-xl border border-edge bg-surface/50 overflow-hidden">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-edge text-left text-xs text-fg-muted uppercase tracking-wider">
+                  <th class="px-4 py-3 w-12">#</th>
+                  <th class="px-4 py-3">Provider</th>
+                  <th class="px-4 py-3">Base Asset</th>
+                  <th class="px-4 py-3">Quote Asset</th>
+                  <th class="px-4 py-3 w-20"></th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (m of g.members; track m.provider_id + m.from_asset_id + m.to_asset_id) {
+                  <tr class="border-b border-edge/50 hover:bg-elevated/30 transition-colors">
+                    <td class="px-4 py-3 text-fg-muted font-mono text-xs">{{ m.order }}</td>
+                    <td class="px-4 py-3">
+                      <a [routerLink]="['/settings/providers', m.provider_id]" class="text-info hover:underline font-medium">{{ m.provider_name }}</a>
+                    </td>
+                    <td class="px-4 py-3">
+                      <a [routerLink]="['/settings/assets', m.from_asset_id]" class="text-info hover:underline font-mono text-xs">{{ m.from_asset_symbol }}</a>
+                    </td>
+                    <td class="px-4 py-3">
+                      <a [routerLink]="['/settings/assets', m.to_asset_id]" class="text-info hover:underline font-mono text-xs">{{ m.to_asset_symbol }}</a>
+                    </td>
+                    <td class="px-4 py-3">
+                      <button (click)="removeMember(m)" class="text-xs text-negative/70 hover:text-negative transition-colors">Remove</button>
+                    </td>
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td colspan="5" class="px-4 py-12 text-center text-fg-faint">No members in this group.</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      }
+
+    </div>
+  </div>
+  }
+}
