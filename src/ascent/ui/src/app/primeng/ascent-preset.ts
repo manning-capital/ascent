@@ -169,7 +169,9 @@ export const AscentPreset: GlobalPassThrough = {
     header: { class: 'flex items-center justify-between px-6 pt-6 pb-0' },
     title: { class: 'text-sm font-semibold text-fg' },
     headerActions: { class: 'flex items-center' },
-    pcCloseButton: { class: 'p-1.5 rounded-lg hover:bg-fg/10 text-fg-muted hover:text-fg transition-colors cursor-pointer bg-transparent border-none' },
+    pcCloseButton: {
+      root: { class: 'p-1.5 rounded-lg hover:bg-fg/10 text-fg-muted hover:text-fg transition-colors cursor-pointer bg-transparent border-none' },
+    },
     content: { class: 'px-6 py-4 text-sm text-fg-muted' },
     footer: { class: 'flex items-center justify-end gap-2 px-6 pb-6' },
   },
