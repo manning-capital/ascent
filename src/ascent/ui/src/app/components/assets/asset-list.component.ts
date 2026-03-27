@@ -210,12 +210,20 @@ export class AssetListComponent implements OnInit {
   }
 
   deleteGroup(group: AssetGroup): void {
-    this.assetService.deleteAssetGroup(group.id).subscribe({
-      next: () => {
-        this.toast.success('Group deleted');
-        this.assetService.loadAssetGroups();
+    this.confirmationService.confirm({
+      header: 'Delete Group',
+      message: 'Are you sure you want to delete this asset group? This action cannot be undone.',
+      acceptLabel: 'Delete',
+      rejectLabel: 'Cancel',
+      accept: () => {
+        this.assetService.deleteAssetGroup(group.id).subscribe({
+          next: () => {
+            this.toast.success('Group deleted');
+            this.assetService.loadAssetGroups();
+          },
+          error: () => this.toast.error('Failed to delete group'),
+        });
       },
-      error: () => this.toast.error('Failed to delete group'),
     });
   }
 
