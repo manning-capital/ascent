@@ -5,11 +5,14 @@ import { AssetService } from '../../../services/asset.service';
 import { ToastService } from '../../../services/toast.service';
 import { TypeItem, AssetTypeMetadataField, MetadataType } from '../../../models/asset.model';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner.component';
+import { Select } from 'primeng/select';
+import { Checkbox } from 'primeng/checkbox';
+import { TableModule } from 'primeng/table';
 
 @Component({
   selector: 'app-asset-type-detail',
   standalone: true,
-  imports: [RouterLink, FormsModule, LoadingSpinnerComponent],
+  imports: [RouterLink, FormsModule, LoadingSpinnerComponent, Select, Checkbox, TableModule],
   templateUrl: './asset-type-detail.component.html',
 })
 export class AssetTypeDetailComponent implements OnInit {

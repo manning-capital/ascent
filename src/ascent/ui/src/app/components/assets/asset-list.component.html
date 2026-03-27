@@ -58,11 +58,7 @@
           </div>
           <div>
             <label class="block text-xs text-fg-muted mb-1">Type *</label>
-            <select [(ngModel)]="newAssetTypeId" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info">
-              @for (t of assetService.assetTypes(); track t.id) {
-                <option [value]="t.id">{{ t.name }}</option>
-              }
-            </select>
+            <p-select [(ngModel)]="newAssetTypeId" [options]="assetService.assetTypes()" optionLabel="name" optionValue="id" placeholder="-- select type --"/>
           </div>
           <div>
             <label class="block text-xs text-fg-muted mb-1">Description</label>
@@ -127,19 +123,11 @@
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label class="block text-xs text-fg-muted mb-1">Provider *</label>
-            <select [(ngModel)]="newLinkProviderId" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info">
-              @for (p of providerService.providers(); track p.id) {
-                <option [value]="p.id">{{ p.name }}</option>
-              }
-            </select>
+            <p-select [(ngModel)]="newLinkProviderId" [options]="providerService.providers()" optionLabel="name" optionValue="id" placeholder="-- select provider --"/>
           </div>
           <div>
             <label class="block text-xs text-fg-muted mb-1">Asset *</label>
-            <select [(ngModel)]="newLinkAssetId" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info">
-              @for (a of assetService.assets(); track a.id) {
-                <option [value]="a.id">{{ a.symbol || a.name }}</option>
-              }
-            </select>
+            <p-select [(ngModel)]="newLinkAssetId" [options]="assetService.assets()" optionLabel="name" optionValue="id" placeholder="-- select asset --"/>
           </div>
           <div>
             <label class="block text-xs text-fg-muted mb-1">Provider Identifier *</label>
@@ -155,34 +143,33 @@
 
     <!-- Mappings Table -->
     <div class="rounded-xl border border-edge bg-surface/50 overflow-hidden">
-      <table class="w-full text-sm">
-        <thead>
-          <tr class="border-b border-edge text-left text-xs text-fg-muted uppercase tracking-wider">
-            <th class="px-4 py-3">Provider</th>
-            <th class="px-4 py-3">Asset</th>
-            <th class="px-4 py-3">Asset Symbol</th>
-            <th class="px-4 py-3">Provider Identifier</th>
-            <th class="px-4 py-3 w-20"></th>
+      <p-table [value]="filteredLinks()" [tableStyle]="{'width': '100%'}">
+        <ng-template #header>
+          <tr>
+            <th>Provider</th>
+            <th>Asset</th>
+            <th>Asset Symbol</th>
+            <th>Provider Identifier</th>
+            <th class="w-20"></th>
           </tr>
-        </thead>
-        <tbody>
-          @for (link of filteredLinks(); track link.provider_id + link.asset_id) {
-            <tr class="border-b border-edge/50 hover:bg-elevated/30 transition-colors">
-              <td class="px-4 py-3 font-medium"><a [routerLink]="['/settings/providers', link.provider_id]" class="text-info hover:underline">{{ link.provider_name }}</a></td>
-              <td class="px-4 py-3"><a [routerLink]="['/settings/assets', link.asset_id]" class="text-info hover:underline">{{ link.asset_name }}</a></td>
-              <td class="px-4 py-3 font-mono text-fg-muted">{{ link.asset_symbol }}</td>
-              <td class="px-4 py-3 font-mono font-medium text-info">{{ link.identifier }}</td>
-              <td class="px-4 py-3">
-                <button (click)="deleteLink(link)" class="text-xs text-negative/70 hover:text-negative transition-colors">Remove</button>
-              </td>
-            </tr>
-          } @empty {
-            <tr>
-              <td colspan="5" class="px-4 py-12 text-center text-fg-faint">No provider-asset mappings found.</td>
-            </tr>
-          }
-        </tbody>
-      </table>
+        </ng-template>
+        <ng-template #body let-link>
+          <tr>
+            <td class="font-medium"><a [routerLink]="['/settings/providers', link.provider_id]" class="text-info hover:underline">{{ link.provider_name }}</a></td>
+            <td><a [routerLink]="['/settings/assets', link.asset_id]" class="text-info hover:underline">{{ link.asset_name }}</a></td>
+            <td class="font-mono text-fg-muted">{{ link.asset_symbol }}</td>
+            <td class="font-mono font-medium text-info">{{ link.identifier }}</td>
+            <td>
+              <button (click)="deleteLink(link)" class="text-xs text-negative/70 hover:text-negative transition-colors">Remove</button>
+            </td>
+          </tr>
+        </ng-template>
+        <ng-template #emptymessage>
+          <tr>
+            <td colspan="5" class="text-center text-fg-faint">No provider-asset mappings found.</td>
+          </tr>
+        </ng-template>
+      </p-table>
     </div>
   }
 
@@ -219,27 +206,15 @@
         <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
           <div>
             <label class="block text-xs text-fg-muted mb-1">Provider</label>
-            <select [(ngModel)]="tmpMemberProviderId" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info">
-              @for (p of providerService.providers(); track p.id) {
-                <option [value]="p.id">{{ p.name }}</option>
-              }
-            </select>
+            <p-select [(ngModel)]="tmpMemberProviderId" [options]="providerService.providers()" optionLabel="name" optionValue="id" placeholder="-- select provider --"/>
           </div>
           <div>
             <label class="block text-xs text-fg-muted mb-1">From Asset (Base)</label>
-            <select [(ngModel)]="tmpMemberFromAssetId" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info">
-              @for (a of assetService.assets(); track a.id) {
-                <option [value]="a.id">{{ a.symbol || a.name }}</option>
-              }
-            </select>
+            <p-select [(ngModel)]="tmpMemberFromAssetId" [options]="assetService.assets()" optionLabel="name" optionValue="id" placeholder="-- select asset --"/>
           </div>
           <div>
             <label class="block text-xs text-fg-muted mb-1">To Asset (Quote)</label>
-            <select [(ngModel)]="tmpMemberToAssetId" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info">
-              @for (a of assetService.assets(); track a.id) {
-                <option [value]="a.id">{{ a.symbol || a.name }}</option>
-              }
-            </select>
+            <p-select [(ngModel)]="tmpMemberToAssetId" [options]="assetService.assets()" optionLabel="name" optionValue="id" placeholder="-- select asset --"/>
           </div>
           <div>
             <button (click)="addTempMember()" class="w-full px-3 py-2 rounded-lg bg-fg/5 text-fg text-sm font-medium hover:bg-fg/10 transition-colors">Add Member</button>

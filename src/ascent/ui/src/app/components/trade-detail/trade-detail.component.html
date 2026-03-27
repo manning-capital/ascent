@@ -38,43 +38,39 @@
           <div class="px-4 py-3 border-b border-edge">
             <h3 class="font-semibold text-sm">Trade Legs</h3>
           </div>
-          <div class="overflow-x-auto">
-            <table class="w-full">
-              <thead>
-                <tr class="border-b border-edge text-left text-xs font-medium text-fg-muted uppercase tracking-wider">
-                  <th class="px-4 py-3">Pair</th>
-                  <th class="px-4 py-3">Direction</th>
-                  <th class="px-4 py-3">Quantity</th>
-                  <th class="px-4 py-3">Entry</th>
-                  <th class="px-4 py-3">Exit</th>
-                  <th class="px-4 py-3 text-right">P&L</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-edge-dim">
-                @for (leg of trade.legs; track leg.id) {
-                  <tr>
-                    <td class="px-4 py-3 text-sm font-medium">{{ leg.from_asset_symbol }}/{{ leg.to_asset_symbol }}</td>
-                    <td class="px-4 py-3"><app-badge [label]="leg.direction"/></td>
-                    <td class="px-4 py-3 text-sm">{{ leg.quantity }}</td>
-                    <td class="px-4 py-3 text-sm">
-                      {{ tradeService.formatCurrency(leg.entry_price) }}
-                      @if (leg.expected_entry_price) {
-                        <span class="text-xs text-fg-faint ml-1">(exp: {{ tradeService.formatCurrency(leg.expected_entry_price) }})</span>
-                      }
-                    </td>
-                    <td class="px-4 py-3 text-sm">
-                      {{ tradeService.formatCurrency(leg.exit_price) }}
-                    </td>
-                    <td class="px-4 py-3 text-sm text-right">
-                      <span [class]="tradeService.getPnlClass(leg.realized_pnl)">
-                        {{ tradeService.formatCurrency(leg.realized_pnl) }}
-                      </span>
-                    </td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
+          <p-table [value]="trade.legs">
+            <ng-template #header>
+              <tr>
+                <th>Pair</th>
+                <th>Direction</th>
+                <th>Quantity</th>
+                <th>Entry</th>
+                <th>Exit</th>
+                <th class="text-right">P&L</th>
+              </tr>
+            </ng-template>
+            <ng-template #body let-leg>
+              <tr>
+                <td class="text-sm font-medium">{{ leg.from_asset_symbol }}/{{ leg.to_asset_symbol }}</td>
+                <td><app-badge [label]="leg.direction"/></td>
+                <td class="text-sm">{{ leg.quantity }}</td>
+                <td class="text-sm">
+                  {{ tradeService.formatCurrency(leg.entry_price) }}
+                  @if (leg.expected_entry_price) {
+                    <span class="text-xs text-fg-faint ml-1">(exp: {{ tradeService.formatCurrency(leg.expected_entry_price) }})</span>
+                  }
+                </td>
+                <td class="text-sm">
+                  {{ tradeService.formatCurrency(leg.exit_price) }}
+                </td>
+                <td class="text-sm text-right">
+                  <span [class]="tradeService.getPnlClass(leg.realized_pnl)">
+                    {{ tradeService.formatCurrency(leg.realized_pnl) }}
+                  </span>
+                </td>
+              </tr>
+            </ng-template>
+          </p-table>
         </div>
 
         <!-- Strategy Conditions -->
@@ -117,28 +113,24 @@
             <div class="px-4 py-3 border-b border-edge">
               <h3 class="font-semibold text-sm">Signal Snapshots</h3>
             </div>
-            <div class="overflow-x-auto">
-              <table class="w-full">
-                <thead>
-                  <tr class="border-b border-edge text-left text-xs font-medium text-fg-muted uppercase tracking-wider">
-                    <th class="px-4 py-3">Type</th>
-                    <th class="px-4 py-3">Attribute</th>
-                    <th class="px-4 py-3">Value</th>
-                    <th class="px-4 py-3">Timestamp</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-edge-dim">
-                  @for (snap of trade.snapshots; track $index) {
-                    <tr>
-                      <td class="px-4 py-3"><app-badge [label]="snap.snapshot_type"/></td>
-                      <td class="px-4 py-3 text-sm">{{ snap.attribute_name }}</td>
-                      <td class="px-4 py-3 text-sm font-mono">{{ snap.attribute_value }}</td>
-                      <td class="px-4 py-3 text-sm text-fg-muted">{{ snap.timestamp | date:'medium' }}</td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
-            </div>
+            <p-table [value]="trade.snapshots">
+              <ng-template #header>
+                <tr>
+                  <th>Type</th>
+                  <th>Attribute</th>
+                  <th>Value</th>
+                  <th>Timestamp</th>
+                </tr>
+              </ng-template>
+              <ng-template #body let-snap>
+                <tr>
+                  <td><app-badge [label]="snap.snapshot_type"/></td>
+                  <td class="text-sm">{{ snap.attribute_name }}</td>
+                  <td class="text-sm font-mono">{{ snap.attribute_value }}</td>
+                  <td class="text-sm text-fg-muted">{{ snap.timestamp | date:'medium' }}</td>
+                </tr>
+              </ng-template>
+            </p-table>
           </div>
         }
       </div>

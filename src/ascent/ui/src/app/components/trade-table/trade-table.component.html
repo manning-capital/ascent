@@ -1,72 +1,71 @@
 <!-- Desktop Table -->
-<div class="hidden md:block overflow-x-auto">
-  <table class="w-full">
-    <thead>
-      <tr class="border-b border-edge text-left text-xs font-medium text-fg-muted uppercase tracking-wider">
-        <th class="px-4 py-3">Symbol</th>
+<div class="hidden md:block">
+  <p-table [value]="trades()" [tableStyle]="{'width': '100%'}">
+    <ng-template #header>
+      <tr>
+        <th>Symbol</th>
         @if (showStrategy()) {
-          <th class="px-4 py-3">Strategy</th>
+          <th>Strategy</th>
         }
-        <th class="px-4 py-3">Type</th>
-        <th class="px-4 py-3">Qty</th>
-        <th class="px-4 py-3">Entry Price</th>
-        <th class="px-4 py-3">Exit/Current</th>
-        <th class="px-4 py-3 text-right">P&L</th>
-        <th class="px-4 py-3 text-right">Status</th>
+        <th>Type</th>
+        <th>Qty</th>
+        <th>Entry Price</th>
+        <th>Exit/Current</th>
+        <th class="text-right">P&L</th>
+        <th class="text-right">Status</th>
       </tr>
-    </thead>
-    <tbody class="divide-y divide-edge-dim">
-      @for (trade of trades(); track trade.id) {
-        <tr class="hover:bg-fg/5 cursor-pointer transition-colors" (click)="navigateToTrade(trade.id)">
-          <td class="px-4 py-3">
-            <div class="flex items-center gap-2">
-              <span class="font-medium text-sm">{{ trade.display_symbol }}</span>
-              @if (trade.is_paper) {
-                <app-badge label="PAPER"/>
-              }
-            </div>
-          </td>
-          @if (showStrategy()) {
-            <td class="px-4 py-3 text-sm text-fg-muted">{{ trade.strategy_name }}</td>
-          }
-          <td class="px-4 py-3">
-            <div class="flex gap-1">
-              @for (tag of trade.tags; track tag) {
-                @if (tag !== 'PAPER') {
-                  <app-badge [label]="tag"/>
-                }
-              }
-            </div>
-          </td>
-          <td class="px-4 py-3 text-sm">
-            {{ getMainLeg(trade)?.quantity | number:'1.0-4' }}
-          </td>
-          <td class="px-4 py-3 text-sm">
-            {{ tradeService.formatCurrency(getMainLeg(trade)?.entry_price ?? null) }}
-          </td>
-          <td class="px-4 py-3 text-sm">
-            {{ tradeService.formatCurrency(getMainLeg(trade)?.exit_price ?? getMainLeg(trade)?.entry_price ?? null) }}
-          </td>
-          <td class="px-4 py-3 text-sm text-right">
-            <span [class]="tradeService.getPnlClass(trade.total_realized_pnl)">
-              {{ tradeService.formatCurrency(trade.total_realized_pnl) }}
-            </span>
-          </td>
-          <td class="px-4 py-3 text-right">
-            @if (trade.current_status) {
-              <app-badge [label]="trade.current_status" variant="status"/>
+    </ng-template>
+    <ng-template #body let-trade>
+      <tr class="cursor-pointer" (click)="navigateToTrade(trade.id)">
+        <td>
+          <div class="flex items-center gap-2">
+            <span class="font-medium text-sm">{{ trade.display_symbol }}</span>
+            @if (trade.is_paper) {
+              <app-badge label="PAPER"/>
             }
-          </td>
-        </tr>
-      } @empty {
-        <tr>
-          <td [attr.colspan]="showStrategy() ? 8 : 7" class="px-4 py-12 text-center text-fg-faint">
-            No trades found.
-          </td>
-        </tr>
-      }
-    </tbody>
-  </table>
+          </div>
+        </td>
+        @if (showStrategy()) {
+          <td class="text-sm text-fg-muted">{{ trade.strategy_name }}</td>
+        }
+        <td>
+          <div class="flex gap-1">
+            @for (tag of trade.tags; track tag) {
+              @if (tag !== 'PAPER') {
+                <app-badge [label]="tag"/>
+              }
+            }
+          </div>
+        </td>
+        <td class="text-sm">
+          {{ getMainLeg(trade)?.quantity | number:'1.0-4' }}
+        </td>
+        <td class="text-sm">
+          {{ tradeService.formatCurrency(getMainLeg(trade)?.entry_price ?? null) }}
+        </td>
+        <td class="text-sm">
+          {{ tradeService.formatCurrency(getMainLeg(trade)?.exit_price ?? getMainLeg(trade)?.entry_price ?? null) }}
+        </td>
+        <td class="text-sm text-right">
+          <span [class]="tradeService.getPnlClass(trade.total_realized_pnl)">
+            {{ tradeService.formatCurrency(trade.total_realized_pnl) }}
+          </span>
+        </td>
+        <td class="text-right">
+          @if (trade.current_status) {
+            <app-badge [label]="trade.current_status" variant="status"/>
+          }
+        </td>
+      </tr>
+    </ng-template>
+    <ng-template #emptymessage>
+      <tr>
+        <td [attr.colspan]="showStrategy() ? 8 : 7">
+          No trades found.
+        </td>
+      </tr>
+    </ng-template>
+  </p-table>
 </div>
 
 <!-- Mobile Cards -->

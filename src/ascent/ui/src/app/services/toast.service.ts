@@ -1,20 +1,17 @@
-import { Injectable, signal } from '@angular/core';
-
-export interface Toast {
-  id: number;
-  message: string;
-  type: 'success' | 'error' | 'info';
-}
+import { inject, Injectable } from '@angular/core';
+import { MessageService } from 'primeng/api';
 
 @Injectable({ providedIn: 'root' })
 export class ToastService {
-  toasts = signal<Toast[]>([]);
-  private nextId = 0;
+  private messageService = inject(MessageService);
 
-  show(message: string, type: Toast['type'] = 'info', duration = 3000): void {
-    const id = this.nextId++;
-    this.toasts.update(t => [...t, { id, message, type }]);
-    setTimeout(() => this.dismiss(id), duration);
+  show(message: string, type: 'success' | 'error' | 'info' = 'info', duration = 3000): void {
+    this.messageService.add({
+      severity: type === 'error' ? 'error' : type === 'success' ? 'success' : 'info',
+      summary: type.charAt(0).toUpperCase() + type.slice(1),
+      detail: message,
+      life: duration,
+    });
   }
 
   success(message: string): void {
@@ -23,9 +20,5 @@ export class ToastService {
 
   error(message: string): void {
     this.show(message, 'error', 5000);
-  }
-
-  dismiss(id: number): void {
-    this.toasts.update(t => t.filter(toast => toast.id !== id));
   }
 }

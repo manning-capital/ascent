@@ -5,6 +5,9 @@ import { AssetService } from '../../services/asset.service';
 import { ProviderService } from '../../services/provider.service';
 import { ToastService } from '../../services/toast.service';
 import { LoadingSpinnerComponent } from '../shared/loading-spinner.component';
+import { Select } from 'primeng/select';
+import { TableModule } from 'primeng/table';
+import { ConfirmationService } from 'primeng/api';
 import {
   AssetListItem, AssetCreate,
   ProviderAssetLink, ProviderAssetLinkCreate,
@@ -16,13 +19,14 @@ type Tab = 'assets' | 'mappings' | 'groups';
 @Component({
   selector: 'app-asset-list',
   standalone: true,
-  imports: [RouterLink, FormsModule, LoadingSpinnerComponent],
+  imports: [RouterLink, FormsModule, LoadingSpinnerComponent, Select, TableModule],
   templateUrl: './asset-list.component.html',
 })
 export class AssetListComponent implements OnInit {
   assetService = inject(AssetService);
   providerService = inject(ProviderService);
   private toast = inject(ToastService);
+  private confirmationService = inject(ConfirmationService);
 
   activeTab = signal<Tab>('assets');
   search = signal('');

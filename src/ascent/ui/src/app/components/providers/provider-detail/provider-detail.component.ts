@@ -7,7 +7,12 @@ import { AssetService } from '../../../services/asset.service';
 import { ToastService } from '../../../services/toast.service';
 import { MetadataEntry, MetadataHistoryEntry, ProviderTypeMetadataField } from '../../../models/asset.model';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner.component';
-import { PanelTabsComponent } from '../../shared/panel-tabs.component';
+import { Tabs, TabList, Tab } from 'primeng/tabs';
+import { Select } from 'primeng/select';
+import { Checkbox } from 'primeng/checkbox';
+import { DatePicker } from 'primeng/datepicker';
+import { TableModule } from 'primeng/table';
+import { ConfirmationService } from 'primeng/api';
 
 @Component({
   selector: 'app-provider-detail',
@@ -17,13 +22,18 @@ import { PanelTabsComponent } from '../../shared/panel-tabs.component';
     DatePipe,
     FormsModule,
     LoadingSpinnerComponent,
-    PanelTabsComponent,
+    Tabs, TabList, Tab,
+    Select,
+    Checkbox,
+    DatePicker,
+    TableModule,
   ],
   templateUrl: './provider-detail.component.html',
 })
 export class ProviderDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private toast = inject(ToastService);
+  private confirmationService = inject(ConfirmationService);
   providerService = inject(ProviderService);
   assetService = inject(AssetService);
 
@@ -44,11 +54,11 @@ export class ProviderDetailComponent implements OnInit {
   metadataEntries = signal<MetadataEntry[]>([]);
   providerTypeFields = signal<ProviderTypeMetadataField[]>([]);
   fieldInputValues: Record<string, string> = {};
-  fieldTimestampValues: Record<string, string> = {};
+  fieldTimestampValues: Record<string, Date | null> = {};
   showMetadataForm = signal(false);
   newMetadataId = '';
   newMetadataValue = '';
-  newMetadataTimestamp = '';
+  newMetadataTimestamp: Date | null = null;
 
   // History state
   historyMetadataId = signal<string | null>(null);
@@ -56,7 +66,7 @@ export class ProviderDetailComponent implements OnInit {
   historyEntries = signal<MetadataHistoryEntry[]>([]);
   editingHistoryTimestamp = signal<string | null>(null);
   editHistoryValue = '';
-  editHistoryTimestamp = '';
+  editHistoryTimestamp: Date | null = null;
 
   ngOnInit(): void {
     this.route.paramMap.subscribe(params => {
@@ -131,12 +141,20 @@ export class ProviderDetailComponent implements OnInit {
   }
 
   deleteProvider(): void {
-    this.providerService.deleteProvider(this.providerId).subscribe({
-      next: () => {
-        this.toast.success('Provider deleted');
-        window.history.back();
+    this.confirmationService.confirm({
+      header: 'Delete Provider',
+      message: 'Are you sure you want to delete this provider? This action cannot be undone.',
+      acceptLabel: 'Delete',
+      rejectLabel: 'Cancel',
+      accept: () => {
+        this.providerService.deleteProvider(this.providerId).subscribe({
+          next: () => {
+            this.toast.success('Provider deleted');
+            window.history.back();
+          },
+          error: () => this.toast.error('Failed to delete provider'),
+        });
       },
-      error: () => this.toast.error('Failed to delete provider'),
     });
   }
 
@@ -166,7 +184,7 @@ export class ProviderDetailComponent implements OnInit {
     const available = this.assetService.metadataTypes().filter(mt => !usedIds.has(mt.id));
     this.newMetadataId = available[0]?.id ?? this.assetService.metadataTypes()[0]?.id ?? '';
     this.newMetadataValue = '';
-    this.newMetadataTimestamp = '';
+    this.newMetadataTimestamp = null;
     this.showMetadataForm.set(true);
   }
 
@@ -180,7 +198,7 @@ export class ProviderDetailComponent implements OnInit {
     try { value = JSON.parse(this.newMetadataValue); } catch {}
     const payload: any = { metadata_id: this.newMetadataId, value };
     if (this.newMetadataTimestamp) {
-      payload.timestamp = new Date(this.newMetadataTimestamp).toISOString();
+      payload.timestamp = this.newMetadataTimestamp.toISOString();
     }
     this.providerService.addProviderMetadata(this.providerId, payload).subscribe({
       next: () => {
@@ -208,13 +226,13 @@ export class ProviderDetailComponent implements OnInit {
     const payload: any = { metadata_id: field.metadata_id, value };
     const ts = this.fieldTimestampValues[field.metadata_id];
     if (ts) {
-      payload.timestamp = new Date(ts).toISOString();
+      payload.timestamp = ts.toISOString();
     }
     this.providerService.addProviderMetadata(this.providerId, payload).subscribe({
       next: () => {
         this.toast.success(`${field.metadata_name} updated`);
         this.fieldInputValues[field.metadata_id] = '';
-        this.fieldTimestampValues[field.metadata_id] = '';
+        this.fieldTimestampValues[field.metadata_id] = null;
         this.loadMetadata();
         this.providerService.loadProviderDetail(this.providerId, true);
         if (this.historyMetadataId() === field.metadata_id) {
@@ -286,7 +304,7 @@ export class ProviderDetailComponent implements OnInit {
   startEditHistory(h: MetadataHistoryEntry): void {
     this.editingHistoryTimestamp.set(h.timestamp);
     this.editHistoryValue = typeof h.value === 'object' ? JSON.stringify(h.value) : String(h.value);
-    this.editHistoryTimestamp = this.toLocalDatetime(h.timestamp);
+    this.editHistoryTimestamp = new Date(h.timestamp);
   }
 
   cancelEditHistory(): void {
@@ -299,7 +317,7 @@ export class ProviderDetailComponent implements OnInit {
     if (!metaId || !origTs) return;
     let value: any = this.editHistoryValue;
     try { value = JSON.parse(this.editHistoryValue); } catch {}
-    const newTs = this.editHistoryTimestamp ? new Date(this.editHistoryTimestamp).toISOString() : undefined;
+    const newTs = this.editHistoryTimestamp?.toISOString();
     this.providerService.updateProviderMetadataEntry(this.providerId, metaId, origTs, {
       value,
       timestamp: newTs,
@@ -328,12 +346,6 @@ export class ProviderDetailComponent implements OnInit {
   }
 
   // ---- Helpers ----
-
-  toLocalDatetime(iso: string): string {
-    const d = new Date(iso);
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  }
 
   formatValue(value: any): string {
     if (value === null || value === undefined) return '-';

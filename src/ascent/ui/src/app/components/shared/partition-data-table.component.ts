@@ -1,8 +1,10 @@
 import { Component, Input, Output, EventEmitter, computed } from '@angular/core';
+import { TableModule } from 'primeng/table';
 
 @Component({
   selector: 'app-partition-data-table',
   standalone: true,
+  imports: [TableModule],
   styles: [`
     :host { display: flex; flex-direction: column; min-height: 0; }
   `],
@@ -18,26 +20,29 @@ import { Component, Input, Output, EventEmitter, computed } from '@angular/core'
         <span class="text-[11px] text-fg-faint">Page {{ page }} / {{ totalPages || 1 }}</span>
       </div>
 
-      <!-- Table body — scrollable with hidden scrollbar -->
-      <div class="flex-1 min-h-0 overflow-y-auto">
-        <table class="w-full text-[11px]">
-          <thead class="sticky top-0 bg-surface z-10">
+      <!-- Table — scrollable with sticky header via PrimeNG -->
+      <div class="flex-1 min-h-0 text-[11px]">
+        <p-table [value]="data" [scrollable]="true" scrollHeight="flex">
+          <ng-template #header>
             <tr>
               @for (col of columns(); track col) {
-                <th class="text-left px-2 py-1.5 text-fg-muted font-medium border-b border-edge whitespace-nowrap">{{ col }}</th>
+                <th class="whitespace-nowrap">{{ col }}</th>
               }
             </tr>
-          </thead>
-          <tbody>
-            @for (row of data; track $index) {
-              <tr class="border-b border-edge-dim hover:bg-fg/[.03] transition-colors">
-                @for (col of columns(); track col) {
-                  <td class="px-2 py-1.5 text-fg whitespace-nowrap font-mono">{{ row[col] ?? '-' }}</td>
-                }
-              </tr>
-            }
-          </tbody>
-        </table>
+          </ng-template>
+          <ng-template #body let-row>
+            <tr>
+              @for (col of columns(); track col) {
+                <td class="whitespace-nowrap font-mono">{{ row[col] ?? '-' }}</td>
+              }
+            </tr>
+          </ng-template>
+          <ng-template #emptymessage>
+            <tr>
+              <td [attr.colspan]="columns().length">No data.</td>
+            </tr>
+          </ng-template>
+        </p-table>
       </div>
 
       <!-- Pagination footer -->

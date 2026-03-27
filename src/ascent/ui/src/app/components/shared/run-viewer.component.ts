@@ -2,7 +2,8 @@ import { Component, Input, OnInit, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Observable } from 'rxjs';
-import { SplitPaneComponent } from './split-pane.component';
+import { DatePicker } from 'primeng/datepicker';
+import { Splitter } from 'primeng/splitter';
 import { RunDetailCardComponent, RunDetailItem, RunDetailField } from './run-detail-card.component';
 import { PaginatedResponse } from '../../models/trade.model';
 
@@ -20,11 +21,12 @@ type Radius = 5 | 10 | 30 | 60;
 @Component({
   selector: 'app-run-viewer',
   standalone: true,
-  imports: [DatePipe, FormsModule, SplitPaneComponent, RunDetailCardComponent],
+  imports: [DatePipe, FormsModule, DatePicker, Splitter, RunDetailCardComponent],
   template: `
-    <app-split-pane class="h-full block">
+    <p-splitter [panelSizes]="[60, 40]" [minSizes]="[25, 15]" [gutterSize]="6" class="h-full block">
+      <ng-template #panel>
       <!-- Left: Selected Run Detail -->
-      <div left class="h-full overflow-y-auto">
+      <div class="h-full overflow-y-auto">
         @if (selectedRun(); as run) {
           <div class="p-5">
             <app-run-detail-card [run]="run" [extraFields]="extraDetailFields"/>
@@ -35,9 +37,11 @@ type Radius = 5 | 10 | 30 | 60;
           </div>
         }
       </div>
+      </ng-template>
 
+      <ng-template #panel>
       <!-- Right: Run List with Filters -->
-      <div right class="h-full flex flex-col">
+      <div class="h-full flex flex-col">
         <!-- Filter bar -->
         <div class="px-3 py-2 border-b border-edge shrink-0 space-y-2">
           <div class="flex items-center gap-1.5">
@@ -67,19 +71,23 @@ type Radius = 5 | 10 | 30 | 60;
             <div class="space-y-1.5">
               <div class="flex items-center gap-2">
                 <label class="text-[10px] text-fg-faint w-10 shrink-0">From</label>
-                <input
-                  type="datetime-local"
+                <p-datepicker
                   [ngModel]="rangeFrom()"
                   (ngModelChange)="rangeFrom.set($event)"
-                  class="flex-1 bg-elevated border border-edge rounded px-2 py-1 text-[11px] text-fg focus:outline-none focus:border-info/50"/>
+                  [showTime]="true"
+                  dateFormat="yy-mm-dd"
+                  hourFormat="24"
+                  [style]="{'width': '100%'}"/>
               </div>
               <div class="flex items-center gap-2">
                 <label class="text-[10px] text-fg-faint w-10 shrink-0">To</label>
-                <input
-                  type="datetime-local"
+                <p-datepicker
                   [ngModel]="rangeTo()"
                   (ngModelChange)="rangeTo.set($event)"
-                  class="flex-1 bg-elevated border border-edge rounded px-2 py-1 text-[11px] text-fg focus:outline-none focus:border-info/50"/>
+                  [showTime]="true"
+                  dateFormat="yy-mm-dd"
+                  hourFormat="24"
+                  [style]="{'width': '100%'}"/>
               </div>
               <div class="flex gap-1.5">
                 <button
@@ -99,11 +107,13 @@ type Radius = 5 | 10 | 30 | 60;
           <!-- Around filter inputs -->
           @if (filterMode() === 'around') {
             <div class="space-y-1.5">
-              <input
-                type="datetime-local"
+              <p-datepicker
                 [ngModel]="aroundDatetime()"
                 (ngModelChange)="aroundDatetime.set($event)"
-                class="w-full bg-elevated border border-edge rounded px-2 py-1 text-[11px] text-fg focus:outline-none focus:border-info/50"/>
+                [showTime]="true"
+                dateFormat="yy-mm-dd"
+                hourFormat="24"
+                [style]="{'width': '100%'}"/>
               <div class="flex items-center gap-1">
                 <span class="text-[10px] text-fg-faint shrink-0">&plusmn;</span>
                 @for (r of radiusOptions; track r) {
@@ -182,7 +192,8 @@ type Radius = 5 | 10 | 30 | 60;
           </div>
         </div>
       </div>
-    </app-split-pane>
+      </ng-template>
+    </p-splitter>
   `,
 })
 export class RunViewerComponent implements OnInit {
@@ -199,9 +210,9 @@ export class RunViewerComponent implements OnInit {
 
   // Filter state
   filterMode = signal<FilterMode>('none');
-  rangeFrom = signal('');
-  rangeTo = signal('');
-  aroundDatetime = signal('');
+  rangeFrom = signal<Date | null>(null);
+  rangeTo = signal<Date | null>(null);
+  aroundDatetime = signal<Date | null>(null);
   aroundRadius = signal<Radius>(5);
   radiusOptions: Radius[] = [5, 10, 30, 60];
 
@@ -221,9 +232,9 @@ export class RunViewerComponent implements OnInit {
   setFilterMode(mode: FilterMode): void {
     this.filterMode.set(mode);
     if (mode === 'none') {
-      this.rangeFrom.set('');
-      this.rangeTo.set('');
-      this.aroundDatetime.set('');
+      this.rangeFrom.set(null);
+      this.rangeTo.set(null);
+      this.aroundDatetime.set(null);
       this.page.set(1);
       this.loadRuns();
     }
@@ -257,13 +268,14 @@ export class RunViewerComponent implements OnInit {
     const mode = this.filterMode();
     if (mode === 'range') {
       const f: RunFilter = {};
-      if (this.rangeFrom()) f.started_after = new Date(this.rangeFrom()).toISOString();
-      if (this.rangeTo()) f.started_before = new Date(this.rangeTo()).toISOString();
+      const from = this.rangeFrom();
+      const to = this.rangeTo();
+      if (from) f.started_after = from.toISOString();
+      if (to) f.started_before = to.toISOString();
       if (f.started_after || f.started_before) return f;
     } else if (mode === 'around') {
-      const dt = this.aroundDatetime();
-      if (dt) {
-        const center = new Date(dt);
+      const center = this.aroundDatetime();
+      if (center) {
         const offsetMs = this.aroundRadius() * 60 * 1000;
         return {
           started_after: new Date(center.getTime() - offsetMs).toISOString(),

@@ -11,18 +11,21 @@ import { ToastService } from '../../../services/toast.service';
 import { StrategyFeedDAG, StrategyRunListItem } from '../../../models/feed.model';
 import { UniverseItem, UniverseItemCreate, AssetGroup } from '../../../models/asset.model';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner.component';
-import { PanelTabsComponent } from '../../shared/panel-tabs.component';
+import { Tabs, TabList, Tab } from 'primeng/tabs';
 import { StatCardComponent } from '../../shared/stat-card.component';
 import { SchemaFormComponent } from '../../shared/schema-form.component';
 import { TradeTableComponent } from '../../trade-table/trade-table.component';
 import { FeedDagComponent, FeedRunStatusOverride } from './feed-dag.component';
-import { SplitPaneComponent } from '../../shared/split-pane.component';
+import { Splitter } from 'primeng/splitter';
 import { RunDetailCardComponent, RunDetailField, RunDetailItem } from '../../shared/run-detail-card.component';
 import { RunFilter } from '../../shared/run-viewer.component';
 import { CumulativePnlChartComponent, CumulativePnlPoint } from './charts/cumulative-pnl-chart.component';
 import { TradePnlChartComponent } from './charts/trade-pnl-chart.component';
 import { WinLossChartComponent } from './charts/win-loss-chart.component';
 import { MonthlyPnlChartComponent, MonthlyPnlPoint } from './charts/monthly-pnl-chart.component';
+import { Select } from 'primeng/select';
+import { DatePicker } from 'primeng/datepicker';
+import { TableModule } from 'primeng/table';
 
 @Component({
   selector: 'app-strategy-detail',
@@ -33,17 +36,20 @@ import { MonthlyPnlChartComponent, MonthlyPnlPoint } from './charts/monthly-pnl-
     JsonPipe,
     FormsModule,
     LoadingSpinnerComponent,
-    PanelTabsComponent,
+    Tabs, TabList, Tab,
     StatCardComponent,
     SchemaFormComponent,
     TradeTableComponent,
     FeedDagComponent,
-    SplitPaneComponent,
+    Splitter,
     RunDetailCardComponent,
     CumulativePnlChartComponent,
     TradePnlChartComponent,
     WinLossChartComponent,
     MonthlyPnlChartComponent,
+    Select,
+    DatePicker,
+    TableModule,
   ],
   templateUrl: './strategy-detail.component.html',
 })
@@ -70,9 +76,9 @@ export class StrategyDetailComponent implements OnInit {
   runsPage = signal(1);
   selectedStrategyRun = signal<StrategyRunListItem | null>(null);
   runsFilterMode = signal<'none' | 'range' | 'around'>('none');
-  runsRangeFrom = signal('');
-  runsRangeTo = signal('');
-  runsAroundDatetime = signal('');
+  runsRangeFrom = signal<Date | null>(null);
+  runsRangeTo = signal<Date | null>(null);
+  runsAroundDatetime = signal<Date | null>(null);
   runsAroundRadius = signal<5 | 10 | 30 | 60>(5);
   runsRadiusOptions: (5 | 10 | 30 | 60)[] = [5, 10, 30, 60];
 
@@ -142,6 +148,14 @@ export class StrategyDetailComponent implements OnInit {
   uniFromAssetId = '';
   uniToAssetId = '';
   uniGroupId = '';
+
+  assetOptions = computed(() =>
+    this.assetService.assets().map(a => ({ id: a.id, displayLabel: a.symbol || a.name }))
+  );
+
+  groupOptions = computed(() =>
+    this.assetService.assetGroups().map(g => ({ id: g.id, displayLabel: `Group (${g.members.length} members)` }))
+  );
 
   strategyId = '';
 
@@ -254,9 +268,9 @@ export class StrategyDetailComponent implements OnInit {
   setRunsFilterMode(mode: 'none' | 'range' | 'around'): void {
     this.runsFilterMode.set(mode);
     if (mode === 'none') {
-      this.runsRangeFrom.set('');
-      this.runsRangeTo.set('');
-      this.runsAroundDatetime.set('');
+      this.runsRangeFrom.set(null);
+      this.runsRangeTo.set(null);
+      this.runsAroundDatetime.set(null);
       this.runsPage.set(1);
       this.loadStrategyRuns();
     }
@@ -390,13 +404,14 @@ export class StrategyDetailComponent implements OnInit {
     const mode = this.runsFilterMode();
     if (mode === 'range') {
       const f: RunFilter = {};
-      if (this.runsRangeFrom()) f.started_after = new Date(this.runsRangeFrom()).toISOString();
-      if (this.runsRangeTo()) f.started_before = new Date(this.runsRangeTo()).toISOString();
+      const from = this.runsRangeFrom();
+      const to = this.runsRangeTo();
+      if (from) f.started_after = from.toISOString();
+      if (to) f.started_before = to.toISOString();
       if (f.started_after || f.started_before) return f;
     } else if (mode === 'around') {
-      const dt = this.runsAroundDatetime();
-      if (dt) {
-        const center = new Date(dt);
+      const center = this.runsAroundDatetime();
+      if (center) {
         const offsetMs = this.runsAroundRadius() * 60 * 1000;
         return {
           started_after: new Date(center.getTime() - offsetMs).toISOString(),

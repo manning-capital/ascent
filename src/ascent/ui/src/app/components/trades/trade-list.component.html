@@ -19,26 +19,26 @@
         class="bg-elevated border border-edge rounded-lg px-3 py-2 text-sm placeholder-fg-faint focus:outline-none focus:border-info transition-colors">
 
       <!-- Status -->
-      <select
+      <p-select
         [ngModel]="status()"
         (ngModelChange)="onStatusChange($event)"
-        class="bg-elevated border border-edge rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-info transition-colors">
-        <option value="">All Statuses</option>
-        <option value="OPEN">Open</option>
-        <option value="CLOSED">Closed</option>
-        <option value="PENDING">Pending</option>
-      </select>
+        [options]="statusOptions"
+        optionLabel="label"
+        optionValue="value"
+        placeholder="All Statuses"
+        [showClear]="true"/>
 
       <!-- Strategy -->
-      <select
-        [ngModel]="selectedStrategyId() ?? ''"
+      <p-select
+        [ngModel]="selectedStrategyId()"
         (ngModelChange)="onStrategyChange($event)"
-        class="bg-elevated border border-edge rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-info transition-colors">
-        <option value="">All Strategies</option>
-        @for (strategy of strategyService.strategies(); track strategy.id) {
-          <option [value]="strategy.id">{{ strategy.name }}</option>
-        }
-      </select>
+        [options]="strategyService.strategies()"
+        optionLabel="name"
+        optionValue="id"
+        placeholder="All Strategies"
+        [showClear]="true"
+        [filter]="true"
+        filterPlaceholder="Search strategies..."/>
 
       <!-- Clear -->
       <button
@@ -52,19 +52,25 @@
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
       <div class="flex items-center gap-2">
         <label class="text-xs text-fg-muted shrink-0">From:</label>
-        <input
-          type="date"
+        <p-datepicker
           [ngModel]="startDate()"
           (ngModelChange)="startDate.set($event); page.set(1)"
-          class="bg-elevated border border-edge rounded-lg px-3 py-2 text-sm flex-1 focus:outline-none focus:border-info transition-colors">
+          dateFormat="yy-mm-dd"
+          [showIcon]="true"
+          [showButtonBar]="true"
+          placeholder="Start date"
+          [style]="{'width': '100%'}"/>
       </div>
       <div class="flex items-center gap-2">
         <label class="text-xs text-fg-muted shrink-0">To:</label>
-        <input
-          type="date"
+        <p-datepicker
           [ngModel]="endDate()"
           (ngModelChange)="endDate.set($event); page.set(1)"
-          class="bg-elevated border border-edge rounded-lg px-3 py-2 text-sm flex-1 focus:outline-none focus:border-info transition-colors">
+          dateFormat="yy-mm-dd"
+          [showIcon]="true"
+          [showButtonBar]="true"
+          placeholder="End date"
+          [style]="{'width': '100%'}"/>
       </div>
     </div>
 

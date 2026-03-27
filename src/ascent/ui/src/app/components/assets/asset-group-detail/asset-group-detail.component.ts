@@ -7,7 +7,9 @@ import { ProviderService } from '../../../services/provider.service';
 import { ToastService } from '../../../services/toast.service';
 import { AssetGroup, AssetGroupMemberCreate } from '../../../models/asset.model';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner.component';
-import { PanelTabsComponent } from '../../shared/panel-tabs.component';
+import { Tabs, TabList, Tab } from 'primeng/tabs';
+import { Select } from 'primeng/select';
+import { TableModule } from 'primeng/table';
 
 @Component({
   selector: 'app-asset-group-detail',
@@ -17,7 +19,9 @@ import { PanelTabsComponent } from '../../shared/panel-tabs.component';
     DatePipe,
     FormsModule,
     LoadingSpinnerComponent,
-    PanelTabsComponent,
+    Tabs, TabList, Tab,
+    Select,
+    TableModule,
   ],
   templateUrl: './asset-group-detail.component.html',
 })

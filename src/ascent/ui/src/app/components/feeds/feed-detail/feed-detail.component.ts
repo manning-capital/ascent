@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { DatePipe, JsonPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -9,11 +9,13 @@ import { ToastService } from '../../../services/toast.service';
 import { FeedRunListItem, PartitionDataResponse } from '../../../models/feed.model';
 import { UniverseItem, UniverseItemCreate } from '../../../models/asset.model';
 import { LoadingSpinnerComponent } from '../../shared/loading-spinner.component';
-import { PanelTabsComponent } from '../../shared/panel-tabs.component';
+import { Tabs, TabList, Tab } from 'primeng/tabs';
 import { SchemaFormComponent } from '../../shared/schema-form.component';
-import { SplitPaneComponent } from '../../shared/split-pane.component';
+import { Splitter } from 'primeng/splitter';
 import { RunDetailCardComponent, RunDetailField } from '../../shared/run-detail-card.component';
 import { PartitionDataTableComponent } from '../../shared/partition-data-table.component';
+import { Select } from 'primeng/select';
+import { TableModule } from 'primeng/table';
 
 @Component({
   selector: 'app-feed-detail',
@@ -24,11 +26,13 @@ import { PartitionDataTableComponent } from '../../shared/partition-data-table.c
     JsonPipe,
     FormsModule,
     LoadingSpinnerComponent,
-    PanelTabsComponent,
+    Tabs, TabList, Tab,
     SchemaFormComponent,
-    SplitPaneComponent,
+    Splitter,
     RunDetailCardComponent,
     PartitionDataTableComponent,
+    Select,
+    TableModule,
   ],
   templateUrl: './feed-detail.component.html',
 })
@@ -72,6 +76,14 @@ export class FeedDetailComponent implements OnInit {
   uniFromAssetId = '';
   uniToAssetId = '';
   uniGroupId = '';
+
+  // Computed options for p-select dropdowns
+  assetOptions = computed(() =>
+    this.assetService.assets().map(a => ({ label: a.symbol || a.name, value: a.id }))
+  );
+  groupOptions = computed(() =>
+    this.assetService.assetGroups().map(g => ({ label: `Group (${g.members.length} members)`, value: g.id }))
+  );
 
   ngOnInit(): void {
     this.route.paramMap.subscribe(params => {

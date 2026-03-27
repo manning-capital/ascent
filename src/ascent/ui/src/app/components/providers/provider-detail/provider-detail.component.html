@@ -23,7 +23,13 @@
       </div>
     </div>
 
-    <app-panel-tabs [tabs]="tabs" [(activeTab)]="activeTab"/>
+    <p-tabs [(value)]="activeTab">
+      <p-tablist>
+        @for (tab of tabs; track tab) {
+          <p-tab [value]="tab">{{ tab }}</p-tab>
+        }
+      </p-tablist>
+    </p-tabs>
 
     <div class="flex-1 overflow-hidden">
 
@@ -51,7 +57,7 @@
                   <textarea [(ngModel)]="editDescription" rows="2" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info"></textarea>
                 </div>
                 <div class="flex items-center gap-2">
-                  <input type="checkbox" [(ngModel)]="editIsActive" id="editActive" class="accent-info"/>
+                  <p-checkbox [(ngModel)]="editIsActive" [binary]="true" inputId="editActive"/>
                   <label for="editActive" class="text-sm text-fg-muted">Active</label>
                 </div>
               </div>
@@ -108,48 +114,47 @@
                 <button (click)="closeHistory()" class="text-xs text-fg-muted hover:text-fg transition-colors">Close</button>
               </div>
               <div class="rounded-lg border border-edge bg-surface/50 overflow-hidden">
-                <table class="w-full text-sm">
-                  <thead>
-                    <tr class="border-b border-edge text-left text-xs text-fg-muted uppercase tracking-wider">
-                      <th class="px-4 py-2">Timestamp</th>
-                      <th class="px-4 py-2">Value</th>
-                      <th class="px-4 py-2 w-36"></th>
+                <p-table [value]="historyEntries()">
+                  <ng-template #header>
+                    <tr>
+                      <th>Timestamp</th>
+                      <th>Value</th>
+                      <th class="w-36"></th>
                     </tr>
-                  </thead>
-                  <tbody>
-                    @for (h of historyEntries(); track h.timestamp) {
-                      @if (editingHistoryTimestamp() === h.timestamp) {
-                        <tr class="border-b border-edge/50 bg-info/5">
-                          <td class="px-4 py-2">
-                            <input type="datetime-local" [(ngModel)]="editHistoryTimestamp" class="px-2 py-1 rounded bg-canvas border border-edge text-fg text-xs font-mono focus:outline-none focus:border-info w-full"/>
-                          </td>
-                          <td class="px-4 py-2">
-                            <input type="text" [(ngModel)]="editHistoryValue" class="px-2 py-1 rounded bg-canvas border border-edge text-fg text-xs font-mono focus:outline-none focus:border-info w-full"/>
-                          </td>
-                          <td class="px-4 py-2">
-                            <div class="flex items-center gap-2">
-                              <button (click)="submitEditHistory()" class="text-xs text-positive hover:text-positive/80 transition-colors font-medium">Save</button>
-                              <button (click)="cancelEditHistory()" class="text-xs text-fg-muted hover:text-fg transition-colors">Cancel</button>
-                            </div>
-                          </td>
-                        </tr>
-                      } @else {
-                        <tr class="border-b border-edge/50 hover:bg-elevated/30 transition-colors">
-                          <td class="px-4 py-2 text-xs text-fg-muted font-mono">{{ h.timestamp | date:'medium' }}</td>
-                          <td class="px-4 py-2 font-mono text-xs">{{ formatValue(h.value) }}</td>
-                          <td class="px-4 py-2">
-                            <div class="flex items-center gap-2">
-                              <button (click)="startEditHistory(h)" class="text-xs text-info/70 hover:text-info transition-colors">Edit</button>
-                              <button (click)="deleteHistoryEntry(h)" class="text-xs text-negative/70 hover:text-negative transition-colors">Delete</button>
-                            </div>
-                          </td>
-                        </tr>
-                      }
-                    } @empty {
-                      <tr><td colspan="3" class="px-4 py-6 text-center text-fg-faint text-xs">No history.</td></tr>
+                  </ng-template>
+                  <ng-template #body let-h>
+                    @if (editingHistoryTimestamp() === h.timestamp) {
+                      <tr class="bg-info/5">
+                        <td>
+                          <p-datepicker [(ngModel)]="editHistoryTimestamp" [showTime]="true" dateFormat="yy-mm-dd" hourFormat="24" [style]="{'width': '100%'}"/>
+                        </td>
+                        <td>
+                          <input type="text" [(ngModel)]="editHistoryValue" class="px-2 py-1 rounded bg-canvas border border-edge text-fg text-xs font-mono focus:outline-none focus:border-info w-full"/>
+                        </td>
+                        <td>
+                          <div class="flex items-center gap-2">
+                            <button (click)="submitEditHistory()" class="text-xs text-positive hover:text-positive/80 transition-colors font-medium">Save</button>
+                            <button (click)="cancelEditHistory()" class="text-xs text-fg-muted hover:text-fg transition-colors">Cancel</button>
+                          </div>
+                        </td>
+                      </tr>
+                    } @else {
+                      <tr>
+                        <td class="text-xs text-fg-muted font-mono">{{ h.timestamp | date:'medium' }}</td>
+                        <td class="font-mono text-xs">{{ formatValue(h.value) }}</td>
+                        <td>
+                          <div class="flex items-center gap-2">
+                            <button (click)="startEditHistory(h)" class="text-xs text-info/70 hover:text-info transition-colors">Edit</button>
+                            <button (click)="deleteHistoryEntry(h)" class="text-xs text-negative/70 hover:text-negative transition-colors">Delete</button>
+                          </div>
+                        </td>
+                      </tr>
                     }
-                  </tbody>
-                </table>
+                  </ng-template>
+                  <ng-template #emptymessage>
+                    <tr><td colspan="3" class="text-center text-fg-faint text-xs">No history.</td></tr>
+                  </ng-template>
+                </p-table>
               </div>
             </div>
           }
@@ -193,11 +198,7 @@
                     <!-- Row: Input to set/update value -->
                     <div class="flex items-center gap-2 pl-40">
                       @if (field.value_type === 'boolean') {
-                        <select [(ngModel)]="fieldInputValues[field.metadata_id]" class="w-full md:w-48 px-3 py-1.5 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info">
-                          <option value="">-- select --</option>
-                          <option value="true">True</option>
-                          <option value="false">False</option>
-                        </select>
+                        <p-select [(ngModel)]="fieldInputValues[field.metadata_id]" [options]="[{label: 'true', value: 'true'}, {label: 'false', value: 'false'}]" optionLabel="label" optionValue="value" placeholder="-- select --"/>
                       } @else if (field.value_type === 'number') {
                         <input [(ngModel)]="fieldInputValues[field.metadata_id]" type="number" placeholder="Enter number..."
                                class="w-full md:w-48 px-3 py-1.5 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info"/>
@@ -211,8 +212,7 @@
                         <input [(ngModel)]="fieldInputValues[field.metadata_id]" type="text" placeholder="Enter value..."
                                class="w-full md:w-48 px-3 py-1.5 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info"/>
                       }
-                      <input [(ngModel)]="fieldTimestampValues[field.metadata_id]" type="datetime-local" title="As-of timestamp (leave blank for now)"
-                             class="w-48 px-2 py-1.5 rounded-lg bg-canvas border border-edge text-fg text-xs focus:outline-none focus:border-info shrink-0"/>
+                      <p-datepicker [(ngModel)]="fieldTimestampValues[field.metadata_id]" [showTime]="true" dateFormat="yy-mm-dd" hourFormat="24" [style]="{'width': '100%'}"/>
                       <button (click)="submitFieldValue(field)" class="px-3 py-1.5 rounded-lg bg-positive/15 text-positive text-xs font-medium hover:bg-positive/25 transition-colors shrink-0">Set</button>
                     </div>
                   </div>
@@ -237,11 +237,7 @@
               <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label class="block text-xs text-fg-muted mb-1">Metadata Type</label>
-                  <select [(ngModel)]="newMetadataId" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info">
-                    @for (mt of assetService.metadataTypes(); track mt.id) {
-                      <option [value]="mt.id">{{ mt.name }}</option>
-                    }
-                  </select>
+                  <p-select [(ngModel)]="newMetadataId" [options]="assetService.metadataTypes()" optionLabel="name" optionValue="id" placeholder="Select metadata type"/>
                 </div>
                 <div>
                   <label class="block text-xs text-fg-muted mb-1">Value</label>
@@ -250,8 +246,7 @@
                 </div>
                 <div>
                   <label class="block text-xs text-fg-muted mb-1">As-of Timestamp <span class="text-fg-faint">(optional)</span></label>
-                  <input [(ngModel)]="newMetadataTimestamp" type="datetime-local"
-                         class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info"/>
+                  <p-datepicker [(ngModel)]="newMetadataTimestamp" [showTime]="true" dateFormat="yy-mm-dd" hourFormat="24" [style]="{'width': '100%'}"/>
                 </div>
               </div>
               <div class="flex gap-2 mt-4">
@@ -263,31 +258,29 @@
 
           @if (extraMetadata().length > 0) {
             <div class="rounded-xl border border-edge bg-surface/50 overflow-hidden">
-              <table class="w-full text-sm">
-                <thead>
-                  <tr class="border-b border-edge text-left text-xs text-fg-muted uppercase tracking-wider">
-                    <th class="px-4 py-3">Key</th>
-                    <th class="px-4 py-3">Value</th>
-                    <th class="px-4 py-3">As Of</th>
-                    <th class="px-4 py-3 w-32"></th>
+              <p-table [value]="extraMetadata()">
+                <ng-template #header>
+                  <tr>
+                    <th>Key</th>
+                    <th>Value</th>
+                    <th>As Of</th>
+                    <th class="w-32"></th>
                   </tr>
-                </thead>
-                <tbody>
-                  @for (entry of extraMetadata(); track entry.metadata_id) {
-                    <tr class="border-b border-edge/50 hover:bg-elevated/30 transition-colors">
-                      <td class="px-4 py-3 font-medium">{{ entry.metadata_name }}</td>
-                      <td class="px-4 py-3 font-mono text-xs">{{ formatValue(entry.value) }}</td>
-                      <td class="px-4 py-3 text-xs text-fg-muted">{{ entry.timestamp | date:'medium' }}</td>
-                      <td class="px-4 py-3">
-                        <div class="flex items-center gap-2">
-                          <button (click)="showHistory(entry)" class="text-xs text-info/70 hover:text-info transition-colors">History</button>
-                          <button (click)="deleteMetadata(entry)" class="text-xs text-negative/70 hover:text-negative transition-colors">Remove</button>
-                        </div>
-                      </td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
+                </ng-template>
+                <ng-template #body let-entry>
+                  <tr>
+                    <td class="font-medium">{{ entry.metadata_name }}</td>
+                    <td class="font-mono text-xs">{{ formatValue(entry.value) }}</td>
+                    <td class="text-xs text-fg-muted">{{ entry.timestamp | date:'medium' }}</td>
+                    <td>
+                      <div class="flex items-center gap-2">
+                        <button (click)="showHistory(entry)" class="text-xs text-info/70 hover:text-info transition-colors">History</button>
+                        <button (click)="deleteMetadata(entry)" class="text-xs text-negative/70 hover:text-negative transition-colors">Remove</button>
+                      </div>
+                    </td>
+                  </tr>
+                </ng-template>
+              </p-table>
             </div>
           } @else if (providerTypeFields().length === 0) {
             <div class="rounded-xl border border-edge bg-surface/50 p-12 text-center text-fg-faint text-sm">
@@ -305,32 +298,31 @@
             <p class="text-xs text-fg-faint mt-1">Assets this provider has mappings for.</p>
           </div>
           <div class="rounded-xl border border-edge bg-surface/50 overflow-hidden">
-            <table class="w-full text-sm">
-              <thead>
-                <tr class="border-b border-edge text-left text-xs text-fg-muted uppercase tracking-wider">
-                  <th class="px-4 py-3">Asset</th>
-                  <th class="px-4 py-3">Symbol</th>
-                  <th class="px-4 py-3">Identifier</th>
-                  <th class="px-4 py-3">Created</th>
+            <p-table [value]="provider.asset_links">
+              <ng-template #header>
+                <tr>
+                  <th>Asset</th>
+                  <th>Symbol</th>
+                  <th>Identifier</th>
+                  <th>Created</th>
                 </tr>
-              </thead>
-              <tbody>
-                @for (link of provider.asset_links; track link.asset_id) {
-                  <tr class="border-b border-edge/50 hover:bg-elevated/30 transition-colors">
-                    <td class="px-4 py-3">
-                      <a [routerLink]="['/settings/assets', link.asset_id]" class="text-info hover:underline font-medium">{{ link.asset_name }}</a>
-                    </td>
-                    <td class="px-4 py-3 font-mono text-xs">{{ link.asset_symbol || '-' }}</td>
-                    <td class="px-4 py-3 font-mono text-xs">{{ link.identifier }}</td>
-                    <td class="px-4 py-3 text-xs text-fg-muted">{{ link.created_at | date:'mediumDate' }}</td>
-                  </tr>
-                } @empty {
-                  <tr>
-                    <td colspan="4" class="px-4 py-12 text-center text-fg-faint">No asset mappings for this provider.</td>
-                  </tr>
-                }
-              </tbody>
-            </table>
+              </ng-template>
+              <ng-template #body let-link>
+                <tr>
+                  <td>
+                    <a [routerLink]="['/settings/assets', link.asset_id]" class="text-info hover:underline font-medium">{{ link.asset_name }}</a>
+                  </td>
+                  <td class="font-mono text-xs">{{ link.asset_symbol || '-' }}</td>
+                  <td class="font-mono text-xs">{{ link.identifier }}</td>
+                  <td class="text-xs text-fg-muted">{{ link.created_at | date:'mediumDate' }}</td>
+                </tr>
+              </ng-template>
+              <ng-template #emptymessage>
+                <tr>
+                  <td colspan="4">No asset mappings for this provider.</td>
+                </tr>
+              </ng-template>
+            </p-table>
           </div>
         </div>
       }

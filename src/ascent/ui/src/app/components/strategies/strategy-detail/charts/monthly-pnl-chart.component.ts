@@ -1,5 +1,5 @@
 import { Component, computed, input } from '@angular/core';
-import { BaseChartDirective } from 'ng2-charts';
+import { UIChart } from 'primeng/chart';
 import { ChartData, ChartOptions } from 'chart.js';
 import { DARK_THEME, CHART_COLORS } from './chart-defaults';
 
@@ -11,15 +11,11 @@ export interface MonthlyPnlPoint {
 @Component({
   selector: 'app-monthly-pnl-chart',
   standalone: true,
-  imports: [BaseChartDirective],
+  imports: [UIChart],
   template: `
     <div class="h-full w-full min-h-[200px]">
       @if (data().length > 0) {
-        <canvas baseChart
-          type="bar"
-          [data]="chartData()"
-          [options]="chartOptions">
-        </canvas>
+        <p-chart type="bar" [data]="chartData()" [options]="chartOptions"/>
       } @else {
         <div class="flex items-center justify-center h-full text-fg-faint text-sm">No trade data available</div>
       }

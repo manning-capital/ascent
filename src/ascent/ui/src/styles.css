@@ -37,74 +37,12 @@
     font-family: var(--font-sans);
   }
 
-  /* ── Date / datetime-local inputs — theme the native browser chrome ── */
-  input[type="date"],
-  input[type="datetime-local"] {
+  /* ── Remaining native date inputs — minimal theme ── */
+  input[type="date"] {
     color-scheme: light;
-    appearance: none;
-    -webkit-appearance: none;
-    position: relative;
   }
-
-  .dark input[type="date"],
-  .dark input[type="datetime-local"] {
+  .dark input[type="date"] {
     color-scheme: dark;
-  }
-
-  /* Calendar / clock icon */
-  input[type="date"]::-webkit-calendar-picker-indicator,
-  input[type="datetime-local"]::-webkit-calendar-picker-indicator {
-    cursor: pointer;
-    opacity: 0.5;
-    filter: var(--date-icon-filter, none);
-    border-radius: 3px;
-    padding: 2px;
-    transition: opacity 0.15s ease, background 0.15s ease;
-  }
-
-  input[type="date"]::-webkit-calendar-picker-indicator:hover,
-  input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
-    opacity: 1;
-    background: var(--edge);
-  }
-
-  .dark input[type="date"]::-webkit-calendar-picker-indicator,
-  .dark input[type="datetime-local"]::-webkit-calendar-picker-indicator {
-    filter: invert(1);
-  }
-
-  /* Inner text styling (Webkit) */
-  input[type="date"]::-webkit-datetime-edit,
-  input[type="datetime-local"]::-webkit-datetime-edit {
-    font-family: var(--font-sans);
-  }
-
-  input[type="date"]::-webkit-datetime-edit-fields-wrapper,
-  input[type="datetime-local"]::-webkit-datetime-edit-fields-wrapper {
-    padding: 0;
-  }
-
-  input[type="date"]::-webkit-datetime-edit-text {
-    color: var(--fg-faint);
-    padding: 0 1px;
-  }
-
-  input[type="datetime-local"]::-webkit-datetime-edit-text {
-    color: var(--fg-faint);
-    padding: 0 1px;
-  }
-
-  /* Placeholder / empty state */
-  input[type="date"]:invalid,
-  input[type="datetime-local"]:invalid {
-    color: var(--fg-faint);
-  }
-
-  /* Firefox: remove inner buttons */
-  input[type="date"]::-moz-focus-inner,
-  input[type="datetime-local"]::-moz-focus-inner {
-    border: 0;
-    padding: 0;
   }
 
   /* Scrollbar — uses semantic edge token */

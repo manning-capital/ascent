@@ -1,6 +1,7 @@
 import { Component, input, output, inject } from '@angular/core';
 import { Router } from '@angular/router';
 import { DecimalPipe } from '@angular/common';
+import { TableModule } from 'primeng/table';
 import { TradeListItem, TradeLegSummary } from '../../models/trade.model';
 import { TradeService } from '../../services/trade.service';
 import { BadgeComponent } from '../shared/badge.component';
@@ -9,7 +10,7 @@ import { StatCardComponent } from '../shared/stat-card.component';
 @Component({
   selector: 'app-trade-table',
   standalone: true,
-  imports: [BadgeComponent, DecimalPipe, StatCardComponent],
+  imports: [BadgeComponent, DecimalPipe, StatCardComponent, TableModule],
   templateUrl: './trade-table.component.html',
 })
 export class TradeTableComponent {

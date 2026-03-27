@@ -1,5 +1,8 @@
 import { Component, input, output, signal, effect, EventEmitter } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Select } from 'primeng/select';
+import { ToggleSwitch } from 'primeng/toggleswitch';
+import { InputNumber } from 'primeng/inputnumber';
 import { JsonSchema, JsonSchemaProperty } from '../../models/strategy.model';
 
 interface FormField {
@@ -17,7 +20,7 @@ interface FormField {
 @Component({
   selector: 'app-schema-form',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, Select, ToggleSwitch, InputNumber],
   template: `
     <div class="space-y-4" [class.opacity-50]="readonly()" [class.pointer-events-none]="readonly()">
       @for (field of fields(); track field.key) {
@@ -30,44 +33,33 @@ interface FormField {
           </label>
 
           @if (field.type === 'select') {
-            <select
-              class="w-full rounded-lg border border-edge bg-elevated px-3 py-2 text-sm text-fg-muted cursor-not-allowed"
-              [class]="readonly() ? '' : '!text-fg !cursor-auto focus:outline-none focus:ring-1 focus:ring-info'"
+            <p-select
+              [options]="field.options ?? []"
               [ngModel]="values()[field.key]"
               (ngModelChange)="onFieldChange(field.key, $event)"
-              [disabled]="readonly()">
-              @for (opt of field.options; track opt) {
-                <option [value]="opt">{{ opt }}</option>
-              }
-            </select>
-          } @else if (field.type === 'boolean') {
-            <button
-              type="button"
-              class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
-              [class]="(values()[field.key] ? 'bg-info' : 'bg-elevated') + (readonly() ? ' cursor-not-allowed' : ' focus:outline-none focus:ring-1 focus:ring-info')"
               [disabled]="readonly()"
-              (click)="onFieldChange(field.key, !values()[field.key])">
-              <span
-                class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
-                [class]="values()[field.key] ? 'translate-x-6' : 'translate-x-1'">
-              </span>
-            </button>
-          } @else if (field.type === 'number') {
-            <input
-              type="number"
-              class="w-full rounded-lg border border-edge bg-elevated px-3 py-2 text-sm text-fg-muted cursor-not-allowed"
-              [class]="readonly() ? '' : '!text-fg !cursor-auto focus:outline-none focus:ring-1 focus:ring-info'"
+              placeholder="Select..."/>
+          } @else if (field.type === 'boolean') {
+            <p-toggleswitch
               [ngModel]="values()[field.key]"
               (ngModelChange)="onFieldChange(field.key, $event)"
-              [attr.min]="field.min"
-              [attr.max]="field.max"
-              [attr.step]="field.type === 'number' ? 'any' : null"
-              [readOnly]="readonly()"/>
+              [disabled]="readonly()"/>
+          } @else if (field.type === 'number') {
+            <p-inputNumber
+              [ngModel]="values()[field.key]"
+              (ngModelChange)="onFieldChange(field.key, $event)"
+              [min]="field.min"
+              [max]="field.max"
+              [minFractionDigits]="0"
+              [maxFractionDigits]="10"
+              [disabled]="readonly()"
+              mode="decimal"/>
           } @else {
             <input
               type="text"
-              class="w-full rounded-lg border border-edge bg-elevated px-3 py-2 text-sm text-fg-muted cursor-not-allowed"
-              [class]="readonly() ? '' : '!text-fg !cursor-auto focus:outline-none focus:ring-1 focus:ring-info'"
+              class="w-full rounded-lg border border-edge bg-canvas px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-info transition-colors"
+              [class.text-fg]="!readonly()"
+              [class.text-fg-muted]="readonly()"
               [ngModel]="values()[field.key]"
               (ngModelChange)="onFieldChange(field.key, $event)"
               [readOnly]="readonly()"/>

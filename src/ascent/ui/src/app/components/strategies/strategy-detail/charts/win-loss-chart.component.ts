@@ -1,20 +1,16 @@
 import { Component, computed, input } from '@angular/core';
-import { BaseChartDirective } from 'ng2-charts';
+import { UIChart } from 'primeng/chart';
 import { ChartData, ChartOptions } from 'chart.js';
 import { CHART_COLORS } from './chart-defaults';
 
 @Component({
   selector: 'app-win-loss-chart',
   standalone: true,
-  imports: [BaseChartDirective],
+  imports: [UIChart],
   template: `
     <div class="h-full w-full min-h-[200px] relative">
       @if (wins() + losses() + breakeven() > 0) {
-        <canvas baseChart
-          type="doughnut"
-          [data]="chartData()"
-          [options]="chartOptions">
-        </canvas>
+        <p-chart type="doughnut" [data]="chartData()" [options]="chartOptions"/>
         <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div class="text-center">
             <span class="text-2xl font-bold text-fg">{{ winRate() }}%</span>

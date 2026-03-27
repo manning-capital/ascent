@@ -30,14 +30,10 @@
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
         <div>
           <label class="block text-xs text-fg-muted mb-1">Metadata Type *</label>
-          <select [(ngModel)]="newFieldMetadataId" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info">
-            @for (mt of availableMetadataTypes(); track mt.id) {
-              <option [value]="mt.id">{{ mt.name }} ({{ mt.value_type }})</option>
-            }
-          </select>
+          <p-select [(ngModel)]="newFieldMetadataId" [options]="availableMetadataTypes()" optionLabel="name" optionValue="id" placeholder="Select metadata type"/>
         </div>
         <div class="flex items-center gap-2">
-          <input type="checkbox" [(ngModel)]="newFieldRequired" id="fieldRequired" class="accent-info"/>
+          <p-checkbox [(ngModel)]="newFieldRequired" [binary]="true" inputId="fieldRequired"/>
           <label for="fieldRequired" class="text-sm text-fg-muted">Required</label>
         </div>
         <div>
@@ -57,13 +53,7 @@
             </div>
             <div>
               <label class="block text-xs text-fg-muted mb-1">Value Type *</label>
-              <select [(ngModel)]="newMetaValueType" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info">
-                <option value="string">Text</option>
-                <option value="number">Number</option>
-                <option value="boolean">Boolean</option>
-                <option value="json">JSON</option>
-                <option value="date">Date</option>
-              </select>
+              <p-select [(ngModel)]="newMetaValueType" [options]="['string', 'number', 'boolean', 'json', 'date']" placeholder="Select value type"/>
             </div>
             <div>
               <label class="block text-xs text-fg-muted mb-1">Description</label>
@@ -87,46 +77,45 @@
 
   <!-- Fields Table -->
   <div class="rounded-xl border border-edge bg-surface/50 overflow-hidden">
-    <table class="w-full text-sm">
-      <thead>
-        <tr class="border-b border-edge text-left text-xs text-fg-muted uppercase tracking-wider">
-          <th class="px-4 py-3 w-10">#</th>
-          <th class="px-4 py-3">Field Name</th>
-          <th class="px-4 py-3">Value Type</th>
-          <th class="px-4 py-3">Required</th>
-          <th class="px-4 py-3">Description</th>
-          <th class="px-4 py-3 w-20"></th>
+    <p-table [value]="fields()">
+      <ng-template #header>
+        <tr>
+          <th class="w-10">#</th>
+          <th>Field Name</th>
+          <th>Value Type</th>
+          <th>Required</th>
+          <th>Description</th>
+          <th class="w-20"></th>
         </tr>
-      </thead>
-      <tbody>
-        @for (field of fields(); track field.metadata_id; let i = $index) {
-          <tr class="border-b border-edge/50 hover:bg-elevated/30 transition-colors">
-            <td class="px-4 py-3 text-fg-muted font-mono text-xs">{{ i + 1 }}</td>
-            <td class="px-4 py-3 font-medium">{{ field.metadata_name }}</td>
-            <td class="px-4 py-3">
-              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-fg/5 text-fg-muted">
-                {{ valueTypeLabel(field.value_type) }}
-              </span>
-            </td>
-            <td class="px-4 py-3">
-              @if (field.is_required) {
-                <span class="text-xs text-negative font-medium">Required</span>
-              } @else {
-                <span class="text-xs text-fg-faint">Optional</span>
-              }
-            </td>
-            <td class="px-4 py-3 text-xs text-fg-faint">{{ field.metadata_description || '-' }}</td>
-            <td class="px-4 py-3">
-              <button (click)="removeField(field.metadata_id)" class="text-xs text-negative/70 hover:text-negative transition-colors">Remove</button>
-            </td>
-          </tr>
-        } @empty {
-          <tr>
-            <td colspan="6" class="px-4 py-12 text-center text-fg-faint">No metadata fields defined. Click + Add Field to get started.</td>
-          </tr>
-        }
-      </tbody>
-    </table>
+      </ng-template>
+      <ng-template #body let-field let-i="rowIndex">
+        <tr>
+          <td class="text-fg-muted font-mono text-xs">{{ i + 1 }}</td>
+          <td class="font-medium">{{ field.metadata_name }}</td>
+          <td>
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-fg/5 text-fg-muted">
+              {{ valueTypeLabel(field.value_type) }}
+            </span>
+          </td>
+          <td>
+            @if (field.is_required) {
+              <span class="text-xs text-negative font-medium">Required</span>
+            } @else {
+              <span class="text-xs text-fg-faint">Optional</span>
+            }
+          </td>
+          <td class="text-xs text-fg-faint">{{ field.metadata_description || '-' }}</td>
+          <td>
+            <button (click)="removeField(field.metadata_id)" class="text-xs text-negative/70 hover:text-negative transition-colors">Remove</button>
+          </td>
+        </tr>
+      </ng-template>
+      <ng-template #emptymessage>
+        <tr>
+          <td colspan="6">No metadata fields defined. Click + Add Field to get started.</td>
+        </tr>
+      </ng-template>
+    </p-table>
   </div>
 </div>
 } @else {
