@@ -37,7 +37,7 @@ def _auto_persist(session: Session, output_table: str, df, feed_id: uuid.UUID) -
 
     Args:
         session: SQLAlchemy session.
-        output_table: Target table name (e.g., 'provider_asset_attribute').
+        output_table: Target table name (e.g., 'provider_asset_group_attribute').
         df: The feed output DataFrame.
         feed_id: Feed ID for logging.
 

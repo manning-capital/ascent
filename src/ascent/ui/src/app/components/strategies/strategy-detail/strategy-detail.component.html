@@ -135,7 +135,7 @@
         </div>
       </div>
     } @else if (activeTab() === 'Universe') {
-      <div class="flex-1 overflow-y-auto p-6 max-w-4xl mx-auto">
+      <div class="flex-1 overflow-y-auto p-6">
         <div class="flex items-center justify-between mb-4">
           <div>
             <p-skeleton width="8rem" height="1rem" class="mb-1"/>
@@ -580,94 +580,13 @@
 
       <!-- Universe Tab -->
       @if (activeTab() === 'Universe') {
-        <div class="overflow-y-auto h-full p-6">
-          <div class="flex items-center justify-between mb-4">
-            <div>
-              <h3 class="font-semibold text-sm">Asset Universe</h3>
-              <p class="text-xs text-surface-400 mt-1">Asset groups and individual pairs this strategy trades.</p>
-            </div>
-            <p-button label="+ Add" [outlined]="true" size="small" (onClick)="openUniverseForm()"/>
-          </div>
-
-          <!-- Add Form -->
-          @if (showUniverseForm()) {
-            <p-card class="mb-6">
-              <ng-template #header>
-                <div class="flex items-center justify-between px-5 pt-4">
-                  <span class="font-semibold text-sm">Add to Universe</span>
-                  <p-button label="&times;" severity="secondary" [text]="true" [rounded]="true" size="small" (onClick)="cancelUniverseForm()"/>
-                </div>
-              </ng-template>
-
-              <!-- Mode Toggle -->
-              <p-selectButton
-                [options]="universeAddModeOptions"
-                [ngModel]="universeAddMode()"
-                (ngModelChange)="universeAddMode.set($event)"
-                optionLabel="label"
-                optionValue="value"
-                size="small"
-                class="mb-4"/>
-
-              @if (universeAddMode() === 'individual') {
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label class="block text-xs font-medium text-muted-color mb-1">Provider</label>
-                    <p-select [(ngModel)]="uniProviderId" [options]="providerService.providers()" optionLabel="name" optionValue="id" placeholder="Select provider" [showClear]="true" [fluid]="true" appendTo="body"/>
-                  </div>
-                  <div>
-                    <label class="block text-xs font-medium text-muted-color mb-1">From Asset (Base)</label>
-                    <p-select [(ngModel)]="uniFromAssetId" [options]="assetOptions()" optionLabel="displayLabel" optionValue="id" placeholder="Select base asset" [showClear]="true" [filter]="true" [fluid]="true" appendTo="body"/>
-                  </div>
-                  <div>
-                    <label class="block text-xs font-medium text-muted-color mb-1">To Asset (Quote)</label>
-                    <p-select [(ngModel)]="uniToAssetId" [options]="assetOptions()" optionLabel="displayLabel" optionValue="id" placeholder="Select quote asset" [showClear]="true" [filter]="true" [fluid]="true" appendTo="body"/>
-                  </div>
-                </div>
-                <div class="flex justify-end gap-2 mt-4">
-                  <p-button label="Cancel" severity="secondary" [outlined]="true" size="small" (onClick)="cancelUniverseForm()"/>
-                  <p-button label="Add Pair" size="small" (onClick)="submitUniverseItem()"/>
-                </div>
-              }
-
-              @if (universeAddMode() === 'group') {
-                <div>
-                  <label class="block text-xs font-medium text-muted-color mb-1">Asset Group</label>
-                  <p-select [(ngModel)]="uniGroupId" [options]="groupOptions()" optionValue="id" placeholder="Search groups..." [showClear]="true" [filter]="true" filterBy="displayLabel" [fluid]="true" appendTo="body">
-                    <ng-template #selectedItem let-group>
-                      <span class="text-sm">{{ group.displayLabel }}</span>
-                    </ng-template>
-                    <ng-template #item let-group>
-                      <div class="py-1">
-                        <div class="flex items-center gap-2 mb-1">
-                          <span class="text-xs font-medium text-muted-color">{{ group.members.length }} pair{{ group.members.length !== 1 ? 's' : '' }}</span>
-                          @if (!group.is_active) {
-                            <p-tag value="Inactive" severity="secondary" [rounded]="true"/>
-                          }
-                        </div>
-                        <div class="flex flex-wrap gap-1">
-                          @for (m of group.members; track m.order) {
-                            <span class="text-xs font-mono bg-emphasis rounded px-1.5 py-0.5">{{ m.from_asset_symbol }}/{{ m.to_asset_symbol }}</span>
-                          }
-                        </div>
-                        @if (group.members.length > 0) {
-                          <div class="text-xs text-muted-color mt-1">via {{ group.members[0].provider_name }}</div>
-                        }
-                      </div>
-                    </ng-template>
-                  </p-select>
-                </div>
-                <div class="flex justify-end gap-2 mt-4">
-                  <p-button label="Cancel" severity="secondary" [outlined]="true" size="small" (onClick)="cancelUniverseForm()"/>
-                  <p-button label="Link Group" size="small" (onClick)="addGroupToUniverse()"/>
-                </div>
-              }
-            </p-card>
-          }
-
-          <!-- Universe Tables -->
-          <app-universe-table [items]="universeItems()" (remove)="removeUniverseItem($event)" (removeGroup)="removeUniverseGroup($event)"/>
-        </div>
+        <app-universe-panel
+          [items]="universeItems()"
+          subtitle="Asset groups and individual pairs this strategy trades."
+          (addItem)="onAddUniverseItem($event)"
+          (addAssetGroup)="onAddUniverseGroup($event)"
+          (remove)="removeUniverseItem($event)"
+          (removeGroup)="removeUniverseGroup($event)"/>
       }
 
       <!-- Runs Tab -->

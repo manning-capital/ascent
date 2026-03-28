@@ -40,11 +40,7 @@ from ascent.database.models.orders import Order, OrderStatus
 from ascent.database.models.portfolio import Portfolio, PortfolioAssetHolding
 
 # Import provider assets
-from ascent.database.models.provider_assets import (
-    ProviderAssetAttribute,
-    ProviderAssetMetadata,
-    ProviderAssetPeriodAttribute,
-)
+from ascent.database.models.provider_assets import ProviderAssetMetadata
 
 # Import provider content
 from ascent.database.models.provider_content import (
@@ -138,8 +134,6 @@ __all__ = [
     "ProviderMetadata",
     "ProviderTypeMetadata",
     # Provider Assets
-    "ProviderAssetAttribute",
-    "ProviderAssetPeriodAttribute",
     "ProviderAssetMetadata",
     # Provider Content
     "ProviderContent",

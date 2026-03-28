@@ -5,11 +5,10 @@ import { FormsModule } from '@angular/forms';
 import { StrategyService } from '../../../services/strategy.service';
 import { FeedService } from '../../../services/feed.service';
 import { TradeService } from '../../../services/trade.service';
-import { AssetService } from '../../../services/asset.service';
-import { ProviderService } from '../../../services/provider.service';
 import { ToastService } from '../../../services/toast.service';
 import { StrategyFeedDAG, StrategyRunListItem } from '../../../models/feed.model';
 import { UniverseItem, UniverseItemCreate, AssetGroup } from '../../../models/asset.model';
+import { UniversePanelComponent } from '../../shared/universe-panel.component';
 import { Tabs, TabList, Tab } from 'primeng/tabs';
 import { SchemaFormComponent } from '../../shared/schema-form.component';
 import { TradeTableComponent } from '../../trade-table/trade-table.component';
@@ -19,18 +18,15 @@ import { RunDetailCardComponent, RunDetailField, RunDetailItem } from '../../sha
 import { RunFilter } from '../../shared/run-viewer.component';
 import { CumulativePnlChartComponent, CumulativePnlPoint } from './charts/cumulative-pnl-chart.component';
 import { PnlDistributionChartComponent } from './charts/pnl-distribution-chart.component';
-import { Select } from 'primeng/select';
 import { DatePicker } from 'primeng/datepicker';
 import { TableModule } from 'primeng/table';
 import { SelectButton } from 'primeng/selectbutton';
 import { Button } from 'primeng/button';
 import { Tag } from 'primeng/tag';
 import { Paginator } from 'primeng/paginator';
-import { Message } from 'primeng/message';
 import { Card } from 'primeng/card';
 import { Skeleton } from 'primeng/skeleton';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
-import { UniverseTableComponent } from '../../shared/universe-table.component';
 
 @Component({
   selector: 'app-strategy-detail',
@@ -48,18 +44,16 @@ import { UniverseTableComponent } from '../../shared/universe-table.component';
     RunDetailCardComponent,
     CumulativePnlChartComponent,
     PnlDistributionChartComponent,
-    Select,
     DatePicker,
     TableModule,
     SelectButton,
     Button,
     Tag,
     Paginator,
-    Message,
     Card,
     Skeleton,
     EmptyStateComponent,
-    UniverseTableComponent,
+    UniversePanelComponent,
   ],
   templateUrl: './strategy-detail.component.html',
 })
@@ -70,8 +64,6 @@ export class StrategyDetailComponent implements OnInit {
   strategyService = inject(StrategyService);
   feedService = inject(FeedService);
   tradeService = inject(TradeService);
-  assetService = inject(AssetService);
-  providerService = inject(ProviderService);
 
   tabs = ['Performance', 'Trades', 'Universe', 'Runs', 'Configuration'];
   activeTab = signal('Performance');
@@ -100,11 +92,6 @@ export class StrategyDetailComponent implements OnInit {
     { label: 'All', value: 'none' },
     { label: 'Range', value: 'range' },
     { label: 'Around', value: 'around' },
-  ];
-
-  universeAddModeOptions = [
-    { label: 'Individual Pair', value: 'individual' },
-    { label: 'Asset Group', value: 'group' },
   ];
 
   runsRadiusSelectOptions = [
@@ -169,23 +156,6 @@ export class StrategyDetailComponent implements OnInit {
 
   // Universe tab state
   universeItems = signal<UniverseItem[]>([]);
-  showUniverseForm = signal(false);
-  universeAddMode = signal<'individual' | 'group'>('individual');
-  uniProviderId = '';
-  uniFromAssetId = '';
-  uniToAssetId = '';
-  uniGroupId = '';
-
-  assetOptions = computed(() =>
-    this.assetService.assets().map(a => ({ id: a.id, displayLabel: a.symbol || a.name }))
-  );
-
-  groupOptions = computed(() =>
-    this.assetService.assetGroups().map(g => ({
-      ...g,
-      displayLabel: g.members.map(m => `${m.from_asset_symbol}/${m.to_asset_symbol}`).join(', ') || 'Empty group',
-    }))
-  );
 
   strategyId = '';
   private initialRunId: string | null = null;
@@ -230,9 +200,6 @@ export class StrategyDetailComponent implements OnInit {
       });
       this.loadStrategyRuns();
       this.loadUniverse();
-      this.assetService.loadAssets();
-      this.assetService.loadAssetGroups();
-      this.providerService.loadProviders();
     });
   }
 
@@ -403,60 +370,32 @@ export class StrategyDetailComponent implements OnInit {
     });
   }
 
-  openUniverseForm(): void {
-    this.uniProviderId = this.providerService.providers()[0]?.id ?? '';
-    this.uniFromAssetId = this.assetService.assets()[0]?.id ?? '';
-    this.uniToAssetId = this.assetService.assets()[1]?.id ?? this.assetService.assets()[0]?.id ?? '';
-    this.uniGroupId = '';
-    this.universeAddMode.set('individual');
-    this.showUniverseForm.set(true);
-  }
-
-  cancelUniverseForm(): void {
-    this.showUniverseForm.set(false);
-  }
-
-  submitUniverseItem(): void {
-    if (!this.uniProviderId || !this.uniFromAssetId || !this.uniToAssetId) return;
-    const data: UniverseItemCreate = {
-      provider_id: this.uniProviderId,
-      from_asset_id: this.uniFromAssetId,
-      to_asset_id: this.uniToAssetId,
-      order: this.universeItems().length + 1,
-    };
+  onAddUniverseItem(data: UniverseItemCreate): void {
     this.strategyService.addUniverseItem(this.strategyId, data).subscribe({
       next: () => {
         this.toast.success('Pair added to universe');
-        this.showUniverseForm.set(false);
         this.loadUniverse();
       },
       error: () => this.toast.error('Failed to add pair to universe'),
     });
   }
 
-  addGroupToUniverse(): void {
-    if (!this.uniGroupId) return;
-    const group = this.assetService.assetGroups().find(g => g.id === this.uniGroupId);
-    if (!group || group.members.length === 0) return;
-
+  onAddUniverseGroup(event: { group: AssetGroup; startOrder: number }): void {
     let completed = 0;
-    const total = group.members.length;
-    const startOrder = this.universeItems().length + 1;
-
-    for (const member of group.members) {
+    const total = event.group.members.length;
+    for (const member of event.group.members) {
       const data: UniverseItemCreate = {
         provider_id: member.provider_id,
         from_asset_id: member.from_asset_id,
         to_asset_id: member.to_asset_id,
-        provider_asset_group_id: group.id,
-        order: startOrder + member.order - 1,
+        provider_asset_group_id: event.group.id,
+        order: event.startOrder + member.order - 1,
       };
       this.strategyService.addUniverseItem(this.strategyId, data).subscribe({
         next: () => {
           completed++;
           if (completed === total) {
             this.toast.success(`Asset group linked (${total} pairs)`);
-            this.showUniverseForm.set(false);
             this.loadUniverse();
           }
         },

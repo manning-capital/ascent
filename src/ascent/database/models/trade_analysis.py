@@ -114,7 +114,7 @@ class TradeCondition(Base):
 class TradeDataSeries(Base):
     __tablename__ = "trade_data_series"
     __table_args__ = {
-        "comment": "Links a trade to relevant market data series for visualization. This is a pure reference table that tells the UI what data series are relevant to a trade. The UI decides how to display them. Actual time-series data lives in ProviderAssetAttribute or ProviderAssetGroupAttribute tables."
+        "comment": "Links a trade to relevant market data series for visualization. This is a pure reference table that tells the UI what data series are relevant to a trade. The UI decides how to display them. Actual time-series data lives in ProviderAssetGroupAttribute tables."
     }
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -145,36 +145,15 @@ class TradeDataSeries(Base):
     data_source: Mapped[str] = mapped_column(
         String(50),
         nullable=False,
-        comment="The source table for the time-series data: ASSET_ATTRIBUTE, ASSET_PERIOD_ATTRIBUTE, GROUP_ATTRIBUTE, GROUP_PERIOD_ATTRIBUTE",
+        comment="The source table for the time-series data: GROUP_ATTRIBUTE, GROUP_PERIOD_ATTRIBUTE",
     )
-    # Context FKs — group-level or asset-level
+    # Context FKs
     provider_asset_group_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid,
         ForeignKey("provider_asset_group.id"),
         nullable=True,
-        comment="The identifier of the provider asset group, for group-level data series",
+        comment="The identifier of the provider asset group whose attribute data to display",
     )
-    provider_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid,
-        ForeignKey("provider.id"),
-        nullable=True,
-        comment="The identifier of the provider, for asset-level data series",
-    )
-    provider: Mapped[Optional["Provider"]] = relationship("Provider")
-    from_asset_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid,
-        ForeignKey("asset.id"),
-        nullable=True,
-        comment="The identifier of the from asset (base asset), for asset-level data series",
-    )
-    from_asset: Mapped[Optional["Asset"]] = relationship("Asset", foreign_keys=[from_asset_id])
-    to_asset_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid,
-        ForeignKey("asset.id"),
-        nullable=True,
-        comment="The identifier of the to asset (quote asset), for asset-level data series",
-    )
-    to_asset: Mapped[Optional["Asset"]] = relationship("Asset", foreign_keys=[to_asset_id])
     period_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid,
         ForeignKey("period.id"),

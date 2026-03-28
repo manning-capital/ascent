@@ -6,7 +6,8 @@
       "Bash(find /Users/glynfinck/Documents/Repositories/ascent/src/ascent/ui/src/app/services -name *.service.ts)",
       "Bash(grep -r \"universe.*table\\\\|UniverseTable\\\\|universe-table\" /Users/glynfinck/Documents/Repositories/ascent/src/ascent/ui/src/app --include=*.ts --include=*.html)",
       "Bash(grep -r \"ProviderAsset\\\\|ProviderAssetGroup\" /Users/glynfinck/Documents/Repositories/ascent/src/ascent/database/models/*.py)",
-      "Bash(find /Users/glynfinck/Documents/Repositories/ascent/src/ascent/ui/src -type f \\\\\\(-name *.ts -o -name *.tsx \\\\\\))"
+      "Bash(find /Users/glynfinck/Documents/Repositories/ascent/src/ascent/ui/src -type f \\\\\\(-name *.ts -o -name *.tsx \\\\\\))",
+      "Bash(grep -E \"\\\\.\\(py\\)$\")"
     ]
   },
   "hooks": {

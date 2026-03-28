@@ -1,27 +1,21 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DatePipe, JsonPipe } from '@angular/common';
-import { FormsModule } from '@angular/forms';
 import { FeedService } from '../../../services/feed.service';
-import { AssetService } from '../../../services/asset.service';
-import { ProviderService } from '../../../services/provider.service';
 import { ToastService } from '../../../services/toast.service';
-import { FeedRunListItem, PartitionDataResponse } from '../../../models/feed.model';
-import { UniverseItem, UniverseItemCreate } from '../../../models/asset.model';
+import { FeedRunListItem } from '../../../models/feed.model';
+import { UniverseItem, UniverseItemCreate, AssetGroup } from '../../../models/asset.model';
+import { UniversePanelComponent } from '../../shared/universe-panel.component';
 import { Tabs, TabList, Tab } from 'primeng/tabs';
 import { SchemaFormComponent } from '../../shared/schema-form.component';
 import { Splitter } from 'primeng/splitter';
 import { PartitionDataTableComponent } from '../../shared/partition-data-table.component';
-import { Select } from 'primeng/select';
 import { TableModule } from 'primeng/table';
 import { Tag } from 'primeng/tag';
 import { Paginator } from 'primeng/paginator';
 import { Card } from 'primeng/card';
-import { SelectButton } from 'primeng/selectbutton';
-import { Button } from 'primeng/button';
 import { Skeleton } from 'primeng/skeleton';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
-import { UniverseTableComponent } from '../../shared/universe-table.component';
 
 @Component({
   selector: 'app-feed-detail',
@@ -30,21 +24,17 @@ import { UniverseTableComponent } from '../../shared/universe-table.component';
     RouterLink,
     DatePipe,
     JsonPipe,
-    FormsModule,
     Tabs, TabList, Tab,
     SchemaFormComponent,
     Splitter,
     PartitionDataTableComponent,
-    Select,
     TableModule,
     Tag,
     Paginator,
     Card,
-    SelectButton,
-    Button,
     Skeleton,
     EmptyStateComponent,
-    UniverseTableComponent,
+    UniversePanelComponent,
   ],
   templateUrl: './feed-detail.component.html',
 })
@@ -53,8 +43,6 @@ export class FeedDetailComponent implements OnInit {
   private router = inject(Router);
   private toast = inject(ToastService);
   feedService = inject(FeedService);
-  assetService = inject(AssetService);
-  providerService = inject(ProviderService);
 
   tabs = ['Runs', 'Universe', 'Configuration'];
   activeTab = signal('Runs');
@@ -81,25 +69,6 @@ export class FeedDetailComponent implements OnInit {
 
   // Universe state
   universeItems = signal<UniverseItem[]>([]);
-  showUniverseForm = signal(false);
-  universeAddMode = signal<'individual' | 'group'>('individual');
-  uniProviderId = '';
-  uniFromAssetId = '';
-  uniToAssetId = '';
-  uniGroupId = '';
-
-  universeAddModeOptions = [
-    { label: 'Individual Pair', value: 'individual' },
-    { label: 'Asset Group', value: 'group' },
-  ];
-
-  // Computed options for p-select dropdowns
-  assetOptions = computed(() =>
-    this.assetService.assets().map(a => ({ label: a.symbol || a.name, value: a.id }))
-  );
-  groupOptions = computed(() =>
-    this.assetService.assetGroups().map(g => ({ label: `Group (${g.members.length} members)`, value: g.id }))
-  );
 
   ngOnInit(): void {
     this.route.paramMap.subscribe(params => {
@@ -130,9 +99,6 @@ export class FeedDetailComponent implements OnInit {
       this.feedService.loadFeedDetail(this.feedId);
       this.loadRuns();
       this.loadUniverse();
-      this.assetService.loadAssets();
-      this.assetService.loadAssetGroups();
-      this.providerService.loadProviders();
     });
   }
 
@@ -262,60 +228,32 @@ export class FeedDetailComponent implements OnInit {
     });
   }
 
-  openUniverseForm(): void {
-    this.uniProviderId = this.providerService.providers()[0]?.id ?? '';
-    this.uniFromAssetId = this.assetService.assets()[0]?.id ?? '';
-    this.uniToAssetId = this.assetService.assets()[1]?.id ?? this.assetService.assets()[0]?.id ?? '';
-    this.uniGroupId = '';
-    this.universeAddMode.set('individual');
-    this.showUniverseForm.set(true);
-  }
-
-  cancelUniverseForm(): void {
-    this.showUniverseForm.set(false);
-  }
-
-  submitUniverseItem(): void {
-    if (!this.uniProviderId || !this.uniFromAssetId || !this.uniToAssetId) return;
-    const data: UniverseItemCreate = {
-      provider_id: this.uniProviderId,
-      from_asset_id: this.uniFromAssetId,
-      to_asset_id: this.uniToAssetId,
-      order: this.universeItems().length + 1,
-    };
+  onAddUniverseItem(data: UniverseItemCreate): void {
     this.feedService.addFeedUniverseItem(this.feedId, data).subscribe({
       next: () => {
         this.toast.success('Pair added to universe');
-        this.showUniverseForm.set(false);
         this.loadUniverse();
       },
       error: () => this.toast.error('Failed to add pair to universe'),
     });
   }
 
-  addGroupToUniverse(): void {
-    if (!this.uniGroupId) return;
-    const group = this.assetService.assetGroups().find(g => g.id === this.uniGroupId);
-    if (!group || group.members.length === 0) return;
-
+  onAddUniverseGroup(event: { group: AssetGroup; startOrder: number }): void {
     let completed = 0;
-    const total = group.members.length;
-    const startOrder = this.universeItems().length + 1;
-
-    for (const member of group.members) {
+    const total = event.group.members.length;
+    for (const member of event.group.members) {
       const data: UniverseItemCreate = {
         provider_id: member.provider_id,
         from_asset_id: member.from_asset_id,
         to_asset_id: member.to_asset_id,
-        provider_asset_group_id: group.id,
-        order: startOrder + member.order - 1,
+        provider_asset_group_id: event.group.id,
+        order: event.startOrder + member.order - 1,
       };
       this.feedService.addFeedUniverseItem(this.feedId, data).subscribe({
         next: () => {
           completed++;
           if (completed === total) {
             this.toast.success(`Asset group linked (${total} pairs)`);
-            this.showUniverseForm.set(false);
             this.loadUniverse();
           }
         },

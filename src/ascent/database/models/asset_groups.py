@@ -13,7 +13,7 @@ from ascent.database.models.providers import Provider
 class ProviderAssetGroup(Base):
     __tablename__ = "provider_asset_group"
     __table_args__ = {
-        "comment": "Groups provider assets for calculating aggregated statistical values between members. Each group contains provider asset pairs that share statistical relationships for cointegration analysis, mean reversion modeling, and linear regression calculations."
+        "comment": "Universal container for provider asset pairs. A single-member group represents an individual trading pair (e.g. BTC/USD). Multi-member groups represent synthetic instruments (e.g. spreads, baskets) for cointegration analysis, mean reversion modeling, and aggregated calculations. All attribute data is stored against groups via ProviderAssetGroupAttribute."
     }
 
     id: Mapped[uuid.UUID] = mapped_column(

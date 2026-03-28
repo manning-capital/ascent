@@ -66,7 +66,7 @@ class Feed(Base):
         nullable=False,
         comment=(
             "The DB table this feed's output maps to, "
-            "e.g. 'provider_asset_attribute'. Derived from Pandera schema Config.name."
+            "e.g. 'provider_asset_group_attribute'. Derived from Pandera schema Config.name."
         ),
     )
     schedule: Mapped[dict | None] = mapped_column(
@@ -357,11 +357,11 @@ class FeedAssetScope(Base):
         comment="The identifier of the to asset (quote asset)",
     )
     to_asset: Mapped["Asset"] = relationship("Asset", foreign_keys=[to_asset_id])
-    provider_asset_group_id: Mapped[uuid.UUID | None] = mapped_column(
+    provider_asset_group_id: Mapped[uuid.UUID] = mapped_column(
         Uuid,
         ForeignKey("provider_asset_group.id"),
-        nullable=True,
-        comment="Optional group this scope entry belongs to",
+        nullable=False,
+        comment="The identifier of the provider asset group this scope entry belongs to",
     )
     order: Mapped[int] = mapped_column(
         nullable=False,

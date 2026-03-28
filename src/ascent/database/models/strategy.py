@@ -139,11 +139,11 @@ class StrategyAssetScope(Base):
         comment="The identifier of the to asset (quote asset)",
     )
     to_asset: Mapped["Asset"] = relationship("Asset", foreign_keys=[to_asset_id])
-    provider_asset_group_id: Mapped[uuid.UUID | None] = mapped_column(
+    provider_asset_group_id: Mapped[uuid.UUID] = mapped_column(
         Uuid,
         ForeignKey("provider_asset_group.id"),
-        nullable=True,
-        comment="The identifier of the provider asset group, for group-based strategies like pairs trading or triangular arbitrage",
+        nullable=False,
+        comment="The identifier of the provider asset group this scope entry belongs to",
     )
     order: Mapped[int] = mapped_column(
         nullable=False,
