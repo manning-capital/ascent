@@ -20,7 +20,7 @@ export class AssetService {
   assetGroups = signal<AssetGroup[]>([]);
   metadataTypes = signal<MetadataType[]>([]);
   selectedAsset = signal<AssetDetail | null>(null);
-  loading = signal(false);
+  loading = signal(true);
   saving = signal(false);
 
   private loadAssets$ = new Subject<void>();

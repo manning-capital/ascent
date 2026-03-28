@@ -12,6 +12,7 @@ from ascent.database.models.portfolio import Portfolio
 from ascent.database.models.types import TradeStatusType
 
 if TYPE_CHECKING:
+    from ascent.database.models.exchanges import Exchange
     from ascent.database.models.orders import Order
     from ascent.database.models.strategy import Strategy, StrategyRun
     from ascent.database.models.trade_analysis import (
@@ -213,6 +214,13 @@ class TradeLeg(Base):
     exit_transaction_group: Mapped[Optional["TransactionGroup"]] = relationship(
         "TransactionGroup", foreign_keys=[exit_transaction_group_id]
     )
+    exchange_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("exchange.id"),
+        nullable=True,
+        comment="The intended execution venue for this leg. Null means inherited from the trade or strategy context.",
+    )
+    exchange: Mapped[Optional["Exchange"]] = relationship("Exchange")
     realized_pnl: Mapped[float | None] = mapped_column(
         nullable=True,
         comment="The realized P&L for this leg. Computed from entry/exit prices, quantity, and fees.",
@@ -227,6 +235,15 @@ class TradeLeg(Base):
         server_onupdate=func.now(),
         server_default=func.now(),
         comment="The timestamp of the last update of the trade leg record",
+    )
+
+    # All orders linked to this leg (via Order.trade_leg_id)
+    orders: Mapped[list["Order"]] = relationship(
+        "Order",
+        primaryjoin="TradeLeg.id == Order.trade_leg_id",
+        foreign_keys="[Order.trade_leg_id]",
+        order_by="Order.timestamp.asc()",
+        viewonly=True,
     )
 
     def __repr__(self):

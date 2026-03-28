@@ -11,7 +11,7 @@ export class TradeService {
   trades = signal<TradeListItem[]>([]);
   totalTrades = signal(0);
   totalPages = signal(0);
-  loading = signal(false);
+  loading = signal(true);
 
   selectedTrade = signal<TradeDetail | null>(null);
 
@@ -55,8 +55,8 @@ export class TradeService {
   }
 
   getPnlClass(value: number | null): string {
-    if (value === null || value === 0) return 'text-fg-muted';
-    return value > 0 ? 'text-positive' : 'text-negative';
+    if (value === null || value === 0) return 'text-surface-500';
+    return value > 0 ? 'text-green-500' : 'text-red-500';
   }
 
   formatCurrency(value: number | null): string {

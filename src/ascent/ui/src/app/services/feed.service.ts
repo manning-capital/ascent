@@ -13,7 +13,7 @@ export class FeedService {
 
   feeds = signal<FeedListItem[]>([]);
   selectedFeed = signal<FeedDetail | null>(null);
-  loading = signal(false);
+  loading = signal(true);
   saving = signal(false);
 
   private loadFeeds$ = new Subject<void>();

@@ -1,17 +1,29 @@
 import { Component, computed, input } from '@angular/core';
+import { Card } from 'primeng/card';
 
 @Component({
   selector: 'app-stat-card',
   standalone: true,
+  imports: [Card],
   host: { class: 'flex' },
   template: `
-    <div [class]="containerClass()">
-      <p [class]="labelClass()">{{ label() }}</p>
-      <p [class]="valueClasses()">{{ value() }}</p>
-      @if (subtitle()) {
-        <p [class]="subtitleClass()">{{ subtitle() }}</p>
-      }
-    </div>
+    @if (variant() === 'card') {
+      <p-card styleClass="flex-1" [class]="alignClass()">
+        <p [class]="labelClass()">{{ label() }}</p>
+        <p [class]="valueClasses()">{{ value() }}</p>
+        @if (subtitle()) {
+          <p [class]="subtitleClass()">{{ subtitle() }}</p>
+        }
+      </p-card>
+    } @else {
+      <div [class]="'flex-1 ' + alignClass()">
+        <p [class]="labelClass()">{{ label() }}</p>
+        <p [class]="valueClasses()">{{ value() }}</p>
+        @if (subtitle()) {
+          <p [class]="subtitleClass()">{{ subtitle() }}</p>
+        }
+      </div>
+    }
   `,
 })
 export class StatCardComponent {
@@ -23,19 +35,12 @@ export class StatCardComponent {
   variant = input<'card' | 'flat'>('card');
   align = input<'left' | 'center'>('left');
 
-  containerClass = computed(() => {
-    const classes = ['flex-1'];
-    if (this.variant() === 'card') {
-      classes.push('rounded-xl border border-edge bg-surface/50 p-5');
-    }
-    if (this.align() === 'center') {
-      classes.push('text-center');
-    }
-    return classes.join(' ');
+  alignClass = computed(() => {
+    return this.align() === 'center' ? 'text-center' : '';
   });
 
   labelClass = computed(() => {
-    return 'text-xs font-medium text-fg-muted uppercase tracking-wider mb-1';
+    return 'text-xs font-medium text-surface-500 uppercase tracking-wider mb-1';
   });
 
   valueClasses = computed(() => {
@@ -48,6 +53,6 @@ export class StatCardComponent {
   });
 
   subtitleClass = computed(() => {
-    return 'text-xs text-fg-faint mt-1';
+    return 'text-xs text-surface-400 mt-1';
   });
 }

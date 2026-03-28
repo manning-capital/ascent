@@ -1,0 +1,76 @@
+@if (exchangeService.loading()) {
+  <div class="flex flex-col h-[calc(100vh-3.5rem)]">
+    <div class="flex items-center gap-3 px-4 py-2 border-b border-surface shrink-0 bg-emphasis">
+      <p-skeleton width="4rem" height="0.875rem"/>
+      <span class="text-surface-300">|</span>
+      <p-skeleton width="10rem" height="1.125rem"/>
+      <p-skeleton width="3.5rem" height="1.375rem" borderRadius="1rem"/>
+    </div>
+    <div class="flex-1 p-6">
+      <div class="max-w-3xl mx-auto space-y-6">
+        <p-skeleton width="100%" height="12rem"/>
+        <p-skeleton width="100%" height="8rem"/>
+      </div>
+    </div>
+  </div>
+} @else {
+  @let exchange = exchangeService.selectedExchange();
+  @if (exchange) {
+  <div class="flex flex-col h-[calc(100vh-3.5rem)]">
+    <!-- Header Bar -->
+    <div class="flex items-center gap-3 px-4 py-2 border-b border-surface shrink-0 bg-emphasis">
+      <a routerLink="/exchanges" class="text-sm text-primary hover:underline">&larr; Exchanges</a>
+      <span class="text-surface-300">|</span>
+      <h1 class="text-lg font-bold truncate">{{ exchange.name }}</h1>
+      <p-tag [value]="exchange.is_active ? 'Active' : 'Inactive'" [severity]="exchange.is_active ? 'success' : 'secondary'" [rounded]="true"/>
+      @if (exchange.exchange_type_name) {
+        <span class="text-xs text-surface-500 shrink-0">{{ exchange.exchange_type_name }}</span>
+      }
+    </div>
+
+    <!-- Content -->
+    <div class="flex-1 overflow-y-auto">
+      <div class="max-w-3xl mx-auto p-6 space-y-6">
+        <!-- Info Card -->
+        <p-card header="Info">
+          <div class="space-y-2 text-sm">
+            <div class="flex justify-between"><span class="text-surface-500">Name</span><span>{{ exchange.name }}</span></div>
+            <div class="flex justify-between"><span class="text-surface-500">Type</span><span>{{ exchange.exchange_type_name ?? '--' }}</span></div>
+            <div class="flex justify-between"><span class="text-surface-500">Provider</span><span>{{ exchange.provider_name ?? 'None' }}</span></div>
+            <div class="flex justify-between"><span class="text-surface-500">Active</span><span>{{ exchange.is_active ? 'Yes' : 'No' }}</span></div>
+            @if (exchange.created_at) {
+              <div class="flex justify-between"><span class="text-surface-500">Created</span><span>{{ exchange.created_at | date:'mediumDate' }}</span></div>
+            }
+          </div>
+        </p-card>
+
+        <!-- Description -->
+        @if (exchange.description) {
+          <p-card header="Description">
+            <p class="text-sm text-surface-500">{{ exchange.description }}</p>
+          </p-card>
+        }
+
+        <!-- Implementation -->
+        @if (exchange.implementation_class) {
+          <p-card header="Implementation">
+            <div class="space-y-2 text-sm">
+              <div class="flex justify-between">
+                <span class="text-surface-500">Class</span>
+                <span class="font-mono text-xs">{{ exchange.implementation_class }}</span>
+              </div>
+            </div>
+          </p-card>
+        }
+
+        <!-- Configuration -->
+        @if (exchange.config) {
+          <p-card header="Configuration">
+            <pre class="text-xs text-surface-500 overflow-x-auto">{{ exchange.config | json }}</pre>
+          </p-card>
+        }
+      </div>
+    </div>
+  </div>
+  }
+}

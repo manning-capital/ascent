@@ -1,41 +1,41 @@
-<div class="flex h-[calc(100vh-3.5rem)]">
+<div class="flex h-[calc(100vh-3.5rem)] md:h-screen">
   <!-- Sidebar (desktop) -->
-  <nav class="hidden md:flex w-56 shrink-0 border-r border-edge bg-surface/30 p-4 overflow-y-auto flex-col gap-6">
+  <nav class="hidden md:flex w-56 shrink-0 border-r border-surface bg-emphasis p-4 overflow-y-auto flex-col gap-6">
     <h2 class="text-lg font-bold px-3">Settings</h2>
 
     <div>
-      <h3 class="text-xs text-fg-faint uppercase tracking-wider font-semibold px-3 mb-2">Entities</h3>
+      <h3 class="text-xs text-surface-400 uppercase tracking-wider font-semibold px-3 mb-2">Entities</h3>
       <div class="flex flex-col gap-0.5">
-        <a routerLink="assets" routerLinkActive="bg-fg/10 text-fg"
-           class="px-3 py-1.5 rounded-lg text-sm font-medium text-fg-muted hover:text-fg hover:bg-fg/5 transition-all">
+        <a routerLink="assets" routerLinkActive="bg-highlight text-fg"
+           class="px-3 py-1.5 rounded-lg text-sm font-medium text-surface-500 hover:text-fg hover:bg-emphasis transition-all">
           Assets
         </a>
-        <a routerLink="providers" routerLinkActive="bg-fg/10 text-fg"
-           class="px-3 py-1.5 rounded-lg text-sm font-medium text-fg-muted hover:text-fg hover:bg-fg/5 transition-all">
+        <a routerLink="providers" routerLinkActive="bg-highlight text-fg"
+           class="px-3 py-1.5 rounded-lg text-sm font-medium text-surface-500 hover:text-fg hover:bg-emphasis transition-all">
           Providers
         </a>
       </div>
     </div>
 
     <div>
-      <h3 class="text-xs text-fg-faint uppercase tracking-wider font-semibold px-3 mb-2">Schemas</h3>
+      <h3 class="text-xs text-surface-400 uppercase tracking-wider font-semibold px-3 mb-2">Schemas</h3>
       <div class="flex flex-col gap-0.5">
-        <a routerLink="asset-types" routerLinkActive="bg-fg/10 text-fg"
-           class="px-3 py-1.5 rounded-lg text-sm font-medium text-fg-muted hover:text-fg hover:bg-fg/5 transition-all">
+        <a routerLink="asset-types" routerLinkActive="bg-highlight text-fg"
+           class="px-3 py-1.5 rounded-lg text-sm font-medium text-surface-500 hover:text-fg hover:bg-emphasis transition-all">
           Asset Types
         </a>
-        <a routerLink="provider-types" routerLinkActive="bg-fg/10 text-fg"
-           class="px-3 py-1.5 rounded-lg text-sm font-medium text-fg-muted hover:text-fg hover:bg-fg/5 transition-all">
+        <a routerLink="provider-types" routerLinkActive="bg-highlight text-fg"
+           class="px-3 py-1.5 rounded-lg text-sm font-medium text-surface-500 hover:text-fg hover:bg-emphasis transition-all">
           Provider Types
         </a>
       </div>
     </div>
 
     <div>
-      <h3 class="text-xs text-fg-faint uppercase tracking-wider font-semibold px-3 mb-2">System</h3>
+      <h3 class="text-xs text-surface-400 uppercase tracking-wider font-semibold px-3 mb-2">System</h3>
       <div class="flex flex-col gap-0.5">
-        <a routerLink="about" routerLinkActive="bg-fg/10 text-fg"
-           class="px-3 py-1.5 rounded-lg text-sm font-medium text-fg-muted hover:text-fg hover:bg-fg/5 transition-all">
+        <a routerLink="about" routerLinkActive="bg-highlight text-fg"
+           class="px-3 py-1.5 rounded-lg text-sm font-medium text-surface-500 hover:text-fg hover:bg-emphasis transition-all">
           About
         </a>
       </div>
@@ -43,27 +43,27 @@
   </nav>
 
   <!-- Mobile tabs -->
-  <div class="md:hidden flex items-center gap-1 px-4 py-2 border-b border-edge bg-surface/30 overflow-x-auto shrink-0 w-full absolute top-0 left-0">
-    <a routerLink="assets" routerLinkActive="bg-fg/10 text-fg"
-       class="px-3 py-1.5 rounded-lg text-sm font-medium text-fg-muted hover:text-fg hover:bg-fg/5 transition-all whitespace-nowrap">
+  <div class="md:hidden flex items-center gap-1 px-4 py-2 border-b border-surface bg-emphasis overflow-x-auto shrink-0 w-full absolute top-0 left-0">
+    <a routerLink="assets" routerLinkActive="bg-highlight text-fg"
+       class="px-3 py-1.5 rounded-lg text-sm font-medium text-surface-500 hover:text-fg hover:bg-emphasis transition-all whitespace-nowrap">
       Assets
     </a>
-    <a routerLink="providers" routerLinkActive="bg-fg/10 text-fg"
-       class="px-3 py-1.5 rounded-lg text-sm font-medium text-fg-muted hover:text-fg hover:bg-fg/5 transition-all whitespace-nowrap">
+    <a routerLink="providers" routerLinkActive="bg-highlight text-fg"
+       class="px-3 py-1.5 rounded-lg text-sm font-medium text-surface-500 hover:text-fg hover:bg-emphasis transition-all whitespace-nowrap">
       Providers
     </a>
-    <span class="text-fg/15 mx-1">|</span>
-    <a routerLink="asset-types" routerLinkActive="bg-fg/10 text-fg"
-       class="px-3 py-1.5 rounded-lg text-sm font-medium text-fg-muted hover:text-fg hover:bg-fg/5 transition-all whitespace-nowrap">
+    <span class="text-surface-300 mx-1">|</span>
+    <a routerLink="asset-types" routerLinkActive="bg-highlight text-fg"
+       class="px-3 py-1.5 rounded-lg text-sm font-medium text-surface-500 hover:text-fg hover:bg-emphasis transition-all whitespace-nowrap">
       Asset Types
     </a>
-    <a routerLink="provider-types" routerLinkActive="bg-fg/10 text-fg"
-       class="px-3 py-1.5 rounded-lg text-sm font-medium text-fg-muted hover:text-fg hover:bg-fg/5 transition-all whitespace-nowrap">
+    <a routerLink="provider-types" routerLinkActive="bg-highlight text-fg"
+       class="px-3 py-1.5 rounded-lg text-sm font-medium text-surface-500 hover:text-fg hover:bg-emphasis transition-all whitespace-nowrap">
       Provider Types
     </a>
-    <span class="text-fg/15 mx-1">|</span>
-    <a routerLink="about" routerLinkActive="bg-fg/10 text-fg"
-       class="px-3 py-1.5 rounded-lg text-sm font-medium text-fg-muted hover:text-fg hover:bg-fg/5 transition-all whitespace-nowrap">
+    <span class="text-surface-300 mx-1">|</span>
+    <a routerLink="about" routerLinkActive="bg-highlight text-fg"
+       class="px-3 py-1.5 rounded-lg text-sm font-medium text-surface-500 hover:text-fg hover:bg-emphasis transition-all whitespace-nowrap">
       About
     </a>
   </div>

@@ -2,8 +2,9 @@ import { Injectable, inject, signal } from '@angular/core';
 import { Subject, EMPTY, Observable } from 'rxjs';
 import { switchMap, tap, catchError } from 'rxjs/operators';
 import { ApiService } from './api.service';
-import { StrategyListItem, StrategyDetail } from '../models/strategy.model';
+import { StrategyListItem, StrategyDetail, StrategyStats } from '../models/strategy.model';
 import { TradeListItem, PaginatedResponse } from '../models/trade.model';
+import { OrderListItem } from '../models/order.model';
 import { UniverseItem, UniverseItemCreate } from '../models/asset.model';
 
 @Injectable({ providedIn: 'root' })
@@ -13,15 +14,21 @@ export class StrategyService {
   strategies = signal<StrategyListItem[]>([]);
   selectedStrategy = signal<StrategyDetail | null>(null);
   strategyTrades = signal<TradeListItem[]>([]);
-  allStrategyTrades = signal<TradeListItem[]>([]);
-  allTradesLoading = signal(false);
-  loading = signal(false);
+  strategyTradesTotalPages = signal(1);
+  strategyTradesLoading = signal(false);
+  strategyStats = signal<StrategyStats | null>(null);
+  strategyOrders = signal<OrderListItem[]>([]);
+  strategyOrdersTotalPages = signal(1);
+  strategyOrdersLoading = signal(false);
+  statsLoading = signal(false);
+  loading = signal(true);
   saving = signal(false);
 
   private loadStrategies$ = new Subject<void>();
   private loadDetail$ = new Subject<{ strategyId: string; silent: boolean }>();
   private loadTrades$ = new Subject<{ strategyId: string; page: number; pageSize: number }>();
-  private loadAllTrades$ = new Subject<string>();
+  private loadStats$ = new Subject<string>();
+  private loadOrders$ = new Subject<{ strategyId: string; page: number; pageSize: number }>();
 
   constructor() {
     this.loadStrategies$.pipe(
@@ -49,25 +56,41 @@ export class StrategyService {
     });
 
     this.loadTrades$.pipe(
+      tap(() => this.strategyTradesLoading.set(true)),
       switchMap(({ strategyId, page, pageSize }) =>
         this.api.get<PaginatedResponse<TradeListItem>>(`/strategies/${strategyId}/trades`, { page, page_size: pageSize }).pipe(
-          catchError(() => EMPTY)
+          catchError(() => { this.strategyTradesLoading.set(false); return EMPTY; })
         )
       ),
     ).subscribe(res => {
       this.strategyTrades.set(res.items);
+      this.strategyTradesTotalPages.set(res.total_pages);
+      this.strategyTradesLoading.set(false);
     });
 
-    this.loadAllTrades$.pipe(
-      tap(() => this.allTradesLoading.set(true)),
-      switchMap(strategyId =>
-        this.api.get<PaginatedResponse<TradeListItem>>(`/strategies/${strategyId}/trades`, { page: 1, page_size: 10000 }).pipe(
-          catchError(() => { this.allTradesLoading.set(false); return EMPTY; })
+    this.loadOrders$.pipe(
+      tap(() => this.strategyOrdersLoading.set(true)),
+      switchMap(({ strategyId, page, pageSize }) =>
+        this.api.get<PaginatedResponse<OrderListItem>>(`/strategies/${strategyId}/orders`, { page, page_size: pageSize }).pipe(
+          catchError(() => { this.strategyOrdersLoading.set(false); return EMPTY; })
         )
       ),
     ).subscribe(res => {
-      this.allStrategyTrades.set(res.items);
-      this.allTradesLoading.set(false);
+      this.strategyOrders.set(res.items);
+      this.strategyOrdersTotalPages.set(res.total_pages);
+      this.strategyOrdersLoading.set(false);
+    });
+
+    this.loadStats$.pipe(
+      tap(() => this.statsLoading.set(true)),
+      switchMap(strategyId =>
+        this.api.get<StrategyStats>(`/strategies/${strategyId}/stats`).pipe(
+          catchError(() => { this.statsLoading.set(false); return EMPTY; })
+        )
+      ),
+    ).subscribe(stats => {
+      this.strategyStats.set(stats);
+      this.statsLoading.set(false);
     });
   }
 
@@ -83,8 +106,12 @@ export class StrategyService {
     this.loadTrades$.next({ strategyId, page, pageSize });
   }
 
-  loadAllStrategyTrades(strategyId: string): void {
-    this.loadAllTrades$.next(strategyId);
+  loadStrategyStats(strategyId: string): void {
+    this.loadStats$.next(strategyId);
+  }
+
+  loadStrategyOrders(strategyId: string, page: number = 1, pageSize: number = 10): void {
+    this.loadOrders$.next({ strategyId, page, pageSize });
   }
 
   updateStrategy(strategyId: string, data: Record<string, any>): Observable<any> {

@@ -1,5 +1,5 @@
 import { Component, computed, input } from '@angular/core';
-import { BaseChartDirective } from 'ng2-charts';
+import { UIChart } from 'primeng/chart';
 import { ChartData, ChartOptions } from 'chart.js';
 import { DARK_THEME, CHART_COLORS } from './chart-defaults';
 
@@ -12,15 +12,12 @@ export interface CumulativePnlPoint {
 @Component({
   selector: 'app-cumulative-pnl-chart',
   standalone: true,
-  imports: [BaseChartDirective],
+  imports: [UIChart],
+  styles: [`:host { display: block; height: 100%; }`],
   template: `
     <div class="h-full w-full min-h-[200px]">
       @if (data().length > 0) {
-        <canvas baseChart
-          type="line"
-          [data]="chartData()"
-          [options]="chartOptions">
-        </canvas>
+        <p-chart type="line" [data]="chartData()" [options]="chartOptions" [style]="{'width': '100%', 'height': '100%'}"/>
       } @else {
         <div class="flex items-center justify-center h-full text-fg-faint text-sm">No trade data available</div>
       }

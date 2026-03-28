@@ -1,3 +1,5 @@
+import { OrderDetail } from './order.model';
+
 export interface TradeLegSummary {
   id: string;
   from_asset_symbol: string;
@@ -57,6 +59,7 @@ export interface TradeStatus {
 export interface TradeLegDetail extends TradeLegSummary {
   expected_entry_price: number | null;
   expected_exit_price: number | null;
+  orders: OrderDetail[];
 }
 
 export interface TradeDetail extends TradeListItem {

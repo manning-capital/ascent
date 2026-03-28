@@ -18,6 +18,7 @@ from ascent.server.routers import (
     admin,
     assets,
     dashboard,
+    exchanges,
     feeds,
     orders,
     portfolios,
@@ -116,6 +117,7 @@ def create_app() -> FastAPI:
     app.include_router(assets.router, prefix="/api")
     app.include_router(providers.router, prefix="/api")
     app.include_router(provider_assets.router, prefix="/api")
+    app.include_router(exchanges.router, prefix="/api")
 
     # Serve the UI if the static files exist
     if UI_STATIC_DIR.is_dir():

@@ -1,5 +1,8 @@
 import { Component, Input } from '@angular/core';
 import { DatePipe } from '@angular/common';
+import { Card } from 'primeng/card';
+import { Tag } from 'primeng/tag';
+import { Message } from 'primeng/message';
 
 export interface RunDetailItem {
   id: string;
@@ -18,71 +21,56 @@ export interface RunDetailField {
 @Component({
   selector: 'app-run-detail-card',
   standalone: true,
-  imports: [DatePipe],
+  imports: [DatePipe, Card, Tag, Message],
   template: `
-    <div class="space-y-3">
-      <!-- Header: status left, id right -->
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-2">
-          <span class="w-2.5 h-2.5 rounded-full" [class]="statusDotClass(run.status)"></span>
-          <span class="text-sm font-semibold" [class]="statusClass(run.status)">{{ run.status }}</span>
+    <p-card>
+      <ng-template #header>
+        <div class="flex items-center justify-between p-4 pb-0">
+          <p-tag [value]="run.status" [severity]="statusSeverity(run.status)" [rounded]="true"/>
+          <span class="text-sm text-surface-500">#{{ run.id }}</span>
         </div>
-        <span class="text-xs text-fg-faint">#{{ run.id }}</span>
-      </div>
+      </ng-template>
 
-      <!-- Detail rows -->
-      <div class="rounded-xl border border-edge bg-surface/50 p-4 space-y-3 text-sm">
+      <div class="flex flex-col gap-3 text-sm">
         <div class="flex justify-between">
-          <span class="text-fg-muted">Started</span>
+          <span class="text-surface-500">Started</span>
           <span>{{ run.started_at | date:'medium' }}</span>
         </div>
         <div class="flex justify-between">
-          <span class="text-fg-muted">Completed</span>
+          <span class="text-surface-500">Completed</span>
           <span>{{ run.completed_at ? (run.completed_at | date:'medium') : '-' }}</span>
         </div>
         <div class="flex justify-between">
-          <span class="text-fg-muted">Duration</span>
+          <span class="text-surface-500">Duration</span>
           <span>{{ durationLabel() }}</span>
         </div>
         @for (field of extraFields; track field.key) {
           <div class="flex justify-between">
-            <span class="text-fg-muted">{{ field.label }}</span>
+            <span class="text-surface-500">{{ field.label }}</span>
             <span>{{ run[field.key] ?? '-' }}</span>
           </div>
         }
       </div>
 
-      <!-- Error -->
       @if (run.error_message) {
-        <div class="rounded-xl border border-negative/30 bg-negative/5 p-4">
-          <h4 class="text-xs font-semibold text-negative mb-2">Error</h4>
-          <p class="text-xs text-negative/80 whitespace-pre-wrap break-words font-mono">{{ run.error_message }}</p>
-        </div>
+        <p-message severity="error" class="mt-3 block">
+          <span class="text-xs font-mono whitespace-pre-wrap break-words">{{ run.error_message }}</span>
+        </p-message>
       }
-    </div>
+    </p-card>
   `,
 })
 export class RunDetailCardComponent {
   @Input({ required: true }) run!: RunDetailItem;
   @Input() extraFields: RunDetailField[] = [];
 
-  statusClass(status: string): string {
+  statusSeverity(status: string): 'success' | 'danger' | 'warn' | 'secondary' | 'info' {
     switch (status) {
-      case 'COMPLETED': return 'text-positive';
-      case 'FAILED': return 'text-negative';
-      case 'RUNNING': return 'text-warning';
-      case 'PENDING': return 'text-fg-muted';
-      default: return '';
-    }
-  }
-
-  statusDotClass(status: string): string {
-    switch (status) {
-      case 'COMPLETED': return 'bg-positive';
-      case 'FAILED': return 'bg-negative';
-      case 'RUNNING': return 'bg-warning animate-pulse';
-      case 'PENDING': return 'bg-fg-faint';
-      default: return 'bg-fg-faint';
+      case 'COMPLETED': return 'success';
+      case 'FAILED': return 'danger';
+      case 'RUNNING': return 'warn';
+      case 'PENDING': return 'secondary';
+      default: return 'info';
     }
   }
 

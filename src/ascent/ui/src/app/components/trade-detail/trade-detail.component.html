@@ -1,11 +1,57 @@
 @if (tradeService.loading()) {
-  <app-loading/>
+  <div class="p-6 ">
+    <p-skeleton width="8rem" height="0.875rem" class="mb-4"/>
+    <div class="flex items-center gap-3 mb-6">
+      <p-skeleton width="12rem" height="1.75rem"/>
+      <p-skeleton width="3.5rem" height="1.375rem" borderRadius="1rem"/>
+      <p-skeleton width="3.5rem" height="1.375rem" borderRadius="1rem"/>
+    </div>
+    <div class="grid grid-cols-1 lg:grid-cols-[1fr_350px] gap-6">
+      <div class="space-y-6">
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          @for (_ of [1,2,3,4]; track $index) {
+            <p-card>
+              <p-skeleton width="60%" height="0.625rem" class="mb-1"/>
+              <p-skeleton width="80%" height="1.75rem"/>
+            </p-card>
+          }
+        </div>
+        <p-card>
+          <div class="flex flex-col gap-3">
+            @for (_ of [1,2,3]; track $index) {
+              <div class="flex items-center gap-4">
+                <p-skeleton width="5rem" height="1rem"/>
+                <p-skeleton width="3rem" height="1.375rem" borderRadius="1rem"/>
+                <p-skeleton width="3rem" height="1rem"/>
+                <p-skeleton width="4rem" height="1rem"/>
+                <p-skeleton width="4rem" height="1rem"/>
+                <div class="flex-1"></div>
+                <p-skeleton width="4rem" height="1rem"/>
+              </div>
+            }
+          </div>
+        </p-card>
+      </div>
+      <div class="space-y-6">
+        <p-card>
+          <div class="space-y-3">
+            @for (_ of [1,2,3,4]; track $index) {
+              <div class="flex justify-between">
+                <p-skeleton width="30%" height="0.875rem"/>
+                <p-skeleton width="40%" height="0.875rem"/>
+              </div>
+            }
+          </div>
+        </p-card>
+      </div>
+    </div>
+  </div>
 } @else {
   @let trade = tradeService.selectedTrade();
   @if (trade) {
-  <div class="p-6 max-w-7xl mx-auto">
+  <div class="p-6 ">
     <!-- Back Link -->
-    <a routerLink="/trades" class="text-sm text-info hover:underline mb-4 inline-block">&larr; Back to Trades</a>
+    <a routerLink="/trades" class="text-sm text-primary hover:underline mb-4 inline-block">&larr; Back to Trades</a>
 
     <!-- Header -->
     <div class="flex flex-wrap items-center gap-3 mb-6">
@@ -34,184 +80,203 @@
         </div>
 
         <!-- Trade Legs Table -->
-        <div class="rounded-xl border border-edge bg-surface/50 overflow-hidden">
-          <div class="px-4 py-3 border-b border-edge">
-            <h3 class="font-semibold text-sm">Trade Legs</h3>
-          </div>
-          <div class="overflow-x-auto">
-            <table class="w-full">
-              <thead>
-                <tr class="border-b border-edge text-left text-xs font-medium text-fg-muted uppercase tracking-wider">
-                  <th class="px-4 py-3">Pair</th>
-                  <th class="px-4 py-3">Direction</th>
-                  <th class="px-4 py-3">Quantity</th>
-                  <th class="px-4 py-3">Entry</th>
-                  <th class="px-4 py-3">Exit</th>
-                  <th class="px-4 py-3 text-right">P&L</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-edge-dim">
-                @for (leg of trade.legs; track leg.id) {
+        <p-card header="Trade Legs">
+          <p-table [value]="trade.legs">
+            <ng-template #header>
+              <tr>
+                <th>Pair</th>
+                <th>Direction</th>
+                <th>Quantity</th>
+                <th>Entry</th>
+                <th>Exit</th>
+                <th class="text-right">P&L</th>
+              </tr>
+            </ng-template>
+            <ng-template #body let-leg>
+              <tr>
+                <td class="text-sm font-medium">{{ leg.from_asset_symbol }}/{{ leg.to_asset_symbol }}</td>
+                <td><app-badge [label]="leg.direction"/></td>
+                <td class="text-sm">{{ leg.quantity }}</td>
+                <td class="text-sm">
+                  {{ tradeService.formatCurrency(leg.entry_price) }}
+                  @if (leg.expected_entry_price) {
+                    <span class="text-xs text-surface-400 ml-1">(exp: {{ tradeService.formatCurrency(leg.expected_entry_price) }})</span>
+                  }
+                </td>
+                <td class="text-sm">
+                  {{ tradeService.formatCurrency(leg.exit_price) }}
+                </td>
+                <td class="text-sm text-right">
+                  <span [class]="tradeService.getPnlClass(leg.realized_pnl)">
+                    {{ tradeService.formatCurrency(leg.realized_pnl) }}
+                  </span>
+                </td>
+              </tr>
+            </ng-template>
+          </p-table>
+        </p-card>
+
+        <!-- Orders per Leg -->
+        @for (leg of trade.legs; track leg.id) {
+          @if (leg.orders && leg.orders.length > 0) {
+            <p-card [header]="'Orders \u2014 ' + leg.from_asset_symbol + '/' + leg.to_asset_symbol">
+              <p-table [value]="leg.orders" [tableStyle]="{'width': '100%'}">
+                <ng-template #header>
                   <tr>
-                    <td class="px-4 py-3 text-sm font-medium">{{ leg.from_asset_symbol }}/{{ leg.to_asset_symbol }}</td>
-                    <td class="px-4 py-3"><app-badge [label]="leg.direction"/></td>
-                    <td class="px-4 py-3 text-sm">{{ leg.quantity }}</td>
-                    <td class="px-4 py-3 text-sm">
-                      {{ tradeService.formatCurrency(leg.entry_price) }}
-                      @if (leg.expected_entry_price) {
-                        <span class="text-xs text-fg-faint ml-1">(exp: {{ tradeService.formatCurrency(leg.expected_entry_price) }})</span>
+                    <th>Time</th>
+                    <th>Side</th>
+                    <th>Type</th>
+                    <th>Qty</th>
+                    <th>Price</th>
+                    <th>Filled</th>
+                    <th>Avg Fill</th>
+                    <th>Exchange</th>
+                    <th class="text-right">Status</th>
+                  </tr>
+                </ng-template>
+                <ng-template #body let-order>
+                  <tr>
+                    <td class="text-sm text-surface-500">{{ order.timestamp | date:'medium' }}</td>
+                    <td><app-badge [label]="order.side"/></td>
+                    <td class="text-sm text-muted-color">{{ order.order_type }}</td>
+                    <td class="text-sm">{{ order.quantity }}</td>
+                    <td class="text-sm">{{ tradeService.formatCurrency(order.price) }}</td>
+                    <td class="text-sm">
+                      @if (order.filled_quantity !== null) {
+                        {{ order.filled_quantity }} / {{ order.quantity }}
+                      } @else {
+                        <span class="text-muted-color">--</span>
                       }
                     </td>
-                    <td class="px-4 py-3 text-sm">
-                      {{ tradeService.formatCurrency(leg.exit_price) }}
-                    </td>
-                    <td class="px-4 py-3 text-sm text-right">
-                      <span [class]="tradeService.getPnlClass(leg.realized_pnl)">
-                        {{ tradeService.formatCurrency(leg.realized_pnl) }}
-                      </span>
+                    <td class="text-sm">{{ tradeService.formatCurrency(order.average_fill_price) }}</td>
+                    <td class="text-sm text-muted-color">{{ order.exchange_name || '--' }}</td>
+                    <td class="text-right">
+                      @if (order.current_status) {
+                        <app-badge [label]="order.current_status" variant="status"/>
+                      }
                     </td>
                   </tr>
-                }
-              </tbody>
-            </table>
-          </div>
-        </div>
+                </ng-template>
+              </p-table>
+            </p-card>
+          }
+        }
 
         <!-- Strategy Conditions -->
         @if (trade.conditions.length > 0) {
-          <div class="rounded-xl border border-edge bg-surface/50 overflow-hidden">
-            <div class="px-4 py-3 border-b border-edge">
-              <h3 class="font-semibold text-sm">Strategy Conditions</h3>
-            </div>
-            <div class="divide-y divide-edge-dim">
+          <p-card header="Strategy Conditions">
+            <div class="divide-y divide-surface-200 dark:divide-surface-700">
               @for (cond of trade.conditions; track cond.id) {
                 <div class="px-4 py-3 flex items-center justify-between">
                   <div>
-                    <span class="text-xs font-semibold uppercase tracking-wider px-2 py-0.5 rounded mr-2"
-                          [class]="cond.condition_type === 'ENTRY' ? 'bg-positive/15 text-positive' :
-                                   cond.condition_type === 'EXIT' ? 'bg-info/15 text-info' :
-                                   cond.condition_type === 'STOP_LOSS' ? 'bg-negative/15 text-negative' :
-                                   'bg-warning/15 text-warning'">
-                      {{ cond.condition_type }}
-                    </span>
+                    <app-badge [label]="cond.condition_type" class="mr-2"/>
                     <span class="text-sm">{{ cond.attribute_name }} {{ cond.operator }} {{ cond.threshold_value }}</span>
                   </div>
                   <div class="flex items-center gap-2">
                     @if (cond.is_met) {
-                      <span class="w-2 h-2 rounded-full bg-positive"></span>
-                      <span class="text-xs text-fg-muted">{{ cond.met_at | date:'short' }}</span>
+                      <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                      <span class="text-xs text-surface-500">{{ cond.met_at | date:'short' }}</span>
                     } @else {
-                      <span class="w-2 h-2 rounded-full bg-fg-faint"></span>
-                      <span class="text-xs text-fg-faint">Pending</span>
+                      <span class="w-2 h-2 rounded-full bg-surface-400"></span>
+                      <span class="text-xs text-surface-400">Pending</span>
                     }
                   </div>
                 </div>
               }
             </div>
-          </div>
+          </p-card>
         }
 
         <!-- Snapshots -->
         @if (trade.snapshots.length > 0) {
-          <div class="rounded-xl border border-edge bg-surface/50 overflow-hidden">
-            <div class="px-4 py-3 border-b border-edge">
-              <h3 class="font-semibold text-sm">Signal Snapshots</h3>
-            </div>
-            <div class="overflow-x-auto">
-              <table class="w-full">
-                <thead>
-                  <tr class="border-b border-edge text-left text-xs font-medium text-fg-muted uppercase tracking-wider">
-                    <th class="px-4 py-3">Type</th>
-                    <th class="px-4 py-3">Attribute</th>
-                    <th class="px-4 py-3">Value</th>
-                    <th class="px-4 py-3">Timestamp</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-edge-dim">
-                  @for (snap of trade.snapshots; track $index) {
-                    <tr>
-                      <td class="px-4 py-3"><app-badge [label]="snap.snapshot_type"/></td>
-                      <td class="px-4 py-3 text-sm">{{ snap.attribute_name }}</td>
-                      <td class="px-4 py-3 text-sm font-mono">{{ snap.attribute_value }}</td>
-                      <td class="px-4 py-3 text-sm text-fg-muted">{{ snap.timestamp | date:'medium' }}</td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <p-card header="Signal Snapshots">
+            <p-table [value]="trade.snapshots">
+              <ng-template #header>
+                <tr>
+                  <th>Type</th>
+                  <th>Attribute</th>
+                  <th>Value</th>
+                  <th>Timestamp</th>
+                </tr>
+              </ng-template>
+              <ng-template #body let-snap>
+                <tr>
+                  <td><app-badge [label]="snap.snapshot_type"/></td>
+                  <td class="text-sm">{{ snap.attribute_name }}</td>
+                  <td class="text-sm font-mono">{{ snap.attribute_value }}</td>
+                  <td class="text-sm text-surface-500">{{ snap.timestamp | date:'medium' }}</td>
+                </tr>
+              </ng-template>
+            </p-table>
+          </p-card>
         }
       </div>
 
       <!-- Sidebar -->
       <div class="space-y-6">
         <!-- Trade Info -->
-        <div class="rounded-xl border border-edge bg-surface/50 p-5">
-          <h3 class="font-semibold text-sm mb-4">Trade Info</h3>
+        <p-card header="Trade Info">
           <div class="space-y-3">
             <div class="flex justify-between text-sm">
-              <span class="text-fg-muted">Strategy</span>
-              <a [routerLink]="['/strategies', trade.strategy_id]" class="text-info hover:underline">{{ trade.strategy_name }}</a>
+              <span class="text-surface-500">Strategy</span>
+              <a [routerLink]="['/strategies', trade.strategy_id]" class="text-primary hover:underline">{{ trade.strategy_name }}</a>
             </div>
             <div class="flex justify-between text-sm">
-              <span class="text-fg-muted">Paper</span>
+              <span class="text-surface-500">Paper</span>
               <span>{{ trade.is_paper ? 'Yes' : 'No' }}</span>
             </div>
             <div class="flex justify-between text-sm">
-              <span class="text-fg-muted">Entry</span>
+              <span class="text-surface-500">Entry</span>
               <span>{{ trade.entry_at | date:'medium' }}</span>
             </div>
             @if (trade.exit_at) {
               <div class="flex justify-between text-sm">
-                <span class="text-fg-muted">Exit</span>
+                <span class="text-surface-500">Exit</span>
                 <span>{{ trade.exit_at | date:'medium' }}</span>
               </div>
             }
             @if (trade.close_reason) {
               <div class="flex justify-between text-sm">
-                <span class="text-fg-muted">Close Reason</span>
+                <span class="text-surface-500">Close Reason</span>
                 <span>{{ trade.close_reason }}</span>
               </div>
             }
           </div>
-        </div>
+        </p-card>
 
         <!-- Status History -->
         @if (trade.statuses.length > 0) {
-          <div class="rounded-xl border border-edge bg-surface/50 p-5">
-            <h3 class="font-semibold text-sm mb-4">Status History</h3>
+          <p-card header="Status History">
             <div class="space-y-2">
               @for (s of trade.statuses; track $index) {
                 <div class="flex items-center justify-between text-sm">
                   <app-badge [label]="s.status" variant="status"/>
-                  <span class="text-xs text-fg-muted">{{ s.timestamp | date:'short' }}</span>
+                  <span class="text-xs text-surface-500">{{ s.timestamp | date:'short' }}</span>
                 </div>
               }
             </div>
-          </div>
+          </p-card>
         }
 
         <!-- Parameters -->
         @if (trade.parameters) {
-          <div class="rounded-xl border border-edge bg-surface/50 p-5">
-            <h3 class="font-semibold text-sm mb-4">Parameters</h3>
-            <pre class="text-xs text-fg-muted overflow-x-auto">{{ trade.parameters | json }}</pre>
-          </div>
+          <p-card header="Parameters">
+            <pre class="text-xs text-surface-500 overflow-x-auto">{{ trade.parameters | json }}</pre>
+          </p-card>
         }
 
         <!-- Data Series -->
         @if (trade.data_series.length > 0) {
-          <div class="rounded-xl border border-edge bg-surface/50 p-5">
-            <h3 class="font-semibold text-sm mb-4">Data Series</h3>
+          <p-card header="Data Series">
             <div class="space-y-2">
               @for (ds of trade.data_series; track ds.id) {
                 <div class="flex justify-between text-sm">
                   <span>{{ ds.label || ds.attribute_name }}</span>
-                  <span class="text-xs text-fg-faint">{{ ds.data_source }}</span>
+                  <span class="text-xs text-surface-400">{{ ds.data_source }}</span>
                 </div>
               }
             </div>
-          </div>
+          </p-card>
         }
       </div>
     </div>

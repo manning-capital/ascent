@@ -2,13 +2,15 @@ import { Component, inject, OnInit } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { DatePipe } from '@angular/common';
 import { FeedService } from '../../services/feed.service';
-import { LoadingSpinnerComponent } from '../shared/loading-spinner.component';
 import { StatCardComponent } from '../shared/stat-card.component';
+import { Card } from 'primeng/card';
+import { Skeleton } from 'primeng/skeleton';
+import { EmptyStateComponent } from '../shared/empty-state.component';
 
 @Component({
   selector: 'app-feed-list',
   standalone: true,
-  imports: [RouterLink, DatePipe, LoadingSpinnerComponent, StatCardComponent],
+  imports: [RouterLink, DatePipe, StatCardComponent, Card, Skeleton, EmptyStateComponent],
   templateUrl: './feed-list.component.html',
 })
 export class FeedListComponent implements OnInit {
@@ -20,10 +22,10 @@ export class FeedListComponent implements OnInit {
 
   statusClass(status: string | null): string {
     switch (status) {
-      case 'COMPLETED': return 'text-positive';
-      case 'FAILED': return 'text-negative';
+      case 'COMPLETED': return 'text-green-500';
+      case 'FAILED': return 'text-red-500';
       case 'RUNNING': return 'text-warning';
-      default: return 'text-fg-muted';
+      default: return 'text-surface-500';
     }
   }
 

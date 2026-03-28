@@ -20,6 +20,9 @@ from ascent.database.models.base import Base
 # Import descriptors (attributes, periods, metadata)
 from ascent.database.models.descriptors import Attribute, Metadata, Period
 
+# Import exchanges
+from ascent.database.models.exchanges import Exchange
+
 # Import feeds
 from ascent.database.models.feeds import (
     Feed,
@@ -86,6 +89,7 @@ from ascent.database.models.transactions import (
 from ascent.database.models.types import (
     AssetType,
     ContentType,
+    ExchangeType,
     FeedType,
     OrderStatusType,
     OrderType,
@@ -103,6 +107,7 @@ __all__ = [
     "Base",
     # Core Types
     "AssetType",
+    "ExchangeType",
     "ProviderType",
     "ContentType",
     "SentimentType",
@@ -118,6 +123,8 @@ __all__ = [
     "AssetTypeMetadata",
     # Assets
     "Asset",
+    # Exchanges
+    "Exchange",
     # Providers
     "Provider",
     # Portfolio

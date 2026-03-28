@@ -1,31 +1,48 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AssetService } from '../../services/asset.service';
 import { ProviderService } from '../../services/provider.service';
 import { ToastService } from '../../services/toast.service';
-import { LoadingSpinnerComponent } from '../shared/loading-spinner.component';
+import { Select } from 'primeng/select';
+import { TableModule } from 'primeng/table';
+import { InputText } from 'primeng/inputtext';
+import { Card } from 'primeng/card';
+import { Button } from 'primeng/button';
+import { SelectButton } from 'primeng/selectbutton';
+import { Tabs, TabList, Tab } from 'primeng/tabs';
+import { ConfirmationService } from 'primeng/api';
 import {
   AssetListItem, AssetCreate,
   ProviderAssetLink, ProviderAssetLinkCreate,
   AssetGroup, AssetGroupCreate, AssetGroupMemberCreate,
 } from '../../models/asset.model';
 
-type Tab = 'assets' | 'mappings' | 'groups';
+type AssetTab = 'universe' | 'mappings';
 
 @Component({
   selector: 'app-asset-list',
   standalone: true,
-  imports: [RouterLink, FormsModule, LoadingSpinnerComponent],
+  imports: [RouterLink, DatePipe, FormsModule, Select, TableModule, InputText, Card, Button, SelectButton, Tabs, TabList, Tab],
   templateUrl: './asset-list.component.html',
 })
 export class AssetListComponent implements OnInit {
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
   assetService = inject(AssetService);
   providerService = inject(ProviderService);
   private toast = inject(ToastService);
+  private confirmationService = inject(ConfirmationService);
 
-  activeTab = signal<Tab>('assets');
-  search = signal('');
+  typeFilterOptions = computed(() => [
+    { label: 'All', value: null as string | null },
+    ...this.assetService.assetTypes().map(t => ({ label: t.name, value: t.id as string | null })),
+  ]);
+
+  activeTab = signal<AssetTab>('universe');
+  assetSearch = signal('');
+  mappingSearch = signal('');
   selectedTypeId = signal<string | null>(null);
 
   // Asset create
@@ -50,6 +67,10 @@ export class AssetListComponent implements OnInit {
   tmpMemberToAssetId = '';
 
   ngOnInit(): void {
+    const tab = this.route.snapshot.queryParamMap.get('tab') as AssetTab | null;
+    if (tab && ['universe', 'mappings'].includes(tab)) {
+      this.activeTab.set(tab);
+    }
     this.assetService.loadAssets();
     this.assetService.loadAssetTypes();
     this.assetService.loadProviderAssetLinks();
@@ -57,8 +78,9 @@ export class AssetListComponent implements OnInit {
     this.providerService.loadProviders();
   }
 
-  setTab(tab: Tab): void {
+  setTab(tab: AssetTab): void {
     this.activeTab.set(tab);
+    this.router.navigate([], { relativeTo: this.route, queryParams: { tab }, queryParamsHandling: 'merge', replaceUrl: true });
   }
 
   // ---- Assets ----
@@ -73,13 +95,21 @@ export class AssetListComponent implements OnInit {
     if (typeId) {
       items = items.filter(a => a.asset_type_id === typeId);
     }
-    const term = this.search().toLowerCase();
+    const term = this.assetSearch().toLowerCase();
     if (!term) return items;
     return items.filter(a =>
       a.name.toLowerCase().includes(term) ||
       (a.symbol?.toLowerCase().includes(term)) ||
       (a.asset_type_name?.toLowerCase().includes(term))
     );
+  }
+
+  navigateToAsset(id: string): void {
+    this.router.navigate(['/settings/assets', id]);
+  }
+
+  navigateToGroup(id: string): void {
+    this.router.navigate(['/settings/asset-groups', id]);
   }
 
   openAssetCreate(): void {
@@ -115,7 +145,7 @@ export class AssetListComponent implements OnInit {
   // ---- Provider-Asset Links ----
 
   filteredLinks(): ProviderAssetLink[] {
-    const term = this.search().toLowerCase();
+    const term = this.mappingSearch().toLowerCase();
     if (!term) return this.assetService.providerAssetLinks();
     return this.assetService.providerAssetLinks().filter(l =>
       (l.provider_name?.toLowerCase().includes(term)) ||
@@ -206,12 +236,20 @@ export class AssetListComponent implements OnInit {
   }
 
   deleteGroup(group: AssetGroup): void {
-    this.assetService.deleteAssetGroup(group.id).subscribe({
-      next: () => {
-        this.toast.success('Group deleted');
-        this.assetService.loadAssetGroups();
+    this.confirmationService.confirm({
+      header: 'Delete Group',
+      message: 'Are you sure you want to delete this asset group? This action cannot be undone.',
+      acceptLabel: 'Delete',
+      rejectLabel: 'Cancel',
+      accept: () => {
+        this.assetService.deleteAssetGroup(group.id).subscribe({
+          next: () => {
+            this.toast.success('Group deleted');
+            this.assetService.loadAssetGroups();
+          },
+          error: () => this.toast.error('Failed to delete group'),
+        });
       },
-      error: () => this.toast.error('Failed to delete group'),
     });
   }
 

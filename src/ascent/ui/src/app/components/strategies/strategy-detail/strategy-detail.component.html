@@ -1,22 +1,238 @@
 @if (strategyService.loading()) {
-  <div class="flex items-center justify-center h-[calc(100vh-3.5rem)]">
-    <app-loading/>
+  <div class="flex flex-col h-[calc(100vh-3.5rem)]">
+    <!-- Header skeleton -->
+    <div class="flex items-center gap-3 px-4 py-2 border-b border-surface shrink-0 bg-emphasis">
+      <p-skeleton width="5rem" height="0.875rem"/>
+      <span class="text-surface-300">|</span>
+      <p-skeleton width="10rem" height="1.125rem"/>
+      <p-skeleton width="3.5rem" height="1.375rem" borderRadius="1rem"/>
+      <p-skeleton width="4rem" height="0.75rem"/>
+    </div>
+    <!-- Tab bar skeleton -->
+    <div class="flex gap-2 px-4 py-3 border-b border-surface">
+      @for (_ of [1,2,3,4,5]; track $index) {
+        <p-skeleton width="5rem" height="1rem"/>
+      }
+    </div>
+
+    <!-- Tab-specific content skeleton -->
+    @if (activeTab() === 'Performance') {
+      <div class="flex-1 overflow-y-auto p-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-0 border border-surface rounded-lg overflow-hidden">
+          @for (_ of [1,2]; track $index) {
+            <div class="p-5 border-b md:border-r border-surface">
+              <div class="mb-3 pb-2 border-b border-surface"><p-skeleton width="40%" height="0.75rem"/></div>
+              <div class="space-y-3">
+                @for (_ of [1,2,3,4,5,6,7,8]; track $index) {
+                  <div class="flex justify-between"><p-skeleton width="35%" height="1.25rem"/><p-skeleton width="25%" height="1.25rem"/></div>
+                }
+              </div>
+            </div>
+          }
+          <div class="p-5 border-b md:border-b-0 md:border-r border-surface">
+            <div class="mb-3 pb-2 border-b border-surface"><p-skeleton width="38%" height="0.75rem"/></div>
+            <div class="space-y-3">
+              @for (_ of [1,2,3,4,5,6,7]; track $index) {
+                <div class="flex justify-between"><p-skeleton width="35%" height="1.25rem"/><p-skeleton width="25%" height="1.25rem"/></div>
+              }
+            </div>
+          </div>
+          <div class="p-5">
+            <div class="mb-3 pb-2 border-b border-surface"><p-skeleton width="42%" height="0.75rem"/></div>
+            <div class="space-y-3">
+              @for (_ of [1,2,3,4,5,6]; track $index) {
+                <div class="flex justify-between"><p-skeleton width="35%" height="1.25rem"/><p-skeleton width="25%" height="1.25rem"/></div>
+              }
+            </div>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-6">
+          <p-card><p-skeleton width="8rem" height="1rem" class="mb-4"/><p-skeleton width="100%" height="16rem"/></p-card>
+          <p-card><p-skeleton width="8rem" height="1rem" class="mb-4"/><p-skeleton width="100%" height="16rem"/></p-card>
+        </div>
+      </div>
+    } @else if (activeTab() === 'Trades') {
+      <div class="flex-1 overflow-y-auto p-6">
+        <!-- Orders skeleton -->
+        <div class="mb-6">
+          <div class="flex items-center gap-2 mb-3">
+            <p-skeleton width="8rem" height="1.125rem"/>
+          </div>
+          <p-card styleClass="overflow-hidden">
+            <div class="flex flex-col">
+              <!-- Header row -->
+              <div class="flex items-center gap-4 px-4 py-3 border-b border-surface">
+                <p-skeleton width="3rem" height="0.75rem"/>
+                <p-skeleton width="3rem" height="0.75rem"/>
+                <p-skeleton width="3rem" height="0.75rem"/>
+                <p-skeleton width="2.5rem" height="0.75rem"/>
+                <p-skeleton width="3rem" height="0.75rem"/>
+                <p-skeleton width="3rem" height="0.75rem"/>
+                <div class="flex-1"></div>
+                <p-skeleton width="3rem" height="0.75rem"/>
+              </div>
+              @for (_ of skeletonRows(ordersPageSize()); track $index) {
+                <div class="flex items-center gap-4 px-4 py-3 border-b border-surface last:border-b-0">
+                  <p-skeleton width="5rem" height="1rem"/>
+                  <p-skeleton width="4rem" height="1.5rem" borderRadius="1rem"/>
+                  <p-skeleton width="8rem" height="1rem"/>
+                  <p-skeleton width="4rem" height="1rem"/>
+                  <p-skeleton width="5rem" height="1rem"/>
+                  <div class="flex-1"></div>
+                  <p-skeleton width="4rem" height="1.5rem" borderRadius="1rem"/>
+                </div>
+              }
+            </div>
+            <div class="flex items-center justify-between mt-4 px-2">
+              <p-skeleton width="6rem" height="0.75rem"/>
+              <div class="flex gap-1">
+                <p-skeleton width="3.5rem" height="2rem" borderRadius="6px"/>
+                <p-skeleton width="3.5rem" height="2rem" borderRadius="6px"/>
+              </div>
+            </div>
+          </p-card>
+        </div>
+        <!-- Trades skeleton -->
+        <div>
+          <div class="flex items-center gap-2 mb-3">
+            <p-skeleton width="8rem" height="1.125rem"/>
+          </div>
+          <p-card styleClass="overflow-hidden">
+            <div class="flex flex-col">
+              <!-- Header row -->
+              <div class="flex items-center gap-4 px-4 py-3 border-b border-surface">
+                <p-skeleton width="4rem" height="0.75rem"/>
+                <p-skeleton width="5rem" height="0.75rem"/>
+                <p-skeleton width="3rem" height="0.75rem"/>
+                <p-skeleton width="2.5rem" height="0.75rem"/>
+                <p-skeleton width="5rem" height="0.75rem"/>
+                <p-skeleton width="5rem" height="0.75rem"/>
+                <div class="flex-1"></div>
+                <p-skeleton width="2.5rem" height="0.75rem"/>
+                <p-skeleton width="3rem" height="0.75rem"/>
+              </div>
+              @for (_ of skeletonRows(tradesPageSize()); track $index) {
+                <div class="flex items-center gap-4 px-4 py-3 border-b border-surface last:border-b-0">
+                  <p-skeleton width="6rem" height="1rem"/>
+                  <p-skeleton width="4rem" height="1.5rem" borderRadius="1rem"/>
+                  <p-skeleton width="3rem" height="1rem"/>
+                  <p-skeleton width="5rem" height="1rem"/>
+                  <p-skeleton width="5rem" height="1rem"/>
+                  <div class="flex-1"></div>
+                  <p-skeleton width="4rem" height="1rem"/>
+                  <p-skeleton width="4rem" height="1.5rem" borderRadius="1rem"/>
+                </div>
+              }
+            </div>
+            <div class="flex items-center justify-between mt-4 px-2">
+              <p-skeleton width="6rem" height="0.75rem"/>
+              <div class="flex gap-1">
+                <p-skeleton width="3.5rem" height="2rem" borderRadius="6px"/>
+                <p-skeleton width="3.5rem" height="2rem" borderRadius="6px"/>
+              </div>
+            </div>
+          </p-card>
+        </div>
+      </div>
+    } @else if (activeTab() === 'Universe') {
+      <div class="flex-1 overflow-y-auto p-6 max-w-4xl mx-auto">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <p-skeleton width="8rem" height="1rem" class="mb-1"/>
+            <p-skeleton width="16rem" height="0.75rem"/>
+          </div>
+          <p-skeleton width="4rem" height="2rem" borderRadius="6px"/>
+        </div>
+        <p-card>
+          <div class="flex gap-4 pb-3 border-b border-surface">
+            @for (_ of [1,2,3,4,5,6]; track $index) {
+              <p-skeleton width="5rem" height="0.75rem"/>
+            }
+          </div>
+          @for (_ of [1,2,3,4,5]; track $index) {
+            <div class="flex gap-4 py-3 border-b border-surface">
+              <p-skeleton width="2rem" height="1rem"/>
+              <p-skeleton width="6rem" height="1rem"/>
+              <p-skeleton width="5rem" height="1rem"/>
+              <p-skeleton width="5rem" height="1rem"/>
+              <p-skeleton width="3rem" height="1rem"/>
+              <p-skeleton width="4rem" height="1rem"/>
+            </div>
+          }
+        </p-card>
+      </div>
+    } @else if (activeTab() === 'Runs') {
+      <div class="flex-1 flex">
+        <!-- Left panel skeleton -->
+        <div class="flex-1 flex items-center justify-center">
+          <app-empty-state title="Select a run" message="Choose a run from the list to view its data." icon="select"/>
+        </div>
+        <!-- Right panel skeleton -->
+        <div class="w-[40%] border-l border-surface flex flex-col">
+          <div class="p-3 shrink-0">
+            <p-skeleton width="8rem" height="1.5rem" borderRadius="6px"/>
+          </div>
+          <div class="px-3 py-2 shrink-0">
+            <p-skeleton width="4rem" height="0.75rem"/>
+          </div>
+          <div class="flex-1 overflow-hidden">
+            @for (_ of [1,2,3,4,5,6,7,8]; track $index) {
+              <div class="px-3 py-2.5 border-b border-surface">
+                <div class="flex items-center justify-between mb-2">
+                  <p-skeleton width="4.5rem" height="1.25rem" borderRadius="1rem"/>
+                  <p-skeleton width="2rem" height="0.75rem"/>
+                </div>
+                <div class="flex items-center justify-between">
+                  <p-skeleton width="9rem" height="0.75rem"/>
+                  <p-skeleton width="3rem" height="0.75rem"/>
+                </div>
+              </div>
+            }
+          </div>
+          <div class="p-2 shrink-0">
+            <p-skeleton width="100%" height="2rem" borderRadius="6px"/>
+          </div>
+        </div>
+      </div>
+    } @else if (activeTab() === 'Configuration') {
+      <div class="flex-1 overflow-y-auto p-6 max-w-3xl mx-auto">
+        @for (_ of [1,2,3]; track $index) {
+          <p-card class="mb-6">
+            <p-skeleton width="6rem" height="1rem" class="mb-4"/>
+            <div class="space-y-3">
+              @for (_ of [1,2,3,4]; track $index) {
+                <div class="flex justify-between">
+                  <p-skeleton width="30%" height="1rem"/>
+                  <p-skeleton width="40%" height="1rem"/>
+                </div>
+              }
+            </div>
+          </p-card>
+        }
+      </div>
+    }
   </div>
 } @else {
   @let strategy = strategyService.selectedStrategy();
   @if (strategy) {
   <div class="flex flex-col h-[calc(100vh-3.5rem)]">
     <!-- Header Bar -->
-    <div class="flex items-center gap-3 px-4 py-2 border-b border-edge shrink-0 bg-surface/30">
-      <a routerLink="/strategies" class="text-sm text-info hover:underline">&larr; Strategies</a>
-      <span class="text-fg/20">|</span>
+    <div class="flex items-center gap-3 px-4 py-2 border-b border-surface shrink-0 bg-emphasis">
+      <a routerLink="/strategies" class="text-sm text-primary hover:underline">&larr; Strategies</a>
+      <span class="text-surface-300">|</span>
       <h1 class="text-lg font-bold truncate">{{ strategy.name }}</h1>
-      <span class="w-2 h-2 rounded-full shrink-0" [class]="strategy.is_active ? 'bg-positive' : 'bg-fg-faint'"></span>
-      <span class="text-xs text-fg-muted shrink-0">{{ strategy.strategy_type }}</span>
+      <p-tag [value]="strategy.is_active ? 'Active' : 'Inactive'" [severity]="strategy.is_active ? 'success' : 'secondary'" [rounded]="true"/>
+      <span class="text-xs text-surface-500 shrink-0">{{ strategy.strategy_type }}</span>
     </div>
 
     <!-- Tab Bar -->
-    <app-panel-tabs [tabs]="tabs" [(activeTab)]="activeTab"/>
+    <p-tabs [value]="activeTab()" (valueChange)="onTabChange($any($event))">
+      <p-tablist>
+        @for (tab of tabs; track tab) {
+          <p-tab [value]="tab">{{ tab }}</p-tab>
+        }
+      </p-tablist>
+    </p-tabs>
 
     <!-- Tab Content -->
     <div class="flex-1 overflow-hidden">
@@ -24,214 +240,449 @@
       <!-- Performance Tab -->
       @if (activeTab() === 'Performance') {
         <div class="overflow-y-auto h-full">
-          @if (strategyService.allTradesLoading()) {
-            <div class="flex items-center justify-center h-32">
-              <app-loading/>
-            </div>
-          } @else {
-            <!-- Stat Cards -->
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 p-6 pb-0">
-              <app-stat-card label="Total Trades" [value]="'' + strategy.total_trades" [subtitle]="strategy.open_trades + ' open'" size="lg"/>
-              <app-stat-card label="Win Rate" [value]="strategy.win_rate + '%'" size="lg"/>
-              <app-stat-card label="Total P&L" [value]="formatCurrency(strategy.total_pnl)" [valueClass]="pnlClass(strategy.total_pnl)" size="lg"/>
-              <app-stat-card label="Avg Win / Loss" [value]="formatCurrency(strategy.avg_win)" [subtitle]="'Loss: ' + formatCurrency(strategy.avg_loss)" size="lg"/>
-            </div>
-
-            <!-- Two Column: Charts left, Trades right -->
-            <div class="grid grid-cols-1 xl:grid-cols-[1fr_520px] gap-6 p-6">
-              <!-- Left: Charts -->
-              <div class="space-y-6 min-w-0">
-                <!-- Cumulative P&L -->
-                <div class="rounded-xl border border-edge bg-surface/50 p-4">
-                  <h3 class="font-semibold text-sm mb-3">Cumulative P&L</h3>
-                  <div class="h-64">
-                    <app-cumulative-pnl-chart [data]="cumulativePnlData()"/>
-                  </div>
+          @if (strategyService.statsLoading()) {
+            <!-- Stats skeleton -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-0 mx-6 mt-6 border border-surface rounded-lg overflow-hidden">
+              <!-- Performance (8 rows) -->
+              <div class="p-5 border-b md:border-r border-surface">
+                <div class="mb-3 pb-2 border-b border-surface">
+                  <p-skeleton width="40%" height="0.75rem"/>
                 </div>
-
-                <!-- Win/Loss + Monthly side by side -->
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <div class="rounded-xl border border-edge bg-surface/50 p-4">
-                    <h3 class="font-semibold text-sm mb-3">Win / Loss</h3>
-                    <div class="h-56">
-                      <app-win-loss-chart
-                        [wins]="wins()"
-                        [losses]="losses()"
-                        [breakeven]="breakeven()"/>
+                <div class="space-y-3">
+                  @for (_ of [1,2,3,4,5,6,7,8]; track $index) {
+                    <div class="flex justify-between">
+                      <p-skeleton width="35%" height="1.25rem"/>
+                      <p-skeleton width="25%" height="1.25rem"/>
                     </div>
-                  </div>
-                  <div class="rounded-xl border border-edge bg-surface/50 p-4">
-                    <h3 class="font-semibold text-sm mb-3">Monthly P&L</h3>
-                    <div class="h-56">
-                      <app-monthly-pnl-chart [data]="monthlyPnlData()"/>
-                    </div>
-                  </div>
+                  }
                 </div>
-
-                <!-- Per-trade P&L -->
-                <div class="rounded-xl border border-edge bg-surface/50 p-4">
-                  <h3 class="font-semibold text-sm mb-3">Trade P&L</h3>
-                  <div class="h-56">
-                    <app-trade-pnl-chart [trades]="sortedTrades()"/>
+              </div>
+              <!-- Risk Metrics (8 rows) -->
+              <div class="p-5 border-b border-surface">
+                <div class="mb-3 pb-2 border-b border-surface">
+                  <p-skeleton width="35%" height="0.75rem"/>
+                </div>
+                <div class="space-y-3">
+                  @for (_ of [1,2,3,4,5,6,7,8]; track $index) {
+                    <div class="flex justify-between">
+                      <p-skeleton width="35%" height="1.25rem"/>
+                      <p-skeleton width="25%" height="1.25rem"/>
+                    </div>
+                  }
+                </div>
+              </div>
+              <!-- Trade Analysis (7 rows) -->
+              <div class="p-5 border-b md:border-b-0 md:border-r border-surface">
+                <div class="mb-3 pb-2 border-b border-surface">
+                  <p-skeleton width="38%" height="0.75rem"/>
+                </div>
+                <div class="space-y-3">
+                  @for (_ of [1,2,3,4,5,6,7]; track $index) {
+                    <div class="flex justify-between">
+                      <p-skeleton width="35%" height="1.25rem"/>
+                      <p-skeleton width="25%" height="1.25rem"/>
+                    </div>
+                  }
+                </div>
+              </div>
+              <!-- Time & Distribution (6 rows) -->
+              <div class="p-5">
+                <div class="mb-3 pb-2 border-b border-surface">
+                  <p-skeleton width="42%" height="0.75rem"/>
+                </div>
+                <div class="space-y-3">
+                  @for (_ of [1,2,3,4,5,6]; track $index) {
+                    <div class="flex justify-between">
+                      <p-skeleton width="35%" height="1.25rem"/>
+                      <p-skeleton width="25%" height="1.25rem"/>
+                    </div>
+                  }
+                </div>
+              </div>
+            </div>
+            <!-- Charts skeleton -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 p-6">
+              <p-card>
+                <p-skeleton width="8rem" height="1rem" class="mb-4"/>
+                <p-skeleton width="100%" height="16rem"/>
+              </p-card>
+              <p-card>
+                <p-skeleton width="8rem" height="1rem" class="mb-4"/>
+                <p-skeleton width="100%" height="16rem"/>
+              </p-card>
+            </div>
+          } @else if (stats(); as s) {
+            <!-- Summary Dashboard -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-0 mx-6 mt-6 border border-surface rounded-lg overflow-hidden">
+              <!-- Performance -->
+              <div class="p-5 border-b md:border-r border-surface">
+                <div class="text-xs font-bold uppercase tracking-widest text-primary mb-3 pb-2 border-b border-surface">Performance</div>
+                <div class="space-y-2">
+                  <div class="flex justify-between text-sm">
+                    <span class="text-muted-color">Total PnL</span>
+                    <span [class]="'font-semibold ' + pnlClass(s.total_pnl)">{{ formatCurrency(s.total_pnl) }}</span>
+                  </div>
+                  <div class="flex justify-between text-sm">
+                    <span class="text-muted-color">Total Fees</span>
+                    <span class="font-semibold">{{ formatCurrency(s.total_fees) }}</span>
+                  </div>
+                  <div class="flex justify-between text-sm">
+                    <span class="text-muted-color">Net PnL</span>
+                    <span [class]="'font-semibold ' + pnlClass(s.net_pnl)">{{ formatCurrency(s.net_pnl) }}</span>
+                  </div>
+                  <div class="flex justify-between text-sm">
+                    <span class="text-muted-color">Avg Trade PnL</span>
+                    <span [class]="'font-semibold ' + pnlClass(s.avg_trade_pnl)">{{ formatCurrency(s.avg_trade_pnl) }}</span>
+                  </div>
+                  <div class="flex justify-between text-sm">
+                    <span class="text-muted-color">Median PnL</span>
+                    <span [class]="'font-semibold ' + pnlClass(s.median_pnl)">{{ formatCurrency(s.median_pnl) }}</span>
+                  </div>
+                  <div class="flex justify-between text-sm">
+                    <span class="text-muted-color">Profit Factor</span>
+                    <span [class]="'font-semibold ' + (s.profit_factor > 1 ? 'text-positive' : s.profit_factor > 0 ? 'text-negative' : '')">{{ s.profit_factor.toFixed(2) }}</span>
+                  </div>
+                  <div class="flex justify-between text-sm">
+                    <span class="text-muted-color">Payoff Ratio</span>
+                    <span class="font-semibold">{{ s.payoff_ratio.toFixed(2) }}</span>
+                  </div>
+                  <div class="flex justify-between text-sm">
+                    <span class="text-muted-color">Expectancy</span>
+                    <span [class]="'font-semibold ' + pnlClass(s.expectancy)">{{ formatCurrency(s.expectancy) }}</span>
                   </div>
                 </div>
               </div>
 
-              <!-- Right: Trade History -->
-              <div class="rounded-xl border border-edge bg-surface/50 overflow-hidden h-fit">
-                <div class="flex items-center justify-between px-4 py-3 border-b border-edge">
-                  <h3 class="font-semibold text-sm">Trade History</h3>
-                  <a [routerLink]="['/trades']" [queryParams]="{strategy_id: strategy.id}" class="text-xs text-info hover:underline">View All</a>
+              <!-- Risk Metrics -->
+              <div class="p-5 border-b border-surface">
+                <div class="text-xs font-bold uppercase tracking-widest text-primary mb-3 pb-2 border-b border-surface">Risk Metrics</div>
+                <div class="space-y-2">
+                  <div class="flex justify-between text-sm">
+                    <span class="text-muted-color">Sharpe Ratio</span>
+                    <span [class]="'font-semibold ' + pnlClass(s.sharpe_ratio)">{{ s.sharpe_ratio.toFixed(3) }}</span>
+                  </div>
+                  <div class="flex justify-between text-sm">
+                    <span class="text-muted-color">Sortino Ratio</span>
+                    <span [class]="'font-semibold ' + pnlClass(s.sortino_ratio)">{{ s.sortino_ratio.toFixed(3) }}</span>
+                  </div>
+                  <div class="flex justify-between text-sm">
+                    <span class="text-muted-color">Max Drawdown</span>
+                    <span class="font-semibold text-negative">{{ formatCurrency(s.max_drawdown) }}</span>
+                  </div>
+                  <div class="flex justify-between text-sm">
+                    <span class="text-muted-color">Max DD Duration</span>
+                    <span class="font-semibold">{{ s.max_drawdown_duration }} trades</span>
+                  </div>
+                  <div class="flex justify-between text-sm">
+                    <span class="text-muted-color">Avg Win</span>
+                    <span class="font-semibold text-positive">{{ formatCurrency(s.avg_win) }}</span>
+                  </div>
+                  <div class="flex justify-between text-sm">
+                    <span class="text-muted-color">Avg Loss</span>
+                    <span class="font-semibold text-negative">{{ formatCurrency(s.avg_loss) }}</span>
+                  </div>
+                  <div class="flex justify-between text-sm">
+                    <span class="text-muted-color">Max Win</span>
+                    <span class="font-semibold text-positive">{{ formatCurrency(s.max_win) }}</span>
+                  </div>
+                  <div class="flex justify-between text-sm">
+                    <span class="text-muted-color">Max Loss</span>
+                    <span class="font-semibold text-negative">{{ formatCurrency(s.max_loss) }}</span>
+                  </div>
                 </div>
+              </div>
+
+              <!-- Trade Analysis -->
+              <div class="p-5 border-b md:border-b-0 md:border-r border-surface">
+                <div class="text-xs font-bold uppercase tracking-widest text-primary mb-3 pb-2 border-b border-surface">Trade Analysis</div>
+                <div class="space-y-2">
+                  <div class="flex justify-between text-sm">
+                    <span class="text-muted-color">Total Trades</span>
+                    <span class="font-semibold">{{ s.total_trades }}</span>
+                  </div>
+                  <div class="flex justify-between text-sm">
+                    <span class="text-muted-color">Open</span>
+                    <span class="font-semibold">{{ s.open_trades }}</span>
+                  </div>
+                  <div class="flex justify-between text-sm">
+                    <span class="text-muted-color">Winning</span>
+                    <span class="font-semibold text-positive">{{ s.wins }}</span>
+                  </div>
+                  <div class="flex justify-between text-sm">
+                    <span class="text-muted-color">Losing</span>
+                    <span class="font-semibold text-negative">{{ s.losses }}</span>
+                  </div>
+                  <div class="flex justify-between text-sm">
+                    <span class="text-muted-color">Win Rate</span>
+                    <span class="font-semibold">{{ s.win_rate }}%</span>
+                  </div>
+                  <div class="flex justify-between text-sm">
+                    <span class="text-muted-color">Best Streak</span>
+                    <span class="font-semibold text-positive">{{ s.max_win_streak }} trades</span>
+                  </div>
+                  <div class="flex justify-between text-sm">
+                    <span class="text-muted-color">Worst Streak</span>
+                    <span class="font-semibold text-negative">{{ s.max_loss_streak }} trades</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Holding Periods & Distribution -->
+              <div class="p-5">
+                <div class="text-xs font-bold uppercase tracking-widest text-primary mb-3 pb-2 border-b border-surface">Time & Distribution</div>
+                <div class="space-y-2">
+                  <div class="flex justify-between text-sm">
+                    <span class="text-muted-color">Avg Holding</span>
+                    <span class="font-semibold">{{ formatDuration(s.avg_holding_seconds) }}</span>
+                  </div>
+                  <div class="flex justify-between text-sm">
+                    <span class="text-muted-color">Avg Hold (Wins)</span>
+                    <span class="font-semibold text-positive">{{ formatDuration(s.avg_holding_wins_seconds) }}</span>
+                  </div>
+                  <div class="flex justify-between text-sm">
+                    <span class="text-muted-color">Avg Hold (Losses)</span>
+                    <span class="font-semibold text-negative">{{ formatDuration(s.avg_holding_losses_seconds) }}</span>
+                  </div>
+                  <div class="flex justify-between text-sm">
+                    <span class="text-muted-color">Std Dev PnL</span>
+                    <span class="font-semibold">{{ formatCurrency(s.std_dev_pnl) }}</span>
+                  </div>
+                  <div class="flex justify-between text-sm">
+                    <span class="text-muted-color">Skewness</span>
+                    <span class="font-semibold">{{ s.skewness.toFixed(3) }}</span>
+                  </div>
+                  <div class="flex justify-between text-sm">
+                    <span class="text-muted-color">Kurtosis</span>
+                    <span class="font-semibold">{{ s.kurtosis.toFixed(3) }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Charts -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 p-6">
+              <p-card header="Cumulative P&L">
+                <div class="h-64">
+                  <app-cumulative-pnl-chart [data]="cumulativePnlData()"/>
+                </div>
+              </p-card>
+              <p-card header="PnL Distribution">
+                <div class="h-64">
+                  <app-pnl-distribution-chart [pnls]="pnlDistributionData()"/>
+                </div>
+              </p-card>
+            </div>
+          }
+        </div>
+      }
+
+      <!-- Trades Tab -->
+      @if (activeTab() === 'Trades') {
+        <div class="overflow-y-auto h-full p-6">
+          <!-- Open Orders -->
+          <div class="mb-6">
+            <h2 class="text-lg font-semibold flex items-center gap-2 mb-3">
+              Open Orders
+              @if (!strategyService.strategyOrdersLoading()) {
+                <span class="text-sm font-normal text-muted-color">{{ strategyService.strategyOrders().length }}</span>
+              }
+            </h2>
+            <p-card styleClass="overflow-hidden">
+              <div class="transition-opacity duration-200" [class.opacity-40]="strategyService.strategyOrdersLoading()" [class.pointer-events-none]="strategyService.strategyOrdersLoading()">
+                <p-table [value]="strategyService.strategyOrders()" [rowHover]="true" [tableStyle]="{'width': '100%'}">
+                  <ng-template #header>
+                    <tr>
+                      <th>Pair</th>
+                      <th>Side</th>
+                      <th>Type</th>
+                      <th>Qty</th>
+                      <th>Price</th>
+                      <th>Filled</th>
+                      <th class="text-right">Status</th>
+                    </tr>
+                  </ng-template>
+                  <ng-template #body let-order>
+                    <tr>
+                      <td class="font-medium text-sm">{{ order.from_asset_symbol }}/{{ order.to_asset_symbol }}</td>
+                      <td>
+                        <p-tag [value]="order.side" [severity]="orderSideSeverity(order.side)" [rounded]="true"/>
+                      </td>
+                      <td class="text-sm text-muted-color">{{ order.order_type }}</td>
+                      <td class="text-sm">{{ order.quantity }}</td>
+                      <td class="text-sm">{{ formatCurrency(order.price) }}</td>
+                      <td class="text-sm">
+                        @if (order.filled_quantity !== null) {
+                          {{ order.filled_quantity }} / {{ order.quantity }}
+                        } @else {
+                          <span class="text-muted-color">—</span>
+                        }
+                      </td>
+                      <td class="text-right">
+                        @if (order.current_status) {
+                          <p-tag [value]="order.current_status" [severity]="orderStatusSeverity(order.current_status)" [rounded]="true"/>
+                        }
+                      </td>
+                    </tr>
+                  </ng-template>
+                  <ng-template #emptymessage>
+                    <tr>
+                      <td colspan="7">
+                        <app-empty-state title="No orders" icon="data"/>
+                      </td>
+                    </tr>
+                  </ng-template>
+                </p-table>
+                <!-- Orders Pagination -->
+                @if (strategyService.strategyOrdersTotalPages() > 1) {
+                  <div class="flex items-center justify-between mt-4 px-2">
+                    <span class="text-xs text-surface-400">Page {{ ordersPage() }} of {{ strategyService.strategyOrdersTotalPages() }}</span>
+                    <div class="flex gap-1">
+                      <p-button
+                        [disabled]="ordersPage() <= 1"
+                        (onClick)="onOrdersPageChange(ordersPage() - 1)"
+                        severity="secondary"
+                        [outlined]="true"
+                        size="small"
+                        label="Prev"/>
+                      <p-button
+                        [disabled]="ordersPage() >= strategyService.strategyOrdersTotalPages()"
+                        (onClick)="onOrdersPageChange(ordersPage() + 1)"
+                        severity="secondary"
+                        [outlined]="true"
+                        size="small"
+                        label="Next"/>
+                    </div>
+                  </div>
+                }
+              </div>
+            </p-card>
+          </div>
+
+          <!-- Trade History -->
+          <div>
+            <h2 class="text-lg font-semibold flex items-center gap-2 mb-3">
+              Trade History
+              <a [routerLink]="['/trades']" [queryParams]="{strategy_id: strategy.id}" class="text-xs font-normal text-primary hover:underline ml-auto">View All</a>
+            </h2>
+            <p-card styleClass="overflow-hidden">
+              <div class="transition-opacity duration-200" [class.opacity-40]="strategyService.strategyTradesLoading()" [class.pointer-events-none]="strategyService.strategyTradesLoading()">
                 <app-trade-table
                   [trades]="strategyService.strategyTrades()"
                   [showStrategy]="false"
                   [page]="page()"
-                  [totalPages]="1"
+                  [totalPages]="strategyService.strategyTradesTotalPages()"
                   (pageChange)="onPageChange($event)"/>
               </div>
-            </div>
-          }
+            </p-card>
+          </div>
         </div>
       }
 
       <!-- Universe Tab -->
       @if (activeTab() === 'Universe') {
-        <div class="overflow-y-auto h-full p-6 max-w-4xl mx-auto">
+        <div class="overflow-y-auto h-full p-6">
           <div class="flex items-center justify-between mb-4">
             <div>
               <h3 class="font-semibold text-sm">Asset Universe</h3>
-              <p class="text-xs text-fg-faint mt-1">Provider-asset pairs and groups this strategy monitors.</p>
+              <p class="text-xs text-surface-400 mt-1">Asset groups and individual pairs this strategy trades.</p>
             </div>
-            <button (click)="openUniverseForm()" class="px-4 py-2 rounded-lg bg-info/15 text-info text-sm font-medium hover:bg-info/25 transition-colors">
-              + Add
-            </button>
+            <p-button label="+ Add" [outlined]="true" size="small" (onClick)="openUniverseForm()"/>
           </div>
 
           <!-- Add Form -->
           @if (showUniverseForm()) {
-            <div class="mb-6 rounded-xl border border-edge bg-surface/50 p-5">
+            <p-card class="mb-6">
+              <ng-template #header>
+                <div class="flex items-center justify-between px-5 pt-4">
+                  <span class="font-semibold text-sm">Add to Universe</span>
+                  <p-button label="&times;" severity="secondary" [text]="true" [rounded]="true" size="small" (onClick)="cancelUniverseForm()"/>
+                </div>
+              </ng-template>
+
               <!-- Mode Toggle -->
-              <div class="flex items-center gap-2 mb-4">
-                <button (click)="universeAddMode.set('individual')"
-                        class="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
-                        [class]="universeAddMode() === 'individual' ? 'bg-info/20 text-info' : 'text-fg-muted hover:text-fg hover:bg-fg/5'">
-                  Individual Pair
-                </button>
-                <button (click)="universeAddMode.set('group')"
-                        class="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
-                        [class]="universeAddMode() === 'group' ? 'bg-info/20 text-info' : 'text-fg-muted hover:text-fg hover:bg-fg/5'">
-                  From Group
-                </button>
-              </div>
+              <p-selectButton
+                [options]="universeAddModeOptions"
+                [ngModel]="universeAddMode()"
+                (ngModelChange)="universeAddMode.set($event)"
+                optionLabel="label"
+                optionValue="value"
+                size="small"
+                class="mb-4"/>
 
               @if (universeAddMode() === 'individual') {
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <label class="block text-xs text-fg-muted mb-1">Provider</label>
-                    <select [(ngModel)]="uniProviderId" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info">
-                      @for (p of providerService.providers(); track p.id) {
-                        <option [value]="p.id">{{ p.name }}</option>
-                      }
-                    </select>
+                    <label class="block text-xs font-medium text-muted-color mb-1">Provider</label>
+                    <p-select [(ngModel)]="uniProviderId" [options]="providerService.providers()" optionLabel="name" optionValue="id" placeholder="Select provider" [showClear]="true" [fluid]="true" appendTo="body"/>
                   </div>
                   <div>
-                    <label class="block text-xs text-fg-muted mb-1">From Asset (Base)</label>
-                    <select [(ngModel)]="uniFromAssetId" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info">
-                      @for (a of assetService.assets(); track a.id) {
-                        <option [value]="a.id">{{ a.symbol || a.name }}</option>
-                      }
-                    </select>
+                    <label class="block text-xs font-medium text-muted-color mb-1">From Asset (Base)</label>
+                    <p-select [(ngModel)]="uniFromAssetId" [options]="assetOptions()" optionLabel="displayLabel" optionValue="id" placeholder="Select base asset" [showClear]="true" [filter]="true" [fluid]="true" appendTo="body"/>
                   </div>
                   <div>
-                    <label class="block text-xs text-fg-muted mb-1">To Asset (Quote)</label>
-                    <select [(ngModel)]="uniToAssetId" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info">
-                      @for (a of assetService.assets(); track a.id) {
-                        <option [value]="a.id">{{ a.symbol || a.name }}</option>
-                      }
-                    </select>
+                    <label class="block text-xs font-medium text-muted-color mb-1">To Asset (Quote)</label>
+                    <p-select [(ngModel)]="uniToAssetId" [options]="assetOptions()" optionLabel="displayLabel" optionValue="id" placeholder="Select quote asset" [showClear]="true" [filter]="true" [fluid]="true" appendTo="body"/>
                   </div>
                 </div>
-                <div class="flex gap-2 mt-4">
-                  <button (click)="submitUniverseItem()" class="px-4 py-2 rounded-lg bg-positive/15 text-positive text-sm font-medium hover:bg-positive/25 transition-colors">Add</button>
-                  <button (click)="cancelUniverseForm()" class="px-4 py-2 rounded-lg bg-fg/5 text-fg-muted text-sm font-medium hover:bg-fg/10 transition-colors">Cancel</button>
+                <div class="flex justify-end gap-2 mt-4">
+                  <p-button label="Cancel" severity="secondary" [outlined]="true" size="small" (onClick)="cancelUniverseForm()"/>
+                  <p-button label="Add Pair" size="small" (onClick)="submitUniverseItem()"/>
                 </div>
               }
 
               @if (universeAddMode() === 'group') {
                 <div>
-                  <label class="block text-xs text-fg-muted mb-1">Asset Group</label>
-                  <select [(ngModel)]="uniGroupId" class="w-full md:w-96 px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info">
-                    <option value="">Select a group...</option>
-                    @for (g of assetService.assetGroups(); track g.id) {
-                      <option [value]="g.id">Group ({{ g.members.length }} members)</option>
-                    }
-                  </select>
+                  <label class="block text-xs font-medium text-muted-color mb-1">Asset Group</label>
+                  <p-select [(ngModel)]="uniGroupId" [options]="groupOptions()" optionValue="id" placeholder="Search groups..." [showClear]="true" [filter]="true" filterBy="displayLabel" [fluid]="true" appendTo="body">
+                    <ng-template #selectedItem let-group>
+                      <span class="text-sm">{{ group.displayLabel }}</span>
+                    </ng-template>
+                    <ng-template #item let-group>
+                      <div class="py-1">
+                        <div class="flex items-center gap-2 mb-1">
+                          <span class="text-xs font-medium text-muted-color">{{ group.members.length }} pair{{ group.members.length !== 1 ? 's' : '' }}</span>
+                          @if (!group.is_active) {
+                            <p-tag value="Inactive" severity="secondary" [rounded]="true"/>
+                          }
+                        </div>
+                        <div class="flex flex-wrap gap-1">
+                          @for (m of group.members; track m.order) {
+                            <span class="text-xs font-mono bg-emphasis rounded px-1.5 py-0.5">{{ m.from_asset_symbol }}/{{ m.to_asset_symbol }}</span>
+                          }
+                        </div>
+                        @if (group.members.length > 0) {
+                          <div class="text-xs text-muted-color mt-1">via {{ group.members[0].provider_name }}</div>
+                        }
+                      </div>
+                    </ng-template>
+                  </p-select>
                 </div>
-                <div class="flex gap-2 mt-4">
-                  <button (click)="addGroupToUniverse()" class="px-4 py-2 rounded-lg bg-positive/15 text-positive text-sm font-medium hover:bg-positive/25 transition-colors">Add All Members</button>
-                  <button (click)="cancelUniverseForm()" class="px-4 py-2 rounded-lg bg-fg/5 text-fg-muted text-sm font-medium hover:bg-fg/10 transition-colors">Cancel</button>
+                <div class="flex justify-end gap-2 mt-4">
+                  <p-button label="Cancel" severity="secondary" [outlined]="true" size="small" (onClick)="cancelUniverseForm()"/>
+                  <p-button label="Link Group" size="small" (onClick)="addGroupToUniverse()"/>
                 </div>
               }
-            </div>
+            </p-card>
           }
 
-          <!-- Universe Items Table -->
-          <div class="rounded-xl border border-edge bg-surface/50 overflow-hidden">
-            <table class="w-full text-sm">
-              <thead>
-                <tr class="border-b border-edge text-left text-xs text-fg-muted uppercase tracking-wider">
-                  <th class="px-4 py-3 w-12">#</th>
-                  <th class="px-4 py-3">Provider</th>
-                  <th class="px-4 py-3">Base Asset</th>
-                  <th class="px-4 py-3">Quote Asset</th>
-                  <th class="px-4 py-3">Group</th>
-                  <th class="px-4 py-3 w-20"></th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (item of universeItems(); track item.provider_id + item.from_asset_id + item.to_asset_id) {
-                  <tr class="border-b border-edge/50 hover:bg-elevated/30 transition-colors">
-                    <td class="px-4 py-3 text-fg-muted font-mono text-xs">{{ item.order }}</td>
-                    <td class="px-4 py-3 font-medium">{{ item.provider_name }}</td>
-                    <td class="px-4 py-3 font-mono">{{ item.from_asset_symbol }}</td>
-                    <td class="px-4 py-3 font-mono">{{ item.to_asset_symbol }}</td>
-                    <td class="px-4 py-3">
-                      @if (item.provider_asset_group_id) {
-                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wider bg-info/15 text-info">Group</span>
-                      } @else {
-                        <span class="text-fg-faint text-xs">—</span>
-                      }
-                    </td>
-                    <td class="px-4 py-3">
-                      <button (click)="removeUniverseItem(item)" class="text-xs text-negative/70 hover:text-negative transition-colors">Remove</button>
-                    </td>
-                  </tr>
-                } @empty {
-                  <tr>
-                    <td colspan="6" class="px-4 py-12 text-center text-fg-faint">No assets in universe. Add individual pairs or import from a group.</td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
+          <!-- Universe Tables -->
+          <app-universe-table [items]="universeItems()" (remove)="removeUniverseItem($event)" (removeGroup)="removeUniverseGroup($event)"/>
         </div>
       }
 
       <!-- Runs Tab -->
       @if (activeTab() === 'Runs') {
-        <app-split-pane class="h-full block">
+        <p-splitter [panelSizes]="[60, 40]" [minSizes]="[25, 15]" [gutterSize]="6" class="h-full">
+          <ng-template #panel>
           <!-- Left: DAG + Run Detail -->
-          <div left class="h-full flex flex-col">
+          <div class="h-full flex flex-col">
             @if (selectedStrategyRun(); as run) {
               <!-- Top: Feed DAG -->
               <div class="flex-1 min-h-0 overflow-hidden p-2">
-                <div class="h-full rounded-xl border border-edge bg-surface/50 overflow-hidden">
-                  <app-feed-dag
-                    [dag]="feedDag()"
-                    [strategyName]="strategy.name"
-                    [feedRunStatuses]="selectedRunFeedStatuses()"/>
-                </div>
+                <app-feed-dag
+                  [dag]="feedDag()"
+                  [strategyName]="strategy.name"
+                  [feedRunStatuses]="selectedRunFeedStatuses()"/>
               </div>
               <!-- Bottom: Run Detail -->
               <div class="shrink-0 px-2 pb-2">
@@ -240,223 +691,166 @@
                   [extraFields]="strategyRunExtraFields"/>
               </div>
             } @else {
-              <!-- No run selected: single placeholder block -->
-              <div class="flex-1 m-2 rounded-xl border border-edge bg-surface/50 flex items-center justify-center">
-                <span class="text-sm text-fg-faint">Select a run to view details</span>
+              <div class="flex-1 flex items-center justify-center">
+                <app-empty-state title="Select a run" message="Choose a run from the list to view its details." icon="select"/>
               </div>
             }
           </div>
+          </ng-template>
 
+          <ng-template #panel>
           <!-- Right: Run List with Filters -->
-          <div right class="h-full flex flex-col">
+          <div class="h-full flex flex-col">
             <!-- Filter bar -->
-            <div class="px-3 py-2 border-b border-edge shrink-0 space-y-2">
-              <div class="flex items-center gap-1.5">
-                <span class="text-[11px] text-fg-faint mr-1">Filter:</span>
-                <button
-                  (click)="setRunsFilterMode('none')"
-                  class="px-2 py-0.5 rounded text-[11px] transition-colors"
-                  [class]="runsFilterMode() === 'none' ? 'bg-info/20 text-info' : 'text-fg-muted hover:text-fg hover:bg-fg/5'">
-                  All
-                </button>
-                <button
-                  (click)="setRunsFilterMode('range')"
-                  class="px-2 py-0.5 rounded text-[11px] transition-colors"
-                  [class]="runsFilterMode() === 'range' ? 'bg-info/20 text-info' : 'text-fg-muted hover:text-fg hover:bg-fg/5'">
-                  Range
-                </button>
-                <button
-                  (click)="setRunsFilterMode('around')"
-                  class="px-2 py-0.5 rounded text-[11px] transition-colors"
-                  [class]="runsFilterMode() === 'around' ? 'bg-info/20 text-info' : 'text-fg-muted hover:text-fg hover:bg-fg/5'">
-                  Around
-                </button>
-              </div>
+            <div class="p-3 shrink-0 space-y-2">
+              <p-selectButton
+                [options]="runsFilterOptions"
+                [ngModel]="runsFilterMode()"
+                (ngModelChange)="setRunsFilterMode($event)"
+                optionLabel="label"
+                optionValue="value"
+                size="small"/>
+
               @if (runsFilterMode() === 'range') {
-                <div class="space-y-1.5">
+                <div class="flex flex-col gap-2">
                   <div class="flex items-center gap-2">
-                    <label class="text-[10px] text-fg-faint w-10 shrink-0">From</label>
-                    <input
-                      type="datetime-local"
+                    <label class="text-xs text-surface-500 w-10 shrink-0">From</label>
+                    <p-datepicker
                       [ngModel]="runsRangeFrom()"
                       (ngModelChange)="runsRangeFrom.set($event)"
-                      class="flex-1 bg-elevated border border-edge rounded px-2 py-1 text-[11px] text-fg focus:outline-none focus:border-info/50"/>
+                      [showTime]="true"
+                      dateFormat="yy-mm-dd"
+                      hourFormat="24"
+                      [fluid]="true"/>
                   </div>
                   <div class="flex items-center gap-2">
-                    <label class="text-[10px] text-fg-faint w-10 shrink-0">To</label>
-                    <input
-                      type="datetime-local"
+                    <label class="text-xs text-surface-500 w-10 shrink-0">To</label>
+                    <p-datepicker
                       [ngModel]="runsRangeTo()"
                       (ngModelChange)="runsRangeTo.set($event)"
-                      class="flex-1 bg-elevated border border-edge rounded px-2 py-1 text-[11px] text-fg focus:outline-none focus:border-info/50"/>
+                      [showTime]="true"
+                      dateFormat="yy-mm-dd"
+                      hourFormat="24"
+                      [fluid]="true"/>
                   </div>
-                  <div class="flex gap-1.5">
-                    <button
-                      (click)="applyRunsFilter()"
-                      class="flex-1 py-1 rounded text-[11px] bg-info/20 text-info hover:bg-info/30 transition-colors">
-                      Apply
-                    </button>
-                    <button
-                      (click)="clearRunsFilter()"
-                      class="px-2 py-1 rounded text-[11px] text-fg-muted hover:text-fg hover:bg-fg/5 transition-colors">
-                      Clear
-                    </button>
+                  <div class="flex gap-2">
+                    <p-button label="Apply" severity="info" size="small" (onClick)="applyRunsFilter()" [fluid]="true"/>
+                    <p-button label="Clear" severity="secondary" size="small" [text]="true" (onClick)="clearRunsFilter()"/>
                   </div>
                 </div>
               }
+
               @if (runsFilterMode() === 'around') {
-                <div class="space-y-1.5">
-                  <input
-                    type="datetime-local"
+                <div class="flex flex-col gap-2">
+                  <p-datepicker
                     [ngModel]="runsAroundDatetime()"
                     (ngModelChange)="runsAroundDatetime.set($event)"
-                    class="w-full bg-elevated border border-edge rounded px-2 py-1 text-[11px] text-fg focus:outline-none focus:border-info/50"/>
-                  <div class="flex items-center gap-1">
-                    <span class="text-[10px] text-fg-faint shrink-0">&plusmn;</span>
-                    @for (r of runsRadiusOptions; track r) {
-                      <button
-                        (click)="runsAroundRadius.set(r)"
-                        class="px-2 py-0.5 rounded text-[11px] transition-colors"
-                        [class]="runsAroundRadius() === r ? 'bg-info/20 text-info' : 'text-fg-muted hover:text-fg hover:bg-fg/5'">
-                        {{ runsRadiusLabel(r) }}
-                      </button>
-                    }
-                  </div>
-                  <div class="flex gap-1.5">
-                    <button
-                      (click)="applyRunsFilter()"
-                      class="flex-1 py-1 rounded text-[11px] bg-info/20 text-info hover:bg-info/30 transition-colors">
-                      Apply
-                    </button>
-                    <button
-                      (click)="clearRunsFilter()"
-                      class="px-2 py-1 rounded text-[11px] text-fg-muted hover:text-fg hover:bg-fg/5 transition-colors">
-                      Clear
-                    </button>
+                    [showTime]="true"
+                    dateFormat="yy-mm-dd"
+                    hourFormat="24"
+                    [fluid]="true"/>
+                  <p-selectButton
+                    [options]="runsRadiusSelectOptions"
+                    [ngModel]="runsAroundRadius()"
+                    (ngModelChange)="runsAroundRadius.set($event)"
+                    optionLabel="label"
+                    optionValue="value"
+                    size="small"/>
+                  <div class="flex gap-2">
+                    <p-button label="Apply" severity="info" size="small" (onClick)="applyRunsFilter()" [fluid]="true"/>
+                    <p-button label="Clear" severity="secondary" size="small" [text]="true" (onClick)="clearRunsFilter()"/>
                   </div>
                 </div>
               }
             </div>
 
             <!-- Run count -->
-            <div class="px-3 py-2 border-b border-edge shrink-0">
-              <p class="text-[11px] text-fg-faint">{{ runsTotal() }} runs</p>
+            <div class="px-3 py-2 shrink-0">
+              <span class="text-xs text-surface-500">{{ runsTotal() }} runs</span>
             </div>
 
             <!-- Run list -->
-            <div class="flex-1 overflow-y-auto">
+            <div class="flex-1 overflow-y-auto min-h-0">
               @for (run of strategyRuns(); track run.id) {
                 <div
                   (click)="selectStrategyRun(run)"
-                  class="px-3 py-2.5 border-b border-edge-dim cursor-pointer transition-colors"
-                  [class]="selectedStrategyRun()?.id === run.id ? 'bg-info/10 border-l-2 border-l-info' : 'hover:bg-fg/[.03]'">
-                  <div class="flex items-center justify-between mb-0.5">
-                    <div class="flex items-center gap-1.5">
-                      <span class="w-2 h-2 rounded-full shrink-0" [class]="runStatusDotClass(run.status)"></span>
-                      <span class="text-[11px] font-medium" [class]="runStatusClass(run.status)">{{ run.status }}</span>
-                    </div>
-                    <span class="text-[10px] text-fg-faint">#{{ run.id }}</span>
+                  class="px-3 py-2.5 cursor-pointer transition-colors border-b border-surface"
+                  [class.bg-highlight]="selectedStrategyRun()?.id === run.id"
+                  [class.hover:bg-emphasis]="selectedStrategyRun()?.id !== run.id">
+                  <div class="flex items-center justify-between mb-1">
+                    <p-tag [value]="run.status" [severity]="runStatusSeverity(run.status)" [rounded]="true"/>
+                    <span class="text-xs text-surface-500">#{{ run.id }}</span>
                   </div>
-                  <div class="text-[10px] text-fg-faint flex items-center justify-between">
+                  <div class="text-xs text-surface-500 flex items-center justify-between">
                     <span>{{ run.started_at | date:'MMM d, h:mm:ss a' }}</span>
                     <span>{{ runDurationLabel(run) }}</span>
                   </div>
                   @if (run.error_message) {
-                    <p class="text-[10px] text-negative mt-0.5 line-clamp-1">{{ run.error_message }}</p>
+                    <p class="text-xs text-red-500 mt-1 line-clamp-1">{{ run.error_message }}</p>
                   }
                 </div>
               } @empty {
-                <div class="flex items-center justify-center h-32 text-sm text-fg-faint">No runs found.</div>
+                <div class="flex items-center justify-center flex-1">
+                  <app-empty-state title="No runs yet" message="Runs will appear here once the strategy has executed." icon="inbox"/>
+                </div>
               }
             </div>
 
             <!-- Pagination -->
-            <div class="flex items-center justify-between px-3 py-2 border-t border-edge shrink-0 text-[11px] text-fg-muted">
-              <span>Page {{ runsPage() }} / {{ runsTotalPages() || 1 }}</span>
-              <div class="flex items-center gap-1.5">
-                <button
-                  [disabled]="runsPage() <= 1"
-                  (click)="onRunsPageChange(runsPage() - 1)"
-                  class="px-2 py-0.5 rounded border border-edge hover:bg-fg/10 disabled:opacity-30 transition-colors">
-                  Prev
-                </button>
-                <button
-                  [disabled]="runsPage() >= runsTotalPages()"
-                  (click)="onRunsPageChange(runsPage() + 1)"
-                  class="px-2 py-0.5 rounded border border-edge hover:bg-fg/10 disabled:opacity-30 transition-colors">
-                  Next
-                </button>
-              </div>
-            </div>
+            <p-paginator
+              [rows]="20"
+              [totalRecords]="runsTotal()"
+              [first]="(runsPage() - 1) * 20"
+              (onPageChange)="onRunsPageChange(($event.page ?? 0) + 1)"
+              class="shrink-0"/>
           </div>
-        </app-split-pane>
-      }
-
-      <!-- Feeds Tab -->
-      @if (activeTab() === 'Feeds') {
-        <div class="h-full p-2">
-          <div class="h-full rounded-xl border border-edge bg-surface/50 overflow-hidden">
-            <app-feed-dag [dag]="feedDag()" [strategyName]="strategy.name"/>
-          </div>
-        </div>
+          </ng-template>
+        </p-splitter>
       }
 
       <!-- Configuration Tab -->
       @if (activeTab() === 'Configuration') {
         <div class="max-w-3xl mx-auto p-6 space-y-6 overflow-y-auto h-full">
           <!-- Info Card -->
-          <div class="rounded-xl border border-edge bg-surface/50 p-5">
-            <h3 class="font-semibold text-sm mb-3">Info</h3>
+          <p-card header="Info">
             <div class="space-y-2 text-sm">
-              <div class="flex justify-between"><span class="text-fg-muted">Portfolio</span><span>{{ strategy.portfolio_name }}</span></div>
-              <div class="flex justify-between"><span class="text-fg-muted">Strategy</span><span>{{ strategy.strategy_class }}</span></div>
-              <div class="flex justify-between"><span class="text-fg-muted">Active</span><span>{{ strategy.is_active ? 'Yes' : 'No' }}</span></div>
+              <div class="flex justify-between"><span class="text-surface-500">Portfolio</span><span>{{ strategy.portfolio_name }}</span></div>
+              <div class="flex justify-between"><span class="text-surface-500">Strategy</span><span>{{ strategy.strategy_class }}</span></div>
+              <div class="flex justify-between"><span class="text-surface-500">Active</span><span>{{ strategy.is_active ? 'Yes' : 'No' }}</span></div>
               @if (strategy.created_at) {
-                <div class="flex justify-between"><span class="text-fg-muted">Created</span><span>{{ strategy.created_at | date:'mediumDate' }}</span></div>
+                <div class="flex justify-between"><span class="text-surface-500">Created</span><span>{{ strategy.created_at | date:'mediumDate' }}</span></div>
               }
               @if (strategy.last_trade_at) {
-                <div class="flex justify-between"><span class="text-fg-muted">Last Trade</span><span>{{ strategy.last_trade_at | date:'medium' }}</span></div>
+                <div class="flex justify-between"><span class="text-surface-500">Last Trade</span><span>{{ strategy.last_trade_at | date:'medium' }}</span></div>
               }
             </div>
-          </div>
+          </p-card>
 
           <!-- Description -->
           @if (strategy.description) {
-            <div class="rounded-xl border border-edge bg-surface/50 p-5">
-              <h3 class="font-semibold text-sm mb-3">Description</h3>
-              <p class="text-sm text-fg-muted">{{ strategy.description }}</p>
-            </div>
+            <p-card header="Description">
+              <p class="text-sm text-surface-500">{{ strategy.description }}</p>
+            </p-card>
           }
 
           <!-- Parameters -->
           @if (strategy.parameters) {
-            <div class="rounded-xl border border-edge bg-surface/50 p-5">
-              <div class="flex items-center justify-between mb-4">
-                <h3 class="font-semibold text-sm">Parameters</h3>
-                @if (strategy.parameter_schema) {
-                  @if (!editing()) {
-                    <button
-                      (click)="startEditing()"
-                      class="text-xs text-info hover:underline">
-                      Edit
-                    </button>
-                  } @else {
-                    <div class="flex items-center gap-2">
-                      <button
-                        (click)="cancelEditing()"
-                        class="text-xs text-fg-muted hover:text-fg px-2 py-1 rounded border border-edge hover:border-fg/20 transition-colors">
-                        Cancel
-                      </button>
-                      <button
-                        (click)="saveParameters()"
-                        [disabled]="strategyService.saving()"
-                        class="text-xs text-fg bg-info hover:bg-info/80 px-3 py-1 rounded transition-colors disabled:opacity-50">
-                        {{ strategyService.saving() ? 'Saving...' : 'Save' }}
-                      </button>
-                    </div>
+            <p-card>
+              <ng-template #header>
+                <div class="flex items-center justify-between px-5 pt-4">
+                  <span class="font-semibold">Parameters</span>
+                  @if (strategy.parameter_schema) {
+                    @if (!editing()) {
+                      <p-button label="Edit" [link]="true" size="small" (onClick)="startEditing()"/>
+                    } @else {
+                      <div class="flex items-center gap-2">
+                        <p-button label="Cancel" severity="secondary" [text]="true" size="small" (onClick)="cancelEditing()"/>
+                        <p-button label="Save" severity="info" size="small" [loading]="strategyService.saving()" (onClick)="saveParameters()"/>
+                      </div>
+                    }
                   }
-                }
-              </div>
+                </div>
+              </ng-template>
               @if (strategy.parameter_schema) {
                 <app-schema-form
                   [schema]="strategy.parameter_schema"
@@ -464,9 +858,9 @@
                   [readonly]="!editing()"
                   (valuesChange)="onParametersChange($event)"/>
               } @else {
-                <pre class="text-xs text-fg-muted overflow-x-auto">{{ strategy.parameters | json }}</pre>
+                <pre class="text-xs text-surface-500 overflow-x-auto">{{ strategy.parameters | json }}</pre>
               }
-            </div>
+            </p-card>
           }
         </div>
       }

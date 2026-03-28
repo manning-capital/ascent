@@ -1,13 +1,17 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AssetService } from '../../../services/asset.service';
 import { ProviderService } from '../../../services/provider.service';
 import { ToastService } from '../../../services/toast.service';
 import { AssetGroup, AssetGroupMemberCreate } from '../../../models/asset.model';
-import { LoadingSpinnerComponent } from '../../shared/loading-spinner.component';
-import { PanelTabsComponent } from '../../shared/panel-tabs.component';
+import { Tabs, TabList, Tab } from 'primeng/tabs';
+import { Skeleton } from 'primeng/skeleton';
+import { Select } from 'primeng/select';
+import { TableModule } from 'primeng/table';
+import { Card } from 'primeng/card';
+import { Button } from 'primeng/button';
 
 @Component({
   selector: 'app-asset-group-detail',
@@ -16,13 +20,18 @@ import { PanelTabsComponent } from '../../shared/panel-tabs.component';
     RouterLink,
     DatePipe,
     FormsModule,
-    LoadingSpinnerComponent,
-    PanelTabsComponent,
+    Tabs, TabList, Tab,
+    Select,
+    TableModule,
+    Card,
+    Button,
+    Skeleton,
   ],
   templateUrl: './asset-group-detail.component.html',
 })
 export class AssetGroupDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
+  private router = inject(Router);
   private toast = inject(ToastService);
   assetService = inject(AssetService);
   providerService = inject(ProviderService);
@@ -46,13 +55,19 @@ export class AssetGroupDetailComponent implements OnInit {
       if (id === this.groupId) return;
       this.groupId = id;
 
-      this.activeTab.set('Overview');
+      const tab = this.route.snapshot.queryParamMap.get('tab');
+      this.activeTab.set(tab && this.tabs.includes(tab) ? tab : 'Overview');
       this.showMemberForm.set(false);
 
       this.loadGroup();
       this.assetService.loadAssets();
       this.providerService.loadProviders();
     });
+  }
+
+  onTabChange(tab: string): void {
+    this.activeTab.set(tab);
+    this.router.navigate([], { relativeTo: this.route, queryParams: { tab }, queryParamsHandling: 'merge', replaceUrl: true });
   }
 
   loadGroup(): void {

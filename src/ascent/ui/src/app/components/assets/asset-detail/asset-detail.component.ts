@@ -1,13 +1,23 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { AssetService } from '../../../services/asset.service';
 import { ProviderService } from '../../../services/provider.service';
 import { ToastService } from '../../../services/toast.service';
 import { MetadataEntry, MetadataHistoryEntry, AssetTypeMetadataField } from '../../../models/asset.model';
-import { LoadingSpinnerComponent } from '../../shared/loading-spinner.component';
-import { PanelTabsComponent } from '../../shared/panel-tabs.component';
+import { Tabs, TabList, Tab } from 'primeng/tabs';
+import { Skeleton } from 'primeng/skeleton';
+import { Select } from 'primeng/select';
+import { Checkbox } from 'primeng/checkbox';
+import { DatePicker } from 'primeng/datepicker';
+import { TableModule } from 'primeng/table';
+import { Card } from 'primeng/card';
+import { Tag } from 'primeng/tag';
+import { Button } from 'primeng/button';
+import { InputText } from 'primeng/inputtext';
+import { Textarea } from 'primeng/textarea';
+import { ConfirmationService } from 'primeng/api';
 
 @Component({
   selector: 'app-asset-detail',
@@ -16,14 +26,25 @@ import { PanelTabsComponent } from '../../shared/panel-tabs.component';
     RouterLink,
     DatePipe,
     FormsModule,
-    LoadingSpinnerComponent,
-    PanelTabsComponent,
+    Tabs, TabList, Tab,
+    Select,
+    Checkbox,
+    DatePicker,
+    TableModule,
+    Card,
+    Tag,
+    Button,
+    InputText,
+    Textarea,
+    Skeleton,
   ],
   templateUrl: './asset-detail.component.html',
 })
 export class AssetDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
+  private router = inject(Router);
   private toast = inject(ToastService);
+  private confirmationService = inject(ConfirmationService);
   assetService = inject(AssetService);
   providerService = inject(ProviderService);
 
@@ -43,11 +64,11 @@ export class AssetDetailComponent implements OnInit {
   metadataEntries = signal<MetadataEntry[]>([]);
   assetTypeFields = signal<AssetTypeMetadataField[]>([]);
   fieldInputValues: Record<string, string> = {};
-  fieldTimestampValues: Record<string, string> = {};
+  fieldTimestampValues: Record<string, Date | null> = {};
   showMetadataForm = signal(false);
   newMetadataId = '';
   newMetadataValue = '';
-  newMetadataTimestamp = '';
+  newMetadataTimestamp: Date | null = null;
 
   // History state
   historyMetadataId = signal<string | null>(null);
@@ -55,7 +76,7 @@ export class AssetDetailComponent implements OnInit {
   historyEntries = signal<MetadataHistoryEntry[]>([]);
   editingHistoryTimestamp = signal<string | null>(null);
   editHistoryValue = '';
-  editHistoryTimestamp = '';
+  editHistoryTimestamp: Date | null = null;
 
   ngOnInit(): void {
     this.route.paramMap.subscribe(params => {
@@ -63,7 +84,8 @@ export class AssetDetailComponent implements OnInit {
       if (id === this.assetId) return;
       this.assetId = id;
 
-      this.activeTab.set('Overview');
+      const tab = this.route.snapshot.queryParamMap.get('tab');
+      this.activeTab.set(tab && this.tabs.includes(tab) ? tab : 'Overview');
       this.editing.set(false);
       this.metadataEntries.set([]);
       this.assetTypeFields.set([]);
@@ -76,6 +98,11 @@ export class AssetDetailComponent implements OnInit {
       this.loadMetadata();
       this.loadAssetTypeFields();
     });
+  }
+
+  onTabChange(tab: string): void {
+    this.activeTab.set(tab);
+    this.router.navigate([], { relativeTo: this.route, queryParams: { tab }, queryParamsHandling: 'merge', replaceUrl: true });
   }
 
   private loadAssetTypeFields(): void {
@@ -126,12 +153,20 @@ export class AssetDetailComponent implements OnInit {
   }
 
   deleteAsset(): void {
-    this.assetService.deleteAsset(this.assetId).subscribe({
-      next: () => {
-        this.toast.success('Asset deleted');
-        window.history.back();
+    this.confirmationService.confirm({
+      header: 'Delete Asset',
+      message: 'Are you sure you want to delete this asset? This action cannot be undone.',
+      acceptLabel: 'Delete',
+      rejectLabel: 'Cancel',
+      accept: () => {
+        this.assetService.deleteAsset(this.assetId).subscribe({
+          next: () => {
+            this.toast.success('Asset deleted');
+            window.history.back();
+          },
+          error: () => this.toast.error('Failed to delete asset'),
+        });
       },
-      error: () => this.toast.error('Failed to delete asset'),
     });
   }
 
@@ -161,7 +196,7 @@ export class AssetDetailComponent implements OnInit {
     const available = this.assetService.metadataTypes().filter(mt => !usedIds.has(mt.id));
     this.newMetadataId = available[0]?.id ?? this.assetService.metadataTypes()[0]?.id ?? '';
     this.newMetadataValue = '';
-    this.newMetadataTimestamp = '';
+    this.newMetadataTimestamp = null;
     this.showMetadataForm.set(true);
   }
 
@@ -175,7 +210,7 @@ export class AssetDetailComponent implements OnInit {
     try { value = JSON.parse(this.newMetadataValue); } catch {}
     const payload: any = { metadata_id: this.newMetadataId, value };
     if (this.newMetadataTimestamp) {
-      payload.timestamp = new Date(this.newMetadataTimestamp).toISOString();
+      payload.timestamp = this.newMetadataTimestamp.toISOString();
     }
     this.assetService.addAssetMetadata(this.assetId, payload).subscribe({
       next: () => {
@@ -203,13 +238,13 @@ export class AssetDetailComponent implements OnInit {
     const payload: any = { metadata_id: field.metadata_id, value };
     const ts = this.fieldTimestampValues[field.metadata_id];
     if (ts) {
-      payload.timestamp = new Date(ts).toISOString();
+      payload.timestamp = ts.toISOString();
     }
     this.assetService.addAssetMetadata(this.assetId, payload).subscribe({
       next: () => {
         this.toast.success(`${field.metadata_name} updated`);
         this.fieldInputValues[field.metadata_id] = '';
-        this.fieldTimestampValues[field.metadata_id] = '';
+        this.fieldTimestampValues[field.metadata_id] = null;
         this.loadMetadata();
         this.assetService.loadAssetDetail(this.assetId, true);
         if (this.historyMetadataId() === field.metadata_id) {
@@ -281,7 +316,7 @@ export class AssetDetailComponent implements OnInit {
   startEditHistory(h: MetadataHistoryEntry): void {
     this.editingHistoryTimestamp.set(h.timestamp);
     this.editHistoryValue = typeof h.value === 'object' ? JSON.stringify(h.value) : String(h.value);
-    this.editHistoryTimestamp = this.toLocalDatetime(h.timestamp);
+    this.editHistoryTimestamp = new Date(h.timestamp);
   }
 
   cancelEditHistory(): void {
@@ -294,7 +329,7 @@ export class AssetDetailComponent implements OnInit {
     if (!metaId || !origTs) return;
     let value: any = this.editHistoryValue;
     try { value = JSON.parse(this.editHistoryValue); } catch {}
-    const newTs = this.editHistoryTimestamp ? new Date(this.editHistoryTimestamp).toISOString() : undefined;
+    const newTs = this.editHistoryTimestamp ? this.editHistoryTimestamp.toISOString() : undefined;
     this.assetService.updateAssetMetadataEntry(this.assetId, metaId, origTs, {
       value,
       timestamp: newTs,
@@ -323,12 +358,6 @@ export class AssetDetailComponent implements OnInit {
   }
 
   // ---- Helpers ----
-
-  toLocalDatetime(iso: string): string {
-    const d = new Date(iso);
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  }
 
   formatValue(value: any): string {
     if (value === null || value === undefined) return '-';

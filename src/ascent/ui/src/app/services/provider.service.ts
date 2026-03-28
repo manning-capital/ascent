@@ -12,7 +12,7 @@ export class ProviderService {
   providers = signal<ProviderListItem[]>([]);
   providerTypes = signal<TypeItem[]>([]);
   selectedProvider = signal<ProviderDetail | null>(null);
-  loading = signal(false);
+  loading = signal(true);
   saving = signal(false);
 
   private loadProviders$ = new Subject<void>();

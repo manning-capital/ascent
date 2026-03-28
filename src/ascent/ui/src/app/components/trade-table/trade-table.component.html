@@ -1,24 +1,24 @@
-<!-- Desktop Table -->
-<div class="hidden md:block overflow-x-auto">
-  <table class="w-full">
-    <thead>
-      <tr class="border-b border-edge text-left text-xs font-medium text-fg-muted uppercase tracking-wider">
-        <th class="px-4 py-3">Symbol</th>
-        @if (showStrategy()) {
-          <th class="px-4 py-3">Strategy</th>
-        }
-        <th class="px-4 py-3">Type</th>
-        <th class="px-4 py-3">Qty</th>
-        <th class="px-4 py-3">Entry Price</th>
-        <th class="px-4 py-3">Exit/Current</th>
-        <th class="px-4 py-3 text-right">P&L</th>
-        <th class="px-4 py-3 text-right">Status</th>
-      </tr>
-    </thead>
-    <tbody class="divide-y divide-edge-dim">
-      @for (trade of trades(); track trade.id) {
-        <tr class="hover:bg-fg/5 cursor-pointer transition-colors" (click)="navigateToTrade(trade.id)">
-          <td class="px-4 py-3">
+<div class="transition-opacity duration-200" [class.opacity-40]="loading()" [class.pointer-events-none]="loading()">
+  <!-- Desktop Table -->
+  <div class="hidden md:block">
+    <p-table [value]="trades()" [rowHover]="true" [tableStyle]="{'width': '100%'}">
+      <ng-template #header>
+        <tr>
+          <th>Symbol</th>
+          @if (showStrategy()) {
+            <th>Strategy</th>
+          }
+          <th>Type</th>
+          <th>Qty</th>
+          <th>Entry Price</th>
+          <th>Exit/Current</th>
+          <th class="text-right">P&L</th>
+          <th class="text-right">Status</th>
+        </tr>
+      </ng-template>
+      <ng-template #body let-trade>
+        <tr class="cursor-pointer" (click)="navigateToTrade(trade.id)">
+          <td>
             <div class="flex items-center gap-2">
               <span class="font-medium text-sm">{{ trade.display_symbol }}</span>
               @if (trade.is_paper) {
@@ -27,9 +27,9 @@
             </div>
           </td>
           @if (showStrategy()) {
-            <td class="px-4 py-3 text-sm text-fg-muted">{{ trade.strategy_name }}</td>
+            <td class="text-sm text-surface-500">{{ trade.strategy_name }}</td>
           }
-          <td class="px-4 py-3">
+          <td>
             <div class="flex gap-1">
               @for (tag of trade.tags; track tag) {
                 @if (tag !== 'PAPER') {
@@ -38,80 +38,82 @@
               }
             </div>
           </td>
-          <td class="px-4 py-3 text-sm">
+          <td class="text-sm">
             {{ getMainLeg(trade)?.quantity | number:'1.0-4' }}
           </td>
-          <td class="px-4 py-3 text-sm">
+          <td class="text-sm">
             {{ tradeService.formatCurrency(getMainLeg(trade)?.entry_price ?? null) }}
           </td>
-          <td class="px-4 py-3 text-sm">
+          <td class="text-sm">
             {{ tradeService.formatCurrency(getMainLeg(trade)?.exit_price ?? getMainLeg(trade)?.entry_price ?? null) }}
           </td>
-          <td class="px-4 py-3 text-sm text-right">
+          <td class="text-sm text-right">
             <span [class]="tradeService.getPnlClass(trade.total_realized_pnl)">
               {{ tradeService.formatCurrency(trade.total_realized_pnl) }}
             </span>
           </td>
-          <td class="px-4 py-3 text-right">
+          <td class="text-right">
             @if (trade.current_status) {
               <app-badge [label]="trade.current_status" variant="status"/>
             }
           </td>
         </tr>
-      } @empty {
+      </ng-template>
+      <ng-template #emptymessage>
         <tr>
-          <td [attr.colspan]="showStrategy() ? 8 : 7" class="px-4 py-12 text-center text-fg-faint">
-            No trades found.
+          <td [attr.colspan]="showStrategy() ? 8 : 7">
+            <app-empty-state title="No trades" icon="data"/>
           </td>
         </tr>
-      }
-    </tbody>
-  </table>
-</div>
+      </ng-template>
+    </p-table>
+  </div>
 
-<!-- Mobile Cards -->
-<div class="md:hidden flex flex-col gap-3">
-  @for (trade of trades(); track trade.id) {
-    <div class="rounded-xl border border-edge bg-surface/50 p-4 cursor-pointer hover:bg-elevated/50 transition-colors"
-         (click)="navigateToTrade(trade.id)">
-      <div class="flex items-center justify-between mb-2">
-        <span class="font-medium">{{ trade.display_symbol }}</span>
-        @if (trade.current_status) {
-          <app-badge [label]="trade.current_status" variant="status"/>
+  <!-- Mobile Cards -->
+  <div class="md:hidden flex flex-col gap-3">
+    @for (trade of trades(); track trade.id) {
+      <p-card styleClass="cursor-pointer hover:bg-emphasis transition-colors" (click)="navigateToTrade(trade.id)">
+        <div class="flex items-center justify-between mb-2">
+          <span class="font-medium">{{ trade.display_symbol }}</span>
+          @if (trade.current_status) {
+            <app-badge [label]="trade.current_status" variant="status"/>
+          }
+        </div>
+        <div class="flex items-center gap-2 mb-2">
+          @for (tag of trade.tags; track tag) {
+            <app-badge [label]="tag"/>
+          }
+        </div>
+        @if (showStrategy()) {
+          <p class="text-xs text-surface-500 mb-1">{{ trade.strategy_name }}</p>
         }
+        <app-stat-card label="P&L" [value]="tradeService.formatCurrency(trade.total_realized_pnl)" [valueClass]="tradeService.getPnlClass(trade.total_realized_pnl)" variant="flat" size="sm"/>
+      </p-card>
+    } @empty {
+      <app-empty-state title="No trades" icon="data"/>
+    }
+  </div>
+
+  <!-- Pagination -->
+  @if (totalPages() > 1) {
+    <div class="flex items-center justify-between mt-4 px-2">
+      <span class="text-xs text-surface-400">Page {{ page() }} of {{ totalPages() }}</span>
+      <div class="flex gap-1">
+        <p-button
+          [disabled]="page() <= 1"
+          (onClick)="onPageChange(page() - 1)"
+          severity="secondary"
+          [outlined]="true"
+          size="small"
+          label="Prev"/>
+        <p-button
+          [disabled]="page() >= totalPages()"
+          (onClick)="onPageChange(page() + 1)"
+          severity="secondary"
+          [outlined]="true"
+          size="small"
+          label="Next"/>
       </div>
-      <div class="flex items-center gap-2 mb-2">
-        @for (tag of trade.tags; track tag) {
-          <app-badge [label]="tag"/>
-        }
-      </div>
-      @if (showStrategy()) {
-        <p class="text-xs text-fg-muted mb-1">{{ trade.strategy_name }}</p>
-      }
-      <app-stat-card label="P&L" [value]="tradeService.formatCurrency(trade.total_realized_pnl)" [valueClass]="tradeService.getPnlClass(trade.total_realized_pnl)" variant="flat" size="sm"/>
     </div>
-  } @empty {
-    <div class="text-center text-fg-faint py-12">No trades found.</div>
   }
 </div>
-
-<!-- Pagination -->
-@if (totalPages() > 1) {
-  <div class="flex items-center justify-between mt-4 px-2">
-    <span class="text-xs text-fg-faint">Page {{ page() }} of {{ totalPages() }}</span>
-    <div class="flex gap-1">
-      <button
-        [disabled]="page() <= 1"
-        (click)="onPageChange(page() - 1)"
-        class="px-3 py-1 text-xs rounded-lg border border-edge hover:bg-fg/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
-        Prev
-      </button>
-      <button
-        [disabled]="page() >= totalPages()"
-        (click)="onPageChange(page() + 1)"
-        class="px-3 py-1 text-xs rounded-lg border border-edge hover:bg-fg/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">
-        Next
-      </button>
-    </div>
-  </div>
-}

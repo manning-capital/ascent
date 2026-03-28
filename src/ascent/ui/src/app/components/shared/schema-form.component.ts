@@ -1,5 +1,9 @@
 import { Component, input, output, signal, effect, EventEmitter } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Select } from 'primeng/select';
+import { ToggleSwitch } from 'primeng/toggleswitch';
+import { InputNumber } from 'primeng/inputnumber';
+import { InputText } from 'primeng/inputtext';
 import { JsonSchema, JsonSchemaProperty } from '../../models/strategy.model';
 
 interface FormField {
@@ -17,70 +21,58 @@ interface FormField {
 @Component({
   selector: 'app-schema-form',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, Select, ToggleSwitch, InputNumber, InputText],
   template: `
     <div class="space-y-4" [class.opacity-50]="readonly()" [class.pointer-events-none]="readonly()">
       @for (field of fields(); track field.key) {
         <div>
-          <label class="block text-xs font-medium text-fg-muted mb-1">
+          <label class="block text-xs font-medium text-surface-500 mb-1">
             {{ field.label }}
             @if (field.required) {
-              <span class="text-negative">*</span>
+              <span class="text-red-500">*</span>
             }
           </label>
 
           @if (field.type === 'select') {
-            <select
-              class="w-full rounded-lg border border-edge bg-elevated px-3 py-2 text-sm text-fg-muted cursor-not-allowed"
-              [class]="readonly() ? '' : '!text-fg !cursor-auto focus:outline-none focus:ring-1 focus:ring-info'"
+            <p-select
+              [options]="field.options ?? []"
               [ngModel]="values()[field.key]"
               (ngModelChange)="onFieldChange(field.key, $event)"
-              [disabled]="readonly()">
-              @for (opt of field.options; track opt) {
-                <option [value]="opt">{{ opt }}</option>
-              }
-            </select>
-          } @else if (field.type === 'boolean') {
-            <button
-              type="button"
-              class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
-              [class]="(values()[field.key] ? 'bg-info' : 'bg-elevated') + (readonly() ? ' cursor-not-allowed' : ' focus:outline-none focus:ring-1 focus:ring-info')"
               [disabled]="readonly()"
-              (click)="onFieldChange(field.key, !values()[field.key])">
-              <span
-                class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
-                [class]="values()[field.key] ? 'translate-x-6' : 'translate-x-1'">
-              </span>
-            </button>
-          } @else if (field.type === 'number') {
-            <input
-              type="number"
-              class="w-full rounded-lg border border-edge bg-elevated px-3 py-2 text-sm text-fg-muted cursor-not-allowed"
-              [class]="readonly() ? '' : '!text-fg !cursor-auto focus:outline-none focus:ring-1 focus:ring-info'"
+              placeholder="Select..."/>
+          } @else if (field.type === 'boolean') {
+            <p-toggleswitch
               [ngModel]="values()[field.key]"
               (ngModelChange)="onFieldChange(field.key, $event)"
-              [attr.min]="field.min"
-              [attr.max]="field.max"
-              [attr.step]="field.type === 'number' ? 'any' : null"
-              [readOnly]="readonly()"/>
+              [disabled]="readonly()"/>
+          } @else if (field.type === 'number') {
+            <p-inputNumber
+              [ngModel]="values()[field.key]"
+              (ngModelChange)="onFieldChange(field.key, $event)"
+              [min]="field.min"
+              [max]="field.max"
+              [minFractionDigits]="0"
+              [maxFractionDigits]="10"
+              [disabled]="readonly()"
+              mode="decimal"/>
           } @else {
             <input
               type="text"
-              class="w-full rounded-lg border border-edge bg-elevated px-3 py-2 text-sm text-fg-muted cursor-not-allowed"
-              [class]="readonly() ? '' : '!text-fg !cursor-auto focus:outline-none focus:ring-1 focus:ring-info'"
+              pInputText
+              class="w-full"
               [ngModel]="values()[field.key]"
               (ngModelChange)="onFieldChange(field.key, $event)"
               [readOnly]="readonly()"/>
           }
 
           @if (field.description) {
-            <p class="text-xs text-fg-faint mt-1">{{ field.description }}</p>
+            <p class="text-xs text-surface-400 mt-1">{{ field.description }}</p>
           }
         </div>
       }
 
       @if (fields().length === 0) {
-        <p class="text-sm text-fg-faint italic">No parameters defined.</p>
+        <p class="text-sm text-surface-400 italic">No parameters defined.</p>
       }
     </div>
   `,

@@ -1,0 +1,65 @@
+<div class="p-6 ">
+  <h1 class="text-2xl font-bold mb-6">Exchanges</h1>
+
+  @if (exchangeService.loading()) {
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      @for (_ of [1,2,3,4,5,6]; track $index) {
+        <p-card>
+          <div class="flex items-center justify-between mb-2">
+            <p-skeleton width="55%" height="1rem"/>
+            <p-skeleton shape="circle" size="0.625rem"/>
+          </div>
+          <p-skeleton width="80%" height="0.75rem" class="mb-4"/>
+          <div class="grid grid-cols-2 gap-3 mb-4">
+            @for (_ of [1,2]; track $index) {
+              <div class="text-center">
+                <p-skeleton width="60%" height="0.625rem" class="mb-1 mx-auto"/>
+                <p-skeleton width="40%" height="1.125rem" class="mx-auto"/>
+              </div>
+            }
+          </div>
+          <div class="flex items-center justify-between">
+            <p-skeleton width="40%" height="0.75rem"/>
+            <p-skeleton width="25%" height="0.75rem"/>
+          </div>
+        </p-card>
+      }
+    </div>
+  } @else {
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      @for (exchange of exchangeService.exchanges(); track exchange.id) {
+        <a [routerLink]="['/exchanges', exchange.id]" class="block no-underline">
+          <p-card styleClass="hover:bg-emphasis transition-colors cursor-pointer">
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="font-semibold truncate">{{ exchange.name }}</h3>
+              <span class="w-2.5 h-2.5 rounded-full shrink-0" [class]="exchange.is_active ? 'bg-green-500' : 'bg-surface-400'"></span>
+            </div>
+            @if (exchange.description) {
+              <p class="text-xs text-surface-400 mb-4 line-clamp-2">{{ exchange.description }}</p>
+            }
+
+            <div class="grid grid-cols-2 gap-3 mb-4">
+              <app-stat-card label="Type" [value]="exchange.exchange_type_name ?? '--'" variant="flat" size="sm" align="center"/>
+              <app-stat-card label="Provider" [value]="exchange.provider_name ?? 'None'" variant="flat" size="sm" align="center"/>
+            </div>
+
+            <div class="flex items-center justify-between text-xs text-surface-400">
+              @if (exchange.implementation_class) {
+                <span class="truncate font-mono" [title]="exchange.implementation_class">{{ exchange.implementation_class }}</span>
+              } @else {
+                <span class="text-surface-400">No implementation</span>
+              }
+              @if (exchange.created_at) {
+                <span class="shrink-0 ml-2">{{ exchange.created_at | date:'short' }}</span>
+              }
+            </div>
+          </p-card>
+        </a>
+      } @empty {
+        <div class="col-span-full">
+          <app-empty-state title="No exchanges" message="Configure an exchange to start trading." icon="inbox"/>
+        </div>
+      }
+    </div>
+  }
+</div>

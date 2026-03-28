@@ -1,5 +1,5 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DatePipe, JsonPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { FeedService } from '../../../services/feed.service';
@@ -8,12 +8,20 @@ import { ProviderService } from '../../../services/provider.service';
 import { ToastService } from '../../../services/toast.service';
 import { FeedRunListItem, PartitionDataResponse } from '../../../models/feed.model';
 import { UniverseItem, UniverseItemCreate } from '../../../models/asset.model';
-import { LoadingSpinnerComponent } from '../../shared/loading-spinner.component';
-import { PanelTabsComponent } from '../../shared/panel-tabs.component';
+import { Tabs, TabList, Tab } from 'primeng/tabs';
 import { SchemaFormComponent } from '../../shared/schema-form.component';
-import { SplitPaneComponent } from '../../shared/split-pane.component';
-import { RunDetailCardComponent, RunDetailField } from '../../shared/run-detail-card.component';
+import { Splitter } from 'primeng/splitter';
 import { PartitionDataTableComponent } from '../../shared/partition-data-table.component';
+import { Select } from 'primeng/select';
+import { TableModule } from 'primeng/table';
+import { Tag } from 'primeng/tag';
+import { Paginator } from 'primeng/paginator';
+import { Card } from 'primeng/card';
+import { SelectButton } from 'primeng/selectbutton';
+import { Button } from 'primeng/button';
+import { Skeleton } from 'primeng/skeleton';
+import { EmptyStateComponent } from '../../shared/empty-state.component';
+import { UniverseTableComponent } from '../../shared/universe-table.component';
 
 @Component({
   selector: 'app-feed-detail',
@@ -23,17 +31,26 @@ import { PartitionDataTableComponent } from '../../shared/partition-data-table.c
     DatePipe,
     JsonPipe,
     FormsModule,
-    LoadingSpinnerComponent,
-    PanelTabsComponent,
+    Tabs, TabList, Tab,
     SchemaFormComponent,
-    SplitPaneComponent,
-    RunDetailCardComponent,
+    Splitter,
     PartitionDataTableComponent,
+    Select,
+    TableModule,
+    Tag,
+    Paginator,
+    Card,
+    SelectButton,
+    Button,
+    Skeleton,
+    EmptyStateComponent,
+    UniverseTableComponent,
   ],
   templateUrl: './feed-detail.component.html',
 })
 export class FeedDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
+  private router = inject(Router);
   private toast = inject(ToastService);
   feedService = inject(FeedService);
   assetService = inject(AssetService);
@@ -48,18 +65,16 @@ export class FeedDetailComponent implements OnInit {
   totalRunPages = signal(0);
   runPage = signal(1);
   selectedRun = signal<FeedRunListItem | null>(null);
+  runsLoading = signal(false);
+  skeletonRows = Array.from({ length: 8 }, (_, i) => i);
 
   // Partition data state
   partitionData = signal<Record<string, any>[]>([]);
   partitionDataTotal = signal(0);
   partitionDataPage = signal(1);
+  partitionDataPageSize = signal(25);
   partitionDataTotalPages = signal(0);
   partitionDataLoading = signal(false);
-
-  extraDetailFields: RunDetailField[] = [
-    { label: 'Records Fetched', key: 'records_fetched' },
-    { label: 'Partition Key', key: 'partition_key' },
-  ];
 
   initialRunId: string | null = null;
   feedId = '';
@@ -73,14 +88,33 @@ export class FeedDetailComponent implements OnInit {
   uniToAssetId = '';
   uniGroupId = '';
 
+  universeAddModeOptions = [
+    { label: 'Individual Pair', value: 'individual' },
+    { label: 'Asset Group', value: 'group' },
+  ];
+
+  // Computed options for p-select dropdowns
+  assetOptions = computed(() =>
+    this.assetService.assets().map(a => ({ label: a.symbol || a.name, value: a.id }))
+  );
+  groupOptions = computed(() =>
+    this.assetService.assetGroups().map(g => ({ label: `Group (${g.members.length} members)`, value: g.id }))
+  );
+
   ngOnInit(): void {
     this.route.paramMap.subscribe(params => {
       const id = params.get('id')!;
       if (id === this.feedId) return;
       this.feedId = id;
 
-      // Reset all state for the new feed
-      this.activeTab.set('Runs');
+      // Restore tab from query param
+      const qp = this.route.snapshot.queryParamMap;
+      const tab = qp.get('tab');
+      if (tab && this.tabs.includes(tab)) {
+        this.activeTab.set(tab);
+      } else {
+        this.activeTab.set('Runs');
+      }
       this.runs.set([]);
       this.totalRuns.set(0);
       this.totalRunPages.set(0);
@@ -102,22 +136,40 @@ export class FeedDetailComponent implements OnInit {
     });
   }
 
+  onTabChange(tab: string): void {
+    this.activeTab.set(tab);
+    this.updateQueryParams({ tab });
+  }
+
+  private updateQueryParams(params: Record<string, string | null>): void {
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: params,
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
+  }
+
   loadRuns(): void {
+    this.runsLoading.set(true);
     this.feedService.loadFeedRuns(this.feedId, this.runPage(), 20).subscribe({
       next: (res) => {
         this.runs.set(res.items);
         this.totalRuns.set(res.total);
         this.totalRunPages.set(res.total_pages);
+        this.runsLoading.set(false);
         if (this.initialRunId && !this.selectedRun()) {
           const match = res.items.find(r => r.id === this.initialRunId);
           if (match) this.selectRun(match);
         }
       },
+      error: () => this.runsLoading.set(false),
     });
   }
 
   selectRun(run: FeedRunListItem): void {
     this.selectedRun.set(run);
+    this.updateQueryParams({ run: run.id });
     // Load partition data if run has a partition
     if (run.partition_id) {
       this.partitionDataPage.set(1);
@@ -131,7 +183,7 @@ export class FeedDetailComponent implements OnInit {
 
   loadPartitionData(partitionId: string): void {
     this.partitionDataLoading.set(true);
-    this.feedService.loadPartitionData(this.feedId, partitionId, this.partitionDataPage(), 50).subscribe({
+    this.feedService.loadPartitionData(this.feedId, partitionId, this.partitionDataPage(), this.partitionDataPageSize()).subscribe({
       next: (res) => {
         this.partitionData.set(res.items);
         this.partitionDataTotal.set(res.total);
@@ -158,6 +210,11 @@ export class FeedDetailComponent implements OnInit {
     }
   }
 
+  onPartitionDataPageSizeChange(size: number): void {
+    this.partitionDataPageSize.set(size);
+    this.partitionDataPage.set(1);
+  }
+
   onRunPageChange(page: number): void {
     this.runPage.set(page);
     this.loadRuns();
@@ -173,23 +230,13 @@ export class FeedDetailComponent implements OnInit {
     return `Every ${Math.round(interval / 86400)}d`;
   }
 
-  statusClass(status: string): string {
+  statusSeverity(status: string): 'success' | 'danger' | 'warn' | 'secondary' | 'info' {
     switch (status) {
-      case 'COMPLETED': return 'text-positive';
-      case 'FAILED': return 'text-negative';
-      case 'RUNNING': return 'text-warning';
-      case 'PENDING': return 'text-fg-muted';
-      default: return '';
-    }
-  }
-
-  statusDotClass(status: string): string {
-    switch (status) {
-      case 'COMPLETED': return 'bg-positive';
-      case 'FAILED': return 'bg-negative';
-      case 'RUNNING': return 'bg-warning animate-pulse';
-      case 'PENDING': return 'bg-fg-faint';
-      default: return 'bg-fg-faint';
+      case 'COMPLETED': return 'success';
+      case 'FAILED': return 'danger';
+      case 'RUNNING': return 'warn';
+      case 'PENDING': return 'secondary';
+      default: return 'info';
     }
   }
 
@@ -238,11 +285,11 @@ export class FeedDetailComponent implements OnInit {
     };
     this.feedService.addFeedUniverseItem(this.feedId, data).subscribe({
       next: () => {
-        this.toast.success('Asset added to universe');
+        this.toast.success('Pair added to universe');
         this.showUniverseForm.set(false);
         this.loadUniverse();
       },
-      error: () => this.toast.error('Failed to add asset to universe'),
+      error: () => this.toast.error('Failed to add pair to universe'),
     });
   }
 
@@ -267,12 +314,12 @@ export class FeedDetailComponent implements OnInit {
         next: () => {
           completed++;
           if (completed === total) {
-            this.toast.success(`Added ${total} assets from group`);
+            this.toast.success(`Asset group linked (${total} pairs)`);
             this.showUniverseForm.set(false);
             this.loadUniverse();
           }
         },
-        error: () => this.toast.error('Failed to add group member'),
+        error: () => this.toast.error('Failed to link asset group'),
       });
     }
   }
@@ -282,10 +329,28 @@ export class FeedDetailComponent implements OnInit {
       this.feedId, item.provider_id, item.from_asset_id, item.to_asset_id
     ).subscribe({
       next: () => {
-        this.toast.success('Asset removed from universe');
+        this.toast.success('Pair removed from universe');
         this.loadUniverse();
       },
-      error: () => this.toast.error('Failed to remove asset'),
+      error: () => this.toast.error('Failed to remove pair'),
     });
+  }
+
+  removeUniverseGroup(items: UniverseItem[]): void {
+    let completed = 0;
+    for (const item of items) {
+      this.feedService.removeFeedUniverseItem(
+        this.feedId, item.provider_id, item.from_asset_id, item.to_asset_id
+      ).subscribe({
+        next: () => {
+          completed++;
+          if (completed === items.length) {
+            this.toast.success('Asset group removed from universe');
+            this.loadUniverse();
+          }
+        },
+        error: () => this.toast.error('Failed to remove asset group'),
+      });
+    }
   }
 }
