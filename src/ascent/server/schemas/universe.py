@@ -20,5 +20,5 @@ class UniverseItemSchema(BaseModel):
     from_asset_symbol: str | None = None
     to_asset_id: uuid.UUID
     to_asset_symbol: str | None = None
-    provider_asset_group_id: uuid.UUID | None = None
+    provider_asset_group_id: uuid.UUID
     order: int

@@ -152,7 +152,7 @@ export interface UniverseItem {
   from_asset_symbol: string | null;
   to_asset_id: string;
   to_asset_symbol: string | null;
-  provider_asset_group_id: string | null;
+  provider_asset_group_id: string;
   order: number;
 }
 

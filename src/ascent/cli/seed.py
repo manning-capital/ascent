@@ -49,7 +49,6 @@ def run(
         OrderType,
         Portfolio,
         Provider,
-        ProviderAssetAttribute,
         ProviderAssetGroup,
         ProviderAssetGroupAttribute,
         ProviderAssetGroupMember,
@@ -614,7 +613,30 @@ def run(
 
         random.seed(42)
 
-        # --- Asset Groups & Members ---
+        # --- Single-member Asset Groups (one per crypto/USD pair) ---
+        crypto_assets = [
+            btc, eth, sol, ada, xrp, doge, avax, link, dot, matic,
+            atom, uni, apt, arb, op, near, ftm, aave, mkr, snx,
+            crv, ldo, inj, sui, sei, tia, jup, pendle,
+        ]
+        single_member_groups: dict = {}  # keyed by asset.id
+        for asset in crypto_assets:
+            grp = ProviderAssetGroup()
+            db.add(grp)
+            db.flush()
+            db.add(
+                ProviderAssetGroupMember(
+                    provider_asset_group_id=grp.id,
+                    provider_id=provider.id,
+                    from_asset_id=asset.id,
+                    to_asset_id=usd.id,
+                    order=1,
+                )
+            )
+            single_member_groups[asset.id] = grp
+        db.flush()
+
+        # --- Multi-member Asset Groups ---
         # Pairs: BTC/ETH, SOL/AVAX, LINK/DOT, ADA/XRP, UNI/AAVE
         pairs_definitions = [
             ("BTC-ETH", [(btc, usd), (eth, usd)]),
@@ -679,7 +701,7 @@ def run(
             basket_groups.append(grp)
         db.flush()
 
-        all_groups = pair_groups + basket_groups
+        all_groups = list(single_member_groups.values()) + pair_groups + basket_groups
 
         # --- Feeds ---
         # Build a realistic DAG:
@@ -724,7 +746,7 @@ def run(
             feed_ref="ascent.feeds.examples.market:market_data",
             parameters={"provider_name": "kraken", "attributes": ["close"], "lookback_minutes": 5},
             parameter_schema=market_data.parameter_schema(),
-            output_table="provider_asset_attribute",
+            output_table="provider_asset_group_attribute",
             schedule={"interval": 60, "offset": -1.0, "start_date": "2024-01-01T00:00:00+00:00"},
             channel="ascent.feed.market_data",
             is_active=True,
@@ -735,7 +757,7 @@ def run(
             description="Snapshots top-of-book bid/ask every 30 seconds.",
             feed_ref="ascent.feeds.examples.orderbook:orderbook",
             parameters={"depth": 10, "provider_name": "kraken"},
-            output_table="provider_asset_attribute",
+            output_table="provider_asset_group_attribute",
             schedule={"interval": 30, "start_date": "2024-01-01T00:00:00+00:00"},
             channel="ascent.feed.orderbook",
             is_active=True,
@@ -746,7 +768,7 @@ def run(
             description="Aggregated social sentiment scores every 5 minutes.",
             feed_ref="ascent.feeds.examples.sentiment:sentiment",
             parameters={"sources": ["twitter", "reddit"]},
-            output_table="provider_asset_attribute",
+            output_table="provider_asset_group_attribute",
             schedule={"interval": 300, "start_date": "2024-01-01T00:00:00+00:00"},
             channel="ascent.feed.sentiment",
             is_active=True,
@@ -785,7 +807,7 @@ def run(
             description="Perpetual swap funding rates computed externally.",
             feed_ref="ascent.feeds.examples.funding:funding_rates",
             parameters={"exchanges": ["kraken", "binance"]},
-            output_table="provider_asset_attribute",
+            output_table="provider_asset_group_attribute",
             schedule=None,
             channel="ascent.feed.funding_rates",
             is_active=True,
@@ -800,7 +822,7 @@ def run(
             description="Computes bid-ask spread metrics from order book and market data.",
             feed_ref="ascent.feeds.examples.spread:spread_analytics",
             parameters={"window": 20},
-            output_table="provider_asset_attribute",
+            output_table="provider_asset_group_attribute",
             schedule=None,
             channel="ascent.feed.spread",
             is_active=True,
@@ -811,7 +833,7 @@ def run(
             description="Normalised sentiment z-score derived from raw sentiment feed.",
             feed_ref="ascent.feeds.examples.sentiment:sentiment_score",
             parameters={"lookback_hours": 24},
-            output_table="provider_asset_attribute",
+            output_table="provider_asset_group_attribute",
             schedule=None,
             channel="ascent.feed.sentiment_score",
             is_active=True,
@@ -932,115 +954,19 @@ def run(
                 feed_runs_by_feed[feed_obj.id].append(run)
         db.flush()
 
-        # --- Provider Asset Attribute data for MATERIALIZED partitions ---
-        # Populate actual rows in the output table so the partition data API has data to show.
-        # Only for scheduled feeds whose output_table is 'provider_asset_attribute'.
+        # --- Provider Asset Group Attribute data for MATERIALIZED partitions ---
+        # All attribute data now goes through ProviderAssetGroupAttribute.
+        # Single-member groups represent individual asset pairs.
         ref_prices_seed = {
-            btc.id: 67500.0,
-            eth.id: 3400.0,
-            sol.id: 145.0,
-            ada.id: 0.45,
-            xrp.id: 0.52,
-            doge.id: 0.12,
-            avax.id: 35.0,
-            link.id: 14.0,
-            dot.id: 7.20,
-            matic.id: 0.58,
-            atom.id: 9.50,
-            uni.id: 7.80,
-            apt.id: 8.90,
-            arb.id: 1.15,
-            op.id: 1.85,
-            near.id: 5.20,
-            ftm.id: 0.42,
-            aave.id: 95.0,
-            mkr.id: 1450.0,
-            snx.id: 2.80,
-            crv.id: 0.55,
-            ldo.id: 2.10,
-            inj.id: 22.0,
-            sui.id: 1.35,
-            sei.id: 0.38,
-            tia.id: 8.50,
-            jup.id: 0.85,
-            pendle.id: 4.60,
+            btc.id: 67500.0, eth.id: 3400.0, sol.id: 145.0, ada.id: 0.45,
+            xrp.id: 0.52, doge.id: 0.12, avax.id: 35.0, link.id: 14.0,
+            dot.id: 7.20, matic.id: 0.58, atom.id: 9.50, uni.id: 7.80,
+            apt.id: 8.90, arb.id: 1.15, op.id: 1.85, near.id: 5.20,
+            ftm.id: 0.42, aave.id: 95.0, mkr.id: 1450.0, snx.id: 2.80,
+            crv.id: 0.55, ldo.id: 2.10, inj.id: 22.0, sui.id: 1.35,
+            sei.id: 0.38, tia.id: 8.50, jup.id: 0.85, pendle.id: 4.60,
         }
-        crypto_assets = [
-            btc,
-            eth,
-            sol,
-            ada,
-            xrp,
-            doge,
-            avax,
-            link,
-            dot,
-            matic,
-            atom,
-            uni,
-            apt,
-            arb,
-            op,
-            near,
-            ftm,
-            aave,
-            mkr,
-            snx,
-            crv,
-            ldo,
-            inj,
-            sui,
-            sei,
-            tia,
-            jup,
-            pendle,
-        ]
-        paa_count = 0
-        for (feed_id_key, p_key), partition_obj in partition_cache.items():
-            if partition_obj.status != "MATERIALIZED":
-                continue
-            # Only populate for feeds with output_table == 'provider_asset_attribute'
-            feed_for_partition = next((f for f in all_feeds if f.id == feed_id_key), None)
-            if (
-                feed_for_partition is None
-                or feed_for_partition.output_table != "provider_asset_attribute"
-            ):
-                continue
-            # One timestamp per partition — each asset gets a row per attribute.
-            window_secs = (partition_obj.window_end - partition_obj.window_start).total_seconds()
-            ts = partition_obj.window_start + datetime.timedelta(
-                seconds=window_secs * 0.5 + random.uniform(-0.5, 0.5)
-            )
-            for asset in crypto_assets:
-                base = ref_prices_seed.get(asset.id, 100.0)
-                for attr in attributes:
-                    if attr.name == "close":
-                        value = round(base * (1 + random.uniform(-0.02, 0.02)), 4)
-                    elif attr.name == "spread":
-                        value = round(base * random.uniform(0.0005, 0.003), 4)
-                    elif attr.name == "z_score":
-                        value = round(random.uniform(-3.0, 3.0), 4)
-                    elif attr.name == "rsi":
-                        value = round(random.uniform(20.0, 80.0), 4)
-                    else:
-                        value = round(random.uniform(0, 100), 4)
-                    db.add(
-                        ProviderAssetAttribute(
-                            timestamp=ts,
-                            provider_id=provider.id,
-                            from_asset_id=asset.id,
-                            to_asset_id=usd.id,
-                            attribute_id=attr.id,
-                            attribute_value=value,
-                        )
-                    )
-                    paa_count += 1
-        db.flush()
-
-        # --- Provider Asset Group Attribute data for MATERIALIZED group-feed partitions ---
-        # Populate rows for feeds whose output_table is 'provider_asset_group_attribute'.
         paga_count = 0
-        group_feed_attrs = [attr_spread, attr_zscore]  # group-level attributes
         for (feed_id_key, p_key), partition_obj in partition_cache.items():
             if partition_obj.status != "MATERIALIZED":
                 continue
@@ -1055,11 +981,21 @@ def run(
                 seconds=window_secs * 0.5 + random.uniform(-0.5, 0.5)
             )
             for grp in all_groups:
-                for attr in group_feed_attrs:
-                    if attr.name == "spread":
+                for attr in attributes:
+                    if attr.name == "close":
+                        # Use ref price for single-member groups, random for multi-member
+                        base = 100.0
+                        for asset_id, smg in single_member_groups.items():
+                            if smg.id == grp.id:
+                                base = ref_prices_seed.get(asset_id, 100.0)
+                                break
+                        value = round(base * (1 + random.uniform(-0.02, 0.02)), 4)
+                    elif attr.name == "spread":
                         value = round(random.uniform(-500, 500), 4)
                     elif attr.name == "z_score":
                         value = round(random.uniform(-3.0, 3.0), 4)
+                    elif attr.name == "rsi":
+                        value = round(random.uniform(20.0, 80.0), 4)
                     else:
                         value = round(random.uniform(0, 100), 4)
                     db.add(
@@ -1518,12 +1454,14 @@ def run(
                 )
                 db.add(tp)
 
-            # Data series reference
+            # Data series reference — use the first leg's single-member group
+            ds_group = single_member_groups[pairs[0][0].id]
             ds = TradeDataSeries(
                 trade_id=trade.id,
                 attribute_id=attr_close.id,
                 label="Close Price",
-                data_source="ASSET_ATTRIBUTE",
+                data_source="GROUP_ATTRIBUTE",
+                provider_asset_group_id=ds_group.id,
             )
             db.add(ds)
 
@@ -1685,10 +1623,10 @@ def run(
         )
         print(f"  {feed_count} feeds, {feed_run_count} feed runs, {partition_count} partitions")
         print(
-            f"  {len(all_groups)} asset groups ({len(pair_groups)} pairs, {len(basket_groups)} baskets)"
+            f"  {len(all_groups)} asset groups ({len(single_member_groups)} single-member, {len(pair_groups)} pairs, {len(basket_groups)} baskets)"
         )
         print(
-            f"  {paa_count} provider_asset_attribute rows, {paga_count} provider_asset_group_attribute rows"
+            f"  {paga_count} provider_asset_group_attribute rows"
         )
         print(
             f"  {len(strategy_objs)} strategies, {strat_run_count} strategy runs, {trade_count} trades"

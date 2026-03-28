@@ -10,8 +10,6 @@ Table mapping:
 =========================  =====================================
 Schema                     DB Table
 =========================  =====================================
-AssetAttributes            provider_asset_attribute
-AssetPeriodAttributes      provider_asset_period_attribute
 GroupAttributes            provider_asset_group_attribute
 GroupPeriodAttributes      provider_asset_group_period_attribute
 =========================  =====================================
@@ -26,42 +24,6 @@ class FeedOutput(pa.DataFrameModel):
 
     class Config:
         strict = True
-
-
-# ---------------------------------------------------------------------------
-# Asset-level (per provider + asset pair)
-# ---------------------------------------------------------------------------
-
-
-class AssetAttributes(FeedOutput):
-    """Maps to ``ProviderAssetAttribute`` table."""
-
-    timestamp: Series[pa.DateTime] = pa.Field(description="Observation timestamp")
-    provider_id: Series[int] = pa.Field(ge=1)
-    from_asset_id: Series[int] = pa.Field(ge=1)
-    to_asset_id: Series[int] = pa.Field(ge=1)
-    attribute_id: Series[int] = pa.Field(ge=1)
-    attribute_value: Series[float] = pa.Field()
-
-    class Config:
-        strict = True
-        name = "provider_asset_attribute"
-
-
-class AssetPeriodAttributes(FeedOutput):
-    """Maps to ``ProviderAssetPeriodAttribute`` table."""
-
-    timestamp: Series[pa.DateTime] = pa.Field()
-    provider_id: Series[int] = pa.Field(ge=1)
-    from_asset_id: Series[int] = pa.Field(ge=1)
-    to_asset_id: Series[int] = pa.Field(ge=1)
-    period_id: Series[int] = pa.Field(ge=1)
-    attribute_id: Series[int] = pa.Field(ge=1)
-    attribute_value: Series[float] = pa.Field()
-
-    class Config:
-        strict = True
-        name = "provider_asset_period_attribute"
 
 
 # ---------------------------------------------------------------------------

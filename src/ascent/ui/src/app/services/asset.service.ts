@@ -26,7 +26,7 @@ export class AssetService {
   private loadAssets$ = new Subject<void>();
   private loadTypes$ = new Subject<void>();
   private loadLinks$ = new Subject<Record<string, string> | undefined>();
-  private loadGroups$ = new Subject<void>();
+  private loadGroups$ = new Subject<Record<string, string> | undefined>();
   private loadDetail$ = new Subject<{ assetId: string; silent: boolean }>();
   private loadMetadataTypes$ = new Subject<void>();
 
@@ -64,8 +64,8 @@ export class AssetService {
     });
 
     this.loadGroups$.pipe(
-      switchMap(() =>
-        this.api.get<AssetGroup[]>('/asset-groups').pipe(
+      switchMap(params =>
+        this.api.get<AssetGroup[]>('/asset-groups', params).pipe(
           catchError(() => EMPTY)
         )
       ),
@@ -108,8 +108,8 @@ export class AssetService {
     this.loadLinks$.next(params);
   }
 
-  loadAssetGroups(): void {
-    this.loadGroups$.next();
+  loadAssetGroups(params?: Record<string, string>): void {
+    this.loadGroups$.next(params);
   }
 
   loadAssetDetail(assetId: string, silent = false): void {

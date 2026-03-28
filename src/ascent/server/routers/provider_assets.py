@@ -79,8 +79,11 @@ def create_provider_asset_metadata(
 
 
 @router.get("/asset-groups", response_model=list[AssetGroupSchema])
-def list_asset_groups(db: Session = Depends(get_db)):
-    return provider_asset_service.get_asset_groups(db)
+def list_asset_groups(
+    min_members: int | None = Query(None, ge=1),
+    db: Session = Depends(get_db),
+):
+    return provider_asset_service.get_asset_groups(db, min_members=min_members)
 
 
 @router.get("/asset-groups/{group_id}", response_model=AssetGroupSchema)

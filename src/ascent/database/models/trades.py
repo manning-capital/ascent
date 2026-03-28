@@ -147,14 +147,14 @@ class TradeLeg(Base):
         Uuid,
         ForeignKey("asset.id"),
         nullable=False,
-        comment="The identifier of the from asset (base asset). Matches the ProviderAssetAttribute convention.",
+        comment="The identifier of the from asset (base asset). Matches the ProviderAssetGroupMember convention.",
     )
     from_asset: Mapped["Asset"] = relationship("Asset", foreign_keys=[from_asset_id])
     to_asset_id: Mapped[uuid.UUID] = mapped_column(
         Uuid,
         ForeignKey("asset.id"),
         nullable=False,
-        comment="The identifier of the to asset (quote asset). Matches the ProviderAssetAttribute convention.",
+        comment="The identifier of the to asset (quote asset). Matches the ProviderAssetGroupMember convention.",
     )
     to_asset: Mapped["Asset"] = relationship("Asset", foreign_keys=[to_asset_id])
     direction: Mapped[str] = mapped_column(

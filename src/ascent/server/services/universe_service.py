@@ -9,6 +9,7 @@ from ascent.database.models import (
 from ascent.database.models.feeds import FeedAssetScope
 from ascent.server.exceptions import NotFoundError
 from ascent.server.schemas.universe import UniverseItemCreate, UniverseItemSchema
+from ascent.server.services.provider_asset_service import get_or_create_single_member_group
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -28,6 +29,16 @@ def _build_item(scope) -> UniverseItemSchema:
         provider_asset_group_id=scope.provider_asset_group_id,
         order=scope.order,
     )
+
+
+def _resolve_group_id(db: Session, data: UniverseItemCreate) -> uuid.UUID:
+    """Return the group ID from the request, or auto-create a single-member group."""
+    if data.provider_asset_group_id is not None:
+        return data.provider_asset_group_id
+    group = get_or_create_single_member_group(
+        db, data.provider_id, data.from_asset_id, data.to_asset_id
+    )
+    return group.id
 
 
 # ---------------------------------------------------------------------------
@@ -54,12 +65,13 @@ def get_strategy_universe(db: Session, strategy_id: uuid.UUID) -> list[UniverseI
 def add_strategy_universe_item(
     db: Session, strategy_id: uuid.UUID, data: UniverseItemCreate
 ) -> StrategyAssetScope:
+    group_id = _resolve_group_id(db, data)
     scope = StrategyAssetScope(
         strategy_id=strategy_id,
         provider_id=data.provider_id,
         from_asset_id=data.from_asset_id,
         to_asset_id=data.to_asset_id,
-        provider_asset_group_id=data.provider_asset_group_id,
+        provider_asset_group_id=group_id,
         order=data.order,
     )
     db.add(scope)
@@ -109,12 +121,13 @@ def get_feed_universe(db: Session, feed_id: uuid.UUID) -> list[UniverseItemSchem
 def add_feed_universe_item(
     db: Session, feed_id: uuid.UUID, data: UniverseItemCreate
 ) -> FeedAssetScope:
+    group_id = _resolve_group_id(db, data)
     scope = FeedAssetScope(
         feed_id=feed_id,
         provider_id=data.provider_id,
         from_asset_id=data.from_asset_id,
         to_asset_id=data.to_asset_id,
-        provider_asset_group_id=data.provider_asset_group_id,
+        provider_asset_group_id=group_id,
         order=data.order,
     )
     db.add(scope)

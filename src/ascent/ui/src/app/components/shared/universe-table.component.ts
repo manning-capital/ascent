@@ -21,6 +21,12 @@ interface UniverseRow {
   selector: 'app-universe-table',
   standalone: true,
   imports: [RouterLink, TableModule, Button, EmptyStateComponent],
+  styles: [`
+    :host ::ng-deep .p-datatable {
+      border-radius: 0.5rem;
+      overflow: hidden;
+    }
+  `],
   template: `
     <p-table [value]="rows" [paginator]="true" [rows]="pageSize" [showCurrentPageReport]="true"
              currentPageReportTemplate="{first}–{last} of {totalRecords}" [rowsPerPageOptions]="[5, 10, 25]">
@@ -82,38 +88,25 @@ export class UniverseTableComponent {
   pageSize = 10;
 
   get rows(): UniverseRow[] {
+    // Group items by their provider_asset_group_id
     const groupMap = new Map<string, UniverseItem[]>();
-    const individuals: UniverseItem[] = [];
 
     for (const item of this.items) {
-      if (item.provider_asset_group_id) {
-        const existing = groupMap.get(item.provider_asset_group_id) || [];
-        existing.push(item);
-        groupMap.set(item.provider_asset_group_id, existing);
-      } else {
-        individuals.push(item);
-      }
+      const existing = groupMap.get(item.provider_asset_group_id) || [];
+      existing.push(item);
+      groupMap.set(item.provider_asset_group_id, existing);
     }
 
     const rows: UniverseRow[] = [];
 
-    // Groups first
     for (const [groupId, items] of groupMap) {
+      const sorted = items.sort((a, b) => a.order - b.order);
+      const isMultiMember = sorted.length > 1;
       rows.push({
-        items: items.sort((a, b) => a.order - b.order),
-        isGroup: true,
-        groupId,
-        memberCount: items.length,
-      });
-    }
-
-    // Individual pairs
-    for (const item of individuals) {
-      rows.push({
-        items: [item],
-        isGroup: false,
-        groupId: null,
-        memberCount: 1,
+        items: sorted,
+        isGroup: isMultiMember,
+        groupId: groupId,
+        memberCount: sorted.length,
       });
     }
 

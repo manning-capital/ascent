@@ -137,11 +137,61 @@ def delete_provider_asset_link(db: Session, provider_id: uuid.UUID, asset_id: uu
 
 
 # ---------------------------------------------------------------------------
+# Single-member Group Helper
+# ---------------------------------------------------------------------------
+
+
+def get_or_create_single_member_group(
+    db: Session,
+    provider_id: uuid.UUID,
+    from_asset_id: uuid.UUID,
+    to_asset_id: uuid.UUID,
+) -> ProviderAssetGroup:
+    """Find or create a single-member ``ProviderAssetGroup`` for the given pair."""
+    stmt = (
+        select(ProviderAssetGroup)
+        .join(ProviderAssetGroupMember)
+        .where(
+            ProviderAssetGroupMember.provider_id == provider_id,
+            ProviderAssetGroupMember.from_asset_id == from_asset_id,
+            ProviderAssetGroupMember.to_asset_id == to_asset_id,
+        )
+        .where(
+            ~ProviderAssetGroup.id.in_(
+                select(ProviderAssetGroupMember.provider_asset_group_id)
+                .group_by(ProviderAssetGroupMember.provider_asset_group_id)
+                .having(func.count() > 1)
+            )
+        )
+    )
+    group = db.scalar(stmt)
+    if group:
+        return group
+
+    group = ProviderAssetGroup()
+    db.add(group)
+    db.flush()
+    db.add(
+        ProviderAssetGroupMember(
+            provider_asset_group_id=group.id,
+            provider_id=provider_id,
+            from_asset_id=from_asset_id,
+            to_asset_id=to_asset_id,
+            order=1,
+        )
+    )
+    db.flush()
+    return group
+
+
+# ---------------------------------------------------------------------------
 # Asset Groups
 # ---------------------------------------------------------------------------
 
 
-def get_asset_groups(db: Session) -> list[AssetGroupSchema]:
+def get_asset_groups(
+    db: Session, min_members: int | None = None
+) -> list[AssetGroupSchema]:
     query = (
         select(ProviderAssetGroup)
         .options(
@@ -151,6 +201,14 @@ def get_asset_groups(db: Session) -> list[AssetGroupSchema]:
         )
         .order_by(ProviderAssetGroup.created_at.desc())
     )
+    if min_members is not None:
+        query = query.where(
+            ProviderAssetGroup.id.in_(
+                select(ProviderAssetGroupMember.provider_asset_group_id)
+                .group_by(ProviderAssetGroupMember.provider_asset_group_id)
+                .having(func.count() >= min_members)
+            )
+        )
     groups = db.execute(query).unique().scalars().all()
     return [_build_group_schema(g) for g in groups]
 

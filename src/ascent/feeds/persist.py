@@ -48,7 +48,7 @@ def persist(feed_ref: Feed) -> Callable[[Callable], Persist]:
     Usage::
 
         @persist(market_data)
-        def archive_prices(data: DataFrame[AssetAttributes], db: Session) -> None:
+        def archive_prices(data: DataFrame[GroupAttributes], db: Session) -> None:
             ...
     """
 
