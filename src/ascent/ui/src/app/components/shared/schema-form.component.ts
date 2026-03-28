@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { Select } from 'primeng/select';
 import { ToggleSwitch } from 'primeng/toggleswitch';
 import { InputNumber } from 'primeng/inputnumber';
+import { InputText } from 'primeng/inputtext';
 import { JsonSchema, JsonSchemaProperty } from '../../models/strategy.model';
 
 interface FormField {
@@ -20,15 +21,15 @@ interface FormField {
 @Component({
   selector: 'app-schema-form',
   standalone: true,
-  imports: [FormsModule, Select, ToggleSwitch, InputNumber],
+  imports: [FormsModule, Select, ToggleSwitch, InputNumber, InputText],
   template: `
     <div class="space-y-4" [class.opacity-50]="readonly()" [class.pointer-events-none]="readonly()">
       @for (field of fields(); track field.key) {
         <div>
-          <label class="block text-xs font-medium text-fg-muted mb-1">
+          <label class="block text-xs font-medium text-surface-500 mb-1">
             {{ field.label }}
             @if (field.required) {
-              <span class="text-negative">*</span>
+              <span class="text-red-500">*</span>
             }
           </label>
 
@@ -57,22 +58,21 @@ interface FormField {
           } @else {
             <input
               type="text"
-              class="w-full rounded-lg border border-edge bg-canvas px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-info transition-colors"
-              [class.text-fg]="!readonly()"
-              [class.text-fg-muted]="readonly()"
+              pInputText
+              class="w-full"
               [ngModel]="values()[field.key]"
               (ngModelChange)="onFieldChange(field.key, $event)"
               [readOnly]="readonly()"/>
           }
 
           @if (field.description) {
-            <p class="text-xs text-fg-faint mt-1">{{ field.description }}</p>
+            <p class="text-xs text-surface-400 mt-1">{{ field.description }}</p>
           }
         </div>
       }
 
       @if (fields().length === 0) {
-        <p class="text-sm text-fg-faint italic">No parameters defined.</p>
+        <p class="text-sm text-surface-400 italic">No parameters defined.</p>
       }
     </div>
   `,

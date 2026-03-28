@@ -8,7 +8,7 @@ class OrderCreate(BaseModel):
     timestamp: datetime.datetime
     order_type_id: uuid.UUID
     side: str
-    provider_id: uuid.UUID
+    exchange_id: uuid.UUID
     portfolio_id: uuid.UUID
     from_asset_id: uuid.UUID
     to_asset_id: uuid.UUID
@@ -48,3 +48,33 @@ class OrderSchema(BaseModel):
     external_order_id: str | None = None
     time_in_force: str | None = None
     current_status: str | None = None
+    exchange_name: str | None = None
+
+
+class OrderStatusSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    timestamp: datetime.datetime
+    status: str
+    error_message: str | None = None
+    error_code: str | None = None
+
+
+class OrderDetailSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    timestamp: datetime.datetime
+    order_type: str
+    side: str
+    from_asset_symbol: str
+    to_asset_symbol: str
+    quantity: float
+    price: float
+    filled_quantity: float | None = None
+    average_fill_price: float | None = None
+    external_order_id: str | None = None
+    time_in_force: str | None = None
+    current_status: str | None = None
+    exchange_name: str | None = None
+    statuses: list[OrderStatusSchema] = []

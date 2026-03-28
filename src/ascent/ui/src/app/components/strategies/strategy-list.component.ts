@@ -2,13 +2,15 @@ import { Component, inject, OnInit } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { StrategyService } from '../../services/strategy.service';
 import { TradeService } from '../../services/trade.service';
-import { LoadingSpinnerComponent } from '../shared/loading-spinner.component';
 import { StatCardComponent } from '../shared/stat-card.component';
+import { Card } from 'primeng/card';
+import { Skeleton } from 'primeng/skeleton';
+import { EmptyStateComponent } from '../shared/empty-state.component';
 
 @Component({
   selector: 'app-strategy-list',
   standalone: true,
-  imports: [RouterLink, LoadingSpinnerComponent, StatCardComponent],
+  imports: [RouterLink, StatCardComponent, Card, Skeleton, EmptyStateComponent],
   templateUrl: './strategy-list.component.html',
 })
 export class StrategyListComponent implements OnInit {
@@ -25,6 +27,6 @@ export class StrategyListComponent implements OnInit {
 
   pnlClass(value: number): string {
     if (value === 0) return '';
-    return value > 0 ? 'text-positive' : 'text-negative';
+    return value > 0 ? 'text-green-500' : 'text-red-500';
   }
 }

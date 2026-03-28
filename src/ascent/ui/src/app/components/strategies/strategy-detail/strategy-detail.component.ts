@@ -1,5 +1,5 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DatePipe, JsonPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { StrategyService } from '../../../services/strategy.service';
@@ -10,9 +10,7 @@ import { ProviderService } from '../../../services/provider.service';
 import { ToastService } from '../../../services/toast.service';
 import { StrategyFeedDAG, StrategyRunListItem } from '../../../models/feed.model';
 import { UniverseItem, UniverseItemCreate, AssetGroup } from '../../../models/asset.model';
-import { LoadingSpinnerComponent } from '../../shared/loading-spinner.component';
 import { Tabs, TabList, Tab } from 'primeng/tabs';
-import { StatCardComponent } from '../../shared/stat-card.component';
 import { SchemaFormComponent } from '../../shared/schema-form.component';
 import { TradeTableComponent } from '../../trade-table/trade-table.component';
 import { FeedDagComponent, FeedRunStatusOverride } from './feed-dag.component';
@@ -20,12 +18,19 @@ import { Splitter } from 'primeng/splitter';
 import { RunDetailCardComponent, RunDetailField, RunDetailItem } from '../../shared/run-detail-card.component';
 import { RunFilter } from '../../shared/run-viewer.component';
 import { CumulativePnlChartComponent, CumulativePnlPoint } from './charts/cumulative-pnl-chart.component';
-import { TradePnlChartComponent } from './charts/trade-pnl-chart.component';
-import { WinLossChartComponent } from './charts/win-loss-chart.component';
-import { MonthlyPnlChartComponent, MonthlyPnlPoint } from './charts/monthly-pnl-chart.component';
+import { PnlDistributionChartComponent } from './charts/pnl-distribution-chart.component';
 import { Select } from 'primeng/select';
 import { DatePicker } from 'primeng/datepicker';
 import { TableModule } from 'primeng/table';
+import { SelectButton } from 'primeng/selectbutton';
+import { Button } from 'primeng/button';
+import { Tag } from 'primeng/tag';
+import { Paginator } from 'primeng/paginator';
+import { Message } from 'primeng/message';
+import { Card } from 'primeng/card';
+import { Skeleton } from 'primeng/skeleton';
+import { EmptyStateComponent } from '../../shared/empty-state.component';
+import { UniverseTableComponent } from '../../shared/universe-table.component';
 
 @Component({
   selector: 'app-strategy-detail',
@@ -35,26 +40,32 @@ import { TableModule } from 'primeng/table';
     DatePipe,
     JsonPipe,
     FormsModule,
-    LoadingSpinnerComponent,
     Tabs, TabList, Tab,
-    StatCardComponent,
     SchemaFormComponent,
     TradeTableComponent,
     FeedDagComponent,
     Splitter,
     RunDetailCardComponent,
     CumulativePnlChartComponent,
-    TradePnlChartComponent,
-    WinLossChartComponent,
-    MonthlyPnlChartComponent,
+    PnlDistributionChartComponent,
     Select,
     DatePicker,
     TableModule,
+    SelectButton,
+    Button,
+    Tag,
+    Paginator,
+    Message,
+    Card,
+    Skeleton,
+    EmptyStateComponent,
+    UniverseTableComponent,
   ],
   templateUrl: './strategy-detail.component.html',
 })
 export class StrategyDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
+  private router = inject(Router);
   private toast = inject(ToastService);
   strategyService = inject(StrategyService);
   feedService = inject(FeedService);
@@ -62,9 +73,12 @@ export class StrategyDetailComponent implements OnInit {
   assetService = inject(AssetService);
   providerService = inject(ProviderService);
 
-  tabs = ['Performance', 'Universe', 'Runs', 'Feeds', 'Configuration'];
+  tabs = ['Performance', 'Trades', 'Universe', 'Runs', 'Configuration'];
   activeTab = signal('Performance');
   page = signal(1);
+  tradesPageSize = signal(10);
+  ordersPage = signal(1);
+  ordersPageSize = signal(10);
   editing = signal(false);
   editedParameters = signal<Record<string, any>>({});
   feedDag = signal<StrategyFeedDAG | null>(null);
@@ -81,6 +95,24 @@ export class StrategyDetailComponent implements OnInit {
   runsAroundDatetime = signal<Date | null>(null);
   runsAroundRadius = signal<5 | 10 | 30 | 60>(5);
   runsRadiusOptions: (5 | 10 | 30 | 60)[] = [5, 10, 30, 60];
+
+  runsFilterOptions = [
+    { label: 'All', value: 'none' },
+    { label: 'Range', value: 'range' },
+    { label: 'Around', value: 'around' },
+  ];
+
+  universeAddModeOptions = [
+    { label: 'Individual Pair', value: 'individual' },
+    { label: 'Asset Group', value: 'group' },
+  ];
+
+  runsRadiusSelectOptions = [
+    { label: '5m', value: 5 },
+    { label: '10m', value: 10 },
+    { label: '30m', value: 30 },
+    { label: '1h', value: 60 },
+  ];
 
   selectedRunFeedStatuses = computed<Map<string, FeedRunStatusOverride> | null>(() => {
     const run = this.selectedStrategyRun();
@@ -107,38 +139,33 @@ export class StrategyDetailComponent implements OnInit {
     { label: 'Feeds', key: 'feed_count' },
   ];
 
-  // Chart computed data
-  sortedTrades = computed(() => {
-    return [...this.strategyService.allStrategyTrades()]
-      .filter(t => t.entry_at !== null && t.current_status === 'CLOSED')
-      .sort((a, b) => new Date(a.entry_at!).getTime() - new Date(b.entry_at!).getTime());
-  });
+  // Stats from API
+  stats = computed(() => this.strategyService.strategyStats());
 
-  cumulativePnlData = computed<CumulativePnlPoint[]>(() => {
-    const trades = this.sortedTrades();
-    let cumulative = 0;
-    return trades.map(t => {
-      cumulative += (t.total_realized_pnl ?? 0);
-      return { date: t.entry_at!, value: cumulative, symbol: t.display_symbol };
-    });
-  });
-
-  monthlyPnlData = computed<MonthlyPnlPoint[]>(() => {
-    const trades = this.sortedTrades();
-    const monthMap = new Map<string, number>();
-    for (const t of trades) {
-      const d = new Date(t.entry_at!);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      monthMap.set(key, (monthMap.get(key) ?? 0) + (t.total_realized_pnl ?? 0));
+  // Chart data from stats
+  cumulativePnlData = computed<CumulativePnlPoint[]>(() => this.stats()?.cumulative_pnl ?? []);
+  pnlDistributionData = computed<number[]>(() => {
+    const bins = this.stats()?.pnl_distribution ?? [];
+    // Expand histogram bins back into individual values for the chart component
+    const values: number[] = [];
+    for (const bin of bins) {
+      for (let i = 0; i < bin.count; i++) {
+        values.push(bin.center);
+      }
     }
-    return Array.from(monthMap.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([month, pnl]) => ({ month, pnl }));
+    return values;
   });
 
-  wins = computed(() => this.sortedTrades().filter(t => (t.total_realized_pnl ?? 0) > 0).length);
-  losses = computed(() => this.sortedTrades().filter(t => (t.total_realized_pnl ?? 0) < 0).length);
-  breakeven = computed(() => this.sortedTrades().filter(t => (t.total_realized_pnl ?? 0) === 0).length);
+  formatDuration(seconds: number | null): string {
+    if (seconds === null) return 'N/A';
+    const totalMinutes = Math.abs(seconds) / 60;
+    const days = Math.floor(totalMinutes / 1440);
+    const hours = Math.floor((totalMinutes % 1440) / 60);
+    const minutes = Math.floor(totalMinutes % 60);
+    if (days > 0) return `${days}d ${hours}h ${minutes}m`;
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
+  }
 
   // Universe tab state
   universeItems = signal<UniverseItem[]>([]);
@@ -154,10 +181,14 @@ export class StrategyDetailComponent implements OnInit {
   );
 
   groupOptions = computed(() =>
-    this.assetService.assetGroups().map(g => ({ id: g.id, displayLabel: `Group (${g.members.length} members)` }))
+    this.assetService.assetGroups().map(g => ({
+      ...g,
+      displayLabel: g.members.map(m => `${m.from_asset_symbol}/${m.to_asset_symbol}`).join(', ') || 'Empty group',
+    }))
   );
 
   strategyId = '';
+  private initialRunId: string | null = null;
 
   constructor() {}
 
@@ -167,9 +198,19 @@ export class StrategyDetailComponent implements OnInit {
       if (id === this.strategyId) return;
       this.strategyId = id;
 
+      // Restore tab and run from query params (for back-navigation)
+      const qp = this.route.snapshot.queryParamMap;
+      const tab = qp.get('tab');
+      if (tab && this.tabs.includes(tab)) {
+        this.activeTab.set(tab);
+      } else {
+        this.activeTab.set('Performance');
+      }
+      this.initialRunId = qp.get('run');
+
       // Reset state for the new strategy
-      this.activeTab.set('Performance');
       this.page.set(1);
+      this.ordersPage.set(1);
       this.editing.set(false);
       this.editedParameters.set({});
       this.feedDag.set(null);
@@ -182,7 +223,8 @@ export class StrategyDetailComponent implements OnInit {
 
       this.strategyService.loadStrategyDetail(this.strategyId);
       this.strategyService.loadStrategyTrades(this.strategyId);
-      this.strategyService.loadAllStrategyTrades(this.strategyId);
+      this.strategyService.loadStrategyStats(this.strategyId);
+      this.strategyService.loadStrategyOrders(this.strategyId);
       this.feedService.loadStrategyFeedDAG(this.strategyId).subscribe({
         next: (dag) => this.feedDag.set(dag),
       });
@@ -194,9 +236,32 @@ export class StrategyDetailComponent implements OnInit {
     });
   }
 
+  onTabChange(tab: string): void {
+    this.activeTab.set(tab);
+    this.updateQueryParams({ tab });
+  }
+
+  private updateQueryParams(params: Record<string, string | null>): void {
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: params,
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
+  }
+
   onPageChange(newPage: number): void {
     this.page.set(newPage);
-    this.strategyService.loadStrategyTrades(this.strategyId, newPage);
+    this.strategyService.loadStrategyTrades(this.strategyId, newPage, this.tradesPageSize());
+  }
+
+  onOrdersPageChange(newPage: number): void {
+    this.ordersPage.set(newPage);
+    this.strategyService.loadStrategyOrders(this.strategyId, newPage, this.ordersPageSize());
+  }
+
+  skeletonRows(count: number): number[] {
+    return Array.from({ length: count }, (_, i) => i);
   }
 
   startEditing(): void {
@@ -244,6 +309,28 @@ export class StrategyDetailComponent implements OnInit {
     return value > 0 ? 'text-positive' : 'text-negative';
   }
 
+  orderSideSeverity(side: string): 'success' | 'danger' | 'secondary' {
+    switch (side.toUpperCase()) {
+      case 'BUY': return 'success';
+      case 'SELL': return 'danger';
+      default: return 'secondary';
+    }
+  }
+
+  orderStatusSeverity(status: string): 'success' | 'danger' | 'warn' | 'secondary' {
+    switch (status.toUpperCase()) {
+      case 'FILLED':
+      case 'COMPLETED': return 'success';
+      case 'REJECTED':
+      case 'CANCELLED':
+      case 'FAILED': return 'danger';
+      case 'PARTIALLY_FILLED':
+      case 'SUBMITTED':
+      case 'ACCEPTED': return 'warn';
+      default: return 'secondary';
+    }
+  }
+
   // --- Runs tab methods ---
 
   loadStrategyRuns(): void {
@@ -252,12 +339,17 @@ export class StrategyDetailComponent implements OnInit {
         this.strategyRuns.set(res.items);
         this.runsTotal.set(res.total);
         this.runsTotalPages.set(res.total_pages);
+        if (this.initialRunId && !this.selectedStrategyRun()) {
+          const match = res.items.find(r => r.id === this.initialRunId);
+          if (match) this.selectStrategyRun(match);
+        }
       },
     });
   }
 
   selectStrategyRun(run: StrategyRunListItem): void {
     this.selectedStrategyRun.set(run);
+    this.updateQueryParams({ run: run.id });
   }
 
   onRunsPageChange(newPage: number): void {
@@ -286,23 +378,13 @@ export class StrategyDetailComponent implements OnInit {
     this.setRunsFilterMode('none');
   }
 
-  runStatusClass(status: string): string {
+  runStatusSeverity(status: string): 'success' | 'danger' | 'warn' | 'secondary' | 'info' {
     switch (status) {
-      case 'COMPLETED': return 'text-positive';
-      case 'FAILED': return 'text-negative';
-      case 'RUNNING': return 'text-warning';
-      case 'PENDING': return 'text-fg-muted';
-      default: return '';
-    }
-  }
-
-  runStatusDotClass(status: string): string {
-    switch (status) {
-      case 'COMPLETED': return 'bg-positive';
-      case 'FAILED': return 'bg-negative';
-      case 'RUNNING': return 'bg-warning animate-pulse';
-      case 'PENDING': return 'bg-fg-faint';
-      default: return 'bg-fg-faint';
+      case 'COMPLETED': return 'success';
+      case 'FAILED': return 'danger';
+      case 'RUNNING': return 'warn';
+      case 'PENDING': return 'secondary';
+      default: return 'info';
     }
   }
 
@@ -311,11 +393,6 @@ export class StrategyDetailComponent implements OnInit {
     const ms = new Date(run.completed_at).getTime() - new Date(run.started_at).getTime();
     if (ms < 1000) return `${ms}ms`;
     return `${(ms / 1000).toFixed(1)}s`;
-  }
-
-  runsRadiusLabel(r: number): string {
-    if (r < 60) return `${r}m`;
-    return `${r / 60}h`;
   }
 
   // --- Universe tab methods ---
@@ -349,11 +426,11 @@ export class StrategyDetailComponent implements OnInit {
     };
     this.strategyService.addUniverseItem(this.strategyId, data).subscribe({
       next: () => {
-        this.toast.success('Asset added to universe');
+        this.toast.success('Pair added to universe');
         this.showUniverseForm.set(false);
         this.loadUniverse();
       },
-      error: () => this.toast.error('Failed to add asset to universe'),
+      error: () => this.toast.error('Failed to add pair to universe'),
     });
   }
 
@@ -378,12 +455,12 @@ export class StrategyDetailComponent implements OnInit {
         next: () => {
           completed++;
           if (completed === total) {
-            this.toast.success(`Added ${total} assets from group`);
+            this.toast.success(`Asset group linked (${total} pairs)`);
             this.showUniverseForm.set(false);
             this.loadUniverse();
           }
         },
-        error: () => this.toast.error('Failed to add group member'),
+        error: () => this.toast.error('Failed to link asset group'),
       });
     }
   }
@@ -393,11 +470,29 @@ export class StrategyDetailComponent implements OnInit {
       this.strategyId, item.provider_id, item.from_asset_id, item.to_asset_id
     ).subscribe({
       next: () => {
-        this.toast.success('Asset removed from universe');
+        this.toast.success('Pair removed from universe');
         this.loadUniverse();
       },
-      error: () => this.toast.error('Failed to remove asset'),
+      error: () => this.toast.error('Failed to remove pair'),
     });
+  }
+
+  removeUniverseGroup(items: UniverseItem[]): void {
+    let completed = 0;
+    for (const item of items) {
+      this.strategyService.removeUniverseItem(
+        this.strategyId, item.provider_id, item.from_asset_id, item.to_asset_id
+      ).subscribe({
+        next: () => {
+          completed++;
+          if (completed === items.length) {
+            this.toast.success('Asset group removed from universe');
+            this.loadUniverse();
+          }
+        },
+        error: () => this.toast.error('Failed to remove asset group'),
+      });
+    }
   }
 
   private buildRunsFilter(): RunFilter | undefined {

@@ -3,6 +3,8 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict
 
+from ascent.server.schemas.orders import OrderDetailSchema
+
 
 class TradeLegSummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -75,6 +77,7 @@ class TradeStatusSchema(BaseModel):
 class TradeLegDetail(TradeLegSummary):
     expected_entry_price: float | None = None
     expected_exit_price: float | None = None
+    orders: list[OrderDetailSchema] = []
 
 
 class TradeLegCreate(BaseModel):

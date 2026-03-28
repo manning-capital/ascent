@@ -1,148 +1,235 @@
-<div class="p-6 max-w-7xl mx-auto">
-  <h1 class="text-2xl font-bold mb-6">Assets</h1>
+<div class="p-6 ">
+  <h1 class="text-2xl font-bold mb-6">Asset Universe</h1>
 
   <!-- Tabs -->
-  <div class="flex items-center gap-1 mb-6 border-b border-edge">
-    <button (click)="setTab('assets')" class="px-4 py-2 text-sm font-medium transition-colors"
-            [class]="activeTab() === 'assets' ? 'text-fg border-b-2 border-info' : 'text-fg-muted hover:text-fg'">
-      Assets
-    </button>
-    <button (click)="setTab('mappings')" class="px-4 py-2 text-sm font-medium transition-colors"
-            [class]="activeTab() === 'mappings' ? 'text-fg border-b-2 border-info' : 'text-fg-muted hover:text-fg'">
-      Provider Mappings
-    </button>
-    <button (click)="setTab('groups')" class="px-4 py-2 text-sm font-medium transition-colors"
-            [class]="activeTab() === 'groups' ? 'text-fg border-b-2 border-info' : 'text-fg-muted hover:text-fg'">
-      Groups
-    </button>
-  </div>
+  <p-tabs [value]="activeTab()" (valueChange)="setTab($any($event))">
+    <p-tablist>
+      <p-tab value="universe">Universe</p-tab>
+      <p-tab value="mappings">Provider Mappings</p-tab>
+    </p-tablist>
+  </p-tabs>
 
-  <!-- ============== ASSETS TAB ============== -->
-  @if (activeTab() === 'assets') {
-    <!-- Asset Type Filter -->
-    <div class="flex items-center gap-2 mb-4 flex-wrap">
-      <button (click)="setTypeFilter(null)"
-              class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
-              [class]="selectedTypeId() === null ? 'bg-info/20 text-info' : 'bg-fg/5 text-fg-muted hover:bg-fg/10'">
-        All
-      </button>
-      @for (t of assetService.assetTypes(); track t.id) {
-        <button (click)="setTypeFilter(t.id)"
-                class="px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
-                [class]="selectedTypeId() === t.id ? 'bg-info/20 text-info' : 'bg-fg/5 text-fg-muted hover:bg-fg/10'">
-          {{ t.name }}
-        </button>
-      }
-    </div>
+  <!-- ============== UNIVERSE TAB ============== -->
+  @if (activeTab() === 'universe') {
 
-    <div class="flex items-center justify-between mb-4">
-      <input type="text" placeholder="Search assets..." [ngModel]="search()" (ngModelChange)="search.set($event)"
-             class="w-full md:w-80 px-3 py-2 rounded-lg bg-surface border border-edge text-fg text-sm placeholder:text-fg-faint focus:outline-none focus:border-info"/>
-      <button (click)="openAssetCreate()" class="ml-4 px-4 py-2 rounded-lg bg-info/15 text-info text-sm font-medium hover:bg-info/25 transition-colors shrink-0">
-        + New Asset
-      </button>
-    </div>
-
-    <!-- Create Form -->
-    @if (showAssetForm()) {
-      <div class="mb-6 rounded-xl border border-edge bg-surface/50 p-5">
-        <h3 class="font-semibold mb-4">New Asset</h3>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-xs text-fg-muted mb-1">Name *</label>
-            <input type="text" [(ngModel)]="newAssetName" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info"/>
-          </div>
-          <div>
-            <label class="block text-xs text-fg-muted mb-1">Symbol</label>
-            <input type="text" [(ngModel)]="newAssetSymbol" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info"/>
-          </div>
-          <div>
-            <label class="block text-xs text-fg-muted mb-1">Type *</label>
-            <p-select [(ngModel)]="newAssetTypeId" [options]="assetService.assetTypes()" optionLabel="name" optionValue="id" placeholder="-- select type --"/>
-          </div>
-          <div>
-            <label class="block text-xs text-fg-muted mb-1">Description</label>
-            <input type="text" [(ngModel)]="newAssetDescription" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info"/>
-          </div>
-        </div>
-        <div class="flex gap-2 mt-4">
-          <button (click)="submitAssetCreate()" class="px-4 py-2 rounded-lg bg-positive/15 text-positive text-sm font-medium hover:bg-positive/25 transition-colors">Create</button>
-          <button (click)="cancelAssetCreate()" class="px-4 py-2 rounded-lg bg-fg/5 text-fg-muted text-sm font-medium hover:bg-fg/10 transition-colors">Cancel</button>
-        </div>
+    <!-- ---- Individual Assets ---- -->
+    <div class="mb-10">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-semibold">Individual Assets</h2>
+        <p-button (onClick)="openAssetCreate()" severity="info" [outlined]="true" label="+ New Asset"/>
       </div>
-    }
 
-    @if (assetService.loading()) {
-      <app-loading/>
-    } @else {
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        @for (asset of filteredAssets(); track asset.id) {
-          <a [routerLink]="['/settings/assets', asset.id]" class="block rounded-xl border border-edge bg-surface/50 p-5 hover:bg-elevated/50 hover:border-info/30 transition-colors cursor-pointer">
-            <div class="flex items-center justify-between mb-2">
-              <h3 class="font-semibold truncate">{{ asset.name }}</h3>
-              <span class="w-2.5 h-2.5 rounded-full shrink-0" [class]="asset.is_active ? 'bg-positive' : 'bg-fg-faint'"></span>
+      <!-- Asset Type Filter -->
+      <div class="flex items-center gap-2 mb-4 flex-wrap">
+        <p-selectButton [ngModel]="selectedTypeId()" (ngModelChange)="setTypeFilter($event)" [options]="typeFilterOptions()" optionLabel="label" optionValue="value"/>
+      </div>
+
+      <div class="mb-4">
+        <input type="text" pInputText placeholder="Search assets..." [ngModel]="assetSearch()" (ngModelChange)="assetSearch.set($event)"
+               class="w-full md:w-80"/>
+      </div>
+
+      <!-- Create Form -->
+      @if (showAssetForm()) {
+        <p-card styleClass="mb-6">
+          <h3 class="font-semibold mb-4">New Asset</h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs text-surface-500 mb-1">Name *</label>
+              <input type="text" pInputText [(ngModel)]="newAssetName" class="w-full"/>
             </div>
-            <div class="space-y-1">
-              @if (asset.symbol) {
-                <div class="flex items-center justify-between text-xs">
-                  <span class="text-fg-muted">Symbol</span>
-                  <span class="text-fg font-mono font-medium">{{ asset.symbol }}</span>
+            <div>
+              <label class="block text-xs text-surface-500 mb-1">Symbol</label>
+              <input type="text" pInputText [(ngModel)]="newAssetSymbol" class="w-full"/>
+            </div>
+            <div>
+              <label class="block text-xs text-surface-500 mb-1">Type *</label>
+              <p-select [(ngModel)]="newAssetTypeId" [options]="assetService.assetTypes()" optionLabel="name" optionValue="id" placeholder="-- select type --"/>
+            </div>
+            <div>
+              <label class="block text-xs text-surface-500 mb-1">Description</label>
+              <input type="text" pInputText [(ngModel)]="newAssetDescription" class="w-full"/>
+            </div>
+          </div>
+          <div class="flex gap-2 mt-4">
+            <p-button (onClick)="submitAssetCreate()" severity="success" [outlined]="true" label="Create"/>
+            <p-button (onClick)="cancelAssetCreate()" severity="secondary" [text]="true" label="Cancel"/>
+          </div>
+        </p-card>
+      }
+
+      <!-- Assets Table -->
+      <p-card styleClass="overflow-hidden">
+        <p-table [value]="filteredAssets()" [tableStyle]="{'width': '100%'}">
+          <ng-template #header>
+            <tr>
+              <th>Name</th>
+              <th>Symbol</th>
+              <th>Type</th>
+              <th class="w-24">Status</th>
+            </tr>
+          </ng-template>
+          <ng-template #body let-asset>
+            <tr class="cursor-pointer hover:bg-emphasis transition-colors" (click)="navigateToAsset(asset.id)">
+              <td class="font-medium">{{ asset.name }}</td>
+              <td class="font-mono text-surface-500">{{ asset.symbol ?? '—' }}</td>
+              <td>{{ asset.asset_type_name ?? 'Unknown' }}</td>
+              <td>
+                <span class="inline-flex items-center gap-1.5 text-xs">
+                  <span class="w-2 h-2 rounded-full" [class]="asset.is_active ? 'bg-green-500' : 'bg-surface-400'"></span>
+                  {{ asset.is_active ? 'Active' : 'Inactive' }}
+                </span>
+              </td>
+            </tr>
+          </ng-template>
+          <ng-template #emptymessage>
+            <tr>
+              <td colspan="4" class="text-center text-surface-400">No assets found.</td>
+            </tr>
+          </ng-template>
+        </p-table>
+      </p-card>
+    </div>
+
+    <!-- ---- Synthetic Asset Groups ---- -->
+    <div>
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="text-lg font-semibold">Synthetic Asset Groups</h2>
+          <p class="text-xs text-surface-400 mt-1">Multi-leg synthetic assets that must be traded together as a unit.</p>
+        </div>
+        <p-button (onClick)="openGroupCreate()" severity="info" [outlined]="true" label="+ New Group"/>
+      </div>
+
+      <!-- Create Form -->
+      @if (showGroupForm()) {
+        <p-card styleClass="mb-6">
+          <h3 class="font-semibold mb-4">New Synthetic Asset Group</h3>
+          <p class="text-xs text-surface-400 mb-4">Define the legs of this synthetic asset (e.g., spreads, cointegration pairs, hedge ratios).</p>
+          <!-- Members -->
+          <h4 class="text-sm font-medium mb-2">Legs</h4>
+          @if (newGroupMembers.length > 0) {
+            <div class="mb-3 space-y-2">
+              @for (m of newGroupMembers; track m.order; let i = $index) {
+                <div class="flex items-center gap-3 text-sm px-3 py-2 rounded-lg bg-canvas/50 border border-surface">
+                  <span class="text-surface-500 font-mono text-xs w-6">{{ m.order }}.</span>
+                  <span class="font-medium">{{ providerName(m.provider_id) }}</span>
+                  <span class="text-surface-500">:</span>
+                  <span>{{ assetName(m.from_asset_id) }}</span>
+                  <span class="text-surface-400">/</span>
+                  <span>{{ assetName(m.to_asset_id) }}</span>
+                  <p-button (onClick)="removeTempMember(i)" severity="danger" [text]="true" size="small" label="Remove" styleClass="ml-auto"/>
                 </div>
               }
-              <div class="flex items-center justify-between text-xs">
-                <span class="text-fg-muted">Type</span>
-                <span class="text-fg font-medium">{{ asset.asset_type_name ?? 'Unknown' }}</span>
-              </div>
-              @if (asset.description) {
-                <p class="text-xs text-fg-faint line-clamp-2 mt-1">{{ asset.description }}</p>
-              }
             </div>
-          </a>
-        } @empty {
-          <div class="col-span-full text-center text-fg-faint py-12">No assets found.</div>
-        }
-      </div>
-    }
+          }
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+            <div>
+              <label class="block text-xs text-surface-500 mb-1">Provider</label>
+              <p-select [(ngModel)]="tmpMemberProviderId" [options]="providerService.providers()" optionLabel="name" optionValue="id" placeholder="-- select provider --"/>
+            </div>
+            <div>
+              <label class="block text-xs text-surface-500 mb-1">From Asset (Base)</label>
+              <p-select [(ngModel)]="tmpMemberFromAssetId" [options]="assetService.assets()" optionLabel="name" optionValue="id" placeholder="-- select asset --"/>
+            </div>
+            <div>
+              <label class="block text-xs text-surface-500 mb-1">To Asset (Quote)</label>
+              <p-select [(ngModel)]="tmpMemberToAssetId" [options]="assetService.assets()" optionLabel="name" optionValue="id" placeholder="-- select asset --"/>
+            </div>
+            <div>
+              <p-button (onClick)="addTempMember()" severity="secondary" [outlined]="true" label="Add Leg" styleClass="w-full"/>
+            </div>
+          </div>
+
+          <div class="flex gap-2 mt-4">
+            <p-button (onClick)="submitGroupCreate()" severity="success" [outlined]="true" label="Create Group"/>
+            <p-button (onClick)="cancelGroupCreate()" severity="secondary" [text]="true" label="Cancel"/>
+          </div>
+        </p-card>
+      }
+
+      <!-- Groups Table -->
+      <p-card styleClass="overflow-hidden">
+        <p-table [value]="assetService.assetGroups()" [tableStyle]="{'width': '100%'}">
+          <ng-template #header>
+            <tr>
+              <th class="w-24">Status</th>
+              <th>Legs</th>
+              <th class="w-36">Created</th>
+            </tr>
+          </ng-template>
+          <ng-template #body let-group>
+            <tr class="cursor-pointer hover:bg-emphasis transition-colors" (click)="navigateToGroup(group.id)">
+              <td>
+                <span class="inline-flex items-center gap-1.5 text-xs">
+                  <span class="w-2 h-2 rounded-full" [class]="group.is_active ? 'bg-green-500' : 'bg-surface-400'"></span>
+                  {{ group.is_active ? 'Active' : 'Inactive' }}
+                </span>
+              </td>
+              <td>
+                <div class="flex flex-wrap gap-1.5">
+                  @for (m of group.members; track m.order) {
+                    <span class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-canvas/50 border border-surface">
+                      <span class="text-surface-500 font-mono">{{ m.order }}.</span>
+                      <span class="font-medium text-surface-500">{{ m.provider_name }}</span>
+                      <span class="text-surface-400">:</span>
+                      <span class="font-medium">{{ m.from_asset_symbol }}/{{ m.to_asset_symbol }}</span>
+                    </span>
+                  }
+                  @if (group.members.length === 0) {
+                    <span class="text-xs text-surface-400">No legs defined</span>
+                  }
+                </div>
+              </td>
+              <td class="text-xs text-surface-500">{{ group.created_at | date:'mediumDate' }}</td>
+            </tr>
+          </ng-template>
+          <ng-template #emptymessage>
+            <tr>
+              <td colspan="3" class="text-center text-surface-400">No synthetic asset groups found.</td>
+            </tr>
+          </ng-template>
+        </p-table>
+      </p-card>
+    </div>
   }
 
   <!-- ============== PROVIDER MAPPINGS TAB ============== -->
   @if (activeTab() === 'mappings') {
     <div class="flex items-center justify-between mb-4">
-      <input type="text" placeholder="Search mappings..." [ngModel]="search()" (ngModelChange)="search.set($event)"
-             class="w-full md:w-80 px-3 py-2 rounded-lg bg-surface border border-edge text-fg text-sm placeholder:text-fg-faint focus:outline-none focus:border-info"/>
-      <button (click)="openLinkCreate()" class="ml-4 px-4 py-2 rounded-lg bg-info/15 text-info text-sm font-medium hover:bg-info/25 transition-colors shrink-0">
-        + New Mapping
-      </button>
+      <input type="text" pInputText placeholder="Search mappings..." [ngModel]="mappingSearch()" (ngModelChange)="mappingSearch.set($event)"
+             class="w-full md:w-80"/>
+      <p-button (onClick)="openLinkCreate()" severity="info" [outlined]="true" label="+ New Mapping"/>
     </div>
 
     <!-- Create Form -->
     @if (showLinkForm()) {
-      <div class="mb-6 rounded-xl border border-edge bg-surface/50 p-5">
+      <p-card styleClass="mb-6">
         <h3 class="font-semibold mb-4">Map Asset to Provider</h3>
-        <p class="text-xs text-fg-faint mb-4">Link an asset to a provider with its provider-specific identifier (e.g., BTC on Coinbase, XBT on Kraken).</p>
+        <p class="text-xs text-surface-400 mb-4">Link an asset to a provider with its provider-specific identifier (e.g., BTC on Coinbase, XBT on Kraken).</p>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label class="block text-xs text-fg-muted mb-1">Provider *</label>
+            <label class="block text-xs text-surface-500 mb-1">Provider *</label>
             <p-select [(ngModel)]="newLinkProviderId" [options]="providerService.providers()" optionLabel="name" optionValue="id" placeholder="-- select provider --"/>
           </div>
           <div>
-            <label class="block text-xs text-fg-muted mb-1">Asset *</label>
+            <label class="block text-xs text-surface-500 mb-1">Asset *</label>
             <p-select [(ngModel)]="newLinkAssetId" [options]="assetService.assets()" optionLabel="name" optionValue="id" placeholder="-- select asset --"/>
           </div>
           <div>
-            <label class="block text-xs text-fg-muted mb-1">Provider Identifier *</label>
-            <input type="text" [(ngModel)]="newLinkIdentifier" placeholder="e.g. XBT, BTC, AAPL" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info"/>
+            <label class="block text-xs text-surface-500 mb-1">Provider Identifier *</label>
+            <input type="text" pInputText [(ngModel)]="newLinkIdentifier" placeholder="e.g. XBT, BTC, AAPL" class="w-full"/>
           </div>
         </div>
         <div class="flex gap-2 mt-4">
-          <button (click)="submitLinkCreate()" class="px-4 py-2 rounded-lg bg-positive/15 text-positive text-sm font-medium hover:bg-positive/25 transition-colors">Create</button>
-          <button (click)="cancelLinkCreate()" class="px-4 py-2 rounded-lg bg-fg/5 text-fg-muted text-sm font-medium hover:bg-fg/10 transition-colors">Cancel</button>
+          <p-button (onClick)="submitLinkCreate()" severity="success" [outlined]="true" label="Create"/>
+          <p-button (onClick)="cancelLinkCreate()" severity="secondary" [text]="true" label="Cancel"/>
         </div>
-      </div>
+      </p-card>
     }
 
     <!-- Mappings Table -->
-    <div class="rounded-xl border border-edge bg-surface/50 overflow-hidden">
+    <p-card styleClass="overflow-hidden">
       <p-table [value]="filteredLinks()" [tableStyle]="{'width': '100%'}">
         <ng-template #header>
           <tr>
@@ -155,110 +242,21 @@
         </ng-template>
         <ng-template #body let-link>
           <tr>
-            <td class="font-medium"><a [routerLink]="['/settings/providers', link.provider_id]" class="text-info hover:underline">{{ link.provider_name }}</a></td>
-            <td><a [routerLink]="['/settings/assets', link.asset_id]" class="text-info hover:underline">{{ link.asset_name }}</a></td>
-            <td class="font-mono text-fg-muted">{{ link.asset_symbol }}</td>
-            <td class="font-mono font-medium text-info">{{ link.identifier }}</td>
+            <td class="font-medium"><a [routerLink]="['/settings/providers', link.provider_id]" class="text-primary hover:underline">{{ link.provider_name }}</a></td>
+            <td><a [routerLink]="['/settings/assets', link.asset_id]" class="text-primary hover:underline">{{ link.asset_name }}</a></td>
+            <td class="font-mono text-surface-500">{{ link.asset_symbol }}</td>
+            <td class="font-mono font-medium text-primary">{{ link.identifier }}</td>
             <td>
-              <button (click)="deleteLink(link)" class="text-xs text-negative/70 hover:text-negative transition-colors">Remove</button>
+              <p-button (onClick)="deleteLink(link)" severity="danger" [text]="true" size="small" label="Remove"/>
             </td>
           </tr>
         </ng-template>
         <ng-template #emptymessage>
           <tr>
-            <td colspan="5" class="text-center text-fg-faint">No provider-asset mappings found.</td>
+            <td colspan="5" class="text-center text-surface-400">No provider-asset mappings found.</td>
           </tr>
         </ng-template>
       </p-table>
-    </div>
-  }
-
-  <!-- ============== GROUPS TAB ============== -->
-  @if (activeTab() === 'groups') {
-    <div class="flex items-center justify-end mb-4">
-      <button (click)="openGroupCreate()" class="px-4 py-2 rounded-lg bg-info/15 text-info text-sm font-medium hover:bg-info/25 transition-colors">
-        + New Group
-      </button>
-    </div>
-
-    <!-- Create Form -->
-    @if (showGroupForm()) {
-      <div class="mb-6 rounded-xl border border-edge bg-surface/50 p-5">
-        <h3 class="font-semibold mb-4">New Asset Group</h3>
-        <p class="text-xs text-fg-faint mb-4">Create a group of provider asset pairs for compound calculations (e.g., spreads, cointegration, hedge ratios).</p>
-        <!-- Members -->
-        <h4 class="text-sm font-medium mb-2">Members</h4>
-        @if (newGroupMembers.length > 0) {
-          <div class="mb-3 space-y-2">
-            @for (m of newGroupMembers; track m.order; let i = $index) {
-              <div class="flex items-center gap-3 text-sm px-3 py-2 rounded-lg bg-canvas/50 border border-edge/50">
-                <span class="text-fg-muted font-mono text-xs w-6">{{ m.order }}.</span>
-                <span class="font-medium">{{ providerName(m.provider_id) }}</span>
-                <span class="text-fg-muted">:</span>
-                <span>{{ assetName(m.from_asset_id) }}</span>
-                <span class="text-fg-faint">/</span>
-                <span>{{ assetName(m.to_asset_id) }}</span>
-                <button (click)="removeTempMember(i)" class="ml-auto text-xs text-negative/70 hover:text-negative transition-colors">Remove</button>
-              </div>
-            }
-          </div>
-        }
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-          <div>
-            <label class="block text-xs text-fg-muted mb-1">Provider</label>
-            <p-select [(ngModel)]="tmpMemberProviderId" [options]="providerService.providers()" optionLabel="name" optionValue="id" placeholder="-- select provider --"/>
-          </div>
-          <div>
-            <label class="block text-xs text-fg-muted mb-1">From Asset (Base)</label>
-            <p-select [(ngModel)]="tmpMemberFromAssetId" [options]="assetService.assets()" optionLabel="name" optionValue="id" placeholder="-- select asset --"/>
-          </div>
-          <div>
-            <label class="block text-xs text-fg-muted mb-1">To Asset (Quote)</label>
-            <p-select [(ngModel)]="tmpMemberToAssetId" [options]="assetService.assets()" optionLabel="name" optionValue="id" placeholder="-- select asset --"/>
-          </div>
-          <div>
-            <button (click)="addTempMember()" class="w-full px-3 py-2 rounded-lg bg-fg/5 text-fg text-sm font-medium hover:bg-fg/10 transition-colors">Add Member</button>
-          </div>
-        </div>
-
-        <div class="flex gap-2 mt-4">
-          <button (click)="submitGroupCreate()" class="px-4 py-2 rounded-lg bg-positive/15 text-positive text-sm font-medium hover:bg-positive/25 transition-colors">Create Group</button>
-          <button (click)="cancelGroupCreate()" class="px-4 py-2 rounded-lg bg-fg/5 text-fg-muted text-sm font-medium hover:bg-fg/10 transition-colors">Cancel</button>
-        </div>
-      </div>
-    }
-
-    <!-- Groups List -->
-    <div class="space-y-4">
-      @for (group of assetService.assetGroups(); track group.id) {
-        <a [routerLink]="['/settings/asset-groups', group.id]" class="block rounded-xl border border-edge bg-surface/50 p-5 hover:bg-elevated/50 hover:border-info/30 transition-colors cursor-pointer">
-          <div class="flex items-center gap-3 mb-3">
-            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wider bg-info/15 text-info">
-              Group
-            </span>
-            <span class="w-2.5 h-2.5 rounded-full" [class]="group.is_active ? 'bg-positive' : 'bg-fg-faint'"></span>
-            <span class="text-xs text-fg-muted ml-auto">{{ group.members.length }} members</span>
-          </div>
-          @if (group.members.length > 0) {
-            <div class="space-y-1">
-              @for (m of group.members; track m.order) {
-                <div class="flex items-center gap-3 text-sm px-3 py-2 rounded-lg bg-canvas/30">
-                  <span class="text-fg-muted font-mono text-xs w-6">{{ m.order }}.</span>
-                  <span class="font-medium text-fg-muted">{{ m.provider_name }}</span>
-                  <span class="text-fg-faint">:</span>
-                  <span class="font-medium">{{ m.from_asset_symbol }}</span>
-                  <span class="text-fg-faint">/</span>
-                  <span class="font-medium">{{ m.to_asset_symbol }}</span>
-                </div>
-              }
-            </div>
-          } @else {
-            <p class="text-xs text-fg-faint">No members in this group.</p>
-          }
-        </a>
-      } @empty {
-        <div class="text-center text-fg-faint py-12">No asset groups found.</div>
-      }
-    </div>
+    </p-card>
   }
 </div>

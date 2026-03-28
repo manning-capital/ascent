@@ -1,17 +1,22 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ProviderService } from '../../../services/provider.service';
 import { AssetService } from '../../../services/asset.service';
 import { ToastService } from '../../../services/toast.service';
 import { MetadataEntry, MetadataHistoryEntry, ProviderTypeMetadataField } from '../../../models/asset.model';
-import { LoadingSpinnerComponent } from '../../shared/loading-spinner.component';
 import { Tabs, TabList, Tab } from 'primeng/tabs';
+import { Skeleton } from 'primeng/skeleton';
 import { Select } from 'primeng/select';
 import { Checkbox } from 'primeng/checkbox';
 import { DatePicker } from 'primeng/datepicker';
 import { TableModule } from 'primeng/table';
+import { Tag } from 'primeng/tag';
+import { Card } from 'primeng/card';
+import { Button } from 'primeng/button';
+import { InputText } from 'primeng/inputtext';
+import { Textarea } from 'primeng/textarea';
 import { ConfirmationService } from 'primeng/api';
 
 @Component({
@@ -21,17 +26,23 @@ import { ConfirmationService } from 'primeng/api';
     RouterLink,
     DatePipe,
     FormsModule,
-    LoadingSpinnerComponent,
     Tabs, TabList, Tab,
     Select,
     Checkbox,
     DatePicker,
     TableModule,
+    Tag,
+    Card,
+    Button,
+    InputText,
+    Textarea,
+    Skeleton,
   ],
   templateUrl: './provider-detail.component.html',
 })
 export class ProviderDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
+  private router = inject(Router);
   private toast = inject(ToastService);
   private confirmationService = inject(ConfirmationService);
   providerService = inject(ProviderService);
@@ -74,7 +85,8 @@ export class ProviderDetailComponent implements OnInit {
       if (id === this.providerId) return;
       this.providerId = id;
 
-      this.activeTab.set('Overview');
+      const tab = this.route.snapshot.queryParamMap.get('tab');
+      this.activeTab.set(tab && this.tabs.includes(tab) ? tab : 'Overview');
       this.editing.set(false);
       this.metadataEntries.set([]);
       this.providerTypeFields.set([]);
@@ -89,6 +101,11 @@ export class ProviderDetailComponent implements OnInit {
       this.loadMetadata();
       this.loadProviderTypeFields();
     });
+  }
+
+  onTabChange(tab: string): void {
+    this.activeTab.set(tab);
+    this.router.navigate([], { relativeTo: this.route, queryParams: { tab }, queryParamsHandling: 'merge', replaceUrl: true });
   }
 
   private loadProviderTypeFields(): void {

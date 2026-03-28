@@ -3,12 +3,14 @@ import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ProviderService } from '../../services/provider.service';
 import { ToastService } from '../../services/toast.service';
-import { LoadingSpinnerComponent } from '../shared/loading-spinner.component';
+import { Card } from 'primeng/card';
+import { Button } from 'primeng/button';
+import { InputText } from 'primeng/inputtext';
 
 @Component({
   selector: 'app-provider-type-list',
   standalone: true,
-  imports: [RouterLink, FormsModule, LoadingSpinnerComponent],
+  imports: [RouterLink, FormsModule, Card, Button, InputText],
   templateUrl: './provider-type-list.component.html',
 })
 export class ProviderTypeListComponent implements OnInit {

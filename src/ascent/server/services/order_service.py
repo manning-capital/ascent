@@ -1,27 +1,24 @@
 import datetime
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
-from ascent.database.models import Order, OrderStatus
-from ascent.server.exceptions import NotFoundError
+from ascent.database.models import Order, OrderStatus, OrderStatusType
+from ascent.server.exceptions import BadRequestError, NotFoundError
+
+ORDER_STATUS_TRANSITIONS: dict[str, set[str]] = {
+    "SUBMITTED": {"ACCEPTED", "REJECTED", "CANCELLED"},
+    "ACCEPTED": {"PARTIALLY_FILLED", "FILLED", "CANCELLED", "REJECTED"},
+    "PARTIALLY_FILLED": {"PARTIALLY_FILLED", "FILLED", "CANCELLED"},
+    "FILLED": set(),
+    "REJECTED": set(),
+    "CANCELLED": set(),
+}
 from ascent.server.schemas.orders import OrderCreate, OrderSchema, OrderStatusCreate, OrderUpdate
 
 
-def get_orders(db: Session) -> list[OrderSchema]:
-    query = (
-        select(Order)
-        .options(
-            joinedload(Order.order_type),
-            joinedload(Order.from_asset),
-            joinedload(Order.to_asset),
-            selectinload(Order.statuses).joinedload(OrderStatus.order_status_type),
-        )
-        .order_by(Order.timestamp.desc())
-    )
-    orders = db.execute(query).unique().scalars().all()
-
+def _build_order_schemas(orders: list[Order]) -> list[OrderSchema]:
     items = []
     for o in orders:
         latest_status = o.statuses[-1] if o.statuses else None
@@ -40,9 +37,59 @@ def get_orders(db: Session) -> list[OrderSchema]:
                 external_order_id=o.external_order_id,
                 time_in_force=o.time_in_force,
                 current_status=(latest_status.order_status_type.symbol if latest_status else None),
+                exchange_name=o.exchange.name if o.exchange else None,
             )
         )
     return items
+
+
+def get_orders(db: Session) -> list[OrderSchema]:
+    query = (
+        select(Order)
+        .options(
+            joinedload(Order.order_type),
+            joinedload(Order.exchange),
+            joinedload(Order.from_asset),
+            joinedload(Order.to_asset),
+            selectinload(Order.statuses).joinedload(OrderStatus.order_status_type),
+        )
+        .order_by(Order.timestamp.desc())
+    )
+    orders = db.execute(query).unique().scalars().all()
+    return _build_order_schemas(orders)
+
+
+def get_strategy_orders(
+    db: Session,
+    strategy_id: uuid.UUID,
+    page: int = 1,
+    page_size: int = 10,
+) -> tuple[list[OrderSchema], int]:
+    from ascent.database.models import Trade, TradeLeg
+
+    base = (
+        select(Order)
+        .join(TradeLeg, Order.trade_leg_id == TradeLeg.id)
+        .join(Trade, TradeLeg.trade_id == Trade.id)
+        .where(Trade.strategy_id == strategy_id)
+    )
+
+    total = db.execute(select(func.count()).select_from(base.subquery())).scalar_one()
+
+    query = (
+        base.options(
+            joinedload(Order.order_type),
+            joinedload(Order.exchange),
+            joinedload(Order.from_asset),
+            joinedload(Order.to_asset),
+            selectinload(Order.statuses).joinedload(OrderStatus.order_status_type),
+        )
+        .order_by(Order.timestamp.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    orders = db.execute(query).unique().scalars().all()
+    return _build_order_schemas(orders), total
 
 
 def create_order(db: Session, data: OrderCreate) -> Order:
@@ -68,6 +115,29 @@ def add_order_status(db: Session, order_id: uuid.UUID, data: OrderStatusCreate) 
     order = db.get(Order, order_id)
     if not order:
         raise NotFoundError("Order not found")
+
+    new_status_type = db.get(OrderStatusType, data.order_status_type_id)
+    if not new_status_type:
+        raise NotFoundError("Order status type not found")
+
+    # Validate transition
+    # Eager-load statuses if not already loaded
+    if order.statuses:
+        current_status = order.statuses[-1]
+        current_symbol = (
+            current_status.order_status_type.symbol if current_status.order_status_type else None
+        )
+        if not current_symbol:
+            current_type = db.get(OrderStatusType, current_status.order_status_type_id)
+            current_symbol = current_type.symbol if current_type else None
+        if current_symbol:
+            allowed = ORDER_STATUS_TRANSITIONS.get(current_symbol, set())
+            if new_status_type.symbol not in allowed:
+                raise BadRequestError(
+                    f"Invalid order status transition: {current_symbol} -> {new_status_type.symbol}. "
+                    f"Allowed transitions from {current_symbol}: {sorted(allowed)}"
+                )
+
     ts = data.timestamp or datetime.datetime.now(datetime.UTC)
     status = OrderStatus(
         order_id=order_id,

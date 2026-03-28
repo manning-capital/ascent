@@ -7,6 +7,8 @@ export const routes: Routes = [
   { path: 'feeds/:id', loadComponent: () => import('./components/feeds/feed-detail/feed-detail.component').then(m => m.FeedDetailComponent) },
   { path: 'strategies', loadComponent: () => import('./components/strategies/strategy-list.component').then(m => m.StrategyListComponent) },
   { path: 'strategies/:id', loadComponent: () => import('./components/strategies/strategy-detail/strategy-detail.component').then(m => m.StrategyDetailComponent) },
+  { path: 'exchanges', loadComponent: () => import('./components/exchanges/exchange-list.component').then(m => m.ExchangeListComponent) },
+  { path: 'exchanges/:id', loadComponent: () => import('./components/exchanges/exchange-detail/exchange-detail.component').then(m => m.ExchangeDetailComponent) },
   { path: 'trades', loadComponent: () => import('./components/trades/trade-list.component').then(m => m.TradeListComponent) },
   { path: 'trades/:tradeId', loadComponent: () => import('./components/trade-detail/trade-detail.component').then(m => m.TradeDetailComponent) },
   {

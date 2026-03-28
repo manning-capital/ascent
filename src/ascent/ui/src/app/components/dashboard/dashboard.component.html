@@ -1,47 +1,78 @@
-<div class="p-6 max-w-7xl mx-auto">
+<div class="p-6">
   <h1 class="text-2xl font-bold mb-6">Dashboard</h1>
 
-  @if (dashboardService.loading()) {
-    <app-loading/>
-  } @else {
-    @let stats = dashboardService.stats();
-    @if (stats) {
-      <!-- Stats Cards -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+  <!-- Stats Cards -->
+  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    @if (dashboardService.loading()) {
+      @for (_ of [1,2,3,4]; track $index) {
+        <p-card>
+          <p-skeleton width="40%" height="0.75rem" class="mb-2"/>
+          <p-skeleton width="60%" height="1.75rem" class="mb-2"/>
+          <p-skeleton width="50%" height="0.75rem"/>
+        </p-card>
+      }
+    } @else {
+      @let stats = dashboardService.stats();
+      @if (stats) {
         <app-stat-card label="Total Strategies" [value]="'' + stats.total_strategies" [subtitle]="stats.active_strategies + ' active'"/>
         <app-stat-card label="Open Trades" [value]="'' + stats.open_trades" [subtitle]="stats.total_trades + ' total'"/>
         <app-stat-card label="Total P&L" [value]="formatCurrency(stats.total_pnl)" [valueClass]="pnlClass(stats.total_pnl)" [subtitle]="'Today: ' + formatCurrency(stats.today_pnl)"/>
         <app-stat-card label="Win Rate" [value]="stats.win_rate + '%'" [subtitle]="stats.total_trades + ' closed trades'"/>
-      </div>
+      }
     }
-  }
+  </div>
 
   <!-- Strategies Section -->
   <div class="mb-8">
     <div class="flex items-center justify-between mb-4">
       <h2 class="text-lg font-semibold">Strategies</h2>
-      <a routerLink="/strategies" class="text-sm text-info hover:underline">View All</a>
+      <a routerLink="/strategies" class="text-sm text-primary hover:underline">View All</a>
     </div>
     @if (strategyService.loading()) {
-      <app-loading/>
-    } @else {
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        @for (strategy of strategyService.strategies(); track strategy.id) {
-          <a [routerLink]="['/strategies', strategy.id]"
-             class="rounded-xl border border-edge bg-surface/50 p-5 hover:bg-elevated/50 transition-colors block">
-            <div class="flex items-center justify-between mb-2">
-              <h3 class="font-semibold text-sm">{{ strategy.name }}</h3>
-              <span class="w-2 h-2 rounded-full" [class]="strategy.is_active ? 'bg-positive' : 'bg-fg-faint'"></span>
-            </div>
-            <p class="text-xs text-fg-muted mb-3">{{ strategy.strategy_type }}</p>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        @for (_ of [1,2,3]; track $index) {
+          <p-card>
+            <ng-template #header>
+              <div class="flex items-center justify-between p-5 pb-0">
+                <p-skeleton width="50%" height="1rem"/>
+                <p-skeleton shape="circle" size="0.5rem"/>
+              </div>
+            </ng-template>
+            <p-skeleton width="30%" height="0.75rem" class="mb-3"/>
             <div class="grid grid-cols-3 gap-2">
-              <app-stat-card label="Trades" [value]="'' + strategy.total_trades" variant="flat" size="sm" align="center"/>
-              <app-stat-card label="Win Rate" [value]="strategy.win_rate + '%'" variant="flat" size="sm" align="center"/>
-              <app-stat-card label="P&L" [value]="formatCurrency(strategy.total_pnl)" [valueClass]="pnlClass(strategy.total_pnl)" variant="flat" size="sm" align="center"/>
+              @for (_ of [1,2,3]; track $index) {
+                <div class="text-center">
+                  <p-skeleton width="60%" height="0.625rem" class="mb-1 mx-auto"/>
+                  <p-skeleton width="40%" height="0.875rem" class="mx-auto"/>
+                </div>
+              }
             </div>
+          </p-card>
+        }
+      </div>
+    } @else {
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        @for (strategy of strategyService.strategies(); track strategy.id) {
+          <a [routerLink]="['/strategies', strategy.id]" class="block no-underline">
+            <p-card class="hover:bg-emphasis transition-colors cursor-pointer">
+              <ng-template #header>
+                <div class="flex items-center justify-between p-5 pb-0">
+                  <h3 class="font-semibold text-sm">{{ strategy.name }}</h3>
+                  <span class="w-2 h-2 rounded-full" [class]="strategy.is_active ? 'bg-green-500' : 'bg-surface-400'"></span>
+                </div>
+              </ng-template>
+              <p class="text-xs text-surface-500 mb-3">{{ strategy.strategy_type }}</p>
+              <div class="grid grid-cols-3 gap-2">
+                <app-stat-card label="Trades" [value]="'' + strategy.total_trades" variant="flat" size="sm" align="center"/>
+                <app-stat-card label="Win Rate" [value]="strategy.win_rate + '%'" variant="flat" size="sm" align="center"/>
+                <app-stat-card label="P&L" [value]="formatCurrency(strategy.total_pnl)" [valueClass]="pnlClass(strategy.total_pnl)" variant="flat" size="sm" align="center"/>
+              </div>
+            </p-card>
           </a>
         } @empty {
-          <div class="col-span-full text-center text-fg-faint py-8">No strategies found.</div>
+          <div class="col-span-full">
+            <app-empty-state title="No strategies" message="Create a strategy to get started." icon="inbox"/>
+          </div>
         }
       </div>
     }
@@ -51,14 +82,29 @@
   <div>
     <div class="flex items-center justify-between mb-4">
       <h2 class="text-lg font-semibold">Recent Trades</h2>
-      <a routerLink="/trades" class="text-sm text-info hover:underline">View All</a>
+      <a routerLink="/trades" class="text-sm text-primary hover:underline">View All</a>
     </div>
     @if (tradeService.loading()) {
-      <app-loading/>
+      <p-card>
+        <div class="flex flex-col gap-3">
+          @for (_ of [1,2,3,4,5]; track $index) {
+            <div class="flex items-center gap-4">
+              <p-skeleton width="6rem" height="1rem"/>
+              <p-skeleton width="5rem" height="1rem"/>
+              <p-skeleton width="3rem" height="1rem"/>
+              <p-skeleton width="4rem" height="1rem"/>
+              <p-skeleton width="4rem" height="1rem"/>
+              <div class="flex-1"></div>
+              <p-skeleton width="5rem" height="1rem"/>
+              <p-skeleton width="4rem" height="1.5rem" borderRadius="1rem"/>
+            </div>
+          }
+        </div>
+      </p-card>
     } @else {
-      <div class="rounded-xl border border-edge bg-surface/50 overflow-hidden">
+      <p-card>
         <app-trade-table [trades]="tradeService.trades()" [showStrategy]="true" [page]="1" [totalPages]="1"/>
-      </div>
+      </p-card>
     }
   </div>
 </div>

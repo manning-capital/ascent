@@ -4,6 +4,11 @@ import { FormsModule } from '@angular/forms';
 import { Observable } from 'rxjs';
 import { DatePicker } from 'primeng/datepicker';
 import { Splitter } from 'primeng/splitter';
+import { SelectButton } from 'primeng/selectbutton';
+import { Button } from 'primeng/button';
+import { Tag } from 'primeng/tag';
+import { Paginator } from 'primeng/paginator';
+import { Message } from 'primeng/message';
 import { RunDetailCardComponent, RunDetailItem, RunDetailField } from './run-detail-card.component';
 import { PaginatedResponse } from '../../models/trade.model';
 
@@ -21,19 +26,19 @@ type Radius = 5 | 10 | 30 | 60;
 @Component({
   selector: 'app-run-viewer',
   standalone: true,
-  imports: [DatePipe, FormsModule, DatePicker, Splitter, RunDetailCardComponent],
+  imports: [DatePipe, FormsModule, DatePicker, Splitter, SelectButton, Button, Tag, Paginator, Message, RunDetailCardComponent],
   template: `
-    <p-splitter [panelSizes]="[60, 40]" [minSizes]="[25, 15]" [gutterSize]="6" class="h-full block">
+    <p-splitter [panelSizes]="[60, 40]" [minSizes]="[25, 15]" [gutterSize]="6" class="h-full">
       <ng-template #panel>
       <!-- Left: Selected Run Detail -->
       <div class="h-full overflow-y-auto">
         @if (selectedRun(); as run) {
-          <div class="p-5">
+          <div class="p-4">
             <app-run-detail-card [run]="run" [extraFields]="extraDetailFields"/>
           </div>
         } @else {
-          <div class="flex items-center justify-center h-full text-sm text-fg-faint">
-            Select a run to view details
+          <div class="flex items-center justify-center h-full">
+            <p-message severity="secondary">Select a run to view details</p-message>
           </div>
         }
       </div>
@@ -43,154 +48,107 @@ type Radius = 5 | 10 | 30 | 60;
       <!-- Right: Run List with Filters -->
       <div class="h-full flex flex-col">
         <!-- Filter bar -->
-        <div class="px-3 py-2 border-b border-edge shrink-0 space-y-2">
-          <div class="flex items-center gap-1.5">
-            <span class="text-[11px] text-fg-faint mr-1">Filter:</span>
-            <button
-              (click)="setFilterMode('none')"
-              class="px-2 py-0.5 rounded text-[11px] transition-colors"
-              [class]="filterMode() === 'none' ? 'bg-info/20 text-info' : 'text-fg-muted hover:text-fg hover:bg-fg/5'">
-              All
-            </button>
-            <button
-              (click)="setFilterMode('range')"
-              class="px-2 py-0.5 rounded text-[11px] transition-colors"
-              [class]="filterMode() === 'range' ? 'bg-info/20 text-info' : 'text-fg-muted hover:text-fg hover:bg-fg/5'">
-              Range
-            </button>
-            <button
-              (click)="setFilterMode('around')"
-              class="px-2 py-0.5 rounded text-[11px] transition-colors"
-              [class]="filterMode() === 'around' ? 'bg-info/20 text-info' : 'text-fg-muted hover:text-fg hover:bg-fg/5'">
-              Around
-            </button>
-          </div>
+        <div class="p-3 shrink-0 space-y-2">
+          <p-selectButton
+            [options]="filterOptions"
+            [ngModel]="filterMode()"
+            (ngModelChange)="setFilterMode($event)"
+            optionLabel="label"
+            optionValue="value"
+            size="small"/>
 
           <!-- Range filter inputs -->
           @if (filterMode() === 'range') {
-            <div class="space-y-1.5">
+            <div class="flex flex-col gap-2">
               <div class="flex items-center gap-2">
-                <label class="text-[10px] text-fg-faint w-10 shrink-0">From</label>
+                <label class="text-xs text-surface-500 w-10 shrink-0">From</label>
                 <p-datepicker
                   [ngModel]="rangeFrom()"
                   (ngModelChange)="rangeFrom.set($event)"
                   [showTime]="true"
                   dateFormat="yy-mm-dd"
                   hourFormat="24"
-                  [style]="{'width': '100%'}"/>
+                  [fluid]="true"/>
               </div>
               <div class="flex items-center gap-2">
-                <label class="text-[10px] text-fg-faint w-10 shrink-0">To</label>
+                <label class="text-xs text-surface-500 w-10 shrink-0">To</label>
                 <p-datepicker
                   [ngModel]="rangeTo()"
                   (ngModelChange)="rangeTo.set($event)"
                   [showTime]="true"
                   dateFormat="yy-mm-dd"
                   hourFormat="24"
-                  [style]="{'width': '100%'}"/>
+                  [fluid]="true"/>
               </div>
-              <div class="flex gap-1.5">
-                <button
-                  (click)="applyFilter()"
-                  class="flex-1 py-1 rounded text-[11px] bg-info/20 text-info hover:bg-info/30 transition-colors">
-                  Apply
-                </button>
-                <button
-                  (click)="clearFilter()"
-                  class="px-2 py-1 rounded text-[11px] text-fg-muted hover:text-fg hover:bg-fg/5 transition-colors">
-                  Clear
-                </button>
+              <div class="flex gap-2">
+                <p-button label="Apply" severity="info" size="small" (onClick)="applyFilter()" [fluid]="true"/>
+                <p-button label="Clear" severity="secondary" size="small" [text]="true" (onClick)="clearFilter()"/>
               </div>
             </div>
           }
 
           <!-- Around filter inputs -->
           @if (filterMode() === 'around') {
-            <div class="space-y-1.5">
+            <div class="flex flex-col gap-2">
               <p-datepicker
                 [ngModel]="aroundDatetime()"
                 (ngModelChange)="aroundDatetime.set($event)"
                 [showTime]="true"
                 dateFormat="yy-mm-dd"
                 hourFormat="24"
-                [style]="{'width': '100%'}"/>
-              <div class="flex items-center gap-1">
-                <span class="text-[10px] text-fg-faint shrink-0">&plusmn;</span>
-                @for (r of radiusOptions; track r) {
-                  <button
-                    (click)="aroundRadius.set(r)"
-                    class="px-2 py-0.5 rounded text-[11px] transition-colors"
-                    [class]="aroundRadius() === r ? 'bg-info/20 text-info' : 'text-fg-muted hover:text-fg hover:bg-fg/5'">
-                    {{ radiusLabel(r) }}
-                  </button>
-                }
-              </div>
-              <div class="flex gap-1.5">
-                <button
-                  (click)="applyFilter()"
-                  class="flex-1 py-1 rounded text-[11px] bg-info/20 text-info hover:bg-info/30 transition-colors">
-                  Apply
-                </button>
-                <button
-                  (click)="clearFilter()"
-                  class="px-2 py-1 rounded text-[11px] text-fg-muted hover:text-fg hover:bg-fg/5 transition-colors">
-                  Clear
-                </button>
+                [fluid]="true"/>
+              <p-selectButton
+                [options]="radiusSelectOptions"
+                [ngModel]="aroundRadius()"
+                (ngModelChange)="aroundRadius.set($event)"
+                optionLabel="label"
+                optionValue="value"
+                size="small"/>
+              <div class="flex gap-2">
+                <p-button label="Apply" severity="info" size="small" (onClick)="applyFilter()" [fluid]="true"/>
+                <p-button label="Clear" severity="secondary" size="small" [text]="true" (onClick)="clearFilter()"/>
               </div>
             </div>
           }
         </div>
 
         <!-- Run count -->
-        <div class="px-3 py-2 border-b border-edge shrink-0">
-          <p class="text-[11px] text-fg-faint">{{ total() }} runs</p>
+        <div class="px-3 py-2 shrink-0">
+          <span class="text-xs text-surface-500">{{ total() }} runs</span>
         </div>
 
         <!-- Run list -->
-        <div class="flex-1 overflow-y-auto">
+        <div class="flex-1 overflow-y-auto min-h-0">
           @for (run of runs(); track run.id) {
             <div
               (click)="selectRun(run)"
-              class="px-3 py-2.5 border-b border-edge-dim cursor-pointer transition-colors"
-              [class]="selectedRun()?.id === run.id ? 'bg-info/10 border-l-2 border-l-info' : 'hover:bg-fg/[.03]'">
-              <div class="flex items-center justify-between mb-0.5">
-                <div class="flex items-center gap-1.5">
-                  <span class="w-2 h-2 rounded-full shrink-0" [class]="statusDotClass(run.status)"></span>
-                  <span class="text-[11px] font-medium" [class]="statusClass(run.status)">{{ run.status }}</span>
-                </div>
-                <span class="text-[10px] text-fg-faint">#{{ run.id }}</span>
+              class="px-3 py-2.5 cursor-pointer transition-colors border-b border-surface"
+              [class.bg-highlight]="selectedRun()?.id === run.id"
+              [class.hover:bg-emphasis]="selectedRun()?.id !== run.id">
+              <div class="flex items-center justify-between mb-1">
+                <p-tag [value]="run.status" [severity]="statusSeverity(run.status)" [rounded]="true"/>
+                <span class="text-xs text-surface-500">#{{ run.id }}</span>
               </div>
-              <div class="text-[10px] text-fg-faint flex items-center justify-between">
+              <div class="text-xs text-surface-500 flex items-center justify-between">
                 <span>{{ run.started_at | date:'MMM d, h:mm:ss a' }}</span>
                 <span>{{ durationLabel(run) }}</span>
               </div>
               @if (run.error_message) {
-                <p class="text-[10px] text-negative mt-0.5 line-clamp-1">{{ run.error_message }}</p>
+                <p class="text-xs text-red-500 mt-1 line-clamp-1">{{ run.error_message }}</p>
               }
             </div>
           } @empty {
-            <div class="flex items-center justify-center h-32 text-sm text-fg-faint">No runs found.</div>
+            <div class="flex items-center justify-center py-8 text-sm text-surface-400">No runs found.</div>
           }
         </div>
 
         <!-- Pagination -->
-        <div class="flex items-center justify-between px-3 py-2 border-t border-edge shrink-0 text-[11px] text-fg-muted">
-          <span>Page {{ page() }} / {{ totalPages() || 1 }}</span>
-          <div class="flex items-center gap-1.5">
-            <button
-              [disabled]="page() <= 1"
-              (click)="onPageChange(page() - 1)"
-              class="px-2 py-0.5 rounded border border-edge hover:bg-fg/10 disabled:opacity-30 transition-colors">
-              Prev
-            </button>
-            <button
-              [disabled]="page() >= totalPages()"
-              (click)="onPageChange(page() + 1)"
-              class="px-2 py-0.5 rounded border border-edge hover:bg-fg/10 disabled:opacity-30 transition-colors">
-              Next
-            </button>
-          </div>
-        </div>
+        <p-paginator
+          [rows]="pageSize"
+          [totalRecords]="total()"
+          [first]="(page() - 1) * pageSize"
+          (onPageChange)="onPageChange(($event.page ?? 0) + 1)"
+          class="shrink-0"/>
       </div>
       </ng-template>
     </p-splitter>
@@ -214,7 +172,19 @@ export class RunViewerComponent implements OnInit {
   rangeTo = signal<Date | null>(null);
   aroundDatetime = signal<Date | null>(null);
   aroundRadius = signal<Radius>(5);
-  radiusOptions: Radius[] = [5, 10, 30, 60];
+
+  filterOptions = [
+    { label: 'All', value: 'none' },
+    { label: 'Range', value: 'range' },
+    { label: 'Around', value: 'around' },
+  ];
+
+  radiusSelectOptions = [
+    { label: '5m', value: 5 },
+    { label: '10m', value: 10 },
+    { label: '30m', value: 30 },
+    { label: '1h', value: 60 },
+  ];
 
   ngOnInit(): void {
     this.loadRuns();
@@ -248,6 +218,23 @@ export class RunViewerComponent implements OnInit {
 
   clearFilter(): void {
     this.setFilterMode('none');
+  }
+
+  statusSeverity(status: string): 'success' | 'danger' | 'warn' | 'secondary' | 'info' {
+    switch (status) {
+      case 'COMPLETED': return 'success';
+      case 'FAILED': return 'danger';
+      case 'RUNNING': return 'warn';
+      case 'PENDING': return 'secondary';
+      default: return 'info';
+    }
+  }
+
+  durationLabel(run: RunItem): string {
+    if (!run.completed_at) return run.status === 'RUNNING' ? 'running...' : '-';
+    const ms = new Date(run.completed_at).getTime() - new Date(run.started_at).getTime();
+    if (ms < 1000) return `${ms}ms`;
+    return `${(ms / 1000).toFixed(1)}s`;
   }
 
   private loadRuns(): void {
@@ -284,37 +271,5 @@ export class RunViewerComponent implements OnInit {
       }
     }
     return undefined;
-  }
-
-  radiusLabel(r: number): string {
-    if (r < 60) return `${r}m`;
-    return `${r / 60}h`;
-  }
-
-  statusClass(status: string): string {
-    switch (status) {
-      case 'COMPLETED': return 'text-positive';
-      case 'FAILED': return 'text-negative';
-      case 'RUNNING': return 'text-warning';
-      case 'PENDING': return 'text-fg-muted';
-      default: return '';
-    }
-  }
-
-  statusDotClass(status: string): string {
-    switch (status) {
-      case 'COMPLETED': return 'bg-positive';
-      case 'FAILED': return 'bg-negative';
-      case 'RUNNING': return 'bg-warning animate-pulse';
-      case 'PENDING': return 'bg-fg-faint';
-      default: return 'bg-fg-faint';
-    }
-  }
-
-  durationLabel(run: RunItem): string {
-    if (!run.completed_at) return run.status === 'RUNNING' ? 'running...' : '-';
-    const ms = new Date(run.completed_at).getTime() - new Date(run.started_at).getTime();
-    if (ms < 1000) return `${ms}ms`;
-    return `${(ms / 1000).toFixed(1)}s`;
   }
 }

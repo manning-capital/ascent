@@ -3,9 +3,9 @@ import { provideRouter } from '@angular/router';
 import { provideHttpClient } from '@angular/common/http';
 import { providePrimeNG } from 'primeng/config';
 import { ConfirmationService, MessageService } from 'primeng/api';
+import Aura from '@primeuix/themes/aura';
 
 import { routes } from './app.routes';
-import { AscentPreset } from './primeng';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -15,8 +15,16 @@ export const appConfig: ApplicationConfig = {
     MessageService,
     ConfirmationService,
     providePrimeNG({
-      theme: 'none',
-      pt: AscentPreset,
+      theme: {
+        preset: Aura,
+        options: {
+          darkModeSelector: '.dark',
+          cssLayer: {
+            name: 'primeng',
+            order: 'tw-base, primeng, tw-utilities',
+          },
+        },
+      },
     }),
   ]
 };

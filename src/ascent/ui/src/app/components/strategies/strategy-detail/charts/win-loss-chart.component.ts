@@ -7,10 +7,11 @@ import { CHART_COLORS } from './chart-defaults';
   selector: 'app-win-loss-chart',
   standalone: true,
   imports: [UIChart],
+  styles: [`:host { display: block; height: 100%; }`],
   template: `
     <div class="h-full w-full min-h-[200px] relative">
       @if (wins() + losses() + breakeven() > 0) {
-        <p-chart type="doughnut" [data]="chartData()" [options]="chartOptions"/>
+        <p-chart type="doughnut" [data]="chartData()" [options]="chartOptions" [style]="{'width': '100%', 'height': '100%'}"/>
         <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div class="text-center">
             <span class="text-2xl font-bold text-fg">{{ winRate() }}%</span>

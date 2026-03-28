@@ -3,15 +3,18 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { Select } from 'primeng/select';
 import { DatePicker } from 'primeng/datepicker';
+import { InputText } from 'primeng/inputtext';
+import { Card } from 'primeng/card';
+import { Button } from 'primeng/button';
+import { SelectButton } from 'primeng/selectbutton';
 import { TradeService } from '../../services/trade.service';
 import { StrategyService } from '../../services/strategy.service';
 import { TradeTableComponent } from '../trade-table/trade-table.component';
-import { LoadingSpinnerComponent } from '../shared/loading-spinner.component';
 
 @Component({
   selector: 'app-trade-list',
   standalone: true,
-  imports: [FormsModule, Select, DatePicker, TradeTableComponent, LoadingSpinnerComponent],
+  imports: [FormsModule, Select, DatePicker, InputText, Card, Button, SelectButton, TradeTableComponent],
   templateUrl: './trade-list.component.html',
 })
 export class TradeListComponent implements OnInit {
@@ -30,9 +33,13 @@ export class TradeListComponent implements OnInit {
 
   availableTags = ['LONG', 'SHORT', 'COMPOUND', 'PAPER'];
   statusOptions = [
-    { label: 'Open', value: 'OPEN' },
-    { label: 'Closed', value: 'CLOSED' },
     { label: 'Pending', value: 'PENDING' },
+    { label: 'Opening', value: 'OPENING' },
+    { label: 'Open', value: 'OPEN' },
+    { label: 'Closing', value: 'CLOSING' },
+    { label: 'Closed', value: 'CLOSED' },
+    { label: 'Cancelled', value: 'CANCELLED' },
+    { label: 'Error', value: 'ERROR' },
   ];
   private isSyncingFromUrl = false;
 

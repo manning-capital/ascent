@@ -77,6 +77,41 @@ class ProviderType(Base):
         return f"{ProviderType.__name__}({self.id}, {self.name})"
 
 
+class ExchangeType(Base):
+    __tablename__ = "exchange_type"
+    __table_args__ = {"comment": "The type of exchange, e.g. spot, futures, paper, OTC"}
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        primary_key=True,
+        default=uuid.uuid4,
+        comment="The unique identifier of the exchange type",
+    )
+    name: Mapped[str] = mapped_column(
+        String(100), nullable=False, comment="The name of the exchange type"
+    )
+    description: Mapped[str | None] = mapped_column(
+        String(1000), nullable=True, comment="The description of the exchange type"
+    )
+    is_active: Mapped[bool] = mapped_column(
+        default=True, comment="Whether the exchange type is active"
+    )
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        nullable=False,
+        server_default=func.now(),
+        comment="The timestamp of the creation of the exchange type",
+    )
+    updated_at: Mapped[datetime.datetime | None] = mapped_column(
+        nullable=False,
+        server_onupdate=func.now(),
+        server_default=func.now(),
+        comment="The timestamp of the last update of the exchange type",
+    )
+
+    def __repr__(self):
+        return f"{ExchangeType.__name__}({self.id}, {self.name})"
+
+
 class ContentType(Base):
     __tablename__ = "content_type"
     __table_args__ = {"comment": "The type of content, e.g. news, social media, etc."}

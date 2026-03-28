@@ -385,6 +385,7 @@ def publish_feed_data(
 _PARTITION_DATA_CONFIGS: dict[str, dict] = {
     "provider_asset_attribute": {
         "select": (
+            "t.provider_id, t.from_asset_id, t.to_asset_id, "
             "p.name AS provider, "
             "fa.name AS from_asset, "
             "ta.name AS to_asset, "
@@ -416,6 +417,7 @@ _PARTITION_DATA_CONFIGS: dict[str, dict] = {
     },
     "provider_asset_period_attribute": {
         "select": (
+            "t.provider_id, t.from_asset_id, t.to_asset_id, t.period_id, "
             "p.name AS provider, "
             "fa.name AS from_asset, "
             "ta.name AS to_asset, "
@@ -449,7 +451,9 @@ _PARTITION_DATA_CONFIGS: dict[str, dict] = {
         },
     },
     "provider_asset_metadata": {
-        "select": ("p.name AS provider, a.name AS asset, m.name AS metadata, t.value"),
+        "select": (
+            "t.provider_id, t.asset_id, p.name AS provider, a.name AS asset, m.name AS metadata, t.value"
+        ),
         "joins": (
             "LEFT JOIN provider p ON p.id = t.provider_id "
             "LEFT JOIN asset a ON a.id = t.asset_id "
@@ -472,7 +476,9 @@ _PARTITION_DATA_CONFIGS: dict[str, dict] = {
         },
     },
     "provider_content": {
-        "select": ("p.name AS provider, ct.name AS content_type, t.content_external_code"),
+        "select": (
+            "t.provider_id, p.name AS provider, ct.name AS content_type, t.content_external_code"
+        ),
         "joins": (
             "LEFT JOIN provider p ON p.id = t.provider_id "
             "LEFT JOIN content_type ct ON ct.id = t.content_type_id"
@@ -648,11 +654,15 @@ def _pivot_rows(
 
     df = pd.DataFrame(rows)
     group_cols = pivot_cfg["group_columns"]
+    eav_group_cols = pivot_cfg.get("eav_group_columns", [])
     pivot_col = pivot_cfg["pivot_column"]
     value_col = pivot_cfg["value_column"]
 
+    # Include ID columns in the pivot index so they survive into the output
+    index_cols = list(dict.fromkeys(eav_group_cols + group_cols))
+
     pivoted = df.pivot_table(
-        index=group_cols,
+        index=index_cols,
         columns=pivot_col,
         values=value_col,
         aggfunc="first",

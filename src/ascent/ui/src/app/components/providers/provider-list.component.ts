@@ -4,13 +4,17 @@ import { FormsModule } from '@angular/forms';
 import { ProviderService } from '../../services/provider.service';
 import { ToastService } from '../../services/toast.service';
 import { Select } from 'primeng/select';
-import { LoadingSpinnerComponent } from '../shared/loading-spinner.component';
+import { InputText } from 'primeng/inputtext';
+import { Textarea } from 'primeng/textarea';
+import { Card } from 'primeng/card';
+import { Button } from 'primeng/button';
+import { Skeleton } from 'primeng/skeleton';
 import { ProviderListItem, ProviderCreate } from '../../models/provider.model';
 
 @Component({
   selector: 'app-provider-list',
   standalone: true,
-  imports: [RouterLink, FormsModule, LoadingSpinnerComponent, Select],
+  imports: [RouterLink, FormsModule, Select, InputText, Textarea, Card, Button, Skeleton],
   templateUrl: './provider-list.component.html',
 })
 export class ProviderListComponent implements OnInit {

@@ -1,33 +1,57 @@
 @if (assetService.loading()) {
-  <div class="flex items-center justify-center h-[calc(100vh-3.5rem)]">
-    <app-loading/>
+  <div class="flex flex-col h-[calc(100vh-3.5rem)]">
+    <div class="flex items-center gap-3 px-4 py-2 border-b border-surface shrink-0 bg-emphasis">
+      <p-skeleton width="4rem" height="0.875rem"/>
+      <span class="text-surface-300">|</span>
+      <p-skeleton width="8rem" height="1.125rem"/>
+      <p-skeleton width="3rem" height="0.875rem"/>
+      <p-skeleton shape="circle" size="0.5rem"/>
+      <p-skeleton width="4rem" height="1.375rem" borderRadius="0.25rem"/>
+    </div>
+    <div class="flex gap-2 px-4 py-3 border-b border-surface">
+      @for (_ of [1,2,3]; track $index) {
+        <p-skeleton width="5rem" height="1rem"/>
+      }
+    </div>
+    <div class="max-w-3xl mx-auto p-6 space-y-6 w-full">
+      <p-card>
+        <div class="space-y-3">
+          @for (_ of [1,2,3,4]; track $index) {
+            <div class="flex justify-between">
+              <p-skeleton width="30%" height="0.875rem"/>
+              <p-skeleton width="40%" height="0.875rem"/>
+            </div>
+          }
+        </div>
+      </p-card>
+    </div>
   </div>
 } @else {
   @let asset = assetService.selectedAsset();
   @if (asset) {
   <div class="flex flex-col h-[calc(100vh-3.5rem)]">
     <!-- Header Bar -->
-    <div class="flex items-center gap-3 px-4 py-2 border-b border-edge shrink-0 bg-surface/30">
-      <a routerLink="/settings/assets" class="text-sm text-info hover:underline">&larr; Assets</a>
-      <span class="text-fg/20">|</span>
+    <div class="flex items-center gap-3 px-4 py-2 border-b border-surface shrink-0 bg-emphasis">
+      <a routerLink="/settings/assets" class="text-sm text-primary hover:underline">&larr; Assets</a>
+      <span class="text-surface-300">|</span>
       <h1 class="text-lg font-bold truncate">{{ asset.name }}</h1>
       @if (asset.symbol) {
-        <span class="text-sm text-fg-muted font-mono">({{ asset.symbol }})</span>
+        <span class="text-sm text-surface-500 font-mono">({{ asset.symbol }})</span>
       }
-      <span class="w-2 h-2 rounded-full shrink-0" [class]="asset.is_active ? 'bg-positive' : 'bg-fg-faint'"></span>
+      <span class="w-2 h-2 rounded-full shrink-0" [class]="asset.is_active ? 'bg-green-500' : 'bg-surface-400'"></span>
       @if (asset.asset_type_name) {
-        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wider bg-info/15 text-info">{{ asset.asset_type_name }}</span>
+        <p-tag [value]="asset.asset_type_name!" severity="info"/>
       }
       <div class="ml-auto flex items-center gap-2">
         @if (!editing()) {
-          <button (click)="startEdit()" class="px-3 py-1 rounded-lg text-xs text-fg-muted hover:text-fg hover:bg-fg/5 transition-colors">Edit</button>
-          <button (click)="deleteAsset()" class="px-3 py-1 rounded-lg text-xs text-negative/70 hover:text-negative hover:bg-negative/10 transition-colors">Delete</button>
+          <p-button label="Edit" severity="secondary" [text]="true" size="small" (onClick)="startEdit()"/>
+          <p-button label="Delete" severity="danger" [text]="true" size="small" (onClick)="deleteAsset()"/>
         }
       </div>
     </div>
 
     <!-- Tab Bar -->
-    <p-tabs [(value)]="activeTab">
+    <p-tabs [value]="activeTab()" (valueChange)="onTabChange($any($event))">
       <p-tablist>
         @for (tab of tabs; track tab) {
           <p-tab [value]="tab">{{ tab }}</p-tab>
@@ -42,54 +66,51 @@
       @if (activeTab() === 'Overview') {
         <div class="max-w-3xl mx-auto p-6 space-y-6 overflow-y-auto h-full">
           @if (editing()) {
-            <div class="rounded-xl border border-info/50 bg-surface/50 p-5">
-              <h3 class="font-semibold text-sm mb-4">Edit Asset</h3>
+            <p-card header="Edit Asset">
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label class="block text-xs text-fg-muted mb-1">Name *</label>
-                  <input type="text" [(ngModel)]="editName" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info"/>
+                  <label class="block text-xs text-surface-500 mb-1">Name *</label>
+                  <input type="text" pInputText [(ngModel)]="editName" class="w-full"/>
                 </div>
                 <div>
-                  <label class="block text-xs text-fg-muted mb-1">Symbol</label>
-                  <input type="text" [(ngModel)]="editSymbol" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info"/>
+                  <label class="block text-xs text-surface-500 mb-1">Symbol</label>
+                  <input type="text" pInputText [(ngModel)]="editSymbol" class="w-full"/>
                 </div>
                 <div class="md:col-span-2">
-                  <label class="block text-xs text-fg-muted mb-1">Description</label>
-                  <textarea [(ngModel)]="editDescription" rows="3" class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info"></textarea>
+                  <label class="block text-xs text-surface-500 mb-1">Description</label>
+                  <textarea pTextarea [(ngModel)]="editDescription" rows="3" class="w-full"></textarea>
                 </div>
                 <div class="flex items-center gap-2">
                   <p-checkbox [(ngModel)]="editIsActive" [binary]="true" inputId="editActive"/>
-                  <label for="editActive" class="text-sm text-fg-muted">Active</label>
+                  <label for="editActive" class="text-sm text-surface-500">Active</label>
                 </div>
               </div>
               <div class="flex gap-2 mt-4">
-                <button (click)="submitEdit()" class="px-4 py-2 rounded-lg bg-positive/15 text-positive text-sm font-medium hover:bg-positive/25 transition-colors">Save</button>
-                <button (click)="cancelEdit()" class="px-4 py-2 rounded-lg bg-fg/5 text-fg-muted text-sm font-medium hover:bg-fg/10 transition-colors">Cancel</button>
+                <p-button label="Save" severity="info" (onClick)="submitEdit()"/>
+                <p-button label="Cancel" severity="secondary" [text]="true" (onClick)="cancelEdit()"/>
               </div>
-            </div>
+            </p-card>
           } @else {
-            <div class="rounded-xl border border-edge bg-surface/50 p-5">
-              <h3 class="font-semibold text-sm mb-3">Info</h3>
+            <p-card header="Info">
               <div class="space-y-2 text-sm">
-                <div class="flex justify-between"><span class="text-fg-muted">Name</span><span class="font-medium">{{ asset.name }}</span></div>
+                <div class="flex justify-between"><span class="text-surface-500">Name</span><span class="font-medium">{{ asset.name }}</span></div>
                 @if (asset.symbol) {
-                  <div class="flex justify-between"><span class="text-fg-muted">Symbol</span><span class="font-mono">{{ asset.symbol }}</span></div>
+                  <div class="flex justify-between"><span class="text-surface-500">Symbol</span><span class="font-mono">{{ asset.symbol }}</span></div>
                 }
                 @if (asset.asset_type_name) {
-                  <div class="flex justify-between"><span class="text-fg-muted">Type</span><span>{{ asset.asset_type_name }}</span></div>
+                  <div class="flex justify-between"><span class="text-surface-500">Type</span><span>{{ asset.asset_type_name }}</span></div>
                 }
-                <div class="flex justify-between"><span class="text-fg-muted">Active</span><span>{{ asset.is_active ? 'Yes' : 'No' }}</span></div>
+                <div class="flex justify-between"><span class="text-surface-500">Active</span><span>{{ asset.is_active ? 'Yes' : 'No' }}</span></div>
                 @if (asset.created_at) {
-                  <div class="flex justify-between"><span class="text-fg-muted">Created</span><span>{{ asset.created_at | date:'mediumDate' }}</span></div>
+                  <div class="flex justify-between"><span class="text-surface-500">Created</span><span>{{ asset.created_at | date:'mediumDate' }}</span></div>
                 }
               </div>
-            </div>
+            </p-card>
 
             @if (asset.description) {
-              <div class="rounded-xl border border-edge bg-surface/50 p-5">
-                <h3 class="font-semibold text-sm mb-3">Description</h3>
-                <p class="text-sm text-fg-muted">{{ asset.description }}</p>
-              </div>
+              <p-card header="Description">
+                <p class="text-sm text-surface-500">{{ asset.description }}</p>
+              </p-card>
             }
           }
         </div>
@@ -101,55 +122,55 @@
 
           <!-- History Panel (shared) -->
           @if (historyMetadataId()) {
-            <div class="mb-6 rounded-xl border border-info/30 bg-info/5 p-5">
-              <div class="flex items-center justify-between mb-3">
-                <h4 class="font-semibold text-sm">History: {{ historyMetadataName() }}</h4>
-                <button (click)="closeHistory()" class="text-xs text-fg-muted hover:text-fg transition-colors">Close</button>
-              </div>
-              <div class="rounded-lg border border-edge bg-surface/50 overflow-hidden">
-                <p-table [value]="historyEntries()">
-                  <ng-template #header>
+            <p-card class="mb-6">
+              <ng-template #header>
+                <div class="flex items-center justify-between px-5 pt-4">
+                  <h4 class="font-semibold text-sm">History: {{ historyMetadataName() }}</h4>
+                  <p-button label="Close" severity="secondary" [text]="true" size="small" (onClick)="closeHistory()"/>
+                </div>
+              </ng-template>
+              <p-table [value]="historyEntries()">
+                <ng-template #header>
+                  <tr>
+                    <th>Timestamp</th>
+                    <th>Value</th>
+                    <th class="w-36"></th>
+                  </tr>
+                </ng-template>
+                <ng-template #body let-h>
+                  @if (editingHistoryTimestamp() === h.timestamp) {
                     <tr>
-                      <th>Timestamp</th>
-                      <th>Value</th>
-                      <th class="w-36"></th>
+                      <td>
+                        <p-datepicker [(ngModel)]="editHistoryTimestamp" [showTime]="true" dateFormat="yy-mm-dd" hourFormat="24" [style]="{'width': '100%'}"/>
+                      </td>
+                      <td>
+                        <input type="text" pInputText [(ngModel)]="editHistoryValue" class="w-full font-mono"/>
+                      </td>
+                      <td>
+                        <div class="flex items-center gap-2">
+                          <p-button label="Save" severity="info" [text]="true" size="small" (onClick)="submitEditHistory()"/>
+                          <p-button label="Cancel" severity="secondary" [text]="true" size="small" (onClick)="cancelEditHistory()"/>
+                        </div>
+                      </td>
                     </tr>
-                  </ng-template>
-                  <ng-template #body let-h>
-                    @if (editingHistoryTimestamp() === h.timestamp) {
-                      <tr class="bg-info/5">
-                        <td>
-                          <p-datepicker [(ngModel)]="editHistoryTimestamp" [showTime]="true" dateFormat="yy-mm-dd" hourFormat="24" [style]="{'width': '100%'}"/>
-                        </td>
-                        <td>
-                          <input type="text" [(ngModel)]="editHistoryValue" class="px-2 py-1 rounded bg-canvas border border-edge text-fg text-xs font-mono focus:outline-none focus:border-info w-full"/>
-                        </td>
-                        <td>
-                          <div class="flex items-center gap-2">
-                            <button (click)="submitEditHistory()" class="text-xs text-positive hover:text-positive/80 transition-colors font-medium">Save</button>
-                            <button (click)="cancelEditHistory()" class="text-xs text-fg-muted hover:text-fg transition-colors">Cancel</button>
-                          </div>
-                        </td>
-                      </tr>
-                    } @else {
-                      <tr>
-                        <td class="text-xs text-fg-muted font-mono">{{ h.timestamp | date:'medium' }}</td>
-                        <td class="font-mono text-xs">{{ formatValue(h.value) }}</td>
-                        <td>
-                          <div class="flex items-center gap-2">
-                            <button (click)="startEditHistory(h)" class="text-xs text-info/70 hover:text-info transition-colors">Edit</button>
-                            <button (click)="deleteHistoryEntry(h)" class="text-xs text-negative/70 hover:text-negative transition-colors">Delete</button>
-                          </div>
-                        </td>
-                      </tr>
-                    }
-                  </ng-template>
-                  <ng-template #emptymessage>
-                    <tr><td colspan="3" class="text-center text-fg-faint text-xs">No history.</td></tr>
-                  </ng-template>
-                </p-table>
-              </div>
-            </div>
+                  } @else {
+                    <tr>
+                      <td class="text-xs text-surface-500 font-mono">{{ h.timestamp | date:'medium' }}</td>
+                      <td class="font-mono text-xs">{{ formatValue(h.value) }}</td>
+                      <td>
+                        <div class="flex items-center gap-2">
+                          <p-button label="Edit" severity="info" [text]="true" size="small" (onClick)="startEditHistory(h)"/>
+                          <p-button label="Delete" severity="danger" [text]="true" size="small" (onClick)="deleteHistoryEntry(h)"/>
+                        </div>
+                      </td>
+                    </tr>
+                  }
+                </ng-template>
+                <ng-template #emptymessage>
+                  <tr><td colspan="3" class="text-center text-surface-400 text-xs">No history.</td></tr>
+                </ng-template>
+              </p-table>
+            </p-card>
           }
 
           <!-- Asset Type Fields (structured form) -->
@@ -157,34 +178,34 @@
             <div class="mb-8">
               <div class="mb-4">
                 <h3 class="font-semibold text-sm">{{ asset.asset_type_name }} Fields</h3>
-                <p class="text-xs text-fg-faint mt-1">Required and optional metadata fields defined for this asset type.</p>
+                <p class="text-xs text-surface-400 mt-1">Required and optional metadata fields defined for this asset type.</p>
               </div>
-              <div class="rounded-xl border border-edge bg-surface/50 overflow-hidden">
+              <p-card>
                 @for (field of assetTypeFields(); track field.metadata_id) {
                   @let currentValue = fieldValue(field.metadata_id);
-                  <div class="px-5 py-3 border-b border-edge/50 last:border-b-0 space-y-2">
+                  <div class="px-5 py-3 border-b border-surface last:border-b-0 space-y-2">
                     <!-- Row: Label + Current Value + History/Clear -->
                     <div class="flex items-center gap-4">
                       <div class="w-40 shrink-0">
                         <span class="text-sm font-medium">{{ field.metadata_name }}</span>
                         @if (field.is_required) {
-                          <span class="text-negative text-xs ml-1">*</span>
+                          <span class="text-red-500 text-xs ml-1">*</span>
                         }
                         @if (field.metadata_description) {
-                          <p class="text-xs text-fg-faint mt-0.5 line-clamp-1">{{ field.metadata_description }}</p>
+                          <p class="text-xs text-surface-400 mt-0.5 line-clamp-1">{{ field.metadata_description }}</p>
                         }
                       </div>
                       <div class="flex-1 min-w-0">
                         @if (currentValue !== null) {
                           <span class="font-mono text-sm">{{ formatValue(currentValue) }}</span>
                         } @else {
-                          <span class="text-fg-faint text-sm italic">Not set</span>
+                          <span class="text-surface-400 text-sm italic">Not set</span>
                         }
                       </div>
                       <div class="flex items-center gap-2 shrink-0">
-                        <button (click)="showFieldHistory(field)" class="text-xs text-info/70 hover:text-info transition-colors">History</button>
+                        <p-button label="History" severity="info" [text]="true" size="small" (onClick)="showFieldHistory(field)"/>
                         @if (currentValue !== null) {
-                          <button (click)="deleteFieldMetadata(field.metadata_id)" class="text-xs text-negative/70 hover:text-negative transition-colors">Clear</button>
+                          <p-button label="Clear" severity="danger" [text]="true" size="small" (onClick)="deleteFieldMetadata(field.metadata_id)"/>
                         }
                       </div>
                     </div>
@@ -193,24 +214,24 @@
                       @if (field.value_type === 'boolean') {
                         <p-select [(ngModel)]="fieldInputValues[field.metadata_id]" [options]="[{label: 'true', value: 'true'}, {label: 'false', value: 'false'}]" optionLabel="label" optionValue="value" placeholder="-- select --"/>
                       } @else if (field.value_type === 'number') {
-                        <input [(ngModel)]="fieldInputValues[field.metadata_id]" type="number" placeholder="Enter number..."
-                               class="w-full md:w-48 px-3 py-1.5 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info"/>
+                        <input [(ngModel)]="fieldInputValues[field.metadata_id]" type="number" pInputText placeholder="Enter number..."
+                               class="w-full md:w-48"/>
                       } @else if (field.value_type === 'json') {
-                        <input [(ngModel)]="fieldInputValues[field.metadata_id]" type="text" placeholder='{"key": "value"}'
-                               class="w-full px-3 py-1.5 rounded-lg bg-canvas border border-edge text-fg text-sm font-mono focus:outline-none focus:border-info"/>
+                        <input [(ngModel)]="fieldInputValues[field.metadata_id]" type="text" pInputText placeholder='{"key": "value"}'
+                               class="w-full font-mono"/>
                       } @else if (field.value_type === 'date') {
-                        <input [(ngModel)]="fieldInputValues[field.metadata_id]" type="date"
-                               class="w-full md:w-48 px-3 py-1.5 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info"/>
+                        <input [(ngModel)]="fieldInputValues[field.metadata_id]" type="date" pInputText
+                               class="w-full md:w-48"/>
                       } @else {
-                        <input [(ngModel)]="fieldInputValues[field.metadata_id]" type="text" placeholder="Enter value..."
-                               class="w-full md:w-48 px-3 py-1.5 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info"/>
+                        <input [(ngModel)]="fieldInputValues[field.metadata_id]" type="text" pInputText placeholder="Enter value..."
+                               class="w-full md:w-48"/>
                       }
                       <p-datepicker [(ngModel)]="fieldTimestampValues[field.metadata_id]" [showTime]="true" dateFormat="yy-mm-dd" hourFormat="24" placeholder="As-of timestamp" [style]="{'width': '12rem'}" class="shrink-0"/>
-                      <button (click)="submitFieldValue(field)" class="px-3 py-1.5 rounded-lg bg-positive/15 text-positive text-xs font-medium hover:bg-positive/25 transition-colors shrink-0">Set</button>
+                      <p-button label="Set" severity="info" size="small" (onClick)="submitFieldValue(field)"/>
                     </div>
                   </div>
                 }
-              </div>
+              </p-card>
             </div>
           }
 
@@ -218,41 +239,39 @@
           <div class="flex items-center justify-between mb-4">
             <div>
               <h3 class="font-semibold text-sm">Additional Metadata</h3>
-              <p class="text-xs text-fg-faint mt-1">Extra key-value metadata tracked over time.</p>
+              <p class="text-xs text-surface-400 mt-1">Extra key-value metadata tracked over time.</p>
             </div>
-            <button (click)="openMetadataForm()" class="px-4 py-2 rounded-lg bg-info/15 text-info text-sm font-medium hover:bg-info/25 transition-colors">
-              + Add
-            </button>
+            <p-button label="+ Add" severity="info" [outlined]="true" (onClick)="openMetadataForm()"/>
           </div>
 
           <!-- Add Form -->
           @if (showMetadataForm()) {
-            <div class="mb-6 rounded-xl border border-edge bg-surface/50 p-5">
+            <p-card class="mb-6">
               <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label class="block text-xs text-fg-muted mb-1">Metadata Type</label>
+                  <label class="block text-xs text-surface-500 mb-1">Metadata Type</label>
                   <p-select [(ngModel)]="newMetadataId" [options]="assetService.metadataTypes()" optionLabel="name" optionValue="id" placeholder="-- select type --"/>
                 </div>
                 <div>
-                  <label class="block text-xs text-fg-muted mb-1">Value</label>
-                  <input [(ngModel)]="newMetadataValue" type="text" placeholder="e.g. USD or {&quot;key&quot;: &quot;val&quot;}"
-                         class="w-full px-3 py-2 rounded-lg bg-canvas border border-edge text-fg text-sm focus:outline-none focus:border-info"/>
+                  <label class="block text-xs text-surface-500 mb-1">Value</label>
+                  <input [(ngModel)]="newMetadataValue" type="text" pInputText placeholder="e.g. USD or {&quot;key&quot;: &quot;val&quot;}"
+                         class="w-full"/>
                 </div>
                 <div>
-                  <label class="block text-xs text-fg-muted mb-1">As-of Timestamp <span class="text-fg-faint">(optional)</span></label>
+                  <label class="block text-xs text-surface-500 mb-1">As-of Timestamp <span class="text-surface-400">(optional)</span></label>
                   <p-datepicker [(ngModel)]="newMetadataTimestamp" [showTime]="true" dateFormat="yy-mm-dd" hourFormat="24" [style]="{'width': '100%'}"/>
                 </div>
               </div>
               <div class="flex gap-2 mt-4">
-                <button (click)="submitMetadata()" class="px-4 py-2 rounded-lg bg-positive/15 text-positive text-sm font-medium hover:bg-positive/25 transition-colors">Add</button>
-                <button (click)="cancelMetadataForm()" class="px-4 py-2 rounded-lg bg-fg/5 text-fg-muted text-sm font-medium hover:bg-fg/10 transition-colors">Cancel</button>
+                <p-button label="Add" severity="info" (onClick)="submitMetadata()"/>
+                <p-button label="Cancel" severity="secondary" [text]="true" (onClick)="cancelMetadataForm()"/>
               </div>
-            </div>
+            </p-card>
           }
 
           <!-- Extra Metadata Table -->
           @if (extraMetadata().length > 0) {
-            <div class="rounded-xl border border-edge bg-surface/50 overflow-hidden">
+            <p-card>
               <p-table [value]="extraMetadata()">
                 <ng-template #header>
                   <tr>
@@ -266,21 +285,23 @@
                   <tr>
                     <td class="font-medium">{{ entry.metadata_name }}</td>
                     <td class="font-mono text-xs">{{ formatValue(entry.value) }}</td>
-                    <td class="text-xs text-fg-muted">{{ entry.timestamp | date:'medium' }}</td>
+                    <td class="text-xs text-surface-500">{{ entry.timestamp | date:'medium' }}</td>
                     <td>
                       <div class="flex items-center gap-2">
-                        <button (click)="showHistory(entry)" class="text-xs text-info/70 hover:text-info transition-colors">History</button>
-                        <button (click)="deleteMetadata(entry)" class="text-xs text-negative/70 hover:text-negative transition-colors">Remove</button>
+                        <p-button label="History" severity="info" [text]="true" size="small" (onClick)="showHistory(entry)"/>
+                        <p-button label="Remove" severity="danger" [text]="true" size="small" (onClick)="deleteMetadata(entry)"/>
                       </div>
                     </td>
                   </tr>
                 </ng-template>
               </p-table>
-            </div>
+            </p-card>
           } @else if (assetTypeFields().length === 0) {
-            <div class="rounded-xl border border-edge bg-surface/50 p-12 text-center text-fg-faint text-sm">
-              No metadata defined. Click + Add to create entries.
-            </div>
+            <p-card>
+              <div class="p-12 text-center text-surface-400 text-sm">
+                No metadata defined. Click + Add to create entries.
+              </div>
+            </p-card>
           }
         </div>
       }
@@ -290,10 +311,10 @@
         <div class="overflow-y-auto h-full p-6 max-w-4xl mx-auto">
           <div class="mb-4">
             <h3 class="font-semibold text-sm">Provider Mappings</h3>
-            <p class="text-xs text-fg-faint mt-1">Providers that have a mapping for this asset.</p>
+            <p class="text-xs text-surface-400 mt-1">Providers that have a mapping for this asset.</p>
           </div>
 
-          <div class="rounded-xl border border-edge bg-surface/50 overflow-hidden">
+          <p-card>
             <p-table [value]="asset.provider_links">
               <ng-template #header>
                 <tr>
@@ -305,10 +326,10 @@
               <ng-template #body let-link>
                 <tr>
                   <td>
-                    <a [routerLink]="['/settings/providers', link.provider_id]" class="text-info hover:underline font-medium">{{ link.provider_name }}</a>
+                    <a [routerLink]="['/settings/providers', link.provider_id]" class="text-primary hover:underline font-medium">{{ link.provider_name }}</a>
                   </td>
                   <td class="font-mono text-xs">{{ link.identifier }}</td>
-                  <td class="text-xs text-fg-muted">{{ link.created_at | date:'mediumDate' }}</td>
+                  <td class="text-xs text-surface-500">{{ link.created_at | date:'mediumDate' }}</td>
                 </tr>
               </ng-template>
               <ng-template #emptymessage>
@@ -317,7 +338,7 @@
                 </tr>
               </ng-template>
             </p-table>
-          </div>
+          </p-card>
         </div>
       }
 

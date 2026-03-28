@@ -13,10 +13,11 @@ export interface CumulativePnlPoint {
   selector: 'app-cumulative-pnl-chart',
   standalone: true,
   imports: [UIChart],
+  styles: [`:host { display: block; height: 100%; }`],
   template: `
     <div class="h-full w-full min-h-[200px]">
       @if (data().length > 0) {
-        <p-chart type="line" [data]="chartData()" [options]="chartOptions"/>
+        <p-chart type="line" [data]="chartData()" [options]="chartOptions" [style]="{'width': '100%', 'height': '100%'}"/>
       } @else {
         <div class="flex items-center justify-center h-full text-fg-faint text-sm">No trade data available</div>
       }

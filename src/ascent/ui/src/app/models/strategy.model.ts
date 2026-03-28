@@ -22,6 +22,55 @@ export interface StrategyDetail extends StrategyListItem {
   created_at: string | null;
 }
 
+export interface StrategyStats {
+  // Core
+  total_trades: number;
+  open_trades: number;
+  closed_trades: number;
+  wins: number;
+  losses: number;
+  breakeven: number;
+  win_rate: number;
+
+  // PnL
+  total_pnl: number;
+  total_fees: number;
+  net_pnl: number;
+  avg_trade_pnl: number;
+  median_pnl: number;
+  avg_win: number;
+  avg_loss: number;
+  max_win: number;
+  max_loss: number;
+
+  // Risk
+  profit_factor: number;
+  payoff_ratio: number;
+  expectancy: number;
+  sharpe_ratio: number;
+  sortino_ratio: number;
+  max_drawdown: number;
+  max_drawdown_duration: number;
+
+  // Distribution
+  std_dev_pnl: number;
+  skewness: number;
+  kurtosis: number;
+
+  // Streaks
+  max_win_streak: number;
+  max_loss_streak: number;
+
+  // Holding periods (seconds)
+  avg_holding_seconds: number | null;
+  avg_holding_wins_seconds: number | null;
+  avg_holding_losses_seconds: number | null;
+
+  // Chart data
+  cumulative_pnl: { date: string; value: number; symbol: string }[];
+  pnl_distribution: { center: number; count: number }[];
+}
+
 /** Subset of JSON Schema that Pydantic v2 generates. */
 export interface JsonSchemaProperty {
   type?: string;

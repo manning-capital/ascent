@@ -5,15 +5,19 @@ import { ProviderService } from '../../../services/provider.service';
 import { AssetService } from '../../../services/asset.service';
 import { ToastService } from '../../../services/toast.service';
 import { TypeItem, ProviderTypeMetadataField, MetadataType } from '../../../models/asset.model';
-import { LoadingSpinnerComponent } from '../../shared/loading-spinner.component';
 import { Select } from 'primeng/select';
+import { Skeleton } from 'primeng/skeleton';
 import { Checkbox } from 'primeng/checkbox';
 import { TableModule } from 'primeng/table';
+import { Card } from 'primeng/card';
+import { Button } from 'primeng/button';
+import { InputText } from 'primeng/inputtext';
+import { Tag } from 'primeng/tag';
 
 @Component({
   selector: 'app-provider-type-detail',
   standalone: true,
-  imports: [RouterLink, FormsModule, LoadingSpinnerComponent, Select, Checkbox, TableModule],
+  imports: [RouterLink, FormsModule, Select, Checkbox, TableModule, Card, Button, InputText, Tag, Skeleton],
   templateUrl: './provider-type-detail.component.html',
 })
 export class ProviderTypeDetailComponent implements OnInit {

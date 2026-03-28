@@ -1,91 +1,58 @@
-@import "tailwindcss";
+@layer tw-base, primeng, tw-utilities;
+
+@import "tailwindcss/preflight" layer(tw-base);
+@import "tailwindcss/theme" layer(tw-base);
+@import "tailwindcss-primeui";
+@import "tailwindcss/utilities" layer(tw-utilities);
 
 @variant dark (&:where(.dark, .dark *));
 
 /* ── Semantic layout tokens — switch automatically with light/dark ── */
-@layer base {
-  :root {
-    --canvas: #fff9eb;
-    --surface: #fffdf5;
-    --elevated: #f3e7ca;
-    --fg: #2b2921;
-    --fg-muted: #66604e;
-    --fg-faint: #948c78;
-    --edge: rgba(43, 41, 33, 0.12);
-    --edge-dim: rgba(43, 41, 33, 0.06);
-    --overlay: rgba(31, 27, 22, 0.5);
-  }
+:root {
+  --canvas: #ffffff;
+  --surface: #f9fafb;
+  --elevated: #f3f4f6;
+  --fg: #111827;
+  --fg-muted: #6b7280;
+  --fg-faint: #9ca3af;
+  --edge: rgba(0, 0, 0, 0.1);
+  --edge-dim: rgba(0, 0, 0, 0.05);
+  --overlay: rgba(0, 0, 0, 0.5);
+}
 
-  .dark {
-    --canvas: #19181a;
-    --surface: #2d2a2e;
-    --elevated: #403e41;
-    --fg: #fcfcfa;
-    --fg-muted: #939293;
-    --fg-faint: #727072;
-    --edge: rgba(252, 252, 250, 0.1);
-    --edge-dim: rgba(252, 252, 250, 0.05);
-    --overlay: rgba(25, 24, 26, 0.8);
-  }
+.dark {
+  --canvas: #0a0a0a;
+  --surface: #18181b;
+  --elevated: #27272a;
+  --fg: #fafafa;
+  --fg-muted: #a1a1aa;
+  --fg-faint: #71717a;
+  --edge: rgba(255, 255, 255, 0.1);
+  --edge-dim: rgba(255, 255, 255, 0.05);
+  --overlay: rgba(0, 0, 0, 0.7);
+}
 
-  html {
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
 
-  body {
-    font-family: var(--font-sans);
-  }
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
 
-  /* ── Remaining native date inputs — minimal theme ── */
-  input[type="date"] {
-    color-scheme: light;
-  }
-  .dark input[type="date"] {
-    color-scheme: dark;
-  }
+::-webkit-scrollbar-track {
+  background: transparent;
+}
 
-  /* Scrollbar — uses semantic edge token */
-  ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  ::-webkit-scrollbar-thumb {
-    background: var(--edge);
-    border-radius: 3px;
-  }
+::-webkit-scrollbar-thumb {
+  background: var(--edge);
+  border-radius: 3px;
 }
 
 @theme {
-  /* ── Monokai Pro accent colors ── */
-  --color-positive: #a9dc76;
-  --color-negative: #ff6188;
-  --color-warning: #fc9867;
-  --color-info: #78dce8;
-  --color-carrot-orange: #fc9867;
-  --color-tuscan-sun: #ffd866;
-  --color-blue-slate: #ab9df2;
-
-  /* ── Monokai Pro neutral overrides (safety net for un-migrated code) ── */
-  --color-white: #fcfcfa;
-  --color-black: #19181a;
-  --color-zinc-50:  #fcfcfa;
-  --color-zinc-100: #e3e1e4;
-  --color-zinc-200: #c1c0c0;
-  --color-zinc-300: #939293;
-  --color-zinc-400: #727072;
-  --color-zinc-500: #5b595c;
-  --color-zinc-600: #403e41;
-  --color-zinc-700: #363437;
-  --color-zinc-800: #2d2a2e;
-  --color-zinc-900: #221f22;
-  --color-zinc-950: #19181a;
-
   /* ── Semantic layout tokens ── */
   --color-canvas: var(--canvas);
   --color-surface: var(--surface);
@@ -97,10 +64,14 @@
   --color-edge-dim: var(--edge-dim);
   --color-overlay: var(--overlay);
 
-  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  /* ── Accent colors (standard Tailwind-aligned) ── */
+  --color-positive: #22c55e;
+  --color-negative: #ef4444;
+  --color-warning: #f97316;
+  --color-info: #3b82f6;
 }
 
-@layer utilities {
+@layer tw-utilities {
   .glass {
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);

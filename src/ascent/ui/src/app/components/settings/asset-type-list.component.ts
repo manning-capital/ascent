@@ -3,13 +3,15 @@ import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { AssetService } from '../../services/asset.service';
 import { ToastService } from '../../services/toast.service';
-import { LoadingSpinnerComponent } from '../shared/loading-spinner.component';
 import { TypeItem } from '../../models/asset.model';
+import { Card } from 'primeng/card';
+import { Button } from 'primeng/button';
+import { InputText } from 'primeng/inputtext';
 
 @Component({
   selector: 'app-asset-type-list',
   standalone: true,
-  imports: [RouterLink, FormsModule, LoadingSpinnerComponent],
+  imports: [RouterLink, FormsModule, Card, Button, InputText],
   templateUrl: './asset-type-list.component.html',
 })
 export class AssetTypeListComponent implements OnInit {

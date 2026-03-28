@@ -1,4 +1,14 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(curl -s \"http://localhost:50548/api/strategies/c6b88d55-969a-4bcb-8fe2-5e897d2c7d37/orders\")",
+      "Bash(find /Users/glynfinck/Documents/Repositories/ascent/src/ascent/server -path *routers*feed* -o -path *schemas*feed*)",
+      "Bash(find /Users/glynfinck/Documents/Repositories/ascent/src/ascent/ui/src/app/services -name *.service.ts)",
+      "Bash(grep -r \"universe.*table\\\\|UniverseTable\\\\|universe-table\" /Users/glynfinck/Documents/Repositories/ascent/src/ascent/ui/src/app --include=*.ts --include=*.html)",
+      "Bash(grep -r \"ProviderAsset\\\\|ProviderAssetGroup\" /Users/glynfinck/Documents/Repositories/ascent/src/ascent/database/models/*.py)",
+      "Bash(find /Users/glynfinck/Documents/Repositories/ascent/src/ascent/ui/src -type f \\\\\\(-name *.ts -o -name *.tsx \\\\\\))"
+    ]
+  },
   "hooks": {
     "SessionStart": [
       {

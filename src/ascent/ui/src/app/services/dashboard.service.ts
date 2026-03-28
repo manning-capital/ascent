@@ -9,7 +9,7 @@ export class DashboardService {
   private api = inject(ApiService);
 
   stats = signal<DashboardStats | null>(null);
-  loading = signal(false);
+  loading = signal(true);
 
   private loadStats$ = new Subject<void>();
 

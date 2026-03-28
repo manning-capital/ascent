@@ -6,8 +6,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ascent.database.models.assets import Asset
 from ascent.database.models.base import Base
+from ascent.database.models.exchanges import Exchange
 from ascent.database.models.portfolio import Portfolio
-from ascent.database.models.providers import Provider
 from ascent.database.models.types import OrderStatusType, OrderType
 
 
@@ -35,13 +35,13 @@ class Order(Base):
         nullable=False,
         comment="The side of the order: BUY or SELL",
     )
-    provider_id: Mapped[uuid.UUID] = mapped_column(
+    exchange_id: Mapped[uuid.UUID] = mapped_column(
         Uuid,
-        ForeignKey("provider.id"),
+        ForeignKey("exchange.id"),
         nullable=False,
-        comment="The identifier of the provider/exchange",
+        comment="The identifier of the exchange this order was submitted to",
     )
-    provider: Mapped["Provider"] = relationship("Provider")
+    exchange: Mapped["Exchange"] = relationship("Exchange")
     portfolio_id: Mapped[uuid.UUID] = mapped_column(
         Uuid,
         ForeignKey("portfolio.id"),
@@ -114,7 +114,7 @@ class Order(Base):
     )
 
     def __repr__(self):
-        return f"{Order.__name__}(id={self.id}, timestamp={self.timestamp}, side={self.side}, provider_id={self.provider_id}, from_asset_id={self.from_asset_id}, to_asset_id={self.to_asset_id}, quantity={self.quantity}, price={self.price})"
+        return f"{Order.__name__}(id={self.id}, timestamp={self.timestamp}, side={self.side}, exchange_id={self.exchange_id}, from_asset_id={self.from_asset_id}, to_asset_id={self.to_asset_id}, quantity={self.quantity}, price={self.price})"
 
 
 class OrderStatus(Base):

@@ -1,36 +1,61 @@
-<div class="p-6 max-w-7xl mx-auto">
+<div class="p-6 ">
   <h1 class="text-2xl font-bold mb-6">Feeds</h1>
 
   @if (feedService.loading()) {
-    <app-loading/>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      @for (_ of [1,2,3,4,5,6]; track $index) {
+        <p-card>
+          <div class="flex items-center justify-between mb-2">
+            <p-skeleton width="55%" height="1rem"/>
+            <p-skeleton shape="circle" size="0.625rem"/>
+          </div>
+          <p-skeleton width="80%" height="0.75rem" class="mb-4"/>
+          <div class="grid grid-cols-3 gap-3 mb-4">
+            @for (_ of [1,2,3]; track $index) {
+              <div class="text-center">
+                <p-skeleton width="60%" height="0.625rem" class="mb-1 mx-auto"/>
+                <p-skeleton width="40%" height="1.125rem" class="mx-auto"/>
+              </div>
+            }
+          </div>
+          <div class="flex items-center justify-between">
+            <p-skeleton width="40%" height="0.75rem"/>
+            <p-skeleton width="25%" height="0.75rem"/>
+          </div>
+        </p-card>
+      }
+    </div>
   } @else {
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
       @for (feed of feedService.feeds(); track feed.id) {
-        <a [routerLink]="['/feeds', feed.id]"
-           class="rounded-xl border border-edge bg-surface/50 p-5 hover:bg-elevated/50 transition-colors block">
-          <div class="flex items-center justify-between mb-2">
-            <h3 class="font-semibold truncate">{{ feed.name }}</h3>
-            <span class="w-2.5 h-2.5 rounded-full shrink-0" [class]="feed.is_active ? 'bg-positive' : 'bg-fg-faint'"></span>
-          </div>
-          @if (feed.description) {
-            <p class="text-xs text-fg-faint mb-4 line-clamp-2">{{ feed.description }}</p>
-          }
-
-          <div class="grid grid-cols-3 gap-3 mb-4">
-            <app-stat-card label="Schedule" [value]="scheduleLabel(feed.schedule)" variant="flat" size="sm" align="center"/>
-            <app-stat-card label="Total Runs" [value]="'' + feed.total_runs" variant="flat" size="md" align="center"/>
-            <app-stat-card label="Last Status" [value]="feed.last_run_status ?? 'N/A'" [valueClass]="statusClass(feed.last_run_status)" variant="flat" size="sm" align="center"/>
-          </div>
-
-          <div class="flex items-center justify-between text-xs text-fg-faint">
-            <span class="truncate" title="{{ feed.channel }}">{{ feed.channel }}</span>
-            @if (feed.last_run_at) {
-              <span class="shrink-0 ml-2">{{ feed.last_run_at | date:'short' }}</span>
+        <a [routerLink]="['/feeds', feed.id]" class="block no-underline">
+          <p-card styleClass="hover:bg-emphasis transition-colors cursor-pointer">
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="font-semibold truncate">{{ feed.name }}</h3>
+              <span class="w-2.5 h-2.5 rounded-full shrink-0" [class]="feed.is_active ? 'bg-green-500' : 'bg-surface-400'"></span>
+            </div>
+            @if (feed.description) {
+              <p class="text-xs text-surface-400 mb-4 line-clamp-2">{{ feed.description }}</p>
             }
-          </div>
+
+            <div class="grid grid-cols-3 gap-3 mb-4">
+              <app-stat-card label="Schedule" [value]="scheduleLabel(feed.schedule)" variant="flat" size="sm" align="center"/>
+              <app-stat-card label="Total Runs" [value]="'' + feed.total_runs" variant="flat" size="md" align="center"/>
+              <app-stat-card label="Last Status" [value]="feed.last_run_status ?? 'N/A'" [valueClass]="statusClass(feed.last_run_status)" variant="flat" size="sm" align="center"/>
+            </div>
+
+            <div class="flex items-center justify-between text-xs text-surface-400">
+              <span class="truncate" title="{{ feed.channel }}">{{ feed.channel }}</span>
+              @if (feed.last_run_at) {
+                <span class="shrink-0 ml-2">{{ feed.last_run_at | date:'short' }}</span>
+              }
+            </div>
+          </p-card>
         </a>
       } @empty {
-        <div class="col-span-full text-center text-fg-faint py-12">No feeds found.</div>
+        <div class="col-span-full">
+          <app-empty-state title="No feeds" message="Create a feed to start ingesting data." icon="inbox"/>
+        </div>
       }
     </div>
   }

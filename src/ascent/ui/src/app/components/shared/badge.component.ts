@@ -1,31 +1,53 @@
-import { Component, input } from '@angular/core';
+import { Component, computed, input } from '@angular/core';
+import { Tag } from 'primeng/tag';
 
 @Component({
   selector: 'app-badge',
   standalone: true,
+  imports: [Tag],
   template: `
-    <span [class]="badgeClasses()">{{ label() }}</span>
+    <p-tag [value]="label()" [severity]="severity()" [rounded]="true" />
   `,
 })
 export class BadgeComponent {
   label = input.required<string>();
   variant = input<'status' | 'side' | 'tag'>('tag');
 
-  badgeClasses(): string {
-    const base = 'inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold uppercase tracking-wider';
+  severity = computed<'success' | 'info' | 'warn' | 'danger' | 'secondary' | 'contrast' | undefined>(() => {
     const label = this.label().toUpperCase();
 
     if (this.variant() === 'status') {
-      if (label === 'OPEN') return `${base} bg-positive/15 text-positive`;
-      if (label === 'CLOSED') return `${base} bg-fg-faint/15 text-fg-muted`;
-      return `${base} bg-warning/15 text-warning`;
+      if (label === 'OPEN' || label === 'FILLED') return 'success';
+      if (label === 'OPENING' || label === 'CLOSING' || label === 'PARTIALLY_FILLED') return 'info';
+      if (label === 'PENDING' || label === 'SUBMITTED' || label === 'ACCEPTED') return 'warn';
+      if (label === 'ERROR' || label === 'REJECTED') return 'danger';
+      if (label === 'CLOSED' || label === 'CANCELLED') return 'secondary';
+      return 'warn';
     }
 
-    if (label === 'LONG') return `${base} bg-positive/15 text-positive`;
-    if (label === 'SHORT') return `${base} bg-negative/15 text-negative`;
-    if (label === 'COMPOUND') return `${base} bg-warning/15 text-warning`;
-    if (label === 'PAPER') return `${base} bg-blue-slate/15 text-blue-slate`;
-
-    return `${base} bg-fg-faint/15 text-fg-muted`;
-  }
+    switch (label) {
+      case 'LONG':
+      case 'ENTRY':
+      case 'COMPLETED':
+      case 'BUY':
+        return 'success';
+      case 'SHORT':
+      case 'FAILED':
+      case 'STOP_LOSS':
+      case 'SELL':
+        return 'danger';
+      case 'COMPOUND':
+      case 'RUNNING':
+      case 'TAKE_PROFIT':
+        return 'warn';
+      case 'PAPER':
+      case 'EXIT':
+        return 'info';
+      case 'PENDING':
+      case 'CLOSED':
+        return 'secondary';
+      default:
+        return 'secondary';
+    }
+  });
 }

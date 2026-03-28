@@ -36,6 +36,8 @@ def run(
         AssetTypeMetadata,
         Attribute,
         Base,
+        Exchange,
+        ExchangeType,
         FeedDependency,
         FeedPartition,
         FeedRun,
@@ -123,6 +125,15 @@ def run(
         db.add_all(provider_types)
         db.flush()
 
+        exchange_types = [
+            ExchangeType(name="Spot", description="Spot/cash market exchange"),
+            ExchangeType(name="Futures", description="Futures/derivatives exchange"),
+            ExchangeType(name="Paper", description="Paper/simulated trading exchange"),
+            ExchangeType(name="OTC", description="Over-the-counter trading"),
+        ]
+        db.add_all(exchange_types)
+        db.flush()
+
         strategy_types = [
             StrategyType(
                 symbol="PAIRS_TRADING",
@@ -143,11 +154,22 @@ def run(
 
         trade_status_types = [
             TradeStatusType(symbol="PENDING", name="Pending", description="Trade is pending entry"),
+            TradeStatusType(
+                symbol="OPENING",
+                name="Opening",
+                description="Entry orders have been submitted",
+            ),
             TradeStatusType(symbol="OPEN", name="Open", description="Trade is currently open"),
+            TradeStatusType(
+                symbol="CLOSING",
+                name="Closing",
+                description="Exit orders have been submitted",
+            ),
             TradeStatusType(symbol="CLOSED", name="Closed", description="Trade has been closed"),
             TradeStatusType(
                 symbol="CANCELLED", name="Cancelled", description="Trade was cancelled"
             ),
+            TradeStatusType(symbol="ERROR", name="Error", description="Trade encountered an error"),
         ]
         db.add_all(trade_status_types)
         db.flush()
@@ -165,6 +187,11 @@ def run(
             OrderStatusType(symbol="SUBMITTED", name="Submitted", description="Order submitted"),
             OrderStatusType(
                 symbol="ACCEPTED", name="Accepted", description="Order accepted by exchange"
+            ),
+            OrderStatusType(
+                symbol="PARTIALLY_FILLED",
+                name="Partially Filled",
+                description="Order partially filled",
             ),
             OrderStatusType(symbol="FILLED", name="Filled", description="Order fully filled"),
             OrderStatusType(symbol="REJECTED", name="Rejected", description="Order rejected"),
@@ -243,6 +270,23 @@ def run(
             provider_type_id=provider_types[0].id, name="Kraken", description="Kraken Exchange"
         )
         db.add(provider)
+        db.flush()
+
+        # --- Exchanges ---
+        kraken_exchange = Exchange(
+            exchange_type_id=exchange_types[0].id,
+            name="Kraken",
+            description="Kraken Spot Exchange",
+            provider_id=provider.id,
+        )
+        paper_exchange = Exchange(
+            exchange_type_id=exchange_types[2].id,
+            name="Paper Trading",
+            description="Simulated paper trading exchange",
+            implementation_class="ascent.exchanges.paper.PaperExchange",
+            config={"initial_balance": 100000},
+        )
+        db.add_all([kraken_exchange, paper_exchange])
         db.flush()
 
         # --- Attributes ---
@@ -1391,28 +1435,46 @@ def run(
                 trade.total_fees = round(random.uniform(0.5, 25.0), 2)
 
                 # Trade statuses (history)
-                ts_pending = TradeStatus(
-                    timestamp=entry_at - datetime.timedelta(minutes=random.randint(1, 10)),
-                    trade_id=trade.id,
-                    trade_status_type_id=status_map["PENDING"].id,
+                pending_ts = entry_at - datetime.timedelta(minutes=random.randint(1, 10))
+                db.add(
+                    TradeStatus(
+                        timestamp=pending_ts,
+                        trade_id=trade.id,
+                        trade_status_type_id=status_map["PENDING"].id,
+                    )
                 )
-                db.add(ts_pending)
-
-                ts_open = TradeStatus(
-                    timestamp=entry_at,
-                    trade_id=trade.id,
-                    trade_status_type_id=status_map["OPEN"].id,
+                db.add(
+                    TradeStatus(
+                        timestamp=pending_ts + datetime.timedelta(seconds=5),
+                        trade_id=trade.id,
+                        trade_status_type_id=status_map["OPENING"].id,
+                    )
                 )
-                db.add(ts_open)
+                db.add(
+                    TradeStatus(
+                        timestamp=entry_at,
+                        trade_id=trade.id,
+                        trade_status_type_id=status_map["OPEN"].id,
+                    )
+                )
 
                 if trade_status.symbol in ("CLOSED", "CANCELLED"):
                     close_ts = exit_at or (entry_at + datetime.timedelta(minutes=30))
-                    ts_close = TradeStatus(
-                        timestamp=close_ts,
-                        trade_id=trade.id,
-                        trade_status_type_id=trade_status.id,
+                    if trade_status.symbol == "CLOSED":
+                        db.add(
+                            TradeStatus(
+                                timestamp=close_ts - datetime.timedelta(seconds=5),
+                                trade_id=trade.id,
+                                trade_status_type_id=status_map["CLOSING"].id,
+                            )
+                        )
+                    db.add(
+                        TradeStatus(
+                            timestamp=close_ts,
+                            trade_id=trade.id,
+                            trade_status_type_id=trade_status.id,
+                        )
                     )
-                    db.add(ts_close)
 
                 all_trades.append(trade)
 
@@ -1499,7 +1561,7 @@ def run(
                     timestamp=trade.entry_at,
                     order_type_id=order_types[0].id,  # MARKET
                     side="BUY" if leg.direction == "LONG" else "SELL",
-                    provider_id=provider.id,
+                    exchange_id=kraken_exchange.id,
                     portfolio_id=trade.portfolio_id,
                     from_asset_id=leg.from_asset_id,
                     to_asset_id=leg.to_asset_id,
@@ -1529,13 +1591,32 @@ def run(
                         order_status_type_id=order_status_map["ACCEPTED"].id,
                     )
                 )
-                db.add(
-                    OrderStatus(
-                        timestamp=trade.entry_at + datetime.timedelta(seconds=2),
-                        order_id=entry_order.id,
-                        order_status_type_id=order_status_map["FILLED"].id,
+                # Some orders go through partial fill before full fill
+                if random.random() < 0.3:
+                    entry_order.filled_quantity = round(leg.quantity * 0.6, 6)
+                    db.add(
+                        OrderStatus(
+                            timestamp=trade.entry_at + datetime.timedelta(seconds=2),
+                            order_id=entry_order.id,
+                            order_status_type_id=order_status_map["PARTIALLY_FILLED"].id,
+                        )
                     )
-                )
+                    entry_order.filled_quantity = leg.quantity
+                    db.add(
+                        OrderStatus(
+                            timestamp=trade.entry_at + datetime.timedelta(seconds=4),
+                            order_id=entry_order.id,
+                            order_status_type_id=order_status_map["FILLED"].id,
+                        )
+                    )
+                else:
+                    db.add(
+                        OrderStatus(
+                            timestamp=trade.entry_at + datetime.timedelta(seconds=2),
+                            order_id=entry_order.id,
+                            order_status_type_id=order_status_map["FILLED"].id,
+                        )
+                    )
 
                 # Exit order if closed
                 if leg.exit_price and trade.exit_at:
@@ -1543,7 +1624,7 @@ def run(
                         timestamp=trade.exit_at,
                         order_type_id=order_types[0].id,
                         side="SELL" if leg.direction == "LONG" else "BUY",
-                        provider_id=provider.id,
+                        exchange_id=kraken_exchange.id,
                         portfolio_id=trade.portfolio_id,
                         from_asset_id=leg.from_asset_id,
                         to_asset_id=leg.to_asset_id,

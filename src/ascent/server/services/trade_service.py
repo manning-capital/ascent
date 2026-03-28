@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 
 from ascent.database.models import (
     Asset,
+    Order,
+    OrderStatus,
     Trade,
     TradeCondition,
     TradeDataSeries,
@@ -14,7 +16,8 @@ from ascent.database.models import (
     TradeStatus,
     TradeStatusType,
 )
-from ascent.server.exceptions import NotFoundError
+from ascent.server.exceptions import BadRequestError, NotFoundError
+from ascent.server.schemas.orders import OrderDetailSchema, OrderStatusSchema
 from ascent.server.schemas.trades import (
     TradeConditionSchema,
     TradeCreate,
@@ -30,6 +33,16 @@ from ascent.server.schemas.trades import (
     TradeStatusSchema,
     TradeUpdate,
 )
+
+TRADE_STATUS_TRANSITIONS: dict[str, set[str]] = {
+    "PENDING": {"OPENING", "CANCELLED"},
+    "OPENING": {"OPEN", "CANCELLED", "ERROR"},
+    "OPEN": {"CLOSING", "ERROR"},
+    "CLOSING": {"CLOSED", "ERROR"},
+    "CLOSED": set(),
+    "CANCELLED": set(),
+    "ERROR": {"PENDING", "CANCELLED"},
+}
 
 
 def _compute_tags(trade: Trade) -> list[str]:
@@ -170,6 +183,14 @@ def get_trade_detail(db: Session, trade_id: uuid.UUID) -> TradeDetail:
             joinedload(Trade.current_status_type),
             selectinload(Trade.legs).joinedload(TradeLeg.from_asset),
             selectinload(Trade.legs).joinedload(TradeLeg.to_asset),
+            selectinload(Trade.legs).selectinload(TradeLeg.orders).joinedload(Order.order_type),
+            selectinload(Trade.legs).selectinload(TradeLeg.orders).joinedload(Order.exchange),
+            selectinload(Trade.legs).selectinload(TradeLeg.orders).joinedload(Order.from_asset),
+            selectinload(Trade.legs).selectinload(TradeLeg.orders).joinedload(Order.to_asset),
+            selectinload(Trade.legs)
+            .selectinload(TradeLeg.orders)
+            .selectinload(Order.statuses)
+            .joinedload(OrderStatus.order_status_type),
             selectinload(Trade.conditions).joinedload(TradeCondition.attribute),
             selectinload(Trade.data_series).joinedload(TradeDataSeries.attribute),
             selectinload(Trade.snapshots).joinedload(TradeSnapshot.attribute),
@@ -180,21 +201,56 @@ def get_trade_detail(db: Session, trade_id: uuid.UUID) -> TradeDetail:
     if not trade:
         raise NotFoundError("Trade not found")
 
-    legs = [
-        TradeLegDetail(
-            id=leg.id,
-            from_asset_symbol=leg.from_asset.symbol or leg.from_asset.name,
-            to_asset_symbol=leg.to_asset.symbol or leg.to_asset.name,
-            direction=leg.direction,
-            quantity=leg.quantity,
-            entry_price=leg.entry_price,
-            exit_price=leg.exit_price,
-            realized_pnl=leg.realized_pnl,
-            expected_entry_price=leg.expected_entry_price,
-            expected_exit_price=leg.expected_exit_price,
+    legs = []
+    for leg in trade.legs:
+        leg_orders = []
+        for o in leg.orders:
+            latest_status = o.statuses[-1] if o.statuses else None
+            order_statuses = [
+                OrderStatusSchema(
+                    timestamp=s.timestamp,
+                    status=s.order_status_type.symbol,
+                    error_message=s.error_message,
+                    error_code=s.error_code,
+                )
+                for s in o.statuses
+            ]
+            leg_orders.append(
+                OrderDetailSchema(
+                    id=o.id,
+                    timestamp=o.timestamp,
+                    order_type=o.order_type.name,
+                    side=o.side,
+                    from_asset_symbol=o.from_asset.symbol or o.from_asset.name,
+                    to_asset_symbol=o.to_asset.symbol or o.to_asset.name,
+                    quantity=o.quantity,
+                    price=o.price,
+                    filled_quantity=o.filled_quantity,
+                    average_fill_price=o.average_fill_price,
+                    external_order_id=o.external_order_id,
+                    time_in_force=o.time_in_force,
+                    current_status=(
+                        latest_status.order_status_type.symbol if latest_status else None
+                    ),
+                    exchange_name=o.exchange.name if o.exchange else None,
+                    statuses=order_statuses,
+                )
+            )
+        legs.append(
+            TradeLegDetail(
+                id=leg.id,
+                from_asset_symbol=leg.from_asset.symbol or leg.from_asset.name,
+                to_asset_symbol=leg.to_asset.symbol or leg.to_asset.name,
+                direction=leg.direction,
+                quantity=leg.quantity,
+                entry_price=leg.entry_price,
+                exit_price=leg.exit_price,
+                realized_pnl=leg.realized_pnl,
+                expected_entry_price=leg.expected_entry_price,
+                expected_exit_price=leg.expected_exit_price,
+                orders=leg_orders,
+            )
         )
-        for leg in trade.legs
-    ]
 
     conditions = [
         TradeConditionSchema(
@@ -328,6 +384,28 @@ def add_trade_status(db: Session, trade_id: uuid.UUID, data: TradeStatusCreate) 
     trade = db.get(Trade, trade_id)
     if not trade:
         raise NotFoundError("Trade not found")
+
+    new_status_type = db.get(TradeStatusType, data.trade_status_type_id)
+    if not new_status_type:
+        raise NotFoundError("Trade status type not found")
+
+    # Validate transition
+    if trade.current_status_type_id is None:
+        if new_status_type.symbol != "PENDING":
+            raise BadRequestError(
+                f"First trade status must be PENDING, got {new_status_type.symbol}"
+            )
+    else:
+        current_type = db.get(TradeStatusType, trade.current_status_type_id)
+        current_symbol = current_type.symbol if current_type else None
+        if current_symbol:
+            allowed = TRADE_STATUS_TRANSITIONS.get(current_symbol, set())
+            if new_status_type.symbol not in allowed:
+                raise BadRequestError(
+                    f"Invalid trade status transition: {current_symbol} -> {new_status_type.symbol}. "
+                    f"Allowed transitions from {current_symbol}: {sorted(allowed)}"
+                )
+
     ts = data.timestamp or datetime.datetime.now(datetime.UTC)
     status = TradeStatus(
         trade_id=trade_id,

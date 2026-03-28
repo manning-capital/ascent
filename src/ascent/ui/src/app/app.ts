@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 import { ThemeService } from './services/theme.service';
 import { Toast } from 'primeng/toast';
@@ -13,13 +13,4 @@ import { Tooltip } from 'primeng/tooltip';
 })
 export class App {
   theme = inject(ThemeService);
-  mobileMenuOpen = signal(false);
-
-  toggleMobileMenu(): void {
-    this.mobileMenuOpen.update(v => !v);
-  }
-
-  closeMobileMenu(): void {
-    this.mobileMenuOpen.set(false);
-  }
 }

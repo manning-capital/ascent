@@ -5,17 +5,19 @@ from sqlalchemy.orm import Session
 
 from ascent.server.dependencies import get_db
 from ascent.server.schemas.common import PaginatedResponse
+from ascent.server.schemas.orders import OrderSchema
 from ascent.server.schemas.strategies import (
     StrategyCreate,
     StrategyDetail,
     StrategyFeedDAG,
     StrategyListItem,
     StrategyRunListItem,
+    StrategyStats,
     StrategyUpdate,
 )
 from ascent.server.schemas.trades import TradeListItem
 from ascent.server.schemas.universe import UniverseItemCreate, UniverseItemSchema
-from ascent.server.services import strategy_service, trade_service, universe_service
+from ascent.server.services import order_service, strategy_service, trade_service, universe_service
 
 router = APIRouter(prefix="/strategies", tags=["strategies"])
 
@@ -45,6 +47,11 @@ def delete_strategy(strategy_id: uuid.UUID, db: Session = Depends(get_db)):
     strategy_service.delete_strategy(db, strategy_id)
 
 
+@router.get("/{strategy_id}/stats", response_model=StrategyStats)
+def get_strategy_stats(strategy_id: uuid.UUID, db: Session = Depends(get_db)):
+    return strategy_service.get_strategy_stats(db, strategy_id)
+
+
 @router.get("/{strategy_id}/feeds", response_model=StrategyFeedDAG)
 def get_strategy_feeds(strategy_id: uuid.UUID, db: Session = Depends(get_db)):
     return strategy_service.get_strategy_feed_dag(db, strategy_id)
@@ -65,6 +72,26 @@ def get_strategy_trades(
 ):
     items, total = trade_service.get_trades(
         db, strategy_id=strategy_id, page=page, page_size=page_size
+    )
+    total_pages = (total + page_size - 1) // page_size
+    return PaginatedResponse(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+    )
+
+
+@router.get("/{strategy_id}/orders", response_model=PaginatedResponse[OrderSchema])
+def get_strategy_orders(
+    strategy_id: uuid.UUID,
+    page: int = 1,
+    page_size: int = 10,
+    db: Session = Depends(get_db),
+):
+    items, total = order_service.get_strategy_orders(
+        db, strategy_id, page=page, page_size=page_size
     )
     total_pages = (total + page_size - 1) // page_size
     return PaginatedResponse(

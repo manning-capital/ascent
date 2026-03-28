@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from ascent.database.models import (
     AssetType,
     AssetTypeMetadata,
+    ExchangeType,
     Metadata,
     OrderStatusType,
     OrderType,
@@ -298,3 +299,17 @@ def list_transaction_statuses(db: Session = Depends(get_db)):
 @router.post("/transaction-statuses", status_code=201)
 def create_transaction_status_type(data: TypeCreate, db: Session = Depends(get_db)):
     return _create_type(db, TransactionStatusType, data)
+
+
+# --- Exchange Types ---
+
+
+@router.get("/exchange-types", response_model=list[TypeItem])
+def list_exchange_types(db: Session = Depends(get_db)):
+    result = db.execute(select(ExchangeType)).scalars().all()
+    return [TypeItem.model_validate(r) for r in result]
+
+
+@router.post("/exchange-types", status_code=201)
+def create_exchange_type(data: TypeCreate, db: Session = Depends(get_db)):
+    return _create_type(db, ExchangeType, data)
