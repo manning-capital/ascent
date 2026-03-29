@@ -89,6 +89,17 @@ class FeedPartitionItem(BaseModel):
     latest_run: FeedRunListItem | None = None
 
 
+class FeedDependencyCreate(BaseModel):
+    depends_on_feed_id: uuid.UUID
+
+
+class FeedDependencySchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    feed_id: uuid.UUID
+    depends_on_feed_id: uuid.UUID
+
+
 class FeedPublishRequest(BaseModel):
     records: list[dict]
     partition_key: datetime.datetime | None = None

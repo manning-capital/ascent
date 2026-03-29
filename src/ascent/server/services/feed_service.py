@@ -7,7 +7,7 @@ import pandas as pd
 from sqlalchemy import bindparam, func, select, text
 from sqlalchemy.orm import Session
 
-from ascent.database.models.feeds import Feed, FeedPartition, FeedRun, StrategyFeed
+from ascent.database.models.feeds import Feed, FeedDependency, FeedPartition, FeedRun, StrategyFeed
 from ascent.engine.cache import EngineCache
 from ascent.feeds.partition import generate_keys, partition_key_for, partition_window
 from ascent.feeds.schedule import Schedule
@@ -15,6 +15,8 @@ from ascent.server.exceptions import BadRequestError, NotFoundError
 from ascent.server.schemas.common import PaginatedResponse
 from ascent.server.schemas.feeds import (
     FeedCreate,
+    FeedDependencyCreate,
+    FeedDependencySchema,
     FeedDetail,
     FeedListItem,
     FeedPartitionItem,
@@ -742,3 +744,19 @@ def get_partition_data(
         page_size=page_size,
         total_pages=total_pages,
     )
+
+
+def get_feed_dependencies(db: Session, feed_id: uuid.UUID) -> list[FeedDependencySchema]:
+    rows = (
+        db.execute(select(FeedDependency).where(FeedDependency.feed_id == feed_id)).scalars().all()
+    )
+    return [FeedDependencySchema.model_validate(r) for r in rows]
+
+
+def create_feed_dependency(
+    db: Session, feed_id: uuid.UUID, data: FeedDependencyCreate
+) -> FeedDependency:
+    obj = FeedDependency(feed_id=feed_id, depends_on_feed_id=data.depends_on_feed_id)
+    db.add(obj)
+    db.commit()
+    return obj

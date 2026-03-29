@@ -7,6 +7,7 @@ from ascent.database.models import (
     AssetTypeMetadata,
     AssetTypeProviderAssetMetadata,
     ExchangeType,
+    FeedType,
     Metadata,
     OrderStatusType,
     OrderType,
@@ -24,12 +25,15 @@ from ascent.server.schemas.metadata import (
     AssetTypeMetadataSchema,
     AssetTypeProviderAssetMetadataCreate,
     AssetTypeProviderAssetMetadataSchema,
+    EntityUsage,
     MetadataTypeCreate,
     MetadataTypeSchema,
+    MetadataTypeUpdate,
     ProviderTypeMetadataCreate,
     ProviderTypeMetadataSchema,
 )
 from ascent.server.schemas.types import TypeCreate, TypeHierarchyItem, TypeItem, TypeItemWithSymbol
+from ascent.server.services import field_service
 from ascent.server.services.type_service import (
     build_type_tree,
     get_effective_asset_type_metadata,
@@ -54,17 +58,36 @@ def _create_type(db: Session, model_class, data: TypeCreate):
 
 @router.get("/metadata-types", response_model=list[MetadataTypeSchema])
 def list_metadata_types(db: Session = Depends(get_db)):
-    result = db.execute(select(Metadata)).scalars().all()
-    return [MetadataTypeSchema.model_validate(r) for r in result]
+    return [MetadataTypeSchema.model_validate(r) for r in field_service.get_metadata_types(db)]
 
 
 @router.post("/metadata-types", status_code=201, response_model=MetadataTypeSchema)
 def create_metadata_type(data: MetadataTypeCreate, db: Session = Depends(get_db)):
-    obj = Metadata(**data.model_dump())
-    db.add(obj)
-    db.commit()
-    db.refresh(obj)
-    return MetadataTypeSchema.model_validate(obj)
+    return MetadataTypeSchema.model_validate(field_service.create_metadata_type(db, data))
+
+
+@router.get("/metadata-types/{metadata_type_id}", response_model=MetadataTypeSchema)
+def get_metadata_type(metadata_type_id: str, db: Session = Depends(get_db)):
+    return MetadataTypeSchema.model_validate(field_service.get_metadata_type(db, metadata_type_id))
+
+
+@router.put("/metadata-types/{metadata_type_id}", response_model=MetadataTypeSchema)
+def update_metadata_type(
+    metadata_type_id: str, data: MetadataTypeUpdate, db: Session = Depends(get_db)
+):
+    return MetadataTypeSchema.model_validate(
+        field_service.update_metadata_type(db, metadata_type_id, data)
+    )
+
+
+@router.get("/metadata-types/{metadata_type_id}/usage", response_model=EntityUsage)
+def get_metadata_type_usage(metadata_type_id: str, db: Session = Depends(get_db)):
+    return field_service.get_metadata_type_usage(db, metadata_type_id)
+
+
+@router.delete("/metadata-types/{metadata_type_id}", status_code=204)
+def delete_metadata_type(metadata_type_id: str, db: Session = Depends(get_db)):
+    field_service.delete_metadata_type(db, metadata_type_id)
 
 
 @router.get("/asset-types", response_model=list[TypeItem])
@@ -85,6 +108,16 @@ def create_asset_type(data: TypeCreate, db: Session = Depends(get_db)):
         if not parent:
             raise NotFoundError("Parent asset type not found")
     return _create_type(db, AssetType, data)
+
+
+@router.get("/asset-types/{asset_type_id}/usage", response_model=EntityUsage)
+def get_asset_type_usage(asset_type_id: str, db: Session = Depends(get_db)):
+    return field_service.get_asset_type_usage(db, asset_type_id)
+
+
+@router.delete("/asset-types/{asset_type_id}", status_code=204)
+def delete_asset_type(asset_type_id: str, db: Session = Depends(get_db)):
+    field_service.delete_asset_type(db, asset_type_id)
 
 
 # ---- Asset Type Metadata Requirements ----
@@ -136,6 +169,18 @@ def add_asset_type_metadata(
     ).scalar_one_or_none()
     if existing:
         raise ConflictError("Metadata field already linked to this asset type")
+
+    new_meta = db.get(Metadata, data.metadata_id)
+    if not new_meta:
+        raise NotFoundError("Metadata type not found")
+    effective = get_effective_asset_type_metadata(db, asset_type_id)
+    for f in effective:
+        if f.metadata_name == new_meta.name:
+            raise ConflictError(
+                f"A field with the name '{new_meta.name}' already exists (inherited from '{f.source_type_name}')"
+                if f.is_inherited
+                else f"A field with the name '{new_meta.name}' already exists on this type"
+            )
 
     obj = AssetTypeMetadata(
         asset_type_id=asset_type_id,
@@ -230,6 +275,18 @@ def add_asset_type_provider_asset_metadata(
             "Metadata field already linked to this asset type's provider-asset schema"
         )
 
+    new_meta = db.get(Metadata, data.metadata_id)
+    if not new_meta:
+        raise NotFoundError("Metadata type not found")
+    effective = get_effective_asset_type_provider_asset_metadata(db, asset_type_id)
+    for f in effective:
+        if f.metadata_name == new_meta.name:
+            raise ConflictError(
+                f"A provider-asset field with the name '{new_meta.name}' already exists (inherited from '{f.source_type_name}')"
+                if f.is_inherited
+                else f"A provider-asset field with the name '{new_meta.name}' already exists on this type"
+            )
+
     obj = AssetTypeProviderAssetMetadata(
         asset_type_id=asset_type_id,
         metadata_id=data.metadata_id,
@@ -291,6 +348,16 @@ def create_provider_type(data: TypeCreate, db: Session = Depends(get_db)):
     return _create_type(db, ProviderType, data)
 
 
+@router.get("/provider-types/{provider_type_id}/usage", response_model=EntityUsage)
+def get_provider_type_usage(provider_type_id: str, db: Session = Depends(get_db)):
+    return field_service.get_provider_type_usage(db, provider_type_id)
+
+
+@router.delete("/provider-types/{provider_type_id}", status_code=204)
+def delete_provider_type(provider_type_id: str, db: Session = Depends(get_db)):
+    field_service.delete_provider_type(db, provider_type_id)
+
+
 # ---- Provider Type Metadata Requirements ----
 
 
@@ -344,6 +411,18 @@ def add_provider_type_metadata(
     ).scalar_one_or_none()
     if existing:
         raise ConflictError("Metadata field already linked to this provider type")
+
+    new_meta = db.get(Metadata, data.metadata_id)
+    if not new_meta:
+        raise NotFoundError("Metadata type not found")
+    effective = get_effective_provider_type_metadata(db, provider_type_id)
+    for f in effective:
+        if f.metadata_name == new_meta.name:
+            raise ConflictError(
+                f"A field with the name '{new_meta.name}' already exists (inherited from '{f.source_type_name}')"
+                if f.is_inherited
+                else f"A field with the name '{new_meta.name}' already exists on this type"
+            )
 
     obj = ProviderTypeMetadata(
         provider_type_id=provider_type_id,
@@ -459,3 +538,17 @@ def list_exchange_types(db: Session = Depends(get_db)):
 @router.post("/exchange-types", status_code=201)
 def create_exchange_type(data: TypeCreate, db: Session = Depends(get_db)):
     return _create_type(db, ExchangeType, data)
+
+
+# --- Feed Types ---
+
+
+@router.get("/feed-types", response_model=list[TypeItemWithSymbol])
+def list_feed_types(db: Session = Depends(get_db)):
+    result = db.execute(select(FeedType)).scalars().all()
+    return [TypeItemWithSymbol.model_validate(r) for r in result]
+
+
+@router.post("/feed-types", status_code=201)
+def create_feed_type(data: TypeCreate, db: Session = Depends(get_db)):
+    return _create_type(db, FeedType, data)

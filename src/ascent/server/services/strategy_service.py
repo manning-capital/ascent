@@ -14,6 +14,7 @@ from ascent.server.schemas.strategies import (
     PnlDistributionBin,
     StrategyCreate,
     StrategyDetail,
+    StrategyFeedCreate,
     StrategyFeedDAG,
     StrategyFeedNode,
     StrategyListItem,
@@ -373,7 +374,7 @@ def get_strategies(db: Session) -> list[StrategyListItem]:
                 name=s.name,
                 description=s.description,
                 strategy_type=s.strategy_type.name,
-                strategy_class=s.strategy_ref,
+                strategy_ref=s.strategy_ref,
                 parameters=s.parameters,
                 portfolio_id=s.portfolio_id,
                 is_active=s.is_active,
@@ -410,6 +411,20 @@ def delete_strategy(db: Session, strategy_id: uuid.UUID) -> None:
     db.commit()
 
 
+def add_strategy_feed(
+    db: Session, strategy_id: uuid.UUID, data: StrategyFeedCreate
+) -> StrategyFeed:
+    obj = StrategyFeed(
+        strategy_id=strategy_id,
+        feed_id=data.feed_id,
+        is_required=data.is_required,
+        order=data.order,
+    )
+    db.add(obj)
+    db.commit()
+    return obj
+
+
 def get_strategy_detail(db: Session, strategy_id: uuid.UUID) -> StrategyDetail:
     query = (
         select(Strategy)
@@ -426,7 +441,7 @@ def get_strategy_detail(db: Session, strategy_id: uuid.UUID) -> StrategyDetail:
         name=strategy.name,
         description=strategy.description,
         strategy_type=strategy.strategy_type.name,
-        strategy_class=strategy.strategy_ref,
+        strategy_ref=strategy.strategy_ref,
         parameters=strategy.parameters,
         portfolio_id=strategy.portfolio_id,
         is_active=strategy.is_active,

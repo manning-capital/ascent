@@ -126,6 +126,35 @@ class TradeStatusCreate(BaseModel):
     timestamp: datetime.datetime | None = None
 
 
+class TradeConditionCreate(BaseModel):
+    condition_type: str
+    attribute_id: uuid.UUID
+    operator: str
+    threshold_value: float
+    is_met: bool = False
+    met_at: datetime.datetime | None = None
+    provider_asset_group_id: uuid.UUID | None = None
+    provider_id: uuid.UUID | None = None
+    from_asset_id: uuid.UUID | None = None
+    to_asset_id: uuid.UUID | None = None
+    period_id: uuid.UUID | None = None
+
+
+class TradeSnapshotCreate(BaseModel):
+    attribute_id: uuid.UUID
+    snapshot_type: str
+    attribute_value: float
+    timestamp: datetime.datetime
+
+
+class TradeDataSeriesCreate(BaseModel):
+    attribute_id: uuid.UUID
+    label: str | None = None
+    data_source: str
+    provider_asset_group_id: uuid.UUID | None = None
+    period_id: uuid.UUID | None = None
+
+
 class TradeDetail(TradeListItem):
     close_reason: str | None = None
     parameters: dict | list | str | int | float | bool | None = None

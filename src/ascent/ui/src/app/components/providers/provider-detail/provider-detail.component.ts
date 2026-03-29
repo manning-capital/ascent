@@ -4,8 +4,10 @@ import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { forkJoin } from 'rxjs';
 import { ProviderService } from '../../../services/provider.service';
+import { FieldService } from '../../../services/field.service';
 import { ToastService } from '../../../services/toast.service';
 import { MetadataEntry, ProviderTypeMetadataField, MetadataHistoryGrid, BulkHistoryUpdate } from '../../../models/asset.model';
+import { EntityUsage } from '../../../models/field.model';
 import { Skeleton } from 'primeng/skeleton';
 import { Select } from 'primeng/select';
 import { Checkbox } from 'primeng/checkbox';
@@ -17,8 +19,8 @@ import { Button } from 'primeng/button';
 import { InputText } from 'primeng/inputtext';
 import { Textarea } from 'primeng/textarea';
 import { Tabs, TabList, Tab } from 'primeng/tabs';
-import { ConfirmationService } from 'primeng/api';
 import { MetadataHistoryTableComponent } from '../../shared/metadata-history-table.component';
+import { SafeDeleteDialogComponent } from '../../shared/safe-delete-dialog.component';
 
 @Component({
   selector: 'app-provider-detail',
@@ -39,6 +41,7 @@ import { MetadataHistoryTableComponent } from '../../shared/metadata-history-tab
     Skeleton,
     Tabs, TabList, Tab,
     MetadataHistoryTableComponent,
+    SafeDeleteDialogComponent,
   ],
   templateUrl: './provider-detail.component.html',
 })
@@ -46,13 +49,18 @@ export class ProviderDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private toast = inject(ToastService);
-  private confirmationService = inject(ConfirmationService);
   providerService = inject(ProviderService);
+  private fieldService = inject(FieldService);
 
   providerId = '';
 
   // Tabs
-  tabs = ['Details', 'History'];
+  tabs = ['Details', 'History', 'Settings'];
+
+  // Delete
+  showDeleteDialog = signal(false);
+  deleteUsage = signal<EntityUsage | null>(null);
+  deleting = signal(false);
   activeTab = signal('Details');
 
   // Edit state
@@ -68,9 +76,11 @@ export class ProviderDetailComponent implements OnInit {
   // Metadata state
   metadataEntries = signal<MetadataEntry[]>([]);
   providerTypeFields = signal<ProviderTypeMetadataField[]>([]);
+  metadataLoading = signal(true);
 
   // History grid state
   historyGrid = signal<MetadataHistoryGrid | null>(null);
+  historyLoading = signal(false);
 
   ngOnInit(): void {
     this.route.paramMap.subscribe(params => {
@@ -80,6 +90,7 @@ export class ProviderDetailComponent implements OnInit {
       this.editing.set(false);
       this.metadataEntries.set([]);
       this.providerTypeFields.set([]);
+      this.metadataLoading.set(true);
       this.historyGrid.set(null);
 
       // Restore tab from query params
@@ -115,7 +126,11 @@ export class ProviderDetailComponent implements OnInit {
       const provider = this.providerService.selectedProvider();
       if (provider) {
         this.providerService.getProviderTypeMetadata(provider.provider_type_id).subscribe({
-          next: fields => this.providerTypeFields.set(fields),
+          next: fields => {
+            this.providerTypeFields.set(fields);
+            this.metadataLoading.set(false);
+          },
+          error: () => this.metadataLoading.set(false),
         });
       } else {
         setTimeout(check, 100);
@@ -215,20 +230,26 @@ export class ProviderDetailComponent implements OnInit {
     }
   }
 
-  deleteProvider(): void {
-    this.confirmationService.confirm({
-      header: 'Delete Provider',
-      message: 'Are you sure you want to delete this provider? This action cannot be undone.',
-      acceptLabel: 'Delete',
-      rejectLabel: 'Cancel',
-      accept: () => {
-        this.providerService.deleteProvider(this.providerId).subscribe({
-          next: () => {
-            this.toast.success('Provider deleted');
-            window.history.back();
-          },
-          error: () => this.toast.error('Failed to delete provider'),
-        });
+  openDelete(): void {
+    this.deleteUsage.set(null);
+    this.showDeleteDialog.set(true);
+    this.fieldService.getProviderUsage(this.providerId).subscribe({
+      next: usage => this.deleteUsage.set(usage),
+      error: () => this.toast.error('Failed to load usage data'),
+    });
+  }
+
+  confirmDelete(): void {
+    this.deleting.set(true);
+    this.providerService.deleteProvider(this.providerId).subscribe({
+      next: () => {
+        this.toast.success('Provider deleted');
+        this.showDeleteDialog.set(false);
+        window.history.back();
+      },
+      error: () => {
+        this.toast.error('Failed to delete provider');
+        this.deleting.set(false);
       },
     });
   }
@@ -254,8 +275,13 @@ export class ProviderDetailComponent implements OnInit {
   // ---- History Grid ----
 
   loadHistoryGrid(): void {
+    this.historyLoading.set(true);
     this.providerService.getProviderMetadataHistoryGrid(this.providerId).subscribe({
-      next: grid => this.historyGrid.set(grid),
+      next: grid => {
+        this.historyGrid.set(grid);
+        this.historyLoading.set(false);
+      },
+      error: () => this.historyLoading.set(false),
     });
   }
 

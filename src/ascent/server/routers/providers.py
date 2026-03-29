@@ -20,7 +20,8 @@ from ascent.server.schemas.providers import (
     ProviderSchema,
     ProviderUpdate,
 )
-from ascent.server.services import metadata_service, provider_service
+from ascent.server.schemas.metadata import EntityUsage
+from ascent.server.services import field_service, metadata_service, provider_service
 
 router = APIRouter(prefix="/providers", tags=["providers"])
 
@@ -43,6 +44,11 @@ def create_provider(data: ProviderCreate, db: Session = Depends(get_db)):
 @router.put("/{provider_id}")
 def update_provider(provider_id: uuid.UUID, data: ProviderUpdate, db: Session = Depends(get_db)):
     return provider_service.update_provider(db, provider_id, data)
+
+
+@router.get("/{provider_id}/usage", response_model=EntityUsage)
+def get_provider_usage(provider_id: uuid.UUID, db: Session = Depends(get_db)):
+    return field_service.get_provider_usage(db, provider_id)
 
 
 @router.delete("/{provider_id}", status_code=204)

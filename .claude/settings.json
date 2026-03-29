@@ -27,7 +27,10 @@
       "Bash(grep -r \"svg\\\\|icon\\\\|Icon\" /Users/glynfinck/Documents/Repositories/ascent/src/ascent/ui/src/app/components/shared/*.ts)",
       "Bash(grep -E \"\\\\.py$\")",
       "Bash(grep -r value_type /Users/glynfinck/Documents/Repositories/ascent/src/ascent/database/migrations --include=*.py)",
-      "Bash(grep -A 5 \"parseValue\\\\|value_type === ''date''\" /Users/glynfinck/Documents/Repositories/ascent/src/ascent/ui/src/app/components/shared/metadata-history-table.component.ts)"
+      "Bash(grep -A 5 \"parseValue\\\\|value_type === ''date''\" /Users/glynfinck/Documents/Repositories/ascent/src/ascent/ui/src/app/components/shared/metadata-history-table.component.ts)",
+      "Bash(/Users/glynfinck/Documents/Repositories/ascent/.venv/bin/ascent seed:*)",
+      "WebFetch(domain:swimlane.github.io)",
+      "Bash(npm ls:*)"
     ]
   },
   "hooks": {

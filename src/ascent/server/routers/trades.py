@@ -7,11 +7,14 @@ from sqlalchemy.orm import Session
 from ascent.server.dependencies import get_db
 from ascent.server.schemas.common import PaginatedResponse
 from ascent.server.schemas.trades import (
+    TradeConditionCreate,
     TradeCreate,
+    TradeDataSeriesCreate,
     TradeDetail,
     TradeLegCreate,
     TradeLegUpdate,
     TradeListItem,
+    TradeSnapshotCreate,
     TradeStatusCreate,
     TradeUpdate,
 )
@@ -91,3 +94,24 @@ def delete_trade_leg(leg_id: uuid.UUID, db: Session = Depends(get_db)):
 @router.post("/{trade_id}/statuses", status_code=201)
 def add_trade_status(trade_id: uuid.UUID, data: TradeStatusCreate, db: Session = Depends(get_db)):
     return trade_service.add_trade_status(db, trade_id, data)
+
+
+@router.post("/{trade_id}/conditions", status_code=201)
+def add_trade_condition(
+    trade_id: uuid.UUID, data: TradeConditionCreate, db: Session = Depends(get_db)
+):
+    return trade_service.add_trade_condition(db, trade_id, data)
+
+
+@router.post("/{trade_id}/snapshots", status_code=201)
+def add_trade_snapshot(
+    trade_id: uuid.UUID, data: TradeSnapshotCreate, db: Session = Depends(get_db)
+):
+    return trade_service.add_trade_snapshot(db, trade_id, data)
+
+
+@router.post("/{trade_id}/data-series", status_code=201)
+def add_trade_data_series(
+    trade_id: uuid.UUID, data: TradeDataSeriesCreate, db: Session = Depends(get_db)
+):
+    return trade_service.add_trade_data_series(db, trade_id, data)

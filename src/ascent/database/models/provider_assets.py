@@ -47,10 +47,10 @@ class ProviderAssetMetadata(Base):
         comment="The identifier of the metadata type (e.g., 'symbol', 'exchange_code', 'provider_ticker'). References the Metadata table for metadata type definitions.",
     )
     metadata_type: Mapped["Metadata"] = relationship("Metadata")
-    value: Mapped[dict | list | str | int | float | bool | None] = mapped_column(
+    value: Mapped[str | int | float | bool | None] = mapped_column(
         JSONB,
         nullable=False,
-        comment="The JSON value of the metadata attribute for this provider asset. Can store text, numbers, booleans, objects, or arrays. For example, 'BTC' or 'XBT' for Bitcoin symbol, or more complex structured data.",
+        comment="The primitive value of the metadata attribute for this provider asset. Allowed types: string, integer, float, boolean, date, time, datetime.",
     )
     created_at: Mapped[datetime.datetime] = mapped_column(
         nullable=False,

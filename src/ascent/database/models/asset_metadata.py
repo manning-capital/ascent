@@ -40,10 +40,10 @@ class AssetMetadata(Base):
         comment="The identifier of the metadata type (e.g., 'sector', 'currency', 'exchange'). References the Metadata table for metadata type definitions.",
     )
     metadata_type: Mapped["Metadata"] = relationship("Metadata")
-    value: Mapped[dict | list | str | int | float | bool | None] = mapped_column(
+    value: Mapped[str | int | float | bool | None] = mapped_column(
         JSONB,
         nullable=False,
-        comment="The JSON value of the metadata attribute for this asset. Can store text, numbers, booleans, objects, or arrays.",
+        comment="The primitive value of the metadata attribute for this asset. Allowed types: string, integer, float, boolean, date, time, datetime.",
     )
     created_at: Mapped[datetime.datetime] = mapped_column(
         nullable=False,

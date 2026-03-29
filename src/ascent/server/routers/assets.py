@@ -15,7 +15,8 @@ from ascent.server.schemas.metadata import (
     MetadataHistoryGrid,
     MetadataHistoryUpdate,
 )
-from ascent.server.services import asset_service, metadata_service
+from ascent.server.schemas.metadata import EntityUsage
+from ascent.server.services import asset_service, field_service, metadata_service
 
 router = APIRouter(prefix="/assets", tags=["assets"])
 
@@ -38,6 +39,11 @@ def create_asset(data: AssetCreate, db: Session = Depends(get_db)):
 @router.put("/{asset_id}")
 def update_asset(asset_id: uuid.UUID, data: AssetUpdate, db: Session = Depends(get_db)):
     return asset_service.update_asset(db, asset_id, data)
+
+
+@router.get("/{asset_id}/usage", response_model=EntityUsage)
+def get_asset_usage(asset_id: uuid.UUID, db: Session = Depends(get_db)):
+    return field_service.get_asset_usage(db, asset_id)
 
 
 @router.delete("/{asset_id}", status_code=204)

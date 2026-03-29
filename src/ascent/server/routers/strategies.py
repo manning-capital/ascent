@@ -5,10 +5,12 @@ from sqlalchemy.orm import Session
 
 from ascent.server.dependencies import get_db
 from ascent.server.schemas.common import PaginatedResponse
+from ascent.server.schemas.feeds import StrategyFeedItem
 from ascent.server.schemas.orders import OrderSchema
 from ascent.server.schemas.strategies import (
     StrategyCreate,
     StrategyDetail,
+    StrategyFeedCreate,
     StrategyFeedDAG,
     StrategyListItem,
     StrategyRunListItem,
@@ -55,6 +57,13 @@ def get_strategy_stats(strategy_id: uuid.UUID, db: Session = Depends(get_db)):
 @router.get("/{strategy_id}/feeds", response_model=StrategyFeedDAG)
 def get_strategy_feeds(strategy_id: uuid.UUID, db: Session = Depends(get_db)):
     return strategy_service.get_strategy_feed_dag(db, strategy_id)
+
+
+@router.post("/{strategy_id}/feeds", status_code=201, response_model=StrategyFeedItem)
+def add_strategy_feed(
+    strategy_id: uuid.UUID, data: StrategyFeedCreate, db: Session = Depends(get_db)
+):
+    return strategy_service.add_strategy_feed(db, strategy_id, data)
 
 
 @router.get("/{strategy_id}/parameter-schema")

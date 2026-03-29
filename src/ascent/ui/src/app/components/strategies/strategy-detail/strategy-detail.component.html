@@ -734,7 +734,7 @@
           <p-card header="Info">
             <div class="space-y-2 text-sm">
               <div class="flex justify-between"><span class="text-surface-500">Portfolio</span><span>{{ strategy.portfolio_name }}</span></div>
-              <div class="flex justify-between"><span class="text-surface-500">Strategy</span><span>{{ strategy.strategy_class }}</span></div>
+              <div class="flex justify-between"><span class="text-surface-500">Strategy</span><span>{{ strategy.strategy_ref }}</span></div>
               <div class="flex justify-between"><span class="text-surface-500">Active</span><span>{{ strategy.is_active ? 'Yes' : 'No' }}</span></div>
               @if (strategy.created_at) {
                 <div class="flex justify-between"><span class="text-surface-500">Created</span><span>{{ strategy.created_at | date:'mediumDate' }}</span></div>

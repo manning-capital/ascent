@@ -44,6 +44,7 @@ services:
     environment:
       ASCENT_DATABASE_URL: postgresql://ascent:ascent@db:5432/ascent
       ASCENT_REDIS_URL: redis://redis:6379/0
+      ASCENT_DEBUG: "true"
     depends_on:
       db:
         condition: service_healthy

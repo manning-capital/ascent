@@ -11,7 +11,7 @@ class StrategyListItem(BaseModel):
     name: str
     description: str | None = None
     strategy_type: str
-    strategy_class: str
+    strategy_ref: str
     parameters: dict | list | str | int | float | bool | None = None
     portfolio_id: uuid.UUID
     is_active: bool
@@ -28,17 +28,18 @@ class StrategyListItem(BaseModel):
 class StrategyCreate(BaseModel):
     name: str
     strategy_type_id: uuid.UUID
-    strategy_class: str
+    strategy_ref: str
     portfolio_id: uuid.UUID
     description: str | None = None
     parameters: dict | list | str | int | float | bool | None = None
+    parameter_schema: dict | None = None
     is_active: bool = True
 
 
 class StrategyUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
-    strategy_class: str | None = None
+    strategy_ref: str | None = None
     parameters: dict | list | str | int | float | bool | None = None
     is_active: bool | None = None
 
@@ -146,6 +147,12 @@ class StrategyRunFeedRunItem(BaseModel):
     feed_run_id: uuid.UUID
     is_trigger: bool
     status: str
+
+
+class StrategyFeedCreate(BaseModel):
+    feed_id: uuid.UUID
+    is_required: bool = True
+    order: int = 0
 
 
 class StrategyRunListItem(BaseModel):

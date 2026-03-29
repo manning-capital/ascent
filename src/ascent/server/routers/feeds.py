@@ -10,6 +10,8 @@ from ascent.server.dependencies import get_cache, get_db
 from ascent.server.schemas.common import PaginatedResponse
 from ascent.server.schemas.feeds import (
     FeedCreate,
+    FeedDependencyCreate,
+    FeedDependencySchema,
     FeedDetail,
     FeedListItem,
     FeedPartitionItem,
@@ -164,6 +166,18 @@ def remove_feed_universe_item(
     db: Session = Depends(get_db),
 ):
     universe_service.remove_feed_universe_item(db, feed_id, provider_id, from_asset_id, to_asset_id)
+
+
+@router.get("/{feed_id}/dependencies", response_model=list[FeedDependencySchema])
+def list_feed_dependencies(feed_id: uuid.UUID, db: Session = Depends(get_db)):
+    return feed_service.get_feed_dependencies(db, feed_id)
+
+
+@router.post("/{feed_id}/dependencies", status_code=201, response_model=FeedDependencySchema)
+def create_feed_dependency(
+    feed_id: uuid.UUID, data: FeedDependencyCreate, db: Session = Depends(get_db)
+):
+    return feed_service.create_feed_dependency(db, feed_id, data)
 
 
 @router.get("/{feed_id}/strategies", response_model=list[StrategyFeedItem])

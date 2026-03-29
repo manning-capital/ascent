@@ -1,9 +1,11 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { AssetService } from '../../../services/asset.service';
+import { FieldService } from '../../../services/field.service';
 import { ToastService } from '../../../services/toast.service';
 import { TypeItem, AssetTypeMetadataField, AssetTypeProviderAssetMetadataField, MetadataType } from '../../../models/asset.model';
+import { EntityUsage } from '../../../models/field.model';
 import { Select } from 'primeng/select';
 import { Skeleton } from 'primeng/skeleton';
 import { Checkbox } from 'primeng/checkbox';
@@ -12,28 +14,40 @@ import { Card } from 'primeng/card';
 import { Button } from 'primeng/button';
 import { InputText } from 'primeng/inputtext';
 import { Tag } from 'primeng/tag';
+import { Tabs, TabList, Tab, TabPanels, TabPanel } from 'primeng/tabs';
+import { SafeDeleteDialogComponent } from '../../shared/safe-delete-dialog.component';
 
 @Component({
   selector: 'app-asset-type-detail',
   standalone: true,
-  imports: [RouterLink, FormsModule, Select, Checkbox, TableModule, Card, Button, InputText, Tag, Skeleton],
+  imports: [RouterLink, FormsModule, Select, Checkbox, TableModule, Card, Button, InputText, Tag, Skeleton, Tabs, TabList, Tab, TabPanels, TabPanel, SafeDeleteDialogComponent],
   templateUrl: './asset-type-detail.component.html',
 })
 export class AssetTypeDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
+  private router = inject(Router);
   private toast = inject(ToastService);
   assetService = inject(AssetService);
+  private fieldService = inject(FieldService);
 
   typeId = '';
   assetType = signal<TypeItem | null>(null);
+  activeTab = signal('0');
+
+  // Delete
+  showDeleteDialog = signal(false);
+  usage = signal<EntityUsage | null>(null);
+  deleting = signal(false);
   fields = signal<AssetTypeMetadataField[]>([]);
   ownFields = computed(() => this.fields().filter(f => !f.is_inherited));
   inheritedFields = computed(() => this.fields().filter(f => f.is_inherited));
+  allFields = computed(() => [...this.inheritedFields(), ...this.ownFields()]);
 
   // Provider-asset metadata fields
   paFields = signal<AssetTypeProviderAssetMetadataField[]>([]);
   ownPaFields = computed(() => this.paFields().filter(f => !f.is_inherited));
   inheritedPaFields = computed(() => this.paFields().filter(f => f.is_inherited));
+  allPaFields = computed(() => [...this.inheritedPaFields(), ...this.ownPaFields()]);
   showAddPaField = signal(false);
   newPaFieldMetadataId = '';
   newPaFieldRequired = true;
@@ -84,7 +98,8 @@ export class AssetTypeDetailComponent implements OnInit {
 
   availableMetadataTypes(): MetadataType[] {
     const usedIds = new Set(this.fields().map(f => f.metadata_id));
-    return this.assetService.metadataTypes().filter(mt => !usedIds.has(mt.id));
+    const usedNames = new Set(this.fields().map(f => f.metadata_name));
+    return this.assetService.metadataTypes().filter(mt => !usedIds.has(mt.id) && !usedNames.has(mt.name));
   }
 
   openAddField(): void {
@@ -138,7 +153,13 @@ export class AssetTypeDetailComponent implements OnInit {
   }
 
   submitCreateMetadata(): void {
-    if (!this.newMetaName.trim() || !this.newMetaDisplayName.trim()) return;
+    const name = this.newMetaName.trim();
+    if (!name || !this.newMetaDisplayName.trim()) return;
+    const usedNames = new Set(this.fields().map(f => f.metadata_name));
+    if (usedNames.has(name)) {
+      this.toast.error('A field with this name already exists');
+      return;
+    }
     this.assetService.createMetadataType(
       this.newMetaName.trim(),
       this.newMetaDisplayName.trim(),
@@ -161,7 +182,11 @@ export class AssetTypeDetailComponent implements OnInit {
       ...this.paFields().map(f => f.metadata_id),
       ...this.fields().map(f => f.metadata_id),
     ]);
-    return this.assetService.metadataTypes().filter(mt => !usedIds.has(mt.id));
+    const usedNames = new Set([
+      ...this.paFields().map(f => f.metadata_name),
+      ...this.fields().map(f => f.metadata_name),
+    ]);
+    return this.assetService.metadataTypes().filter(mt => !usedIds.has(mt.id) && !usedNames.has(mt.name));
   }
 
   openAddPaField(): void {
@@ -204,5 +229,31 @@ export class AssetTypeDetailComponent implements OnInit {
   valueTypeLabel(vt: string): string {
     const labels: Record<string, string> = { string: 'Text', integer: 'Integer', float: 'Float', boolean: 'Boolean', date: 'Date', time: 'Time', datetime: 'DateTime' };
     return labels[vt] ?? vt;
+  }
+
+  // ---- Delete ----
+
+  openDelete(): void {
+    this.usage.set(null);
+    this.showDeleteDialog.set(true);
+    this.fieldService.getAssetTypeUsage(this.typeId).subscribe({
+      next: usage => this.usage.set(usage),
+      error: () => this.toast.error('Failed to load usage data'),
+    });
+  }
+
+  confirmDelete(): void {
+    this.deleting.set(true);
+    this.fieldService.deleteAssetType(this.typeId).subscribe({
+      next: () => {
+        this.toast.success('Asset type deleted');
+        this.showDeleteDialog.set(false);
+        this.router.navigate(['/settings/asset-types']);
+      },
+      error: () => {
+        this.toast.error('Failed to delete asset type');
+        this.deleting.set(false);
+      },
+    });
   }
 }

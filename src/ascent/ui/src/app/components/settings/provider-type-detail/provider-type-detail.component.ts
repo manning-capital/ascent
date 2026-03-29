@@ -1,10 +1,12 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ProviderService } from '../../../services/provider.service';
 import { AssetService } from '../../../services/asset.service';
+import { FieldService } from '../../../services/field.service';
 import { ToastService } from '../../../services/toast.service';
 import { TypeItem, ProviderTypeMetadataField, MetadataType } from '../../../models/asset.model';
+import { EntityUsage } from '../../../models/field.model';
 import { Select } from 'primeng/select';
 import { Skeleton } from 'primeng/skeleton';
 import { Checkbox } from 'primeng/checkbox';
@@ -13,24 +15,35 @@ import { Card } from 'primeng/card';
 import { Button } from 'primeng/button';
 import { InputText } from 'primeng/inputtext';
 import { Tag } from 'primeng/tag';
+import { Tabs, TabList, Tab, TabPanels, TabPanel } from 'primeng/tabs';
+import { SafeDeleteDialogComponent } from '../../shared/safe-delete-dialog.component';
 
 @Component({
   selector: 'app-provider-type-detail',
   standalone: true,
-  imports: [RouterLink, FormsModule, Select, Checkbox, TableModule, Card, Button, InputText, Tag, Skeleton],
+  imports: [RouterLink, FormsModule, Select, Checkbox, TableModule, Card, Button, InputText, Tag, Skeleton, Tabs, TabList, Tab, TabPanels, TabPanel, SafeDeleteDialogComponent],
   templateUrl: './provider-type-detail.component.html',
 })
 export class ProviderTypeDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
+  private router = inject(Router);
   private toast = inject(ToastService);
   providerService = inject(ProviderService);
   assetService = inject(AssetService);
+  private fieldService = inject(FieldService);
 
   typeId = '';
   providerType = signal<TypeItem | null>(null);
+  activeTab = signal('0');
+
+  // Delete
+  showDeleteDialog = signal(false);
+  usage = signal<EntityUsage | null>(null);
+  deleting = signal(false);
   fields = signal<ProviderTypeMetadataField[]>([]);
   ownFields = computed(() => this.fields().filter(f => !f.is_inherited));
   inheritedFields = computed(() => this.fields().filter(f => f.is_inherited));
+  allFields = computed(() => [...this.inheritedFields(), ...this.ownFields()]);
 
   showAddField = signal(false);
   newFieldMetadataId = '';
@@ -73,7 +86,8 @@ export class ProviderTypeDetailComponent implements OnInit {
 
   availableMetadataTypes(): MetadataType[] {
     const usedIds = new Set(this.fields().map(f => f.metadata_id));
-    return this.assetService.metadataTypes().filter(mt => !usedIds.has(mt.id));
+    const usedNames = new Set(this.fields().map(f => f.metadata_name));
+    return this.assetService.metadataTypes().filter(mt => !usedIds.has(mt.id) && !usedNames.has(mt.name));
   }
 
   openAddField(): void {
@@ -127,7 +141,13 @@ export class ProviderTypeDetailComponent implements OnInit {
   }
 
   submitCreateMetadata(): void {
-    if (!this.newMetaName.trim() || !this.newMetaDisplayName.trim()) return;
+    const name = this.newMetaName.trim();
+    if (!name || !this.newMetaDisplayName.trim()) return;
+    const usedNames = new Set(this.fields().map(f => f.metadata_name));
+    if (usedNames.has(name)) {
+      this.toast.error('A field with this name already exists');
+      return;
+    }
     this.assetService.createMetadataType(
       this.newMetaName.trim(),
       this.newMetaDisplayName.trim(),
@@ -146,5 +166,31 @@ export class ProviderTypeDetailComponent implements OnInit {
   valueTypeLabel(vt: string): string {
     const labels: Record<string, string> = { string: 'Text', integer: 'Integer', float: 'Float', boolean: 'Boolean', date: 'Date', time: 'Time', datetime: 'DateTime' };
     return labels[vt] ?? vt;
+  }
+
+  // ---- Delete ----
+
+  openDelete(): void {
+    this.usage.set(null);
+    this.showDeleteDialog.set(true);
+    this.fieldService.getProviderTypeUsage(this.typeId).subscribe({
+      next: usage => this.usage.set(usage),
+      error: () => this.toast.error('Failed to load usage data'),
+    });
+  }
+
+  confirmDelete(): void {
+    this.deleting.set(true);
+    this.fieldService.deleteProviderType(this.typeId).subscribe({
+      next: () => {
+        this.toast.success('Provider type deleted');
+        this.showDeleteDialog.set(false);
+        this.router.navigate(['/settings/provider-types']);
+      },
+      error: () => {
+        this.toast.error('Failed to delete provider type');
+        this.deleting.set(false);
+      },
+    });
   }
 }

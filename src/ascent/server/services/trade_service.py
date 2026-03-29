@@ -19,8 +19,10 @@ from ascent.database.models import (
 from ascent.server.exceptions import BadRequestError, NotFoundError
 from ascent.server.schemas.orders import OrderDetailSchema, OrderStatusSchema
 from ascent.server.schemas.trades import (
+    TradeConditionCreate,
     TradeConditionSchema,
     TradeCreate,
+    TradeDataSeriesCreate,
     TradeDataSeriesSchema,
     TradeDetail,
     TradeLegCreate,
@@ -28,6 +30,7 @@ from ascent.server.schemas.trades import (
     TradeLegSummary,
     TradeLegUpdate,
     TradeListItem,
+    TradeSnapshotCreate,
     TradeSnapshotSchema,
     TradeStatusCreate,
     TradeStatusSchema,
@@ -417,3 +420,41 @@ def add_trade_status(db: Session, trade_id: uuid.UUID, data: TradeStatusCreate) 
     db.commit()
     db.refresh(status)
     return status
+
+
+def add_trade_condition(
+    db: Session, trade_id: uuid.UUID, data: TradeConditionCreate
+) -> TradeCondition:
+    trade = db.get(Trade, trade_id)
+    if not trade:
+        raise NotFoundError("Trade not found")
+    obj = TradeCondition(trade_id=trade_id, **data.model_dump())
+    db.add(obj)
+    db.commit()
+    db.refresh(obj)
+    return obj
+
+
+def add_trade_snapshot(
+    db: Session, trade_id: uuid.UUID, data: TradeSnapshotCreate
+) -> TradeSnapshot:
+    trade = db.get(Trade, trade_id)
+    if not trade:
+        raise NotFoundError("Trade not found")
+    obj = TradeSnapshot(trade_id=trade_id, **data.model_dump())
+    db.add(obj)
+    db.commit()
+    return obj
+
+
+def add_trade_data_series(
+    db: Session, trade_id: uuid.UUID, data: TradeDataSeriesCreate
+) -> TradeDataSeries:
+    trade = db.get(Trade, trade_id)
+    if not trade:
+        raise NotFoundError("Trade not found")
+    obj = TradeDataSeries(trade_id=trade_id, **data.model_dump())
+    db.add(obj)
+    db.commit()
+    db.refresh(obj)
+    return obj

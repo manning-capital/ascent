@@ -1,0 +1,78 @@
+<div class="p-6 max-w-5xl mx-auto">
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-2xl font-bold">Attributes</h1>
+      <p class="text-sm text-surface-500 mt-1">Define numerical attribute types used for temporal floating-point values (e.g., prices, scores, statistical measures).</p>
+    </div>
+    <p-button (onClick)="openCreate()" severity="info" [outlined]="true" size="small" label="+ New Attribute"/>
+  </div>
+
+  @if (showCreateForm()) {
+    <p-card class="mb-6">
+      <ng-template #header>
+        <div class="px-5 pt-5">
+          <h3 class="font-semibold">New Attribute</h3>
+        </div>
+      </ng-template>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs text-surface-500 mb-1">Name *</label>
+          <input type="text" pInputText [(ngModel)]="newName" placeholder="e.g. close_price, volume" class="w-full"/>
+        </div>
+        <div>
+          <label class="block text-xs text-surface-500 mb-1">Description</label>
+          <input type="text" pInputText [(ngModel)]="newDescription" placeholder="Optional description" class="w-full"/>
+        </div>
+      </div>
+      <div class="flex gap-2 mt-4">
+        <p-button (onClick)="submitCreate()" severity="success" [outlined]="true" size="small" label="Create"/>
+        <p-button (onClick)="cancelCreate()" severity="secondary" [outlined]="true" size="small" label="Cancel"/>
+      </div>
+    </p-card>
+  }
+
+  @if (fieldService.loading()) {
+    <p-card>
+      <div class="flex flex-col gap-3">
+        @for (_ of [1,2,3,4,5]; track $index) {
+          <div class="flex items-center gap-4">
+            <p-skeleton width="30%" height="1rem"/>
+            <p-skeleton width="10%" height="1rem"/>
+            <div class="flex-1"></div>
+            <p-skeleton width="20%" height="1rem"/>
+          </div>
+        }
+      </div>
+    </p-card>
+  } @else {
+    <p-card styleClass="overflow-hidden">
+      <p-table [value]="fieldService.attributes()" [rowHover]="true" (onRowSelect)="navigateTo($event)" selectionMode="single" dataKey="id">
+        <ng-template #header>
+          <tr>
+            <th>Name</th>
+            <th>Status</th>
+            <th>Description</th>
+          </tr>
+        </ng-template>
+        <ng-template #body let-item>
+          <tr [pSelectableRow]="item" class="cursor-pointer">
+            <td class="font-mono text-sm">{{ item.name }}</td>
+            <td>
+              @if (item.is_active) {
+                <p-tag value="Active" severity="success"/>
+              } @else {
+                <p-tag value="Inactive" severity="warn"/>
+              }
+            </td>
+            <td class="text-sm text-surface-400">{{ item.description || '-' }}</td>
+          </tr>
+        </ng-template>
+        <ng-template #emptymessage>
+          <tr>
+            <td colspan="3" class="text-center text-surface-400 py-8">No attributes defined. Click + New Attribute to get started.</td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </p-card>
+  }
+</div>

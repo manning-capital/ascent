@@ -25,6 +25,10 @@ export const routes: Routes = [
       { path: 'asset-types/:id', loadComponent: () => import('./components/settings/asset-type-detail/asset-type-detail.component').then(m => m.AssetTypeDetailComponent) },
       { path: 'provider-types', loadComponent: () => import('./components/settings/provider-type-list.component').then(m => m.ProviderTypeListComponent) },
       { path: 'provider-types/:id', loadComponent: () => import('./components/settings/provider-type-detail/provider-type-detail.component').then(m => m.ProviderTypeDetailComponent) },
+      { path: 'metadata-types', loadComponent: () => import('./components/settings/metadata-type-list.component').then(m => m.MetadataTypeListComponent) },
+      { path: 'metadata-types/:id', loadComponent: () => import('./components/settings/metadata-type-detail/metadata-type-detail.component').then(m => m.MetadataTypeDetailComponent) },
+      { path: 'attributes', loadComponent: () => import('./components/settings/attribute-list.component').then(m => m.AttributeListComponent) },
+      { path: 'attributes/:id', loadComponent: () => import('./components/settings/attribute-detail/attribute-detail.component').then(m => m.AttributeDetailComponent) },
       { path: 'about', loadComponent: () => import('./components/about/about.component').then(m => m.AboutComponent) },
     ]
   },

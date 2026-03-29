@@ -2,7 +2,7 @@ import datetime
 import uuid
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import insert, select
 from sqlalchemy.orm import Session, joinedload
 
 from ascent.database.models import AssetMetadata, Metadata, ProviderAssetMetadata, ProviderMetadata
@@ -38,22 +38,20 @@ def get_latest_asset_metadata(db: Session, asset_id: uuid.UUID) -> list[Metadata
 def create_asset_metadata_entry(
     db: Session, asset_id: uuid.UUID, data: MetadataEntryCreate
 ) -> MetadataEntrySchema:
-    record = AssetMetadata(
-        timestamp=data.timestamp or datetime.datetime.now(datetime.UTC),
-        asset_id=asset_id,
-        metadata_id=data.metadata_id,
-        value=data.value,
+    ts = data.timestamp or datetime.datetime.now(datetime.UTC)
+    db.execute(
+        insert(AssetMetadata).values(
+            timestamp=ts, asset_id=asset_id, metadata_id=data.metadata_id, value=data.value
+        )
     )
-    db.add(record)
     db.commit()
-    db.refresh(record)
     md = db.get(Metadata, data.metadata_id)
     return MetadataEntrySchema(
-        metadata_id=record.metadata_id,
+        metadata_id=data.metadata_id,
         metadata_name=md.name if md else "",
         metadata_display_name=md.display_name if md else None,
-        value=record.value,
-        timestamp=record.timestamp,
+        value=data.value,
+        timestamp=ts,
     )
 
 
@@ -157,22 +155,20 @@ def get_latest_provider_metadata(db: Session, provider_id: uuid.UUID) -> list[Me
 def create_provider_metadata_entry(
     db: Session, provider_id: uuid.UUID, data: MetadataEntryCreate
 ) -> MetadataEntrySchema:
-    record = ProviderMetadata(
-        timestamp=data.timestamp or datetime.datetime.now(datetime.UTC),
-        provider_id=provider_id,
-        metadata_id=data.metadata_id,
-        value=data.value,
+    ts = data.timestamp or datetime.datetime.now(datetime.UTC)
+    db.execute(
+        insert(ProviderMetadata).values(
+            timestamp=ts, provider_id=provider_id, metadata_id=data.metadata_id, value=data.value
+        )
     )
-    db.add(record)
     db.commit()
-    db.refresh(record)
     md = db.get(Metadata, data.metadata_id)
     return MetadataEntrySchema(
-        metadata_id=record.metadata_id,
+        metadata_id=data.metadata_id,
         metadata_name=md.name if md else "",
         metadata_display_name=md.display_name if md else None,
-        value=record.value,
-        timestamp=record.timestamp,
+        value=data.value,
+        timestamp=ts,
     )
 
 
@@ -267,16 +263,17 @@ def delete_provider_metadata_entry(
 def batch_create_asset_metadata(
     db: Session, asset_id: uuid.UUID, data: BatchMetadataCreate
 ) -> list[MetadataEntrySchema]:
-    results: list[MetadataEntrySchema] = []
     for entry in data.entries:
-        record = AssetMetadata(
-            timestamp=data.timestamp,
-            asset_id=asset_id,
-            metadata_id=entry.metadata_id,
-            value=entry.value,
+        db.execute(
+            insert(AssetMetadata).values(
+                timestamp=data.timestamp,
+                asset_id=asset_id,
+                metadata_id=entry.metadata_id,
+                value=entry.value,
+            )
         )
-        db.add(record)
     db.commit()
+    results: list[MetadataEntrySchema] = []
     for entry in data.entries:
         md = db.get(Metadata, entry.metadata_id)
         results.append(
@@ -294,16 +291,17 @@ def batch_create_asset_metadata(
 def batch_create_provider_metadata(
     db: Session, provider_id: uuid.UUID, data: BatchMetadataCreate
 ) -> list[MetadataEntrySchema]:
-    results: list[MetadataEntrySchema] = []
     for entry in data.entries:
-        record = ProviderMetadata(
-            timestamp=data.timestamp,
-            provider_id=provider_id,
-            metadata_id=entry.metadata_id,
-            value=entry.value,
+        db.execute(
+            insert(ProviderMetadata).values(
+                timestamp=data.timestamp,
+                provider_id=provider_id,
+                metadata_id=entry.metadata_id,
+                value=entry.value,
+            )
         )
-        db.add(record)
     db.commit()
+    results: list[MetadataEntrySchema] = []
     for entry in data.entries:
         md = db.get(Metadata, entry.metadata_id)
         results.append(
@@ -525,23 +523,24 @@ def create_provider_asset_metadata_entry(
     asset_id: uuid.UUID,
     data: MetadataEntryCreate,
 ) -> MetadataEntrySchema:
-    record = ProviderAssetMetadata(
-        timestamp=data.timestamp or datetime.datetime.now(datetime.UTC),
-        provider_id=provider_id,
-        asset_id=asset_id,
-        metadata_id=data.metadata_id,
-        value=data.value,
+    ts = data.timestamp or datetime.datetime.now(datetime.UTC)
+    db.execute(
+        insert(ProviderAssetMetadata).values(
+            timestamp=ts,
+            provider_id=provider_id,
+            asset_id=asset_id,
+            metadata_id=data.metadata_id,
+            value=data.value,
+        )
     )
-    db.add(record)
     db.commit()
-    db.refresh(record)
     md = db.get(Metadata, data.metadata_id)
     return MetadataEntrySchema(
-        metadata_id=record.metadata_id,
+        metadata_id=data.metadata_id,
         metadata_name=md.name if md else "",
         metadata_display_name=md.display_name if md else None,
-        value=record.value,
-        timestamp=record.timestamp,
+        value=data.value,
+        timestamp=ts,
     )
 
 
@@ -551,17 +550,18 @@ def batch_create_provider_asset_metadata(
     asset_id: uuid.UUID,
     data: BatchMetadataCreate,
 ) -> list[MetadataEntrySchema]:
-    results: list[MetadataEntrySchema] = []
     for entry in data.entries:
-        record = ProviderAssetMetadata(
-            timestamp=data.timestamp,
-            provider_id=provider_id,
-            asset_id=asset_id,
-            metadata_id=entry.metadata_id,
-            value=entry.value,
+        db.execute(
+            insert(ProviderAssetMetadata).values(
+                timestamp=data.timestamp,
+                provider_id=provider_id,
+                asset_id=asset_id,
+                metadata_id=entry.metadata_id,
+                value=entry.value,
+            )
         )
-        db.add(record)
     db.commit()
+    results: list[MetadataEntrySchema] = []
     for entry in data.entries:
         md = db.get(Metadata, entry.metadata_id)
         results.append(

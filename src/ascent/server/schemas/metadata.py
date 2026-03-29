@@ -3,7 +3,7 @@ import enum
 import uuid
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class MetadataValueType(str, enum.Enum):
@@ -16,10 +16,29 @@ class MetadataValueType(str, enum.Enum):
     DATETIME = "datetime"
 
 
+# Allowed types for metadata values (primitives + date/time types, no dicts/lists)
+PrimitiveValue = str | int | float | bool | datetime.date | datetime.time | datetime.datetime | None
+
+_ALLOWED_TYPES = (str, int, float, bool, datetime.date, datetime.time, datetime.datetime)
+
+
+def _validate_primitive(v: Any) -> PrimitiveValue:
+    if v is not None and not isinstance(v, _ALLOWED_TYPES):
+        raise ValueError(
+            f"Metadata values must be primitives (str, int, float, bool, date, time, datetime), got {type(v).__name__}"
+        )
+    return v
+
+
 class MetadataEntryCreate(BaseModel):
     metadata_id: uuid.UUID
     value: Any
     timestamp: datetime.datetime | None = None
+
+    @field_validator("value")
+    @classmethod
+    def value_must_be_primitive(cls, v: Any) -> PrimitiveValue:
+        return _validate_primitive(v)
 
 
 class MetadataEntrySchema(BaseModel):
@@ -27,7 +46,7 @@ class MetadataEntrySchema(BaseModel):
 
     metadata_id: uuid.UUID
     metadata_name: str
-    metadata_display_name: str
+    metadata_display_name: str = ""
     value: Any
     timestamp: datetime.datetime
 
@@ -44,15 +63,20 @@ class MetadataHistoryUpdate(BaseModel):
     value: Any | None = None
     timestamp: datetime.datetime | None = None
 
+    @field_validator("value")
+    @classmethod
+    def value_must_be_primitive(cls, v: Any) -> PrimitiveValue:
+        return _validate_primitive(v)
+
 
 class MetadataTypeSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
     name: str
-    display_name: str
+    display_name: str = ""
     description: str | None = None
-    value_type: MetadataValueType = MetadataValueType.STRING
+    value_type: str = "string"
     is_active: bool = True
 
 
@@ -63,12 +87,36 @@ class MetadataTypeCreate(BaseModel):
     value_type: MetadataValueType = MetadataValueType.STRING
 
 
+class MetadataTypeUpdate(BaseModel):
+    name: str | None = None
+    display_name: str | None = None
+    description: str | None = None
+    value_type: MetadataValueType | None = None
+    is_active: bool | None = None
+
+
+# ---------------------------------------------------------------------------
+# Generic entity usage (reusable across all entity types)
+# ---------------------------------------------------------------------------
+
+
+class EntityUsageItem(BaseModel):
+    label: str
+    count: int
+    kind: str = "cascade"  # "cascade" = will be deleted, "reference" = linkage will break
+
+
+class EntityUsage(BaseModel):
+    items: list[EntityUsageItem]
+    total: int
+
+
 class AssetTypeMetadataSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     metadata_id: uuid.UUID
     metadata_name: str
-    metadata_display_name: str
+    metadata_display_name: str = ""
     metadata_description: str | None = None
     value_type: str
     is_required: bool
@@ -89,7 +137,7 @@ class AssetTypeProviderAssetMetadataSchema(BaseModel):
 
     metadata_id: uuid.UUID
     metadata_name: str
-    metadata_display_name: str
+    metadata_display_name: str = ""
     metadata_description: str | None = None
     value_type: str
     is_required: bool
@@ -110,7 +158,7 @@ class ProviderTypeMetadataSchema(BaseModel):
 
     metadata_id: uuid.UUID
     metadata_name: str
-    metadata_display_name: str
+    metadata_display_name: str = ""
     metadata_description: str | None = None
     value_type: str
     is_required: bool
@@ -135,6 +183,11 @@ class BatchMetadataEntry(BaseModel):
     metadata_id: uuid.UUID
     value: Any
 
+    @field_validator("value")
+    @classmethod
+    def value_must_be_primitive(cls, v: Any) -> PrimitiveValue:
+        return _validate_primitive(v)
+
 
 class BatchMetadataCreate(BaseModel):
     timestamp: datetime.datetime
@@ -149,7 +202,7 @@ class BatchMetadataCreate(BaseModel):
 class MetadataFieldInfo(BaseModel):
     metadata_id: uuid.UUID
     metadata_name: str
-    metadata_display_name: str
+    metadata_display_name: str = ""
     value_type: str
 
 
@@ -174,11 +227,21 @@ class BulkHistoryUpdateEntry(BaseModel):
     metadata_id: uuid.UUID
     value: Any
 
+    @field_validator("value")
+    @classmethod
+    def value_must_be_primitive(cls, v: Any) -> PrimitiveValue:
+        return _validate_primitive(v)
+
 
 class BulkHistoryInsertEntry(BaseModel):
     timestamp: datetime.datetime
     metadata_id: uuid.UUID
     value: Any
+
+    @field_validator("value")
+    @classmethod
+    def value_must_be_primitive(cls, v: Any) -> PrimitiveValue:
+        return _validate_primitive(v)
 
 
 class BulkHistoryDeleteEntry(BaseModel):

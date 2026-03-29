@@ -17,6 +17,7 @@ from ascent.server.exceptions import AscentAPIError
 from ascent.server.routers import (
     admin,
     assets,
+    attributes,
     dashboard,
     exchanges,
     feeds,
@@ -67,6 +68,29 @@ def _create_tables() -> None:
                 "parent_type_id UUID REFERENCES provider_type(id)"
             )
         )
+        conn.execute(
+            text("ALTER TABLE metadata ADD COLUMN IF NOT EXISTS display_name VARCHAR(200)")
+        )
+        # Backfill display_name from name for any rows missing it
+        conn.execute(
+            text(
+                "UPDATE metadata SET display_name = INITCAP(REPLACE(name, '_', ' ')) "
+                "WHERE display_name IS NULL"
+            )
+        )
+        # Now make it NOT NULL
+        conn.execute(text("ALTER TABLE metadata ALTER COLUMN display_name SET NOT NULL"))
+        # Migrate old value_type values to new ones
+        conn.execute(text("UPDATE metadata SET value_type = 'float' WHERE value_type = 'number'"))
+        conn.execute(text("UPDATE metadata SET value_type = 'string' WHERE value_type = 'json'"))
+        # Convert any non-primitive (dict/list) metadata values to JSON strings
+        for tbl in ["asset_metadata", "provider_metadata", "provider_asset_metadata"]:
+            conn.execute(
+                text(
+                    f"UPDATE {tbl} SET value = to_jsonb(value::text) "
+                    f"WHERE jsonb_typeof(value) IN ('object', 'array')"
+                )
+            )
         conn.commit()
 
 
@@ -100,18 +124,14 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(Exception)
     async def unhandled_error_handler(request: Request, exc: Exception) -> JSONResponse:
+        logger.error("Unhandled exception:\n%s", traceback.format_exc())
+        detail = {"code": "internal_error", "status": 500}
         if settings.debug:
-            logger.error("Unhandled exception:\n%s", traceback.format_exc())
-        return JSONResponse(
-            status_code=500,
-            content={
-                "error": {
-                    "code": "internal_error",
-                    "message": "An unexpected error occurred",
-                    "status": 500,
-                }
-            },
-        )
+            detail["message"] = str(exc)
+            detail["traceback"] = traceback.format_exc()
+        else:
+            detail["message"] = "An unexpected error occurred"
+        return JSONResponse(status_code=500, content={"error": detail})
 
     # ---- Middleware ----
 
@@ -136,6 +156,7 @@ def create_app() -> FastAPI:
     app.include_router(providers.router, prefix="/api")
     app.include_router(provider_assets.router, prefix="/api")
     app.include_router(exchanges.router, prefix="/api")
+    app.include_router(attributes.router, prefix="/api")
 
     # Serve the UI if the static files exist
     if UI_STATIC_DIR.is_dir():

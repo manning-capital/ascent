@@ -5,8 +5,10 @@ import { FormsModule } from '@angular/forms';
 import { forkJoin } from 'rxjs';
 import { AssetService } from '../../../services/asset.service';
 import { ProviderService } from '../../../services/provider.service';
+import { FieldService } from '../../../services/field.service';
 import { ToastService } from '../../../services/toast.service';
 import { MetadataEntry, AssetTypeMetadataField, AssetTypeProviderAssetMetadataField, MetadataHistoryGrid, BulkHistoryUpdate, ProviderAssetLink } from '../../../models/asset.model';
+import { EntityUsage } from '../../../models/field.model';
 import { Skeleton } from 'primeng/skeleton';
 import { Select } from 'primeng/select';
 import { Checkbox } from 'primeng/checkbox';
@@ -18,8 +20,8 @@ import { InputText } from 'primeng/inputtext';
 import { Textarea } from 'primeng/textarea';
 import { Tabs, TabList, Tab } from 'primeng/tabs';
 import { Panel } from 'primeng/panel';
-import { ConfirmationService } from 'primeng/api';
 import { MetadataHistoryTableComponent } from '../../shared/metadata-history-table.component';
+import { SafeDeleteDialogComponent } from '../../shared/safe-delete-dialog.component';
 
 @Component({
   selector: 'app-asset-detail',
@@ -40,6 +42,7 @@ import { MetadataHistoryTableComponent } from '../../shared/metadata-history-tab
     Tabs, TabList, Tab,
     Panel,
     MetadataHistoryTableComponent,
+    SafeDeleteDialogComponent,
   ],
   templateUrl: './asset-detail.component.html',
 })
@@ -47,15 +50,20 @@ export class AssetDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private toast = inject(ToastService);
-  private confirmationService = inject(ConfirmationService);
   assetService = inject(AssetService);
   providerService = inject(ProviderService);
+  private fieldService = inject(FieldService);
 
   assetId = '';
 
   // Tabs
-  tabs = ['Details', 'History'];
+  tabs = ['Details', 'History', 'Settings'];
   activeTab = signal('Details');
+
+  // Delete
+  showDeleteDialog = signal(false);
+  deleteUsage = signal<EntityUsage | null>(null);
+  deleting = signal(false);
 
   // Edit state
   editing = signal(false);
@@ -70,6 +78,7 @@ export class AssetDetailComponent implements OnInit {
   // Metadata state
   metadataEntries = signal<MetadataEntry[]>([]);
   assetTypeFields = signal<AssetTypeMetadataField[]>([]);
+  metadataLoading = signal(true);
 
   // Provider-asset metadata
   providerAssetFields = signal<AssetTypeProviderAssetMetadataField[]>([]);
@@ -94,7 +103,9 @@ export class AssetDetailComponent implements OnInit {
 
   // History grid state
   historyGrid = signal<MetadataHistoryGrid | null>(null);
+  historyLoading = signal(false);
   paHistoryGrids = signal<Record<string, MetadataHistoryGrid>>({});
+  paHistoryLoading = signal(false);
 
   ngOnInit(): void {
     this.route.paramMap.subscribe(params => {
@@ -117,6 +128,7 @@ export class AssetDetailComponent implements OnInit {
         this.activeTab.set('Details');
       }
 
+      this.metadataLoading.set(true);
       this.assetService.loadAssetDetail(this.assetId);
       this.loadMetadata();
       this.loadAssetTypeFields();
@@ -144,7 +156,11 @@ export class AssetDetailComponent implements OnInit {
       const asset = this.assetService.selectedAsset();
       if (asset) {
         this.assetService.getAssetTypeMetadata(asset.asset_type_id).subscribe({
-          next: fields => this.assetTypeFields.set(fields),
+          next: fields => {
+            this.assetTypeFields.set(fields);
+            this.metadataLoading.set(false);
+          },
+          error: () => this.metadataLoading.set(false),
         });
         this.assetService.getAssetTypeProviderAssetMetadata(asset.asset_type_id).subscribe({
           next: fields => {
@@ -330,20 +346,26 @@ export class AssetDetailComponent implements OnInit {
     });
   }
 
-  deleteAsset(): void {
-    this.confirmationService.confirm({
-      header: 'Delete Asset',
-      message: 'Are you sure you want to delete this asset? This action cannot be undone.',
-      acceptLabel: 'Delete',
-      rejectLabel: 'Cancel',
-      accept: () => {
-        this.assetService.deleteAsset(this.assetId).subscribe({
-          next: () => {
-            this.toast.success('Asset deleted');
-            window.history.back();
-          },
-          error: () => this.toast.error('Failed to delete asset'),
-        });
+  openDelete(): void {
+    this.deleteUsage.set(null);
+    this.showDeleteDialog.set(true);
+    this.fieldService.getAssetUsage(this.assetId).subscribe({
+      next: usage => this.deleteUsage.set(usage),
+      error: () => this.toast.error('Failed to load usage data'),
+    });
+  }
+
+  confirmDelete(): void {
+    this.deleting.set(true);
+    this.assetService.deleteAsset(this.assetId).subscribe({
+      next: () => {
+        this.toast.success('Asset deleted');
+        this.showDeleteDialog.set(false);
+        window.history.back();
+      },
+      error: () => {
+        this.toast.error('Failed to delete asset');
+        this.deleting.set(false);
       },
     });
   }
@@ -369,21 +391,30 @@ export class AssetDetailComponent implements OnInit {
   // ---- History Grid ----
 
   loadHistoryGrid(): void {
+    this.historyLoading.set(true);
     this.assetService.getAssetMetadataHistoryGrid(this.assetId).subscribe({
-      next: grid => this.historyGrid.set(grid),
+      next: grid => {
+        this.historyGrid.set(grid);
+        this.historyLoading.set(false);
+      },
+      error: () => this.historyLoading.set(false),
     });
   }
 
   loadPAHistoryGrids(): void {
     const asset = this.assetService.selectedAsset();
-    if (!asset) return;
+    if (!asset || asset.provider_links.length === 0) return;
+    this.paHistoryLoading.set(true);
     const result: Record<string, MetadataHistoryGrid> = {};
+    let pending = asset.provider_links.length;
     for (const link of asset.provider_links) {
       this.assetService.getProviderAssetMetadataHistoryGrid(link.provider_id, this.assetId).subscribe({
         next: grid => {
           result[link.provider_id] = grid;
           this.paHistoryGrids.set({ ...result });
+          if (--pending === 0) this.paHistoryLoading.set(false);
         },
+        error: () => { if (--pending === 0) this.paHistoryLoading.set(false); },
       });
     }
   }
