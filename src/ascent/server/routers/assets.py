@@ -7,9 +7,12 @@ from sqlalchemy.orm import Session
 from ascent.server.dependencies import get_db
 from ascent.server.schemas.assets import AssetCreate, AssetDetailSchema, AssetSchema, AssetUpdate
 from ascent.server.schemas.metadata import (
+    BatchMetadataCreate,
+    BulkHistoryUpdate,
     MetadataEntryCreate,
     MetadataEntrySchema,
     MetadataHistoryEntry,
+    MetadataHistoryGrid,
     MetadataHistoryUpdate,
 )
 from ascent.server.services import asset_service, metadata_service
@@ -57,6 +60,27 @@ def create_asset_metadata(
     asset_id: uuid.UUID, data: MetadataEntryCreate, db: Session = Depends(get_db)
 ):
     return metadata_service.create_asset_metadata_entry(db, asset_id, data)
+
+
+@router.post(
+    "/{asset_id}/metadata/batch", status_code=201, response_model=list[MetadataEntrySchema]
+)
+def batch_create_asset_metadata(
+    asset_id: uuid.UUID, data: BatchMetadataCreate, db: Session = Depends(get_db)
+):
+    return metadata_service.batch_create_asset_metadata(db, asset_id, data)
+
+
+@router.get("/{asset_id}/metadata/history", response_model=MetadataHistoryGrid)
+def get_asset_metadata_history_grid(asset_id: uuid.UUID, db: Session = Depends(get_db)):
+    return metadata_service.get_asset_metadata_history_grid(db, asset_id)
+
+
+@router.put("/{asset_id}/metadata/history/bulk", status_code=204)
+def bulk_update_asset_metadata_history(
+    asset_id: uuid.UUID, data: BulkHistoryUpdate, db: Session = Depends(get_db)
+):
+    metadata_service.bulk_update_asset_metadata_history(db, asset_id, data)
 
 
 @router.get(

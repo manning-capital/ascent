@@ -8,10 +8,15 @@ from sqlalchemy.orm import Session, joinedload
 from ascent.database.models import AssetMetadata, Metadata, ProviderAssetMetadata, ProviderMetadata
 from ascent.server.exceptions import NotFoundError
 from ascent.server.schemas.metadata import (
+    BatchMetadataCreate,
+    BulkHistoryUpdate,
     MetadataEntryCreate,
     MetadataEntrySchema,
+    MetadataFieldInfo,
     MetadataHistoryEntry,
+    MetadataHistoryGrid,
     MetadataHistoryUpdate,
+    MetadataSnapshotRow,
 )
 
 # ---------------------------------------------------------------------------
@@ -46,6 +51,7 @@ def create_asset_metadata_entry(
     return MetadataEntrySchema(
         metadata_id=record.metadata_id,
         metadata_name=md.name if md else "",
+        metadata_display_name=md.display_name if md else None,
         value=record.value,
         timestamp=record.timestamp,
     )
@@ -164,6 +170,7 @@ def create_provider_metadata_entry(
     return MetadataEntrySchema(
         metadata_id=record.metadata_id,
         metadata_name=md.name if md else "",
+        metadata_display_name=md.display_name if md else None,
         value=record.value,
         timestamp=record.timestamp,
     )
@@ -253,6 +260,242 @@ def delete_provider_metadata_entry(
 
 
 # ---------------------------------------------------------------------------
+# Batch create
+# ---------------------------------------------------------------------------
+
+
+def batch_create_asset_metadata(
+    db: Session, asset_id: uuid.UUID, data: BatchMetadataCreate
+) -> list[MetadataEntrySchema]:
+    results: list[MetadataEntrySchema] = []
+    for entry in data.entries:
+        record = AssetMetadata(
+            timestamp=data.timestamp,
+            asset_id=asset_id,
+            metadata_id=entry.metadata_id,
+            value=entry.value,
+        )
+        db.add(record)
+    db.commit()
+    for entry in data.entries:
+        md = db.get(Metadata, entry.metadata_id)
+        results.append(
+            MetadataEntrySchema(
+                metadata_id=entry.metadata_id,
+                metadata_name=md.name if md else "",
+                metadata_display_name=md.display_name if md else None,
+                value=entry.value,
+                timestamp=data.timestamp,
+            )
+        )
+    return results
+
+
+def batch_create_provider_metadata(
+    db: Session, provider_id: uuid.UUID, data: BatchMetadataCreate
+) -> list[MetadataEntrySchema]:
+    results: list[MetadataEntrySchema] = []
+    for entry in data.entries:
+        record = ProviderMetadata(
+            timestamp=data.timestamp,
+            provider_id=provider_id,
+            metadata_id=entry.metadata_id,
+            value=entry.value,
+        )
+        db.add(record)
+    db.commit()
+    for entry in data.entries:
+        md = db.get(Metadata, entry.metadata_id)
+        results.append(
+            MetadataEntrySchema(
+                metadata_id=entry.metadata_id,
+                metadata_name=md.name if md else "",
+                metadata_display_name=md.display_name if md else None,
+                value=entry.value,
+                timestamp=data.timestamp,
+            )
+        )
+    return results
+
+
+# ---------------------------------------------------------------------------
+# History grid
+# ---------------------------------------------------------------------------
+
+
+def _build_history_grid(rows: list, metadata_model) -> MetadataHistoryGrid:
+    """Build a MetadataHistoryGrid from raw metadata rows."""
+    # Collect field info and group values by timestamp
+    fields_map: dict[uuid.UUID, MetadataFieldInfo] = {}
+    snapshots_map: dict[datetime.datetime, dict[str, Any]] = {}
+
+    for r in rows:
+        mid = r.metadata_id
+        if mid not in fields_map and r.metadata_type:
+            fields_map[mid] = MetadataFieldInfo(
+                metadata_id=mid,
+                metadata_name=r.metadata_type.name,
+                metadata_display_name=r.metadata_type.display_name,
+                value_type=r.metadata_type.value_type,
+            )
+
+        ts = r.timestamp
+        if ts not in snapshots_map:
+            snapshots_map[ts] = {}
+        snapshots_map[ts][str(mid)] = r.value
+
+    fields = sorted(fields_map.values(), key=lambda f: f.metadata_name)
+    snapshots = [
+        MetadataSnapshotRow(timestamp=ts, values=vals)
+        for ts, vals in sorted(snapshots_map.items(), reverse=True)
+    ]
+    return MetadataHistoryGrid(fields=fields, snapshots=snapshots)
+
+
+def get_asset_metadata_history_grid(db: Session, asset_id: uuid.UUID) -> MetadataHistoryGrid:
+    query = (
+        select(AssetMetadata)
+        .options(joinedload(AssetMetadata.metadata_type))
+        .where(AssetMetadata.asset_id == asset_id)
+        .order_by(AssetMetadata.timestamp.desc())
+    )
+    rows = db.execute(query).unique().scalars().all()
+    return _build_history_grid(rows, AssetMetadata)
+
+
+def get_provider_metadata_history_grid(db: Session, provider_id: uuid.UUID) -> MetadataHistoryGrid:
+    query = (
+        select(ProviderMetadata)
+        .options(joinedload(ProviderMetadata.metadata_type))
+        .where(ProviderMetadata.provider_id == provider_id)
+        .order_by(ProviderMetadata.timestamp.desc())
+    )
+    rows = db.execute(query).unique().scalars().all()
+    return _build_history_grid(rows, ProviderMetadata)
+
+
+# ---------------------------------------------------------------------------
+# Bulk history update
+# ---------------------------------------------------------------------------
+
+
+def bulk_update_asset_metadata_history(
+    db: Session, asset_id: uuid.UUID, data: BulkHistoryUpdate
+) -> None:
+    # Process deletes first
+    for d in data.deletes:
+        if d.metadata_id:
+            row = db.get(AssetMetadata, (d.timestamp, asset_id, d.metadata_id))
+            if row:
+                db.delete(row)
+        else:
+            # Delete all entries at this timestamp
+            rows = (
+                db.execute(
+                    select(AssetMetadata).where(
+                        AssetMetadata.asset_id == asset_id,
+                        AssetMetadata.timestamp == d.timestamp,
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            for row in rows:
+                db.delete(row)
+
+    db.flush()
+
+    # Process updates (value changes and timestamp moves)
+    for u in data.updates:
+        row = db.get(AssetMetadata, (u.old_timestamp, asset_id, u.metadata_id))
+        if not row:
+            continue
+        new_ts = u.new_timestamp if u.new_timestamp is not None else u.old_timestamp
+        if new_ts != u.old_timestamp:
+            db.delete(row)
+            db.flush()
+            new_row = AssetMetadata(
+                timestamp=new_ts,
+                asset_id=asset_id,
+                metadata_id=u.metadata_id,
+                value=u.value,
+            )
+            db.add(new_row)
+        else:
+            row.value = u.value
+
+    db.flush()
+
+    # Process inserts
+    for i in data.inserts:
+        record = AssetMetadata(
+            timestamp=i.timestamp,
+            asset_id=asset_id,
+            metadata_id=i.metadata_id,
+            value=i.value,
+        )
+        db.add(record)
+
+    db.commit()
+
+
+def bulk_update_provider_metadata_history(
+    db: Session, provider_id: uuid.UUID, data: BulkHistoryUpdate
+) -> None:
+    for d in data.deletes:
+        if d.metadata_id:
+            row = db.get(ProviderMetadata, (d.timestamp, provider_id, d.metadata_id))
+            if row:
+                db.delete(row)
+        else:
+            rows = (
+                db.execute(
+                    select(ProviderMetadata).where(
+                        ProviderMetadata.provider_id == provider_id,
+                        ProviderMetadata.timestamp == d.timestamp,
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            for row in rows:
+                db.delete(row)
+
+    db.flush()
+
+    for u in data.updates:
+        row = db.get(ProviderMetadata, (u.old_timestamp, provider_id, u.metadata_id))
+        if not row:
+            continue
+        new_ts = u.new_timestamp if u.new_timestamp is not None else u.old_timestamp
+        if new_ts != u.old_timestamp:
+            db.delete(row)
+            db.flush()
+            new_row = ProviderMetadata(
+                timestamp=new_ts,
+                provider_id=provider_id,
+                metadata_id=u.metadata_id,
+                value=u.value,
+            )
+            db.add(new_row)
+        else:
+            row.value = u.value
+
+    db.flush()
+
+    for i in data.inserts:
+        record = ProviderMetadata(
+            timestamp=i.timestamp,
+            provider_id=provider_id,
+            metadata_id=i.metadata_id,
+            value=i.value,
+        )
+        db.add(record)
+
+    db.commit()
+
+
+# ---------------------------------------------------------------------------
 # Provider-Asset Metadata (using existing ProviderAssetMetadata table)
 # ---------------------------------------------------------------------------
 
@@ -296,9 +539,119 @@ def create_provider_asset_metadata_entry(
     return MetadataEntrySchema(
         metadata_id=record.metadata_id,
         metadata_name=md.name if md else "",
+        metadata_display_name=md.display_name if md else None,
         value=record.value,
         timestamp=record.timestamp,
     )
+
+
+def batch_create_provider_asset_metadata(
+    db: Session,
+    provider_id: uuid.UUID,
+    asset_id: uuid.UUID,
+    data: BatchMetadataCreate,
+) -> list[MetadataEntrySchema]:
+    results: list[MetadataEntrySchema] = []
+    for entry in data.entries:
+        record = ProviderAssetMetadata(
+            timestamp=data.timestamp,
+            provider_id=provider_id,
+            asset_id=asset_id,
+            metadata_id=entry.metadata_id,
+            value=entry.value,
+        )
+        db.add(record)
+    db.commit()
+    for entry in data.entries:
+        md = db.get(Metadata, entry.metadata_id)
+        results.append(
+            MetadataEntrySchema(
+                metadata_id=entry.metadata_id,
+                metadata_name=md.name if md else "",
+                metadata_display_name=md.display_name if md else None,
+                value=entry.value,
+                timestamp=data.timestamp,
+            )
+        )
+    return results
+
+
+def get_provider_asset_metadata_history_grid(
+    db: Session, provider_id: uuid.UUID, asset_id: uuid.UUID
+) -> MetadataHistoryGrid:
+    query = (
+        select(ProviderAssetMetadata)
+        .options(joinedload(ProviderAssetMetadata.metadata_type))
+        .where(
+            ProviderAssetMetadata.provider_id == provider_id,
+            ProviderAssetMetadata.asset_id == asset_id,
+        )
+        .order_by(ProviderAssetMetadata.timestamp.desc())
+    )
+    rows = db.execute(query).unique().scalars().all()
+    return _build_history_grid(rows, ProviderAssetMetadata)
+
+
+def bulk_update_provider_asset_metadata_history(
+    db: Session,
+    provider_id: uuid.UUID,
+    asset_id: uuid.UUID,
+    data: BulkHistoryUpdate,
+) -> None:
+    for d in data.deletes:
+        if d.metadata_id:
+            row = db.get(ProviderAssetMetadata, (d.timestamp, provider_id, asset_id, d.metadata_id))
+            if row:
+                db.delete(row)
+        else:
+            rows = (
+                db.execute(
+                    select(ProviderAssetMetadata).where(
+                        ProviderAssetMetadata.provider_id == provider_id,
+                        ProviderAssetMetadata.asset_id == asset_id,
+                        ProviderAssetMetadata.timestamp == d.timestamp,
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            for row in rows:
+                db.delete(row)
+
+    db.flush()
+
+    for u in data.updates:
+        row = db.get(ProviderAssetMetadata, (u.old_timestamp, provider_id, asset_id, u.metadata_id))
+        if not row:
+            continue
+        new_ts = u.new_timestamp if u.new_timestamp is not None else u.old_timestamp
+        if new_ts != u.old_timestamp:
+            db.delete(row)
+            db.flush()
+            new_row = ProviderAssetMetadata(
+                timestamp=new_ts,
+                provider_id=provider_id,
+                asset_id=asset_id,
+                metadata_id=u.metadata_id,
+                value=u.value,
+            )
+            db.add(new_row)
+        else:
+            row.value = u.value
+
+    db.flush()
+
+    for i in data.inserts:
+        record = ProviderAssetMetadata(
+            timestamp=i.timestamp,
+            provider_id=provider_id,
+            asset_id=asset_id,
+            metadata_id=i.metadata_id,
+            value=i.value,
+        )
+        db.add(record)
+
+    db.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -318,6 +671,7 @@ def _dedup_metadata_rows(rows: list[Any]) -> list[MetadataEntrySchema]:
             MetadataEntrySchema(
                 metadata_id=r.metadata_id,
                 metadata_name=r.metadata_type.name if r.metadata_type else "",
+                metadata_display_name=r.metadata_type.display_name if r.metadata_type else None,
                 value=r.value,
                 timestamp=r.timestamp,
             )

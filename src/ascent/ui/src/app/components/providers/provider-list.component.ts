@@ -1,30 +1,38 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ProviderService } from '../../services/provider.service';
 import { ToastService } from '../../services/toast.service';
 import { Select } from 'primeng/select';
+import { TableModule } from 'primeng/table';
 import { InputText } from 'primeng/inputtext';
 import { Textarea } from 'primeng/textarea';
 import { Card } from 'primeng/card';
 import { Button } from 'primeng/button';
+import { Tag } from 'primeng/tag';
+import { MultiSelect } from 'primeng/multiselect';
 import { Skeleton } from 'primeng/skeleton';
-import { ProviderListItem, ProviderCreate } from '../../models/provider.model';
+import { ProviderCreate } from '../../models/provider.model';
 
 @Component({
   selector: 'app-provider-list',
   standalone: true,
-  imports: [RouterLink, FormsModule, Select, InputText, Textarea, Card, Button, Skeleton],
+  imports: [FormsModule, Select, TableModule, InputText, Textarea, Card, Button, Tag, MultiSelect, Skeleton],
   templateUrl: './provider-list.component.html',
 })
 export class ProviderListComponent implements OnInit {
+  private router = inject(Router);
   providerService = inject(ProviderService);
   private toast = inject(ToastService);
 
-  showCreateForm = signal(false);
-  search = signal('');
+  typeNames = computed(() => this.providerService.providerTypes().map(t => t.name));
 
-  // Create form fields
+  statusOptions = [
+    { label: 'Active', value: true },
+    { label: 'Inactive', value: false },
+  ];
+
+  showCreateForm = signal(false);
   newName = '';
   newDescription = '';
   newTypeId = '';
@@ -36,14 +44,8 @@ export class ProviderListComponent implements OnInit {
     this.providerService.loadProviderTypes();
   }
 
-  filteredProviders(): ProviderListItem[] {
-    const term = this.search().toLowerCase();
-    if (!term) return this.providerService.providers();
-    return this.providerService.providers().filter(p =>
-      p.name.toLowerCase().includes(term) ||
-      (p.description?.toLowerCase().includes(term)) ||
-      (p.provider_type_name?.toLowerCase().includes(term))
-    );
+  navigateToProvider(id: string): void {
+    this.router.navigate(['/settings/providers', id]);
   }
 
   openCreate(): void {

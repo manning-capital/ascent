@@ -189,9 +189,7 @@ def get_or_create_single_member_group(
 # ---------------------------------------------------------------------------
 
 
-def get_asset_groups(
-    db: Session, min_members: int | None = None
-) -> list[AssetGroupSchema]:
+def get_asset_groups(db: Session, min_members: int | None = None) -> list[AssetGroupSchema]:
     query = (
         select(ProviderAssetGroup)
         .options(

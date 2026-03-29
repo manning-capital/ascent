@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ProviderService } from '../../../services/provider.service';
@@ -29,6 +29,8 @@ export class ProviderTypeDetailComponent implements OnInit {
   typeId = '';
   providerType = signal<TypeItem | null>(null);
   fields = signal<ProviderTypeMetadataField[]>([]);
+  ownFields = computed(() => this.fields().filter(f => !f.is_inherited));
+  inheritedFields = computed(() => this.fields().filter(f => f.is_inherited));
 
   showAddField = signal(false);
   newFieldMetadataId = '';
@@ -36,6 +38,7 @@ export class ProviderTypeDetailComponent implements OnInit {
 
   showCreateMetadata = signal(false);
   newMetaName = '';
+  newMetaDisplayName = '';
   newMetaDescription = '';
   newMetaValueType = 'string';
 
@@ -90,7 +93,7 @@ export class ProviderTypeDetailComponent implements OnInit {
     this.providerService.addProviderTypeMetadata(this.typeId, {
       metadata_id: this.newFieldMetadataId,
       is_required: this.newFieldRequired,
-      display_order: this.fields().length,
+      display_order: this.ownFields().length,
     }).subscribe({
       next: () => {
         this.toast.success('Field added');
@@ -113,6 +116,7 @@ export class ProviderTypeDetailComponent implements OnInit {
 
   openCreateMetadata(): void {
     this.newMetaName = '';
+    this.newMetaDisplayName = '';
     this.newMetaDescription = '';
     this.newMetaValueType = 'string';
     this.showCreateMetadata.set(true);
@@ -123,9 +127,10 @@ export class ProviderTypeDetailComponent implements OnInit {
   }
 
   submitCreateMetadata(): void {
-    if (!this.newMetaName.trim()) return;
+    if (!this.newMetaName.trim() || !this.newMetaDisplayName.trim()) return;
     this.assetService.createMetadataType(
       this.newMetaName.trim(),
+      this.newMetaDisplayName.trim(),
       this.newMetaDescription.trim() || undefined,
       this.newMetaValueType,
     ).subscribe({
@@ -139,7 +144,7 @@ export class ProviderTypeDetailComponent implements OnInit {
   }
 
   valueTypeLabel(vt: string): string {
-    const labels: Record<string, string> = { string: 'Text', number: 'Number', boolean: 'Boolean', json: 'JSON', date: 'Date' };
+    const labels: Record<string, string> = { string: 'Text', integer: 'Integer', float: 'Float', boolean: 'Boolean', date: 'Date', time: 'Time', datetime: 'DateTime' };
     return labels[vt] ?? vt;
   }
 }

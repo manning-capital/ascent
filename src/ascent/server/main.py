@@ -46,10 +46,28 @@ class SPAStaticFiles(StaticFiles):
 
 def _create_tables() -> None:
     """Create all database tables if they don't exist."""
+    from sqlalchemy import text
+
     from ascent.database.models import Base
     from ascent.server.dependencies import engine
 
     Base.metadata.create_all(bind=engine)
+
+    # Add columns that create_all() won't add to existing tables
+    with engine.connect() as conn:
+        conn.execute(
+            text(
+                "ALTER TABLE asset_type ADD COLUMN IF NOT EXISTS "
+                "parent_type_id UUID REFERENCES asset_type(id)"
+            )
+        )
+        conn.execute(
+            text(
+                "ALTER TABLE provider_type ADD COLUMN IF NOT EXISTS "
+                "parent_type_id UUID REFERENCES provider_type(id)"
+            )
+        )
+        conn.commit()
 
 
 def create_app() -> FastAPI:

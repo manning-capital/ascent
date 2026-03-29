@@ -9,21 +9,31 @@
       <p-skeleton width="4rem" height="1.375rem" borderRadius="0.25rem"/>
     </div>
     <div class="flex gap-2 px-4 py-3 border-b border-surface">
-      @for (_ of [1,2,3]; track $index) {
+      @for (_ of [1,2]; track $index) {
         <p-skeleton width="5rem" height="1rem"/>
       }
     </div>
-    <div class="max-w-3xl mx-auto p-6 space-y-6 w-full">
-      <p-card>
-        <div class="space-y-3">
+    <div class="p-6 space-y-5">
+      <p-panel header="General">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
           @for (_ of [1,2,3,4]; track $index) {
-            <div class="flex justify-between">
-              <p-skeleton width="30%" height="0.875rem"/>
-              <p-skeleton width="40%" height="0.875rem"/>
+            <div>
+              <p-skeleton width="40%" height="0.75rem" styleClass="mb-2"/>
+              <p-skeleton width="100%" height="2.25rem" borderRadius="0.375rem"/>
             </div>
           }
         </div>
-      </p-card>
+      </p-panel>
+      <p-panel header="Metadata">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
+          @for (_ of [1,2]; track $index) {
+            <div>
+              <p-skeleton width="40%" height="0.75rem" styleClass="mb-2"/>
+              <p-skeleton width="100%" height="2.25rem" borderRadius="0.375rem"/>
+            </div>
+          }
+        </div>
+      </p-panel>
     </div>
   </div>
 } @else {
@@ -59,15 +69,24 @@
       </p-tablist>
     </p-tabs>
 
-    <!-- Tab Content -->
-    <div class="flex-1 overflow-hidden">
+    <!-- Content -->
+    <div class="flex-1 overflow-y-auto">
 
-      <!-- Overview Tab -->
-      @if (activeTab() === 'Overview') {
-        <div class="max-w-3xl mx-auto p-6 space-y-6 overflow-y-auto h-full">
+      <!-- ==================== DETAILS TAB ==================== -->
+      @if (activeTab() === 'Details') {
+        <div class="p-6 space-y-5">
+
+          <!-- EDIT MODE -->
           @if (editing()) {
-            <p-card header="Edit Asset">
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- As-of Timestamp -->
+            <div class="p-3 rounded-lg bg-emphasis border border-surface inline-flex items-center gap-3">
+              <label class="text-xs text-surface-500 whitespace-nowrap">As-of Timestamp</label>
+              <p-datepicker [(ngModel)]="editTimestamp" [showTime]="true" dateFormat="yy-mm-dd" hourFormat="24" [style]="{'width': '16rem'}"/>
+            </div>
+
+            <!-- Base Fields -->
+            <p-panel header="General">
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
                 <div>
                   <label class="block text-xs text-surface-500 mb-1">Name *</label>
                   <input type="text" pInputText [(ngModel)]="editName" class="w-full"/>
@@ -76,269 +95,245 @@
                   <label class="block text-xs text-surface-500 mb-1">Symbol</label>
                   <input type="text" pInputText [(ngModel)]="editSymbol" class="w-full"/>
                 </div>
-                <div class="md:col-span-2">
+                <div>
+                  <label class="block text-xs text-surface-500 mb-1">Active</label>
+                  <div class="flex items-center h-[2.375rem]">
+                    <p-checkbox [(ngModel)]="editIsActive" [binary]="true" inputId="editActive"/>
+                    <label for="editActive" class="text-sm text-surface-500 ml-2">{{ editIsActive ? 'Yes' : 'No' }}</label>
+                  </div>
+                </div>
+                <div class="sm:col-span-2 lg:col-span-3 xl:col-span-4">
                   <label class="block text-xs text-surface-500 mb-1">Description</label>
-                  <textarea pTextarea [(ngModel)]="editDescription" rows="3" class="w-full"></textarea>
-                </div>
-                <div class="flex items-center gap-2">
-                  <p-checkbox [(ngModel)]="editIsActive" [binary]="true" inputId="editActive"/>
-                  <label for="editActive" class="text-sm text-surface-500">Active</label>
+                  <textarea pTextarea [(ngModel)]="editDescription" rows="2" class="w-full"></textarea>
                 </div>
               </div>
-              <div class="flex gap-2 mt-4">
-                <p-button label="Save" severity="info" (onClick)="submitEdit()"/>
-                <p-button label="Cancel" severity="secondary" [text]="true" (onClick)="cancelEdit()"/>
-              </div>
-            </p-card>
-          } @else {
-            <p-card header="Info">
-              <div class="space-y-2 text-sm">
-                <div class="flex justify-between"><span class="text-surface-500">Name</span><span class="font-medium">{{ asset.name }}</span></div>
-                @if (asset.symbol) {
-                  <div class="flex justify-between"><span class="text-surface-500">Symbol</span><span class="font-mono">{{ asset.symbol }}</span></div>
-                }
-                @if (asset.asset_type_name) {
-                  <div class="flex justify-between"><span class="text-surface-500">Type</span><span>{{ asset.asset_type_name }}</span></div>
-                }
-                <div class="flex justify-between"><span class="text-surface-500">Active</span><span>{{ asset.is_active ? 'Yes' : 'No' }}</span></div>
-                @if (asset.created_at) {
-                  <div class="flex justify-between"><span class="text-surface-500">Created</span><span>{{ asset.created_at | date:'mediumDate' }}</span></div>
-                }
-              </div>
-            </p-card>
+            </p-panel>
 
-            @if (asset.description) {
-              <p-card header="Description">
-                <p class="text-sm text-surface-500">{{ asset.description }}</p>
-              </p-card>
-            }
-          }
-        </div>
-      }
-
-      <!-- Metadata Tab -->
-      @if (activeTab() === 'Metadata') {
-        <div class="overflow-y-auto h-full p-6 max-w-4xl mx-auto">
-
-          <!-- History Panel (shared) -->
-          @if (historyMetadataId()) {
-            <p-card class="mb-6">
-              <ng-template #header>
-                <div class="flex items-center justify-between px-5 pt-4">
-                  <h4 class="font-semibold text-sm">History: {{ historyMetadataName() }}</h4>
-                  <p-button label="Close" severity="secondary" [text]="true" size="small" (onClick)="closeHistory()"/>
-                </div>
-              </ng-template>
-              <p-table [value]="historyEntries()">
-                <ng-template #header>
-                  <tr>
-                    <th>Timestamp</th>
-                    <th>Value</th>
-                    <th class="w-36"></th>
-                  </tr>
-                </ng-template>
-                <ng-template #body let-h>
-                  @if (editingHistoryTimestamp() === h.timestamp) {
-                    <tr>
-                      <td>
-                        <p-datepicker [(ngModel)]="editHistoryTimestamp" [showTime]="true" dateFormat="yy-mm-dd" hourFormat="24" [style]="{'width': '100%'}"/>
-                      </td>
-                      <td>
-                        <input type="text" pInputText [(ngModel)]="editHistoryValue" class="w-full font-mono"/>
-                      </td>
-                      <td>
-                        <div class="flex items-center gap-2">
-                          <p-button label="Save" severity="info" [text]="true" size="small" (onClick)="submitEditHistory()"/>
-                          <p-button label="Cancel" severity="secondary" [text]="true" size="small" (onClick)="cancelEditHistory()"/>
-                        </div>
-                      </td>
-                    </tr>
-                  } @else {
-                    <tr>
-                      <td class="text-xs text-surface-500 font-mono">{{ h.timestamp | date:'medium' }}</td>
-                      <td class="font-mono text-xs">{{ formatValue(h.value) }}</td>
-                      <td>
-                        <div class="flex items-center gap-2">
-                          <p-button label="Edit" severity="info" [text]="true" size="small" (onClick)="startEditHistory(h)"/>
-                          <p-button label="Delete" severity="danger" [text]="true" size="small" (onClick)="deleteHistoryEntry(h)"/>
-                        </div>
-                      </td>
-                    </tr>
-                  }
-                </ng-template>
-                <ng-template #emptymessage>
-                  <tr><td colspan="3" class="text-center text-surface-400 text-xs">No history.</td></tr>
-                </ng-template>
-              </p-table>
-            </p-card>
-          }
-
-          <!-- Asset Type Fields (structured form) -->
-          @if (assetTypeFields().length > 0) {
-            <div class="mb-8">
-              <div class="mb-4">
-                <h3 class="font-semibold text-sm">{{ asset.asset_type_name }} Fields</h3>
-                <p class="text-xs text-surface-400 mt-1">Required and optional metadata fields defined for this asset type.</p>
-              </div>
-              <p-card>
-                @for (field of assetTypeFields(); track field.metadata_id) {
-                  @let currentValue = fieldValue(field.metadata_id);
-                  <div class="px-5 py-3 border-b border-surface last:border-b-0 space-y-2">
-                    <!-- Row: Label + Current Value + History/Clear -->
-                    <div class="flex items-center gap-4">
-                      <div class="w-40 shrink-0">
-                        <span class="text-sm font-medium">{{ field.metadata_name }}</span>
-                        @if (field.is_required) {
-                          <span class="text-red-500 text-xs ml-1">*</span>
-                        }
-                        @if (field.metadata_description) {
-                          <p class="text-xs text-surface-400 mt-0.5 line-clamp-1">{{ field.metadata_description }}</p>
-                        }
-                      </div>
-                      <div class="flex-1 min-w-0">
-                        @if (currentValue !== null) {
-                          <span class="font-mono text-sm">{{ formatValue(currentValue) }}</span>
-                        } @else {
-                          <span class="text-surface-400 text-sm italic">Not set</span>
-                        }
-                      </div>
-                      <div class="flex items-center gap-2 shrink-0">
-                        <p-button label="History" severity="info" [text]="true" size="small" (onClick)="showFieldHistory(field)"/>
-                        @if (currentValue !== null) {
-                          <p-button label="Clear" severity="danger" [text]="true" size="small" (onClick)="deleteFieldMetadata(field.metadata_id)"/>
-                        }
-                      </div>
-                    </div>
-                    <!-- Row: Input to set/update value -->
-                    <div class="flex items-center gap-2 pl-40">
+            <!-- Metadata Fields -->
+            @if (assetTypeFields().length > 0) {
+              <p-panel header="Metadata">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
+                  @for (field of assetTypeFields(); track field.metadata_id) {
+                    <div>
+                      <label class="block text-xs text-surface-500 mb-1">
+                        {{ field.metadata_display_name }}
+                        @if (field.is_required) { <span class="text-red-500">*</span> }
+                        @if (field.is_inherited) { <span class="text-surface-400 italic">(inherited)</span> }
+                      </label>
                       @if (field.value_type === 'boolean') {
-                        <p-select [(ngModel)]="fieldInputValues[field.metadata_id]" [options]="[{label: 'true', value: 'true'}, {label: 'false', value: 'false'}]" optionLabel="label" optionValue="value" placeholder="-- select --"/>
-                      } @else if (field.value_type === 'number') {
-                        <input [(ngModel)]="fieldInputValues[field.metadata_id]" type="number" pInputText placeholder="Enter number..."
-                               class="w-full md:w-48"/>
-                      } @else if (field.value_type === 'json') {
-                        <input [(ngModel)]="fieldInputValues[field.metadata_id]" type="text" pInputText placeholder='{"key": "value"}'
-                               class="w-full font-mono"/>
+                        <p-select [(ngModel)]="editFieldValues[field.metadata_id]" [options]="[{label: 'true', value: 'true'}, {label: 'false', value: 'false'}]" optionLabel="label" optionValue="value" placeholder="-- select --" class="w-full"/>
+                      } @else if (field.value_type === 'integer') {
+                        <input [(ngModel)]="editFieldValues[field.metadata_id]" type="number" step="1" pInputText placeholder="Enter integer..." class="w-full"/>
+                      } @else if (field.value_type === 'float') {
+                        <input [(ngModel)]="editFieldValues[field.metadata_id]" type="number" step="any" pInputText placeholder="Enter number..." class="w-full"/>
                       } @else if (field.value_type === 'date') {
-                        <input [(ngModel)]="fieldInputValues[field.metadata_id]" type="date" pInputText
-                               class="w-full md:w-48"/>
+                        <input [(ngModel)]="editFieldValues[field.metadata_id]" type="date" pInputText class="w-full"/>
+                      } @else if (field.value_type === 'time') {
+                        <input [(ngModel)]="editFieldValues[field.metadata_id]" type="time" step="1" pInputText class="w-full"/>
+                      } @else if (field.value_type === 'datetime') {
+                        <input [(ngModel)]="editFieldValues[field.metadata_id]" type="datetime-local" step="1" pInputText class="w-full"/>
                       } @else {
-                        <input [(ngModel)]="fieldInputValues[field.metadata_id]" type="text" pInputText placeholder="Enter value..."
-                               class="w-full md:w-48"/>
+                        <input [(ngModel)]="editFieldValues[field.metadata_id]" type="text" pInputText placeholder="Enter value..." class="w-full"/>
                       }
-                      <p-datepicker [(ngModel)]="fieldTimestampValues[field.metadata_id]" [showTime]="true" dateFormat="yy-mm-dd" hourFormat="24" placeholder="As-of timestamp" [style]="{'width': '12rem'}" class="shrink-0"/>
-                      <p-button label="Set" severity="info" size="small" (onClick)="submitFieldValue(field)"/>
                     </div>
+                  }
+                </div>
+              </p-panel>
+            }
+
+            <!-- Provider Mapping Metadata (edit with selector) -->
+            @if (asset.provider_links.length > 0 && providerAssetFields().length > 0) {
+              <p-panel>
+                <ng-template #header>
+                  <div class="flex items-center gap-3">
+                    <span class="p-panel-title">Provider Mapping Metadata</span>
+                    <p-select [ngModel]="selectedProviderId()" (ngModelChange)="onProviderSelect($event)" [options]="providerLinkOptions()" optionLabel="label" optionValue="value" placeholder="Select provider..." styleClass="w-56"/>
+                  </div>
+                </ng-template>
+                @if (selectedProviderId()) {
+                  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
+                    @for (paf of providerAssetFields(); track paf.metadata_id) {
+                      <div>
+                        <label class="block text-xs text-surface-500 mb-1">
+                          {{ paf.metadata_display_name }}
+                          @if (paf.is_required) { <span class="text-red-500">*</span> }
+                        </label>
+                        @if (paf.value_type === 'boolean') {
+                          <p-select [(ngModel)]="editPAFieldValues[selectedProviderId()! + ':' + paf.metadata_id]" [options]="[{label: 'true', value: 'true'}, {label: 'false', value: 'false'}]" optionLabel="label" optionValue="value" placeholder="-- select --" class="w-full"/>
+                        } @else if (paf.value_type === 'integer') {
+                          <input [(ngModel)]="editPAFieldValues[selectedProviderId()! + ':' + paf.metadata_id]" type="number" step="1" pInputText placeholder="Enter integer..." class="w-full"/>
+                        } @else if (paf.value_type === 'float') {
+                          <input [(ngModel)]="editPAFieldValues[selectedProviderId()! + ':' + paf.metadata_id]" type="number" step="any" pInputText placeholder="Enter number..." class="w-full"/>
+                        } @else if (paf.value_type === 'date') {
+                          <input [(ngModel)]="editPAFieldValues[selectedProviderId()! + ':' + paf.metadata_id]" type="date" pInputText class="w-full"/>
+                        } @else if (paf.value_type === 'time') {
+                          <input [(ngModel)]="editPAFieldValues[selectedProviderId()! + ':' + paf.metadata_id]" type="time" step="1" pInputText class="w-full"/>
+                        } @else if (paf.value_type === 'datetime') {
+                          <input [(ngModel)]="editPAFieldValues[selectedProviderId()! + ':' + paf.metadata_id]" type="datetime-local" step="1" pInputText class="w-full"/>
+                        } @else {
+                          <input [(ngModel)]="editPAFieldValues[selectedProviderId()! + ':' + paf.metadata_id]" type="text" pInputText placeholder="Enter value..." class="w-full"/>
+                        }
+                      </div>
+                    }
+                  </div>
+                } @else {
+                  <div class="text-sm text-surface-400 italic">Select a provider to view mapping metadata.</div>
+                }
+              </p-panel>
+            }
+
+            <div class="flex gap-2">
+              <p-button label="Save" severity="info" (onClick)="submitEdit()"/>
+              <p-button label="Cancel" severity="secondary" [text]="true" (onClick)="cancelEdit()"/>
+            </div>
+
+          <!-- READ MODE -->
+          } @else {
+            <!-- General -->
+            <p-panel header="General">
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
+                <div>
+                  <label class="block text-xs text-surface-500 mb-1">Name</label>
+                  <div class="text-sm font-medium py-1.5">{{ asset.name }}</div>
+                </div>
+                @if (asset.symbol) {
+                  <div>
+                    <label class="block text-xs text-surface-500 mb-1">Symbol</label>
+                    <div class="text-sm font-mono py-1.5">{{ asset.symbol }}</div>
                   </div>
                 }
-              </p-card>
-            </div>
-          }
-
-          <!-- Additional Metadata (ad-hoc entries not in the asset type definition) -->
-          <div class="flex items-center justify-between mb-4">
-            <div>
-              <h3 class="font-semibold text-sm">Additional Metadata</h3>
-              <p class="text-xs text-surface-400 mt-1">Extra key-value metadata tracked over time.</p>
-            </div>
-            <p-button label="+ Add" severity="info" [outlined]="true" (onClick)="openMetadataForm()"/>
-          </div>
-
-          <!-- Add Form -->
-          @if (showMetadataForm()) {
-            <p-card class="mb-6">
-              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                @if (asset.asset_type_name) {
+                  <div>
+                    <label class="block text-xs text-surface-500 mb-1">Type</label>
+                    <div class="text-sm py-1.5">{{ asset.asset_type_name }}</div>
+                  </div>
+                }
                 <div>
-                  <label class="block text-xs text-surface-500 mb-1">Metadata Type</label>
-                  <p-select [(ngModel)]="newMetadataId" [options]="assetService.metadataTypes()" optionLabel="name" optionValue="id" placeholder="-- select type --"/>
+                  <label class="block text-xs text-surface-500 mb-1">Active</label>
+                  <div class="text-sm py-1.5">
+                    <span class="inline-flex items-center gap-1.5">
+                      <span class="w-2 h-2 rounded-full" [class]="asset.is_active ? 'bg-green-500' : 'bg-surface-400'"></span>
+                      {{ asset.is_active ? 'Yes' : 'No' }}
+                    </span>
+                  </div>
                 </div>
-                <div>
-                  <label class="block text-xs text-surface-500 mb-1">Value</label>
-                  <input [(ngModel)]="newMetadataValue" type="text" pInputText placeholder="e.g. USD or {&quot;key&quot;: &quot;val&quot;}"
-                         class="w-full"/>
-                </div>
-                <div>
-                  <label class="block text-xs text-surface-500 mb-1">As-of Timestamp <span class="text-surface-400">(optional)</span></label>
-                  <p-datepicker [(ngModel)]="newMetadataTimestamp" [showTime]="true" dateFormat="yy-mm-dd" hourFormat="24" [style]="{'width': '100%'}"/>
-                </div>
+                @if (asset.created_at) {
+                  <div>
+                    <label class="block text-xs text-surface-500 mb-1">Created</label>
+                    <div class="text-sm py-1.5">{{ asset.created_at | date:'mediumDate' }}</div>
+                  </div>
+                }
+                @if (asset.description) {
+                  <div class="sm:col-span-2 lg:col-span-3 xl:col-span-4">
+                    <label class="block text-xs text-surface-500 mb-1">Description</label>
+                    <div class="text-sm py-1.5">{{ asset.description }}</div>
+                  </div>
+                }
               </div>
-              <div class="flex gap-2 mt-4">
-                <p-button label="Add" severity="info" (onClick)="submitMetadata()"/>
-                <p-button label="Cancel" severity="secondary" [text]="true" (onClick)="cancelMetadataForm()"/>
-              </div>
-            </p-card>
-          }
+            </p-panel>
 
-          <!-- Extra Metadata Table -->
-          @if (extraMetadata().length > 0) {
-            <p-card>
-              <p-table [value]="extraMetadata()">
+            <!-- Metadata -->
+            @if (assetTypeFields().length > 0) {
+              <p-panel header="Metadata">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
+                  @for (field of assetTypeFields(); track field.metadata_id) {
+                    @let val = fieldValue(field.metadata_id);
+                    @let ts = fieldTimestamp(field.metadata_id);
+                    <div>
+                      <label class="block text-xs text-surface-500 mb-1">
+                        {{ field.metadata_display_name }}
+                        @if (field.is_inherited) { <span class="text-surface-400 italic">(inherited)</span> }
+                      </label>
+                      @if (val !== null) {
+                        <div class="text-sm font-mono py-1.5">{{ formatValue(val) }}</div>
+                        @if (ts) {
+                          <div class="text-[0.6875rem] text-surface-400 -mt-0.5">as of {{ ts | date:'shortDate' }}</div>
+                        }
+                      } @else {
+                        <div class="text-sm text-surface-400 italic py-1.5">Not set</div>
+                      }
+                    </div>
+                  }
+                </div>
+              </p-panel>
+            }
+
+            <!-- Provider Mapping Metadata (read with selector) -->
+            @if (asset.provider_links.length > 0 && providerAssetFields().length > 0) {
+              <p-panel>
                 <ng-template #header>
-                  <tr>
-                    <th>Key</th>
-                    <th>Value</th>
-                    <th>As Of</th>
-                    <th class="w-32"></th>
-                  </tr>
+                  <div class="flex items-center gap-3">
+                    <span class="p-panel-title">Provider Mapping Metadata</span>
+                    <p-select [ngModel]="selectedProviderId()" (ngModelChange)="onProviderSelect($event)" [options]="providerLinkOptions()" optionLabel="label" optionValue="value" placeholder="Select provider..." styleClass="w-56"/>
+                  </div>
                 </ng-template>
-                <ng-template #body let-entry>
-                  <tr>
-                    <td class="font-medium">{{ entry.metadata_name }}</td>
-                    <td class="font-mono text-xs">{{ formatValue(entry.value) }}</td>
-                    <td class="text-xs text-surface-500">{{ entry.timestamp | date:'medium' }}</td>
-                    <td>
-                      <div class="flex items-center gap-2">
-                        <p-button label="History" severity="info" [text]="true" size="small" (onClick)="showHistory(entry)"/>
-                        <p-button label="Remove" severity="danger" [text]="true" size="small" (onClick)="deleteMetadata(entry)"/>
+                @if (selectedProviderId()) {
+                  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
+                    @for (paf of providerAssetFields(); track paf.metadata_id) {
+                      @let pval = getProviderAssetFieldValue(selectedProviderId()!, paf.metadata_id);
+                      @let pts = paFieldTimestamp(selectedProviderId()!, paf.metadata_id);
+                      <div>
+                        <label class="block text-xs text-surface-500 mb-1">{{ paf.metadata_display_name }}</label>
+                        @if (pval !== null) {
+                          <div class="text-sm font-mono py-1.5">{{ formatValue(pval) }}</div>
+                          @if (pts) {
+                            <div class="text-[0.6875rem] text-surface-400 -mt-0.5">as of {{ pts | date:'shortDate' }}</div>
+                          }
+                        } @else {
+                          <div class="text-sm text-surface-400 italic py-1.5">Not set</div>
+                        }
                       </div>
-                    </td>
-                  </tr>
-                </ng-template>
-              </p-table>
-            </p-card>
-          } @else if (assetTypeFields().length === 0) {
-            <p-card>
-              <div class="p-12 text-center text-surface-400 text-sm">
-                No metadata defined. Click + Add to create entries.
-              </div>
-            </p-card>
+                    }
+                  </div>
+                } @else {
+                  <div class="text-sm text-surface-400 italic">Select a provider to view mapping metadata.</div>
+                }
+              </p-panel>
+            }
           }
+
         </div>
-      }
 
-      <!-- Provider Mappings Tab -->
-      @if (activeTab() === 'Provider Mappings') {
-        <div class="overflow-y-auto h-full p-6 max-w-4xl mx-auto">
-          <div class="mb-4">
-            <h3 class="font-semibold text-sm">Provider Mappings</h3>
-            <p class="text-xs text-surface-400 mt-1">Providers that have a mapping for this asset.</p>
-          </div>
+      <!-- ==================== HISTORY TAB ==================== -->
+      } @else if (activeTab() === 'History') {
+        <div class="p-6 space-y-5">
 
-          <p-card>
-            <p-table [value]="asset.provider_links">
+          <!-- Asset Metadata History -->
+          <p-panel header="Asset Metadata History">
+            @if (historyGrid()) {
+              <app-metadata-history-table
+                [fields]="historyGrid()!.fields"
+                [snapshots]="historyGrid()!.snapshots"
+                (save)="onHistorySave($event)"/>
+            } @else {
+              <div class="text-sm text-surface-400 italic py-2">No metadata history.</div>
+            }
+          </p-panel>
+
+          <!-- Provider-Asset Metadata History (with selector) -->
+          @if (asset.provider_links.length > 0 && providerAssetFields().length > 0) {
+            <p-panel>
               <ng-template #header>
-                <tr>
-                  <th>Provider</th>
-                  <th>Identifier</th>
-                  <th>Created</th>
-                </tr>
+                <div class="flex items-center gap-3">
+                  <span class="p-panel-title">Provider Mapping Metadata History</span>
+                  <p-select [ngModel]="selectedProviderId()" (ngModelChange)="onProviderSelect($event)" [options]="providerLinkOptions()" optionLabel="label" optionValue="value" placeholder="Select provider..." styleClass="w-56"/>
+                </div>
               </ng-template>
-              <ng-template #body let-link>
-                <tr>
-                  <td>
-                    <a [routerLink]="['/settings/providers', link.provider_id]" class="text-primary hover:underline font-medium">{{ link.provider_name }}</a>
-                  </td>
-                  <td class="font-mono text-xs">{{ link.identifier }}</td>
-                  <td class="text-xs text-surface-500">{{ link.created_at | date:'mediumDate' }}</td>
-                </tr>
-              </ng-template>
-              <ng-template #emptymessage>
-                <tr>
-                  <td colspan="3">No provider mappings for this asset.</td>
-                </tr>
-              </ng-template>
-            </p-table>
-          </p-card>
+              @if (selectedProviderId()) {
+                @if (paHistoryGrids()[selectedProviderId()!]; as grid) {
+                  <app-metadata-history-table
+                    [fields]="grid.fields"
+                    [snapshots]="grid.snapshots"
+                    (save)="onPAHistorySave(selectedProviderId()!, $event)"/>
+                } @else {
+                  <div class="text-sm text-surface-400 italic py-2">No history entries.</div>
+                }
+              } @else {
+                <div class="text-sm text-surface-400 italic py-2">Select a provider to view history.</div>
+              }
+            </p-panel>
+          }
+
         </div>
       }
 

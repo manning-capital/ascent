@@ -3,24 +3,21 @@ import { RouterLink } from '@angular/router';
 import { TableModule } from 'primeng/table';
 import { Button } from 'primeng/button';
 import { EmptyStateComponent } from './empty-state.component';
+import { AssetPairBadgeComponent, AssetPair } from './asset-pair-badge.component';
 import { UniverseItem } from '../../models/asset.model';
 
 /** A flattened row for the combined universe table. */
 interface UniverseRow {
-  /** The universe items — multiple for a group, single for an individual pair. */
   items: UniverseItem[];
-  /** True if this row represents a group. */
   isGroup: boolean;
-  /** The group ID (null for individual pairs). */
   groupId: string | null;
-  /** Number of members (1 for individual pairs). */
   memberCount: number;
 }
 
 @Component({
   selector: 'app-universe-table',
   standalone: true,
-  imports: [RouterLink, TableModule, Button, EmptyStateComponent],
+  imports: [RouterLink, TableModule, Button, EmptyStateComponent, AssetPairBadgeComponent],
   styles: [`
     :host ::ng-deep .p-datatable {
       border-radius: 0.5rem;
@@ -33,7 +30,7 @@ interface UniverseRow {
       <ng-template #header>
         <tr>
           <th class="w-12">#</th>
-          <th>Assets</th>
+          <th>Pairs</th>
           <th class="w-24 text-center">Members</th>
           <th>Group</th>
           <th class="w-20"></th>
@@ -43,15 +40,7 @@ interface UniverseRow {
         <tr>
           <td class="text-surface-500 font-mono text-xs">{{ i + 1 }}</td>
           <td>
-            <div class="flex flex-wrap gap-1.5">
-              @for (m of row.items; track m.order) {
-                <span class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-canvas/50 border border-surface">
-                  <a [routerLink]="['/settings/assets', m.from_asset_id]" class="font-medium text-primary hover:underline">{{ m.from_asset_symbol }}</a>
-                  <span class="text-surface-400">&rarr;</span>
-                  <a [routerLink]="['/settings/assets', m.to_asset_id]" class="font-medium text-primary hover:underline">{{ m.to_asset_symbol }}</a>
-                </span>
-              }
-            </div>
+            <app-asset-pair-badge [pairs]="toPairs(row.items)"/>
           </td>
           <td class="text-center font-mono text-xs text-surface-500">{{ row.memberCount }}</td>
           <td>
@@ -87,8 +76,18 @@ export class UniverseTableComponent {
 
   pageSize = 10;
 
+  toPairs(items: UniverseItem[]): AssetPair[] {
+    return items.map(m => ({
+      providerName: m.provider_name ?? '',
+      providerId: m.provider_id,
+      fromAssetSymbol: m.from_asset_symbol ?? '',
+      fromAssetId: m.from_asset_id,
+      toAssetSymbol: m.to_asset_symbol ?? '',
+      toAssetId: m.to_asset_id,
+    }));
+  }
+
   get rows(): UniverseRow[] {
-    // Group items by their provider_asset_group_id
     const groupMap = new Map<string, UniverseItem[]>();
 
     for (const item of this.items) {

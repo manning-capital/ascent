@@ -13,7 +13,7 @@ export interface AssetListItem {
 export interface AssetCreate {
   asset_type_id: string;
   name: string;
-  symbol?: string | null;
+  symbol: string;
   description?: string | null;
   underlying_asset_id?: string | null;
   is_active?: boolean;
@@ -80,6 +80,7 @@ export interface AssetDetail extends AssetListItem {
 export interface MetadataEntry {
   metadata_id: string;
   metadata_name: string;
+  metadata_display_name: string;
   value: any;
   timestamp: string;
 }
@@ -104,6 +105,7 @@ export interface MetadataHistoryUpdate {
 export interface MetadataType {
   id: string;
   name: string;
+  display_name: string;
   description: string | null;
   value_type: string;
   is_active: boolean;
@@ -112,10 +114,14 @@ export interface MetadataType {
 export interface AssetTypeMetadataField {
   metadata_id: string;
   metadata_name: string;
+  metadata_display_name: string;
   metadata_description: string | null;
   value_type: string;
   is_required: boolean;
   display_order: number;
+  is_inherited: boolean;
+  source_type_id: string | null;
+  source_type_name: string | null;
 }
 
 export interface AssetTypeMetadataCreate {
@@ -124,13 +130,21 @@ export interface AssetTypeMetadataCreate {
   display_order: number;
 }
 
+// Provider-asset metadata field definitions at the asset type level (same shape)
+export type AssetTypeProviderAssetMetadataField = AssetTypeMetadataField;
+export type AssetTypeProviderAssetMetadataCreate = AssetTypeMetadataCreate;
+
 export interface ProviderTypeMetadataField {
   metadata_id: string;
   metadata_name: string;
+  metadata_display_name: string;
   metadata_description: string | null;
   value_type: string;
   is_required: boolean;
   display_order: number;
+  is_inherited: boolean;
+  source_type_id: string | null;
+  source_type_name: string | null;
 }
 
 export interface ProviderTypeMetadataCreate {
@@ -143,6 +157,62 @@ export interface TypeItem {
   id: string;
   name: string;
   description: string | null;
+  parent_type_id: string | null;
+}
+
+export interface TypeHierarchyNode extends TypeItem {
+  children: TypeHierarchyNode[];
+}
+
+export interface BatchMetadataEntry {
+  metadata_id: string;
+  value: any;
+}
+
+export interface BatchMetadataCreate {
+  timestamp: string;
+  entries: BatchMetadataEntry[];
+}
+
+export interface MetadataFieldInfo {
+  metadata_id: string;
+  metadata_name: string;
+  metadata_display_name: string;
+  value_type: string;
+}
+
+export interface MetadataSnapshotRow {
+  timestamp: string;
+  values: Record<string, any>;
+}
+
+export interface MetadataHistoryGrid {
+  fields: MetadataFieldInfo[];
+  snapshots: MetadataSnapshotRow[];
+}
+
+export interface BulkHistoryUpdateEntry {
+  old_timestamp: string;
+  new_timestamp?: string | null;
+  metadata_id: string;
+  value: any;
+}
+
+export interface BulkHistoryInsertEntry {
+  timestamp: string;
+  metadata_id: string;
+  value: any;
+}
+
+export interface BulkHistoryDeleteEntry {
+  timestamp: string;
+  metadata_id?: string | null;
+}
+
+export interface BulkHistoryUpdate {
+  updates: BulkHistoryUpdateEntry[];
+  inserts: BulkHistoryInsertEntry[];
+  deletes: BulkHistoryDeleteEntry[];
 }
 
 export interface UniverseItem {

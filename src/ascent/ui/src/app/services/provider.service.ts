@@ -3,7 +3,12 @@ import { Subject, EMPTY, Observable } from 'rxjs';
 import { switchMap, tap, catchError } from 'rxjs/operators';
 import { ApiService } from './api.service';
 import { ProviderListItem, ProviderDetail, ProviderCreate, ProviderUpdate } from '../models/provider.model';
-import { TypeItem, MetadataEntry, MetadataEntryCreate, MetadataHistoryEntry, MetadataHistoryUpdate, ProviderTypeMetadataField, ProviderTypeMetadataCreate } from '../models/asset.model';
+import {
+  TypeItem, TypeHierarchyNode, MetadataEntry, MetadataEntryCreate,
+  MetadataHistoryEntry, MetadataHistoryUpdate,
+  ProviderTypeMetadataField, ProviderTypeMetadataCreate,
+  BatchMetadataCreate, MetadataHistoryGrid, BulkHistoryUpdate,
+} from '../models/asset.model';
 
 @Injectable({ providedIn: 'root' })
 export class ProviderService {
@@ -67,8 +72,12 @@ export class ProviderService {
     this.loadDetail$.next({ providerId, silent });
   }
 
-  createProviderType(name: string, description?: string): Observable<TypeItem> {
-    return this.api.post<TypeItem>('/types/provider-types', { name, description });
+  createProviderType(name: string, description?: string, parentTypeId?: string): Observable<TypeItem> {
+    return this.api.post<TypeItem>('/types/provider-types', { name, description, parent_type_id: parentTypeId ?? null });
+  }
+
+  loadProviderTypeTree(): Observable<TypeHierarchyNode[]> {
+    return this.api.get<TypeHierarchyNode[]>('/types/provider-types/tree');
   }
 
   createProvider(data: ProviderCreate) {
@@ -127,5 +136,19 @@ export class ProviderService {
 
   removeProviderTypeMetadata(providerTypeId: string, metadataId: string): Observable<any> {
     return this.api.delete(`/types/provider-types/${providerTypeId}/metadata/${metadataId}`);
+  }
+
+  // Batch metadata
+  batchSaveProviderMetadata(providerId: string, data: BatchMetadataCreate): Observable<MetadataEntry[]> {
+    return this.api.post<MetadataEntry[]>(`/providers/${providerId}/metadata/batch`, data);
+  }
+
+  // History grid
+  getProviderMetadataHistoryGrid(providerId: string): Observable<MetadataHistoryGrid> {
+    return this.api.get<MetadataHistoryGrid>(`/providers/${providerId}/metadata/history`);
+  }
+
+  bulkUpdateProviderMetadataHistory(providerId: string, data: BulkHistoryUpdate): Observable<any> {
+    return this.api.put(`/providers/${providerId}/metadata/history/bulk`, data);
   }
 }

@@ -10,8 +10,9 @@ from ascent.database.models.asset_groups import (
 # Import asset metadata
 from ascent.database.models.asset_metadata import AssetMetadata
 
-# Import asset type metadata junction
+# Import asset type metadata junctions
 from ascent.database.models.asset_type_metadata import AssetTypeMetadata
+from ascent.database.models.asset_type_provider_asset_metadata import AssetTypeProviderAssetMetadata
 
 # Import assets
 from ascent.database.models.assets import Asset
@@ -117,6 +118,7 @@ __all__ = [
     # Asset Metadata
     "AssetMetadata",
     "AssetTypeMetadata",
+    "AssetTypeProviderAssetMetadata",
     # Assets
     "Asset",
     # Exchanges

@@ -103,6 +103,11 @@ class Metadata(Base):
         comment="The name of the metadata type, e.g. symbol, exchange_code, provider_ticker, etc. These represent categorical classifications or structured data as-of a particular time, stored as JSON values.",
         unique=True,
     )
+    display_name: Mapped[str] = mapped_column(
+        String(200),
+        nullable=False,
+        comment="Human-readable display name shown in the UI (e.g. 'Market Cap').",
+    )
     description: Mapped[str | None] = mapped_column(
         String(1000),
         nullable=True,
@@ -112,7 +117,7 @@ class Metadata(Base):
         String(20),
         nullable=False,
         server_default="string",
-        comment="The data type for this metadata's value. One of: string, number, boolean, json, date. Controls how the form renders in the UI.",
+        comment="The data type for this metadata's value. One of: string, integer, float, boolean, date, time, datetime. Controls how the form renders in the UI.",
     )
     is_active: Mapped[bool] = mapped_column(
         default=True, comment="Whether the metadata type is active"

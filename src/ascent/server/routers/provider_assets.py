@@ -4,7 +4,13 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from ascent.server.dependencies import get_db
-from ascent.server.schemas.metadata import MetadataEntryCreate, MetadataEntrySchema
+from ascent.server.schemas.metadata import (
+    BatchMetadataCreate,
+    BulkHistoryUpdate,
+    MetadataEntryCreate,
+    MetadataEntrySchema,
+    MetadataHistoryGrid,
+)
 from ascent.server.schemas.provider_assets import (
     AssetGroupCreate,
     AssetGroupMemberCreate,
@@ -71,6 +77,43 @@ def create_provider_asset_metadata(
     db: Session = Depends(get_db),
 ):
     return metadata_service.create_provider_asset_metadata_entry(db, provider_id, asset_id, data)
+
+
+@router.post(
+    "/provider-assets/{provider_id}/{asset_id}/metadata/batch",
+    status_code=201,
+    response_model=list[MetadataEntrySchema],
+)
+def batch_create_provider_asset_metadata(
+    provider_id: uuid.UUID,
+    asset_id: uuid.UUID,
+    data: BatchMetadataCreate,
+    db: Session = Depends(get_db),
+):
+    return metadata_service.batch_create_provider_asset_metadata(db, provider_id, asset_id, data)
+
+
+@router.get(
+    "/provider-assets/{provider_id}/{asset_id}/metadata/history",
+    response_model=MetadataHistoryGrid,
+)
+def get_provider_asset_metadata_history(
+    provider_id: uuid.UUID, asset_id: uuid.UUID, db: Session = Depends(get_db)
+):
+    return metadata_service.get_provider_asset_metadata_history_grid(db, provider_id, asset_id)
+
+
+@router.put(
+    "/provider-assets/{provider_id}/{asset_id}/metadata/history/bulk",
+    status_code=204,
+)
+def bulk_update_provider_asset_metadata_history(
+    provider_id: uuid.UUID,
+    asset_id: uuid.UUID,
+    data: BulkHistoryUpdate,
+    db: Session = Depends(get_db),
+):
+    metadata_service.bulk_update_provider_asset_metadata_history(db, provider_id, asset_id, data)
 
 
 # ---------------------------------------------------------------------------

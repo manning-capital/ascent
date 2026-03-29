@@ -7,7 +7,27 @@
       "Bash(grep -r \"universe.*table\\\\|UniverseTable\\\\|universe-table\" /Users/glynfinck/Documents/Repositories/ascent/src/ascent/ui/src/app --include=*.ts --include=*.html)",
       "Bash(grep -r \"ProviderAsset\\\\|ProviderAssetGroup\" /Users/glynfinck/Documents/Repositories/ascent/src/ascent/database/models/*.py)",
       "Bash(find /Users/glynfinck/Documents/Repositories/ascent/src/ascent/ui/src -type f \\\\\\(-name *.ts -o -name *.tsx \\\\\\))",
-      "Bash(grep -E \"\\\\.\\(py\\)$\")"
+      "Bash(grep -E \"\\\\.\\(py\\)$\")",
+      "Bash(find /Users/glynfinck/Documents/Repositories/ascent/src/ascent/ui/node_modules/primeng -maxdepth 2 -type d \\\\\\(-name *orderlist* -o -name *dragdrop* -o -name *reorder* \\\\\\))",
+      "Bash(npm list:*)",
+      "Bash(find /Users/glynfinck/Documents/Repositories/ascent -path */node_modules -prune -o -type f \\\\\\(-name tailwind.config.* -o -name primeng* \\\\\\) -print)",
+      "Bash(find /Users/glynfinck/Documents/Repositories/ascent -maxdepth 3 -name tailwind* -type f)",
+      "Bash(ls -la /Users/glynfinck/Documents/Repositories/ascent/src/ascent/ui/*.*)",
+      "Bash(find /Users/glynfinck/Documents/Repositories/ascent -path */node_modules/primeng/package.json)",
+      "Bash(cat /Users/glynfinck/Documents/Repositories/ascent/src/ascent/ui/node_modules/primeng/inputicon/*.d.ts)",
+      "Bash(cat /Users/glynfinck/Documents/Repositories/ascent/src/ascent/ui/node_modules/primeng/multiselect/*.d.ts)",
+      "Bash(find /Users/glynfinck/Documents/Repositories/ascent/src/ascent/ui/node_modules/primeng -maxdepth 2 -name *.d.ts -type f)",
+      "Bash(grep -r export.*class.*IconField /Users/glynfinck/Documents/Repositories/ascent/src/ascent/ui/node_modules/primeng/fesm2022/)",
+      "Bash(grep -r export.*class.*InputIcon /Users/glynfinck/Documents/Repositories/ascent/src/ascent/ui/node_modules/primeng/fesm2022/)",
+      "Bash(find /Users/glynfinck/Documents/Repositories/ascent -path */alembic/* -name *.py -type f)",
+      "Bash(find /Users/glynfinck/Documents/Repositories/ascent/src/ascent/ui -name tailwind.config.* -o -name angular.json)",
+      "Bash(curl -s http://localhost:8000/api/types/asset-types/tree)",
+      "Bash(curl -s http://localhost:8000/api/types/provider-types/tree)",
+      "Bash(find /Users/glynfinck/Documents/Repositories/ascent/src/ascent/ui -name favicon* -o -name *.ico)",
+      "Bash(grep -r \"svg\\\\|icon\\\\|Icon\" /Users/glynfinck/Documents/Repositories/ascent/src/ascent/ui/src/app/components/shared/*.ts)",
+      "Bash(grep -E \"\\\\.py$\")",
+      "Bash(grep -r value_type /Users/glynfinck/Documents/Repositories/ascent/src/ascent/database/migrations --include=*.py)",
+      "Bash(grep -A 5 \"parseValue\\\\|value_type === ''date''\" /Users/glynfinck/Documents/Repositories/ascent/src/ascent/ui/src/app/components/shared/metadata-history-table.component.ts)"
     ]
   },
   "hooks": {

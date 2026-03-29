@@ -584,7 +584,7 @@
           [items]="universeItems()"
           subtitle="Asset groups and individual pairs this strategy trades."
           (addItem)="onAddUniverseItem($event)"
-          (addAssetGroup)="onAddUniverseGroup($event)"
+          (createGroupAndAdd)="onCreateGroupAndAdd($event)"
           (remove)="removeUniverseItem($event)"
           (removeGroup)="removeUniverseGroup($event)"/>
       }

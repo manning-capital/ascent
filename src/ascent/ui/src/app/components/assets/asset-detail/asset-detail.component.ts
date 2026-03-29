@@ -1,23 +1,25 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { forkJoin } from 'rxjs';
 import { AssetService } from '../../../services/asset.service';
 import { ProviderService } from '../../../services/provider.service';
 import { ToastService } from '../../../services/toast.service';
-import { MetadataEntry, MetadataHistoryEntry, AssetTypeMetadataField } from '../../../models/asset.model';
-import { Tabs, TabList, Tab } from 'primeng/tabs';
+import { MetadataEntry, AssetTypeMetadataField, AssetTypeProviderAssetMetadataField, MetadataHistoryGrid, BulkHistoryUpdate, ProviderAssetLink } from '../../../models/asset.model';
 import { Skeleton } from 'primeng/skeleton';
 import { Select } from 'primeng/select';
 import { Checkbox } from 'primeng/checkbox';
 import { DatePicker } from 'primeng/datepicker';
 import { TableModule } from 'primeng/table';
-import { Card } from 'primeng/card';
 import { Tag } from 'primeng/tag';
 import { Button } from 'primeng/button';
 import { InputText } from 'primeng/inputtext';
 import { Textarea } from 'primeng/textarea';
+import { Tabs, TabList, Tab } from 'primeng/tabs';
+import { Panel } from 'primeng/panel';
 import { ConfirmationService } from 'primeng/api';
+import { MetadataHistoryTableComponent } from '../../shared/metadata-history-table.component';
 
 @Component({
   selector: 'app-asset-detail',
@@ -26,17 +28,18 @@ import { ConfirmationService } from 'primeng/api';
     RouterLink,
     DatePipe,
     FormsModule,
-    Tabs, TabList, Tab,
     Select,
     Checkbox,
     DatePicker,
     TableModule,
-    Card,
     Tag,
     Button,
     InputText,
     Textarea,
     Skeleton,
+    Tabs, TabList, Tab,
+    Panel,
+    MetadataHistoryTableComponent,
   ],
   templateUrl: './asset-detail.component.html',
 })
@@ -48,10 +51,11 @@ export class AssetDetailComponent implements OnInit {
   assetService = inject(AssetService);
   providerService = inject(ProviderService);
 
-  tabs = ['Overview', 'Metadata', 'Provider Mappings'];
-  activeTab = signal('Overview');
-
   assetId = '';
+
+  // Tabs
+  tabs = ['Details', 'History'];
+  activeTab = signal('Details');
 
   // Edit state
   editing = signal(false);
@@ -59,42 +63,61 @@ export class AssetDetailComponent implements OnInit {
   editSymbol = '';
   editDescription = '';
   editIsActive = true;
+  editTimestamp: Date = new Date();
+  editFieldValues: Record<string, string> = {};
+  editPAFieldValues: Record<string, string> = {};
 
   // Metadata state
   metadataEntries = signal<MetadataEntry[]>([]);
   assetTypeFields = signal<AssetTypeMetadataField[]>([]);
-  fieldInputValues: Record<string, string> = {};
-  fieldTimestampValues: Record<string, Date | null> = {};
-  showMetadataForm = signal(false);
-  newMetadataId = '';
-  newMetadataValue = '';
-  newMetadataTimestamp: Date | null = null;
 
-  // History state
-  historyMetadataId = signal<string | null>(null);
-  historyMetadataName = signal('');
-  historyEntries = signal<MetadataHistoryEntry[]>([]);
-  editingHistoryTimestamp = signal<string | null>(null);
-  editHistoryValue = '';
-  editHistoryTimestamp: Date | null = null;
+  // Provider-asset metadata
+  providerAssetFields = signal<AssetTypeProviderAssetMetadataField[]>([]);
+  providerAssetMetadata = signal<Record<string, MetadataEntry[]>>({});
+
+  // Provider selector
+  selectedProviderId = signal<string | null>(null);
+  providerLinkOptions = computed(() => {
+    const asset = this.assetService.selectedAsset();
+    if (!asset) return [];
+    return asset.provider_links.map(link => ({
+      label: link.provider_name ?? link.provider_id,
+      value: link.provider_id,
+    }));
+  });
+  selectedProviderLink = computed<ProviderAssetLink | null>(() => {
+    const asset = this.assetService.selectedAsset();
+    const pid = this.selectedProviderId();
+    if (!asset || !pid) return null;
+    return asset.provider_links.find(l => l.provider_id === pid) ?? null;
+  });
+
+  // History grid state
+  historyGrid = signal<MetadataHistoryGrid | null>(null);
+  paHistoryGrids = signal<Record<string, MetadataHistoryGrid>>({});
 
   ngOnInit(): void {
     this.route.paramMap.subscribe(params => {
       const id = params.get('id')!;
       if (id === this.assetId) return;
       this.assetId = id;
-
-      const tab = this.route.snapshot.queryParamMap.get('tab');
-      this.activeTab.set(tab && this.tabs.includes(tab) ? tab : 'Overview');
       this.editing.set(false);
       this.metadataEntries.set([]);
       this.assetTypeFields.set([]);
-      this.showMetadataForm.set(false);
-      this.historyMetadataId.set(null);
-      this.historyEntries.set([]);
+      this.providerAssetFields.set([]);
+      this.providerAssetMetadata.set({});
+      this.historyGrid.set(null);
+      this.paHistoryGrids.set({});
+
+      // Restore tab from query params
+      const tab = this.route.snapshot.queryParamMap.get('tab');
+      if (tab && this.tabs.includes(tab)) {
+        this.activeTab.set(tab);
+      } else {
+        this.activeTab.set('Details');
+      }
 
       this.assetService.loadAssetDetail(this.assetId);
-      this.assetService.loadMetadataTypes();
       this.loadMetadata();
       this.loadAssetTypeFields();
     });
@@ -102,7 +125,18 @@ export class AssetDetailComponent implements OnInit {
 
   onTabChange(tab: string): void {
     this.activeTab.set(tab);
-    this.router.navigate([], { relativeTo: this.route, queryParams: { tab }, queryParamsHandling: 'merge', replaceUrl: true });
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { tab },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
+
+    // Load history data when switching to History tab
+    if (tab === 'History') {
+      this.loadHistoryGrid();
+      this.loadPAHistoryGrids();
+    }
   }
 
   private loadAssetTypeFields(): void {
@@ -112,11 +146,51 @@ export class AssetDetailComponent implements OnInit {
         this.assetService.getAssetTypeMetadata(asset.asset_type_id).subscribe({
           next: fields => this.assetTypeFields.set(fields),
         });
+        this.assetService.getAssetTypeProviderAssetMetadata(asset.asset_type_id).subscribe({
+          next: fields => {
+            this.providerAssetFields.set(fields);
+            this.loadProviderAssetMetadata();
+          },
+        });
       } else {
         setTimeout(check, 100);
       }
     };
     check();
+  }
+
+  private loadProviderAssetMetadata(): void {
+    const asset = this.assetService.selectedAsset();
+    if (!asset) return;
+    // Auto-select first provider if none selected
+    if (!this.selectedProviderId() && asset.provider_links.length > 0) {
+      this.selectedProviderId.set(asset.provider_links[0].provider_id);
+    }
+    const result: Record<string, MetadataEntry[]> = {};
+    for (const link of asset.provider_links) {
+      this.assetService.getProviderAssetMetadata(link.provider_id, this.assetId).subscribe({
+        next: entries => {
+          result[link.provider_id] = entries;
+          this.providerAssetMetadata.set({ ...result });
+        },
+      });
+    }
+  }
+
+  onProviderSelect(providerId: string): void {
+    this.selectedProviderId.set(providerId);
+  }
+
+  getProviderAssetFieldValue(providerId: string, metadataId: string): any {
+    const entries = this.providerAssetMetadata()[providerId] ?? [];
+    const entry = entries.find(e => e.metadata_id === metadataId);
+    return entry?.value ?? null;
+  }
+
+  paFieldTimestamp(providerId: string, metadataId: string): string | null {
+    const entries = this.providerAssetMetadata()[providerId] ?? [];
+    const entry = entries.find(e => e.metadata_id === metadataId);
+    return entry?.timestamp ?? null;
   }
 
   // ---- Edit ----
@@ -128,6 +202,35 @@ export class AssetDetailComponent implements OnInit {
     this.editSymbol = asset.symbol ?? '';
     this.editDescription = asset.description ?? '';
     this.editIsActive = asset.is_active;
+    this.editTimestamp = new Date();
+
+    // Pre-populate metadata field values from current entries
+    this.editFieldValues = {};
+    for (const field of this.assetTypeFields()) {
+      const entry = this.metadataEntries().find(e => e.metadata_id === field.metadata_id);
+      if (entry) {
+        this.editFieldValues[field.metadata_id] = typeof entry.value === 'object'
+          ? JSON.stringify(entry.value)
+          : String(entry.value);
+      } else {
+        this.editFieldValues[field.metadata_id] = '';
+      }
+    }
+
+    // Pre-populate provider-asset metadata field values
+    this.editPAFieldValues = {};
+    for (const link of asset.provider_links) {
+      for (const paf of this.providerAssetFields()) {
+        const key = link.provider_id + ':' + paf.metadata_id;
+        const val = this.getProviderAssetFieldValue(link.provider_id, paf.metadata_id);
+        if (val !== null) {
+          this.editPAFieldValues[key] = typeof val === 'object' ? JSON.stringify(val) : String(val);
+        } else {
+          this.editPAFieldValues[key] = '';
+        }
+      }
+    }
+
     this.editing.set(true);
   }
 
@@ -137,16 +240,91 @@ export class AssetDetailComponent implements OnInit {
 
   submitEdit(): void {
     if (!this.editName.trim()) return;
-    this.assetService.updateAsset(this.assetId, {
+    const asset = this.assetService.selectedAsset();
+    if (!asset) return;
+
+    const calls: any[] = [];
+
+    // 1. Save base fields
+    calls.push(this.assetService.updateAsset(this.assetId, {
       name: this.editName.trim(),
       symbol: this.editSymbol.trim() || null,
       description: this.editDescription.trim() || null,
       is_active: this.editIsActive,
-    }).subscribe({
+    }));
+
+    // 2. Collect changed asset metadata fields
+    const changedEntries: { metadata_id: string; value: any }[] = [];
+    for (const field of this.assetTypeFields()) {
+      const rawValue = this.editFieldValues[field.metadata_id] ?? '';
+      const currentEntry = this.metadataEntries().find(e => e.metadata_id === field.metadata_id);
+      const currentStr = currentEntry
+        ? (typeof currentEntry.value === 'object' ? JSON.stringify(currentEntry.value) : String(currentEntry.value))
+        : '';
+
+      if (rawValue !== currentStr && rawValue !== '') {
+        let value: any = rawValue;
+        if (field.value_type === 'integer') {
+          value = parseInt(rawValue, 10);
+          if (isNaN(value)) continue;
+        } else if (field.value_type === 'float') {
+          value = parseFloat(rawValue);
+          if (isNaN(value)) continue;
+        } else if (field.value_type === 'boolean') {
+          value = rawValue === 'true';
+        }
+        changedEntries.push({ metadata_id: field.metadata_id, value });
+      }
+    }
+
+    if (changedEntries.length > 0) {
+      calls.push(this.assetService.batchSaveAssetMetadata(this.assetId, {
+        timestamp: this.editTimestamp.toISOString(),
+        entries: changedEntries,
+      }));
+    }
+
+    // 3. Collect changed provider-asset metadata fields (per provider link)
+    for (const link of asset.provider_links) {
+      const paChangedEntries: { metadata_id: string; value: any }[] = [];
+      for (const paf of this.providerAssetFields()) {
+        const key = link.provider_id + ':' + paf.metadata_id;
+        const rawValue = this.editPAFieldValues[key] ?? '';
+        const currentVal = this.getProviderAssetFieldValue(link.provider_id, paf.metadata_id);
+        const currentStr = currentVal !== null
+          ? (typeof currentVal === 'object' ? JSON.stringify(currentVal) : String(currentVal))
+          : '';
+
+        if (rawValue !== currentStr && rawValue !== '') {
+          let value: any = rawValue;
+          if (paf.value_type === 'integer') {
+            value = parseInt(rawValue, 10);
+            if (isNaN(value)) continue;
+          } else if (paf.value_type === 'float') {
+            value = parseFloat(rawValue);
+            if (isNaN(value)) continue;
+          } else if (paf.value_type === 'boolean') {
+            value = rawValue === 'true';
+          }
+          paChangedEntries.push({ metadata_id: paf.metadata_id, value });
+        }
+      }
+
+      if (paChangedEntries.length > 0) {
+        calls.push(this.assetService.batchSaveProviderAssetMetadata(link.provider_id, this.assetId, {
+          timestamp: this.editTimestamp.toISOString(),
+          entries: paChangedEntries,
+        }));
+      }
+    }
+
+    forkJoin(calls).subscribe({
       next: () => {
         this.toast.success('Asset updated');
         this.editing.set(false);
         this.assetService.loadAssetDetail(this.assetId, true);
+        this.loadMetadata();
+        this.loadProviderAssetMetadata();
       },
       error: () => this.toast.error('Failed to update asset'),
     });
@@ -183,177 +361,54 @@ export class AssetDetailComponent implements OnInit {
     return entry?.value ?? null;
   }
 
-  extraMetadata(): MetadataEntry[] {
-    const fieldIds = new Set(this.assetTypeFields().map(f => f.metadata_id));
-    return this.metadataEntries().filter(e => !fieldIds.has(e.metadata_id));
+  fieldTimestamp(metadataId: string): string | null {
+    const entry = this.metadataEntries().find(e => e.metadata_id === metadataId);
+    return entry?.timestamp ?? null;
   }
 
-  openMetadataForm(): void {
-    const usedIds = new Set([
-      ...this.assetTypeFields().map(f => f.metadata_id),
-      ...this.metadataEntries().map(e => e.metadata_id),
-    ]);
-    const available = this.assetService.metadataTypes().filter(mt => !usedIds.has(mt.id));
-    this.newMetadataId = available[0]?.id ?? this.assetService.metadataTypes()[0]?.id ?? '';
-    this.newMetadataValue = '';
-    this.newMetadataTimestamp = null;
-    this.showMetadataForm.set(true);
+  // ---- History Grid ----
+
+  loadHistoryGrid(): void {
+    this.assetService.getAssetMetadataHistoryGrid(this.assetId).subscribe({
+      next: grid => this.historyGrid.set(grid),
+    });
   }
 
-  cancelMetadataForm(): void {
-    this.showMetadataForm.set(false);
-  }
-
-  submitMetadata(): void {
-    if (!this.newMetadataId || !this.newMetadataValue) return;
-    let value: any = this.newMetadataValue;
-    try { value = JSON.parse(this.newMetadataValue); } catch {}
-    const payload: any = { metadata_id: this.newMetadataId, value };
-    if (this.newMetadataTimestamp) {
-      payload.timestamp = this.newMetadataTimestamp.toISOString();
+  loadPAHistoryGrids(): void {
+    const asset = this.assetService.selectedAsset();
+    if (!asset) return;
+    const result: Record<string, MetadataHistoryGrid> = {};
+    for (const link of asset.provider_links) {
+      this.assetService.getProviderAssetMetadataHistoryGrid(link.provider_id, this.assetId).subscribe({
+        next: grid => {
+          result[link.provider_id] = grid;
+          this.paHistoryGrids.set({ ...result });
+        },
+      });
     }
-    this.assetService.addAssetMetadata(this.assetId, payload).subscribe({
+  }
+
+  onHistorySave(data: BulkHistoryUpdate): void {
+    this.assetService.bulkUpdateAssetMetadataHistory(this.assetId, data).subscribe({
       next: () => {
-        this.toast.success('Metadata added');
-        this.showMetadataForm.set(false);
+        this.toast.success('History updated');
+        this.loadHistoryGrid();
         this.loadMetadata();
         this.assetService.loadAssetDetail(this.assetId, true);
       },
-      error: () => this.toast.error('Failed to add metadata'),
+      error: () => this.toast.error('Failed to update history'),
     });
   }
 
-  submitFieldValue(field: AssetTypeMetadataField): void {
-    const rawValue = this.fieldInputValues[field.metadata_id] ?? '';
-    if (!rawValue && rawValue !== '0') return;
-    let value: any = rawValue;
-    if (field.value_type === 'number') {
-      value = Number(rawValue);
-      if (isNaN(value)) return;
-    } else if (field.value_type === 'boolean') {
-      value = rawValue === 'true';
-    } else if (field.value_type === 'json') {
-      try { value = JSON.parse(rawValue); } catch { return; }
-    }
-    const payload: any = { metadata_id: field.metadata_id, value };
-    const ts = this.fieldTimestampValues[field.metadata_id];
-    if (ts) {
-      payload.timestamp = ts.toISOString();
-    }
-    this.assetService.addAssetMetadata(this.assetId, payload).subscribe({
+  onPAHistorySave(providerId: string, data: BulkHistoryUpdate): void {
+    this.assetService.bulkUpdateProviderAssetMetadataHistory(providerId, this.assetId, data).subscribe({
       next: () => {
-        this.toast.success(`${field.metadata_name} updated`);
-        this.fieldInputValues[field.metadata_id] = '';
-        this.fieldTimestampValues[field.metadata_id] = null;
-        this.loadMetadata();
-        this.assetService.loadAssetDetail(this.assetId, true);
-        if (this.historyMetadataId() === field.metadata_id) {
-          this.refreshHistory();
-        }
-      },
-      error: () => this.toast.error(`Failed to update ${field.metadata_name}`),
-    });
-  }
-
-  deleteMetadata(entry: MetadataEntry): void {
-    this.assetService.deleteAssetMetadata(this.assetId, entry.metadata_id).subscribe({
-      next: () => {
-        this.toast.success('Metadata removed');
-        this.loadMetadata();
+        this.toast.success('Provider mapping history updated');
+        this.loadPAHistoryGrids();
+        this.loadProviderAssetMetadata();
         this.assetService.loadAssetDetail(this.assetId, true);
       },
-      error: () => this.toast.error('Failed to remove metadata'),
-    });
-  }
-
-  deleteFieldMetadata(metadataId: string): void {
-    this.assetService.deleteAssetMetadata(this.assetId, metadataId).subscribe({
-      next: () => {
-        this.toast.success('Value cleared');
-        this.loadMetadata();
-        if (this.historyMetadataId() === metadataId) {
-          this.refreshHistory();
-        }
-      },
-      error: () => this.toast.error('Failed to clear value'),
-    });
-  }
-
-  showHistory(entry: MetadataEntry): void {
-    this.historyMetadataId.set(entry.metadata_id);
-    this.historyMetadataName.set(entry.metadata_name);
-    this.editingHistoryTimestamp.set(null);
-    this.assetService.getAssetMetadataHistory(this.assetId, entry.metadata_id).subscribe({
-      next: entries => this.historyEntries.set(entries),
-    });
-  }
-
-  showFieldHistory(field: AssetTypeMetadataField): void {
-    this.historyMetadataId.set(field.metadata_id);
-    this.historyMetadataName.set(field.metadata_name);
-    this.editingHistoryTimestamp.set(null);
-    this.assetService.getAssetMetadataHistory(this.assetId, field.metadata_id).subscribe({
-      next: entries => this.historyEntries.set(entries),
-    });
-  }
-
-  closeHistory(): void {
-    this.historyMetadataId.set(null);
-    this.historyEntries.set([]);
-    this.editingHistoryTimestamp.set(null);
-  }
-
-  private refreshHistory(): void {
-    const metaId = this.historyMetadataId();
-    if (!metaId) return;
-    this.assetService.getAssetMetadataHistory(this.assetId, metaId).subscribe({
-      next: entries => this.historyEntries.set(entries),
-    });
-  }
-
-  // ---- History editing ----
-
-  startEditHistory(h: MetadataHistoryEntry): void {
-    this.editingHistoryTimestamp.set(h.timestamp);
-    this.editHistoryValue = typeof h.value === 'object' ? JSON.stringify(h.value) : String(h.value);
-    this.editHistoryTimestamp = new Date(h.timestamp);
-  }
-
-  cancelEditHistory(): void {
-    this.editingHistoryTimestamp.set(null);
-  }
-
-  submitEditHistory(): void {
-    const metaId = this.historyMetadataId();
-    const origTs = this.editingHistoryTimestamp();
-    if (!metaId || !origTs) return;
-    let value: any = this.editHistoryValue;
-    try { value = JSON.parse(this.editHistoryValue); } catch {}
-    const newTs = this.editHistoryTimestamp ? this.editHistoryTimestamp.toISOString() : undefined;
-    this.assetService.updateAssetMetadataEntry(this.assetId, metaId, origTs, {
-      value,
-      timestamp: newTs,
-    }).subscribe({
-      next: () => {
-        this.toast.success('Entry updated');
-        this.editingHistoryTimestamp.set(null);
-        this.refreshHistory();
-        this.loadMetadata();
-      },
-      error: () => this.toast.error('Failed to update entry'),
-    });
-  }
-
-  deleteHistoryEntry(h: MetadataHistoryEntry): void {
-    const metaId = this.historyMetadataId();
-    if (!metaId) return;
-    this.assetService.deleteAssetMetadataEntry(this.assetId, metaId, h.timestamp).subscribe({
-      next: () => {
-        this.toast.success('Entry deleted');
-        this.refreshHistory();
-        this.loadMetadata();
-      },
-      error: () => this.toast.error('Failed to delete entry'),
+      error: () => this.toast.error('Failed to update provider mapping history'),
     });
   }
 

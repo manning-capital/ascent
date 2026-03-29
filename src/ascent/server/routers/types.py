@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ascent.database.models import (
     AssetType,
     AssetTypeMetadata,
+    AssetTypeProviderAssetMetadata,
     ExchangeType,
     Metadata,
     OrderStatusType,
@@ -21,18 +22,30 @@ from ascent.server.exceptions import ConflictError, NotFoundError
 from ascent.server.schemas.metadata import (
     AssetTypeMetadataCreate,
     AssetTypeMetadataSchema,
+    AssetTypeProviderAssetMetadataCreate,
+    AssetTypeProviderAssetMetadataSchema,
     MetadataTypeCreate,
     MetadataTypeSchema,
     ProviderTypeMetadataCreate,
     ProviderTypeMetadataSchema,
 )
-from ascent.server.schemas.types import TypeCreate, TypeItem, TypeItemWithSymbol
+from ascent.server.schemas.types import TypeCreate, TypeHierarchyItem, TypeItem, TypeItemWithSymbol
+from ascent.server.services.type_service import (
+    build_type_tree,
+    get_effective_asset_type_metadata,
+    get_effective_asset_type_provider_asset_metadata,
+    get_effective_provider_type_metadata,
+)
 
 router = APIRouter(prefix="/types", tags=["types"])
 
 
 def _create_type(db: Session, model_class, data: TypeCreate):
-    obj = model_class(**data.model_dump())
+    dump = data.model_dump(exclude_none=True)
+    # Remove symbol if the model doesn't have it
+    if not hasattr(model_class, "symbol") and "symbol" in dump:
+        dump.pop("symbol", None)
+    obj = model_class(**dump)
     db.add(obj)
     db.commit()
     db.refresh(obj)
@@ -60,8 +73,17 @@ def list_asset_types(db: Session = Depends(get_db)):
     return [TypeItem.model_validate(r) for r in result]
 
 
+@router.get("/asset-types/tree", response_model=list[TypeHierarchyItem])
+def get_asset_type_tree(db: Session = Depends(get_db)):
+    return build_type_tree(db, AssetType)
+
+
 @router.post("/asset-types", status_code=201)
 def create_asset_type(data: TypeCreate, db: Session = Depends(get_db)):
+    if data.parent_type_id:
+        parent = db.get(AssetType, data.parent_type_id)
+        if not parent:
+            raise NotFoundError("Parent asset type not found")
     return _create_type(db, AssetType, data)
 
 
@@ -69,7 +91,14 @@ def create_asset_type(data: TypeCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/asset-types/{asset_type_id}/metadata", response_model=list[AssetTypeMetadataSchema])
-def list_asset_type_metadata(asset_type_id: str, db: Session = Depends(get_db)):
+def list_asset_type_metadata(
+    asset_type_id: str,
+    include_inherited: bool = Query(default=True),
+    db: Session = Depends(get_db),
+):
+    if include_inherited:
+        return get_effective_asset_type_metadata(db, asset_type_id)
+
     rows = (
         db.execute(
             select(AssetTypeMetadata)
@@ -83,6 +112,7 @@ def list_asset_type_metadata(asset_type_id: str, db: Session = Depends(get_db)):
         AssetTypeMetadataSchema(
             metadata_id=r.metadata_id,
             metadata_name=r.metadata_type.name,
+            metadata_display_name=r.metadata_type.display_name,
             metadata_description=r.metadata_type.description,
             value_type=r.metadata_type.value_type,
             is_required=r.is_required,
@@ -119,6 +149,7 @@ def add_asset_type_metadata(
     return AssetTypeMetadataSchema(
         metadata_id=obj.metadata_id,
         metadata_name=obj.metadata_type.name,
+        metadata_display_name=obj.metadata_type.display_name,
         metadata_description=obj.metadata_type.description,
         value_type=obj.metadata_type.value_type,
         is_required=obj.is_required,
@@ -140,6 +171,103 @@ def remove_asset_type_metadata(asset_type_id: str, metadata_id: str, db: Session
     db.commit()
 
 
+# ---- Asset Type Provider-Asset Metadata Requirements ----
+
+
+@router.get(
+    "/asset-types/{asset_type_id}/provider-asset-metadata",
+    response_model=list[AssetTypeProviderAssetMetadataSchema],
+)
+def list_asset_type_provider_asset_metadata(
+    asset_type_id: str,
+    include_inherited: bool = Query(default=True),
+    db: Session = Depends(get_db),
+):
+    if include_inherited:
+        return get_effective_asset_type_provider_asset_metadata(db, asset_type_id)
+
+    rows = (
+        db.execute(
+            select(AssetTypeProviderAssetMetadata)
+            .where(AssetTypeProviderAssetMetadata.asset_type_id == asset_type_id)
+            .order_by(AssetTypeProviderAssetMetadata.display_order)
+        )
+        .scalars()
+        .all()
+    )
+    return [
+        AssetTypeProviderAssetMetadataSchema(
+            metadata_id=r.metadata_id,
+            metadata_name=r.metadata_type.name,
+            metadata_display_name=r.metadata_type.display_name,
+            metadata_description=r.metadata_type.description,
+            value_type=r.metadata_type.value_type,
+            is_required=r.is_required,
+            display_order=r.display_order,
+        )
+        for r in rows
+    ]
+
+
+@router.post(
+    "/asset-types/{asset_type_id}/provider-asset-metadata",
+    status_code=201,
+    response_model=AssetTypeProviderAssetMetadataSchema,
+)
+def add_asset_type_provider_asset_metadata(
+    asset_type_id: str,
+    data: AssetTypeProviderAssetMetadataCreate,
+    db: Session = Depends(get_db),
+):
+    existing = db.execute(
+        select(AssetTypeProviderAssetMetadata).where(
+            AssetTypeProviderAssetMetadata.asset_type_id == asset_type_id,
+            AssetTypeProviderAssetMetadata.metadata_id == data.metadata_id,
+        )
+    ).scalar_one_or_none()
+    if existing:
+        raise ConflictError(
+            "Metadata field already linked to this asset type's provider-asset schema"
+        )
+
+    obj = AssetTypeProviderAssetMetadata(
+        asset_type_id=asset_type_id,
+        metadata_id=data.metadata_id,
+        is_required=data.is_required,
+        display_order=data.display_order,
+    )
+    db.add(obj)
+    db.commit()
+    db.refresh(obj)
+    return AssetTypeProviderAssetMetadataSchema(
+        metadata_id=obj.metadata_id,
+        metadata_name=obj.metadata_type.name,
+        metadata_display_name=obj.metadata_type.display_name,
+        metadata_description=obj.metadata_type.description,
+        value_type=obj.metadata_type.value_type,
+        is_required=obj.is_required,
+        display_order=obj.display_order,
+    )
+
+
+@router.delete(
+    "/asset-types/{asset_type_id}/provider-asset-metadata/{metadata_id}", status_code=204
+)
+def remove_asset_type_provider_asset_metadata(
+    asset_type_id: str, metadata_id: str, db: Session = Depends(get_db)
+):
+    obj = db.execute(
+        select(AssetTypeProviderAssetMetadata).where(
+            AssetTypeProviderAssetMetadata.asset_type_id == asset_type_id,
+            AssetTypeProviderAssetMetadata.metadata_id == metadata_id,
+        )
+    ).scalar_one_or_none()
+    if not obj:
+        raise NotFoundError("Asset type provider-asset metadata not found")
+    db.delete(obj)
+    db.commit()
+
+
 # ---- Other type endpoints ----
 
 
@@ -149,8 +277,17 @@ def list_provider_types(db: Session = Depends(get_db)):
     return [TypeItem.model_validate(r) for r in result]
 
 
+@router.get("/provider-types/tree", response_model=list[TypeHierarchyItem])
+def get_provider_type_tree(db: Session = Depends(get_db)):
+    return build_type_tree(db, ProviderType)
+
+
 @router.post("/provider-types", status_code=201)
 def create_provider_type(data: TypeCreate, db: Session = Depends(get_db)):
+    if data.parent_type_id:
+        parent = db.get(ProviderType, data.parent_type_id)
+        if not parent:
+            raise NotFoundError("Parent provider type not found")
     return _create_type(db, ProviderType, data)
 
 
@@ -160,7 +297,14 @@ def create_provider_type(data: TypeCreate, db: Session = Depends(get_db)):
 @router.get(
     "/provider-types/{provider_type_id}/metadata", response_model=list[ProviderTypeMetadataSchema]
 )
-def list_provider_type_metadata(provider_type_id: str, db: Session = Depends(get_db)):
+def list_provider_type_metadata(
+    provider_type_id: str,
+    include_inherited: bool = Query(default=True),
+    db: Session = Depends(get_db),
+):
+    if include_inherited:
+        return get_effective_provider_type_metadata(db, provider_type_id)
+
     rows = (
         db.execute(
             select(ProviderTypeMetadata)
@@ -174,6 +318,7 @@ def list_provider_type_metadata(provider_type_id: str, db: Session = Depends(get
         ProviderTypeMetadataSchema(
             metadata_id=r.metadata_id,
             metadata_name=r.metadata_type.name,
+            metadata_display_name=r.metadata_type.display_name,
             metadata_description=r.metadata_type.description,
             value_type=r.metadata_type.value_type,
             is_required=r.is_required,
@@ -212,6 +357,7 @@ def add_provider_type_metadata(
     return ProviderTypeMetadataSchema(
         metadata_id=obj.metadata_id,
         metadata_name=obj.metadata_type.name,
+        metadata_display_name=obj.metadata_type.display_name,
         metadata_description=obj.metadata_type.description,
         value_type=obj.metadata_type.value_type,
         is_required=obj.is_required,

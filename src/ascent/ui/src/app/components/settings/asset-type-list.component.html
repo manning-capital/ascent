@@ -2,7 +2,7 @@
   <div class="flex items-center justify-between mb-6">
     <div>
       <h1 class="text-2xl font-bold">Asset Types</h1>
-      <p class="text-sm text-surface-500 mt-1">Define asset classifications and their required metadata fields.</p>
+      <p class="text-sm text-surface-500 mt-1">Define asset classifications and their required metadata fields. Click a node to view details.</p>
     </div>
     <p-button (onClick)="openCreate()" severity="info" [outlined]="true" size="small" label="+ New Type"/>
   </div>
@@ -14,10 +14,14 @@
           <h3 class="font-semibold">New Asset Type</h3>
         </div>
       </ng-template>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
           <label class="block text-xs text-surface-500 mb-1">Name *</label>
-          <input type="text" pInputText [(ngModel)]="newName" placeholder="e.g. Cryptocurrency, Equity, Commodity" class="w-full"/>
+          <input type="text" pInputText [(ngModel)]="newName" placeholder="e.g. Cryptocurrency, Equity" class="w-full"/>
+        </div>
+        <div>
+          <label class="block text-xs text-surface-500 mb-1">Parent Type</label>
+          <p-select [(ngModel)]="newParentTypeId" [options]="assetService.assetTypes()" optionLabel="name" optionValue="id" placeholder="None (root type)" [showClear]="true" class="w-full"/>
         </div>
         <div>
           <label class="block text-xs text-surface-500 mb-1">Description</label>
@@ -31,18 +35,27 @@
     </p-card>
   }
 
-  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-    @for (t of assetService.assetTypes(); track t.id) {
-      <a [routerLink]="['/settings/asset-types', t.id]" class="block no-underline">
-        <p-card styleClass="hover:bg-emphasis transition-colors cursor-pointer">
-          <h3 class="font-semibold truncate mb-1">{{ t.name }}</h3>
-          @if (t.description) {
-            <p class="text-xs text-surface-400 line-clamp-2">{{ t.description }}</p>
-          }
-        </p-card>
-      </a>
-    } @empty {
-      <div class="col-span-full text-center text-surface-400 py-12">No asset types defined.</div>
-    }
-  </div>
+  @if (treeData().length > 0) {
+    <div class="overflow-x-auto">
+      <p-organizationchart [value]="treeData()" selectionMode="single" [(selection)]="selectedNode" (onNodeSelect)="onNodeSelect($event)" [collapsible]="true">
+        <!-- Virtual root node (when multiple root types exist) -->
+        <ng-template pTemplate="root" let-node>
+          <div class="px-4 py-2 text-center">
+            <div class="font-semibold text-sm text-surface-400">{{ node.label }}</div>
+          </div>
+        </ng-template>
+        <!-- Regular type nodes -->
+        <ng-template pTemplate="default" let-node>
+          <div class="px-4 py-3 text-center cursor-pointer">
+            <div class="font-semibold text-sm">{{ node.data?.name || node.label }}</div>
+            @if (node.data?.description) {
+              <div class="text-xs text-surface-400 mt-1 max-w-48 truncate">{{ node.data.description }}</div>
+            }
+          </div>
+        </ng-template>
+      </p-organizationchart>
+    </div>
+  } @else {
+    <div class="text-center text-surface-400 py-12">No asset types defined. Click + New Type to get started.</div>
+  }
 </div>

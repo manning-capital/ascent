@@ -2,22 +2,23 @@ import { Component, inject, OnInit, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { forkJoin } from 'rxjs';
 import { ProviderService } from '../../../services/provider.service';
-import { AssetService } from '../../../services/asset.service';
 import { ToastService } from '../../../services/toast.service';
-import { MetadataEntry, MetadataHistoryEntry, ProviderTypeMetadataField } from '../../../models/asset.model';
-import { Tabs, TabList, Tab } from 'primeng/tabs';
+import { MetadataEntry, ProviderTypeMetadataField, MetadataHistoryGrid, BulkHistoryUpdate } from '../../../models/asset.model';
 import { Skeleton } from 'primeng/skeleton';
 import { Select } from 'primeng/select';
 import { Checkbox } from 'primeng/checkbox';
 import { DatePicker } from 'primeng/datepicker';
 import { TableModule } from 'primeng/table';
 import { Tag } from 'primeng/tag';
-import { Card } from 'primeng/card';
+import { Panel } from 'primeng/panel';
 import { Button } from 'primeng/button';
 import { InputText } from 'primeng/inputtext';
 import { Textarea } from 'primeng/textarea';
+import { Tabs, TabList, Tab } from 'primeng/tabs';
 import { ConfirmationService } from 'primeng/api';
+import { MetadataHistoryTableComponent } from '../../shared/metadata-history-table.component';
 
 @Component({
   selector: 'app-provider-detail',
@@ -26,17 +27,18 @@ import { ConfirmationService } from 'primeng/api';
     RouterLink,
     DatePipe,
     FormsModule,
-    Tabs, TabList, Tab,
     Select,
     Checkbox,
     DatePicker,
     TableModule,
     Tag,
-    Card,
+    Panel,
     Button,
     InputText,
     Textarea,
     Skeleton,
+    Tabs, TabList, Tab,
+    MetadataHistoryTableComponent,
   ],
   templateUrl: './provider-detail.component.html',
 })
@@ -46,12 +48,12 @@ export class ProviderDetailComponent implements OnInit {
   private toast = inject(ToastService);
   private confirmationService = inject(ConfirmationService);
   providerService = inject(ProviderService);
-  assetService = inject(AssetService);
-
-  tabs = ['Overview', 'Metadata', 'Assets'];
-  activeTab = signal('Overview');
 
   providerId = '';
+
+  // Tabs
+  tabs = ['Details', 'History'];
+  activeTab = signal('Details');
 
   // Edit state
   editing = signal(false);
@@ -60,44 +62,35 @@ export class ProviderDetailComponent implements OnInit {
   editExternalCode = '';
   editUrl = '';
   editIsActive = true;
+  editTimestamp: Date = new Date();
+  editFieldValues: Record<string, string> = {};
 
   // Metadata state
   metadataEntries = signal<MetadataEntry[]>([]);
   providerTypeFields = signal<ProviderTypeMetadataField[]>([]);
-  fieldInputValues: Record<string, string> = {};
-  fieldTimestampValues: Record<string, Date | null> = {};
-  showMetadataForm = signal(false);
-  newMetadataId = '';
-  newMetadataValue = '';
-  newMetadataTimestamp: Date | null = null;
 
-  // History state
-  historyMetadataId = signal<string | null>(null);
-  historyMetadataName = signal('');
-  historyEntries = signal<MetadataHistoryEntry[]>([]);
-  editingHistoryTimestamp = signal<string | null>(null);
-  editHistoryValue = '';
-  editHistoryTimestamp: Date | null = null;
+  // History grid state
+  historyGrid = signal<MetadataHistoryGrid | null>(null);
 
   ngOnInit(): void {
     this.route.paramMap.subscribe(params => {
       const id = params.get('id')!;
       if (id === this.providerId) return;
       this.providerId = id;
-
-      const tab = this.route.snapshot.queryParamMap.get('tab');
-      this.activeTab.set(tab && this.tabs.includes(tab) ? tab : 'Overview');
       this.editing.set(false);
       this.metadataEntries.set([]);
       this.providerTypeFields.set([]);
-      this.fieldInputValues = {};
-      this.fieldTimestampValues = {};
-      this.showMetadataForm.set(false);
-      this.historyMetadataId.set(null);
-      this.historyEntries.set([]);
+      this.historyGrid.set(null);
+
+      // Restore tab from query params
+      const tab = this.route.snapshot.queryParamMap.get('tab');
+      if (tab && this.tabs.includes(tab)) {
+        this.activeTab.set(tab);
+      } else {
+        this.activeTab.set('Details');
+      }
 
       this.providerService.loadProviderDetail(this.providerId);
-      this.assetService.loadMetadataTypes();
       this.loadMetadata();
       this.loadProviderTypeFields();
     });
@@ -105,7 +98,16 @@ export class ProviderDetailComponent implements OnInit {
 
   onTabChange(tab: string): void {
     this.activeTab.set(tab);
-    this.router.navigate([], { relativeTo: this.route, queryParams: { tab }, queryParamsHandling: 'merge', replaceUrl: true });
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { tab },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
+
+    if (tab === 'History') {
+      this.loadHistoryGrid();
+    }
   }
 
   private loadProviderTypeFields(): void {
@@ -132,6 +134,19 @@ export class ProviderDetailComponent implements OnInit {
     this.editExternalCode = provider.provider_external_code ?? '';
     this.editUrl = provider.url ?? '';
     this.editIsActive = provider.is_active;
+    this.editTimestamp = new Date();
+
+    this.editFieldValues = {};
+    for (const field of this.providerTypeFields()) {
+      const entry = this.metadataEntries().find(e => e.metadata_id === field.metadata_id);
+      if (entry) {
+        this.editFieldValues[field.metadata_id] = typeof entry.value === 'object'
+          ? JSON.stringify(entry.value)
+          : String(entry.value);
+      } else {
+        this.editFieldValues[field.metadata_id] = '';
+      }
+    }
     this.editing.set(true);
   }
 
@@ -141,20 +156,63 @@ export class ProviderDetailComponent implements OnInit {
 
   submitEdit(): void {
     if (!this.editName.trim()) return;
-    this.providerService.updateProvider(this.providerId, {
+
+    const baseUpdate = this.providerService.updateProvider(this.providerId, {
       name: this.editName.trim(),
       description: this.editDescription.trim() || null,
       provider_external_code: this.editExternalCode.trim() || null,
       url: this.editUrl.trim() || null,
       is_active: this.editIsActive,
-    }).subscribe({
-      next: () => {
-        this.toast.success('Provider updated');
-        this.editing.set(false);
-        this.providerService.loadProviderDetail(this.providerId, true);
-      },
-      error: () => this.toast.error('Failed to update provider'),
     });
+
+    const changedEntries: { metadata_id: string; value: any }[] = [];
+    for (const field of this.providerTypeFields()) {
+      const rawValue = this.editFieldValues[field.metadata_id] ?? '';
+      const currentEntry = this.metadataEntries().find(e => e.metadata_id === field.metadata_id);
+      const currentStr = currentEntry
+        ? (typeof currentEntry.value === 'object' ? JSON.stringify(currentEntry.value) : String(currentEntry.value))
+        : '';
+
+      if (rawValue !== currentStr && rawValue !== '') {
+        let value: any = rawValue;
+        if (field.value_type === 'integer') {
+          value = parseInt(rawValue, 10);
+          if (isNaN(value)) continue;
+        } else if (field.value_type === 'float') {
+          value = parseFloat(rawValue);
+          if (isNaN(value)) continue;
+        } else if (field.value_type === 'boolean') {
+          value = rawValue === 'true';
+        }
+        changedEntries.push({ metadata_id: field.metadata_id, value });
+      }
+    }
+
+    if (changedEntries.length > 0) {
+      const batchSave = this.providerService.batchSaveProviderMetadata(this.providerId, {
+        timestamp: this.editTimestamp.toISOString(),
+        entries: changedEntries,
+      });
+
+      forkJoin([baseUpdate, batchSave]).subscribe({
+        next: () => {
+          this.toast.success('Provider updated');
+          this.editing.set(false);
+          this.providerService.loadProviderDetail(this.providerId, true);
+          this.loadMetadata();
+        },
+        error: () => this.toast.error('Failed to update provider'),
+      });
+    } else {
+      baseUpdate.subscribe({
+        next: () => {
+          this.toast.success('Provider updated');
+          this.editing.set(false);
+          this.providerService.loadProviderDetail(this.providerId, true);
+        },
+        error: () => this.toast.error('Failed to update provider'),
+      });
+    }
   }
 
   deleteProvider(): void {
@@ -188,177 +246,28 @@ export class ProviderDetailComponent implements OnInit {
     return entry?.value ?? null;
   }
 
-  extraMetadata(): MetadataEntry[] {
-    const fieldIds = new Set(this.providerTypeFields().map(f => f.metadata_id));
-    return this.metadataEntries().filter(e => !fieldIds.has(e.metadata_id));
+  fieldTimestamp(metadataId: string): string | null {
+    const entry = this.metadataEntries().find(e => e.metadata_id === metadataId);
+    return entry?.timestamp ?? null;
   }
 
-  openMetadataForm(): void {
-    const usedIds = new Set([
-      ...this.providerTypeFields().map(f => f.metadata_id),
-      ...this.metadataEntries().map(e => e.metadata_id),
-    ]);
-    const available = this.assetService.metadataTypes().filter(mt => !usedIds.has(mt.id));
-    this.newMetadataId = available[0]?.id ?? this.assetService.metadataTypes()[0]?.id ?? '';
-    this.newMetadataValue = '';
-    this.newMetadataTimestamp = null;
-    this.showMetadataForm.set(true);
+  // ---- History Grid ----
+
+  loadHistoryGrid(): void {
+    this.providerService.getProviderMetadataHistoryGrid(this.providerId).subscribe({
+      next: grid => this.historyGrid.set(grid),
+    });
   }
 
-  cancelMetadataForm(): void {
-    this.showMetadataForm.set(false);
-  }
-
-  submitMetadata(): void {
-    if (!this.newMetadataId || !this.newMetadataValue) return;
-    let value: any = this.newMetadataValue;
-    try { value = JSON.parse(this.newMetadataValue); } catch {}
-    const payload: any = { metadata_id: this.newMetadataId, value };
-    if (this.newMetadataTimestamp) {
-      payload.timestamp = this.newMetadataTimestamp.toISOString();
-    }
-    this.providerService.addProviderMetadata(this.providerId, payload).subscribe({
+  onHistorySave(data: BulkHistoryUpdate): void {
+    this.providerService.bulkUpdateProviderMetadataHistory(this.providerId, data).subscribe({
       next: () => {
-        this.toast.success('Metadata added');
-        this.showMetadataForm.set(false);
+        this.toast.success('History updated');
+        this.loadHistoryGrid();
         this.loadMetadata();
         this.providerService.loadProviderDetail(this.providerId, true);
       },
-      error: () => this.toast.error('Failed to add metadata'),
-    });
-  }
-
-  submitFieldValue(field: ProviderTypeMetadataField): void {
-    const rawValue = this.fieldInputValues[field.metadata_id] ?? '';
-    if (!rawValue && rawValue !== '0') return;
-    let value: any = rawValue;
-    if (field.value_type === 'number') {
-      value = Number(rawValue);
-      if (isNaN(value)) return;
-    } else if (field.value_type === 'boolean') {
-      value = rawValue === 'true';
-    } else if (field.value_type === 'json') {
-      try { value = JSON.parse(rawValue); } catch { return; }
-    }
-    const payload: any = { metadata_id: field.metadata_id, value };
-    const ts = this.fieldTimestampValues[field.metadata_id];
-    if (ts) {
-      payload.timestamp = ts.toISOString();
-    }
-    this.providerService.addProviderMetadata(this.providerId, payload).subscribe({
-      next: () => {
-        this.toast.success(`${field.metadata_name} updated`);
-        this.fieldInputValues[field.metadata_id] = '';
-        this.fieldTimestampValues[field.metadata_id] = null;
-        this.loadMetadata();
-        this.providerService.loadProviderDetail(this.providerId, true);
-        if (this.historyMetadataId() === field.metadata_id) {
-          this.refreshHistory();
-        }
-      },
-      error: () => this.toast.error(`Failed to update ${field.metadata_name}`),
-    });
-  }
-
-  deleteMetadata(entry: MetadataEntry): void {
-    this.providerService.deleteProviderMetadata(this.providerId, entry.metadata_id).subscribe({
-      next: () => {
-        this.toast.success('Metadata removed');
-        this.loadMetadata();
-        this.providerService.loadProviderDetail(this.providerId, true);
-      },
-      error: () => this.toast.error('Failed to remove metadata'),
-    });
-  }
-
-  deleteFieldMetadata(metadataId: string): void {
-    this.providerService.deleteProviderMetadata(this.providerId, metadataId).subscribe({
-      next: () => {
-        this.toast.success('Value cleared');
-        this.loadMetadata();
-        if (this.historyMetadataId() === metadataId) {
-          this.refreshHistory();
-        }
-      },
-      error: () => this.toast.error('Failed to clear value'),
-    });
-  }
-
-  showHistory(entry: MetadataEntry): void {
-    this.historyMetadataId.set(entry.metadata_id);
-    this.historyMetadataName.set(entry.metadata_name);
-    this.editingHistoryTimestamp.set(null);
-    this.providerService.getProviderMetadataHistory(this.providerId, entry.metadata_id).subscribe({
-      next: entries => this.historyEntries.set(entries),
-    });
-  }
-
-  showFieldHistory(field: ProviderTypeMetadataField): void {
-    this.historyMetadataId.set(field.metadata_id);
-    this.historyMetadataName.set(field.metadata_name);
-    this.editingHistoryTimestamp.set(null);
-    this.providerService.getProviderMetadataHistory(this.providerId, field.metadata_id).subscribe({
-      next: entries => this.historyEntries.set(entries),
-    });
-  }
-
-  closeHistory(): void {
-    this.historyMetadataId.set(null);
-    this.historyEntries.set([]);
-    this.editingHistoryTimestamp.set(null);
-  }
-
-  private refreshHistory(): void {
-    const metaId = this.historyMetadataId();
-    if (!metaId) return;
-    this.providerService.getProviderMetadataHistory(this.providerId, metaId).subscribe({
-      next: entries => this.historyEntries.set(entries),
-    });
-  }
-
-  // ---- History editing ----
-
-  startEditHistory(h: MetadataHistoryEntry): void {
-    this.editingHistoryTimestamp.set(h.timestamp);
-    this.editHistoryValue = typeof h.value === 'object' ? JSON.stringify(h.value) : String(h.value);
-    this.editHistoryTimestamp = new Date(h.timestamp);
-  }
-
-  cancelEditHistory(): void {
-    this.editingHistoryTimestamp.set(null);
-  }
-
-  submitEditHistory(): void {
-    const metaId = this.historyMetadataId();
-    const origTs = this.editingHistoryTimestamp();
-    if (!metaId || !origTs) return;
-    let value: any = this.editHistoryValue;
-    try { value = JSON.parse(this.editHistoryValue); } catch {}
-    const newTs = this.editHistoryTimestamp?.toISOString();
-    this.providerService.updateProviderMetadataEntry(this.providerId, metaId, origTs, {
-      value,
-      timestamp: newTs,
-    }).subscribe({
-      next: () => {
-        this.toast.success('Entry updated');
-        this.editingHistoryTimestamp.set(null);
-        this.refreshHistory();
-        this.loadMetadata();
-      },
-      error: () => this.toast.error('Failed to update entry'),
-    });
-  }
-
-  deleteHistoryEntry(h: MetadataHistoryEntry): void {
-    const metaId = this.historyMetadataId();
-    if (!metaId) return;
-    this.providerService.deleteProviderMetadataEntry(this.providerId, metaId, h.timestamp).subscribe({
-      next: () => {
-        this.toast.success('Entry deleted');
-        this.refreshHistory();
-        this.loadMetadata();
-      },
-      error: () => this.toast.error('Failed to delete entry'),
+      error: () => this.toast.error('Failed to update history'),
     });
   }
 

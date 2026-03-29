@@ -34,6 +34,7 @@ def run(
         AssetMetadata,
         AssetType,
         AssetTypeMetadata,
+        AssetTypeProviderAssetMetadata,
         Attribute,
         Base,
         Exchange,
@@ -52,6 +53,7 @@ def run(
         ProviderAssetGroup,
         ProviderAssetGroupAttribute,
         ProviderAssetGroupMember,
+        ProviderAssetMetadata,
         ProviderMetadata,
         ProviderType,
         ProviderTypeMetadata,
@@ -109,17 +111,45 @@ def run(
             return
 
         # --- Type tables ---
+        # Currency is the parent type; Cryptocurrency and Fiat Currency inherit from it
+        currency_type = AssetType(name="Currency", description="Any form of currency")
+        db.add(currency_type)
+        db.flush()
+
         asset_types = [
-            AssetType(name="Cryptocurrency", description="Digital currency"),
-            AssetType(name="Fiat Currency", description="Government-issued currency"),
+            AssetType(
+                name="Cryptocurrency",
+                description="Digital currency",
+                parent_type_id=currency_type.id,
+            ),
+            AssetType(
+                name="Fiat Currency",
+                description="Government-issued currency",
+                parent_type_id=currency_type.id,
+            ),
             AssetType(name="Stock", description="Equity share"),
         ]
         db.add_all(asset_types)
         db.flush()
 
+        # Market Participant is the parent; Exchange and Data Vendor inherit from it
+        market_participant_type = ProviderType(
+            name="Market Participant", description="Any entity participating in the market"
+        )
+        db.add(market_participant_type)
+        db.flush()
+
         provider_types = [
-            ProviderType(name="Exchange", description="Cryptocurrency or stock exchange"),
-            ProviderType(name="Data Vendor", description="Market data provider"),
+            ProviderType(
+                name="Exchange",
+                description="Cryptocurrency or stock exchange",
+                parent_type_id=market_participant_type.id,
+            ),
+            ProviderType(
+                name="Data Vendor",
+                description="Market data provider",
+                parent_type_id=market_participant_type.id,
+            ),
         ]
         db.add_all(provider_types)
         db.flush()
@@ -301,63 +331,96 @@ def run(
 
         # --- Metadata types ---
         meta_market_cap = Metadata(
-            name="market_cap", description="Market capitalization in USD", value_type="number"
+            name="market_cap", display_name="Market Cap", description="Market capitalization in USD", value_type="float"
         )
         meta_sector = Metadata(
-            name="sector", description="Industry sector classification", value_type="string"
+            name="sector", display_name="Sector", description="Industry sector classification", value_type="string"
         )
         meta_circulating_supply = Metadata(
             name="circulating_supply",
+            display_name="Circulating Supply",
             description="Circulating supply of the asset",
-            value_type="number",
+            value_type="float",
         )
         meta_max_supply = Metadata(
-            name="max_supply", description="Maximum supply of the asset", value_type="number"
+            name="max_supply", display_name="Max Supply", description="Maximum supply of the asset", value_type="float"
         )
         meta_launch_date = Metadata(
-            name="launch_date", description="Date the asset was launched", value_type="date"
+            name="launch_date", display_name="Launch Date", description="Date the asset was launched", value_type="date"
         )
         meta_is_stablecoin = Metadata(
             name="is_stablecoin",
+            display_name="Is Stablecoin",
             description="Whether the asset is a stablecoin",
             value_type="boolean",
         )
         meta_consensus = Metadata(
             name="consensus_mechanism",
+            display_name="Consensus Mechanism",
             description="Consensus mechanism (e.g. PoW, PoS)",
             value_type="string",
         )
         meta_whitepaper = Metadata(
-            name="whitepaper_url", description="URL to the project whitepaper", value_type="string"
+            name="whitepaper_url", display_name="Whitepaper URL", description="URL to the project whitepaper", value_type="string"
         )
         meta_iso_code = Metadata(
-            name="iso_currency_code", description="ISO 4217 currency code", value_type="string"
+            name="iso_currency_code", display_name="ISO Currency Code", description="ISO 4217 currency code", value_type="string"
         )
         meta_country = Metadata(
             name="issuing_country",
+            display_name="Issuing Country",
             description="Country that issues the currency",
             value_type="string",
         )
         meta_api_key = Metadata(
             name="api_key_name",
+            display_name="API Key Name",
             description="Name of the API key environment variable",
             value_type="string",
         )
         meta_rate_limit = Metadata(
-            name="rate_limit", description="API rate limit (requests/minute)", value_type="number"
+            name="rate_limit", display_name="Rate Limit", description="API rate limit (requests/minute)", value_type="integer"
         )
         meta_supports_websocket = Metadata(
             name="supports_websocket",
+            display_name="Supports WebSocket",
             description="Whether the provider supports WebSocket connections",
             value_type="boolean",
         )
         meta_supported_markets = Metadata(
             name="supported_markets",
-            description="JSON list of supported market types",
-            value_type="json",
+            display_name="Supported Markets",
+            description="Comma-separated list of supported market types",
+            value_type="string",
         )
         meta_fee_schedule = Metadata(
-            name="fee_schedule", description="Fee schedule as JSON object", value_type="json"
+            name="fee_schedule", display_name="Fee Schedule", description="Fee schedule description", value_type="string"
+        )
+        # Provider-asset link identifier (used by provider_asset_service to discover links)
+        meta_symbol = Metadata(
+            name="symbol",
+            display_name="Symbol",
+            description="The identifier/symbol used by this provider for the asset",
+            value_type="string",
+        )
+        # Provider-asset specific metadata types
+        meta_provider_ticker = Metadata(
+            name="provider_ticker",
+            display_name="Provider Ticker",
+            description="The ticker/symbol used by this provider for the asset",
+            value_type="string",
+        )
+        meta_trading_pair = Metadata(
+            name="trading_pair_symbol",
+            display_name="Trading Pair Symbol",
+            description="The trading pair symbol on this provider (e.g. XBTUSD)",
+            value_type="string",
+        )
+        meta_min_order_size = Metadata(
+            name="min_order_size",
+            display_name="Min Order Size",
+            description="Minimum order size on this provider",
+            value_type="float",
         )
         metadata_types = [
             meta_market_cap,
@@ -375,66 +438,75 @@ def run(
             meta_supports_websocket,
             meta_supported_markets,
             meta_fee_schedule,
+            meta_symbol,
+            meta_provider_ticker,
+            meta_trading_pair,
+            meta_min_order_size,
         ]
         db.add_all(metadata_types)
         db.flush()
 
         # --- Asset type metadata field definitions ---
-        # Cryptocurrency fields
-        crypto_type = asset_types[0]
-        crypto_fields = [
+        # Currency (parent) fields — inherited by Cryptocurrency and Fiat Currency
+        currency_fields = [
             AssetTypeMetadata(
-                asset_type_id=crypto_type.id,
+                asset_type_id=currency_type.id,
                 metadata_id=meta_market_cap.id,
                 is_required=True,
                 display_order=0,
             ),
             AssetTypeMetadata(
+                asset_type_id=currency_type.id,
+                metadata_id=meta_sector.id,
+                is_required=False,
+                display_order=1,
+            ),
+        ]
+        db.add_all(currency_fields)
+
+        # Cryptocurrency own fields (inherits market_cap, sector from Currency)
+        crypto_type = asset_types[0]
+        crypto_fields = [
+            AssetTypeMetadata(
                 asset_type_id=crypto_type.id,
                 metadata_id=meta_circulating_supply.id,
                 is_required=True,
-                display_order=1,
+                display_order=0,
             ),
             AssetTypeMetadata(
                 asset_type_id=crypto_type.id,
                 metadata_id=meta_max_supply.id,
                 is_required=False,
-                display_order=2,
+                display_order=1,
             ),
             AssetTypeMetadata(
                 asset_type_id=crypto_type.id,
                 metadata_id=meta_launch_date.id,
                 is_required=False,
-                display_order=3,
+                display_order=2,
             ),
             AssetTypeMetadata(
                 asset_type_id=crypto_type.id,
                 metadata_id=meta_is_stablecoin.id,
                 is_required=True,
-                display_order=4,
+                display_order=3,
             ),
             AssetTypeMetadata(
                 asset_type_id=crypto_type.id,
                 metadata_id=meta_consensus.id,
                 is_required=False,
-                display_order=5,
-            ),
-            AssetTypeMetadata(
-                asset_type_id=crypto_type.id,
-                metadata_id=meta_sector.id,
-                is_required=False,
-                display_order=6,
+                display_order=4,
             ),
             AssetTypeMetadata(
                 asset_type_id=crypto_type.id,
                 metadata_id=meta_whitepaper.id,
                 is_required=False,
-                display_order=7,
+                display_order=5,
             ),
         ]
         db.add_all(crypto_fields)
 
-        # Fiat Currency fields
+        # Fiat Currency own fields (inherits market_cap, sector from Currency)
         fiat_type = asset_types[1]
         fiat_fields = [
             AssetTypeMetadata(
@@ -452,7 +524,7 @@ def run(
         ]
         db.add_all(fiat_fields)
 
-        # Stock fields
+        # Stock fields (no parent, standalone)
         stock_type = asset_types[2]
         stock_fields = [
             AssetTypeMetadata(
@@ -472,128 +544,533 @@ def run(
         db.flush()
 
         # --- Provider type metadata field definitions ---
-        # Exchange fields
-        exchange_type = provider_types[0]
-        exchange_fields = [
+        # Market Participant (parent) fields — inherited by Exchange and Data Vendor
+        participant_fields = [
             ProviderTypeMetadata(
-                provider_type_id=exchange_type.id,
+                provider_type_id=market_participant_type.id,
                 metadata_id=meta_api_key.id,
                 is_required=True,
                 display_order=0,
             ),
             ProviderTypeMetadata(
-                provider_type_id=exchange_type.id,
+                provider_type_id=market_participant_type.id,
                 metadata_id=meta_rate_limit.id,
                 is_required=True,
                 display_order=1,
             ),
             ProviderTypeMetadata(
-                provider_type_id=exchange_type.id,
+                provider_type_id=market_participant_type.id,
                 metadata_id=meta_supports_websocket.id,
                 is_required=False,
                 display_order=2,
             ),
+        ]
+        db.add_all(participant_fields)
+
+        # Exchange own fields (inherits api_key, rate_limit, supports_websocket)
+        exchange_ptype = provider_types[0]
+        exchange_fields = [
             ProviderTypeMetadata(
-                provider_type_id=exchange_type.id,
+                provider_type_id=exchange_ptype.id,
                 metadata_id=meta_supported_markets.id,
                 is_required=False,
-                display_order=3,
+                display_order=0,
             ),
             ProviderTypeMetadata(
-                provider_type_id=exchange_type.id,
+                provider_type_id=exchange_ptype.id,
                 metadata_id=meta_fee_schedule.id,
                 is_required=False,
-                display_order=4,
+                display_order=1,
             ),
         ]
         db.add_all(exchange_fields)
 
-        # Data Vendor fields
-        vendor_type = provider_types[1]
-        vendor_fields = [
-            ProviderTypeMetadata(
-                provider_type_id=vendor_type.id,
-                metadata_id=meta_api_key.id,
-                is_required=True,
-                display_order=0,
-            ),
-            ProviderTypeMetadata(
-                provider_type_id=vendor_type.id,
-                metadata_id=meta_rate_limit.id,
-                is_required=True,
-                display_order=1,
-            ),
-            ProviderTypeMetadata(
-                provider_type_id=vendor_type.id,
-                metadata_id=meta_supports_websocket.id,
-                is_required=False,
-                display_order=2,
-            ),
-        ]
-        db.add_all(vendor_fields)
+        # Data Vendor has no own fields (inherits everything from Market Participant)
         db.flush()
 
-        # --- Sample asset metadata (temporal entries) ---
-        asset_metadata_data = [
-            (btc, meta_market_cap, 1_320_000_000_000),
-            (btc, meta_circulating_supply, 19_700_000),
-            (btc, meta_max_supply, 21_000_000),
-            (btc, meta_launch_date, "2009-01-03"),
-            (btc, meta_is_stablecoin, False),
-            (btc, meta_consensus, "Proof of Work"),
-            (btc, meta_sector, "Store of Value"),
-            (eth, meta_market_cap, 410_000_000_000),
-            (eth, meta_circulating_supply, 120_200_000),
-            (eth, meta_max_supply, None),
-            (eth, meta_launch_date, "2015-07-30"),
-            (eth, meta_is_stablecoin, False),
-            (eth, meta_consensus, "Proof of Stake"),
-            (eth, meta_sector, "Smart Contract Platform"),
-            (sol, meta_market_cap, 68_000_000_000),
-            (sol, meta_circulating_supply, 440_000_000),
-            (sol, meta_is_stablecoin, False),
-            (sol, meta_consensus, "Proof of History"),
-            (usd, meta_iso_code, "USD"),
-            (usd, meta_country, "United States"),
-        ]
-        for asset_obj, meta_type, value in asset_metadata_data:
-            if value is not None:
-                db.add(
-                    AssetMetadata(
-                        timestamp=now - datetime.timedelta(days=30),
-                        asset_id=asset_obj.id,
-                        metadata_id=meta_type.id,
-                        value=value,
-                    )
-                )
-                db.flush()
+        # --- Asset type provider-asset metadata field definitions ---
+        # Currency (parent): provider_ticker is required for all currency types
+        db.add(
+            AssetTypeProviderAssetMetadata(
+                asset_type_id=currency_type.id,
+                metadata_id=meta_provider_ticker.id,
+                is_required=True,
+                display_order=0,
+            )
+        )
+        # Cryptocurrency: additional provider-asset fields
+        db.add(
+            AssetTypeProviderAssetMetadata(
+                asset_type_id=crypto_type.id,
+                metadata_id=meta_trading_pair.id,
+                is_required=True,
+                display_order=0,
+            )
+        )
+        db.add(
+            AssetTypeProviderAssetMetadata(
+                asset_type_id=crypto_type.id,
+                metadata_id=meta_min_order_size.id,
+                is_required=False,
+                display_order=1,
+            )
+        )
+        db.flush()
 
-        # --- Sample provider metadata (temporal entries) ---
-        provider_metadata_data = [
-            (provider, meta_api_key, "KRAKEN_API_KEY"),
-            (provider, meta_rate_limit, 60),
-            (provider, meta_supports_websocket, True),
-            (
-                provider,
-                meta_supported_markets,
-                ["spot", "futures", "margin"],
-            ),
-            (
-                provider,
-                meta_fee_schedule,
-                {"maker": 0.0016, "taker": 0.0026, "withdrawal": {"BTC": 0.00015}},
-            ),
-        ]
-        for prov_obj, meta_type, value in provider_metadata_data:
-            db.add(
-                ProviderMetadata(
-                    timestamp=now - datetime.timedelta(days=30),
-                    provider_id=prov_obj.id,
-                    metadata_id=meta_type.id,
-                    value=value,
+        # --- Sample asset metadata (temporal entries with history) ---
+        # Per-asset static info used to generate realistic fake history
+        crypto_info = {
+            "BTC": {
+                "sector": "Store of Value",
+                "consensus": "Proof of Work",
+                "launch_date": "2009-01-03",
+                "max_supply": 21_000_000,
+                "base_mcap": 1_300_000_000_000,
+                "base_supply": 19_700_000,
+            },
+            "ETH": {
+                "sector": "Smart Contract Platform",
+                "consensus": "Proof of Stake",
+                "launch_date": "2015-07-30",
+                "max_supply": None,
+                "base_mcap": 410_000_000_000,
+                "base_supply": 120_200_000,
+            },
+            "SOL": {
+                "sector": "Smart Contract Platform",
+                "consensus": "Proof of History",
+                "launch_date": "2020-03-16",
+                "max_supply": None,
+                "base_mcap": 68_000_000_000,
+                "base_supply": 440_000_000,
+            },
+            "ADA": {
+                "sector": "Smart Contract Platform",
+                "consensus": "Proof of Stake",
+                "launch_date": "2017-09-29",
+                "max_supply": 45_000_000_000,
+                "base_mcap": 16_000_000_000,
+                "base_supply": 35_000_000_000,
+            },
+            "XRP": {
+                "sector": "Payments",
+                "consensus": "XRP Ledger Consensus",
+                "launch_date": "2012-06-02",
+                "max_supply": 100_000_000_000,
+                "base_mcap": 32_000_000_000,
+                "base_supply": 53_000_000_000,
+            },
+            "DOGE": {
+                "sector": "Meme",
+                "consensus": "Proof of Work",
+                "launch_date": "2013-12-06",
+                "max_supply": None,
+                "base_mcap": 24_000_000_000,
+                "base_supply": 143_000_000_000,
+            },
+            "AVAX": {
+                "sector": "Smart Contract Platform",
+                "consensus": "Avalanche Consensus",
+                "launch_date": "2020-09-21",
+                "max_supply": 720_000_000,
+                "base_mcap": 14_000_000_000,
+                "base_supply": 380_000_000,
+            },
+            "LINK": {
+                "sector": "Oracle",
+                "consensus": "Delegated Proof of Stake",
+                "launch_date": "2017-09-19",
+                "max_supply": 1_000_000_000,
+                "base_mcap": 10_000_000_000,
+                "base_supply": 587_000_000,
+            },
+            "DOT": {
+                "sector": "Interoperability",
+                "consensus": "Nominated Proof of Stake",
+                "launch_date": "2020-05-26",
+                "max_supply": None,
+                "base_mcap": 9_000_000_000,
+                "base_supply": 1_400_000_000,
+            },
+            "MATIC": {
+                "sector": "Layer 2",
+                "consensus": "Proof of Stake",
+                "launch_date": "2019-04-26",
+                "max_supply": 10_000_000_000,
+                "base_mcap": 8_000_000_000,
+                "base_supply": 9_300_000_000,
+            },
+            "ATOM": {
+                "sector": "Interoperability",
+                "consensus": "Tendermint BFT",
+                "launch_date": "2019-03-14",
+                "max_supply": None,
+                "base_mcap": 4_000_000_000,
+                "base_supply": 390_000_000,
+            },
+            "UNI": {
+                "sector": "DeFi",
+                "consensus": "N/A (ERC-20)",
+                "launch_date": "2020-09-16",
+                "max_supply": 1_000_000_000,
+                "base_mcap": 6_000_000_000,
+                "base_supply": 600_000_000,
+            },
+            "APT": {
+                "sector": "Smart Contract Platform",
+                "consensus": "AptosBFT",
+                "launch_date": "2022-10-12",
+                "max_supply": None,
+                "base_mcap": 4_500_000_000,
+                "base_supply": 470_000_000,
+            },
+            "ARB": {
+                "sector": "Layer 2",
+                "consensus": "Optimistic Rollup",
+                "launch_date": "2023-03-23",
+                "max_supply": 10_000_000_000,
+                "base_mcap": 3_000_000_000,
+                "base_supply": 3_400_000_000,
+            },
+            "OP": {
+                "sector": "Layer 2",
+                "consensus": "Optimistic Rollup",
+                "launch_date": "2022-05-31",
+                "max_supply": 4_294_967_296,
+                "base_mcap": 2_800_000_000,
+                "base_supply": 1_100_000_000,
+            },
+            "NEAR": {
+                "sector": "Smart Contract Platform",
+                "consensus": "Nightshade PoS",
+                "launch_date": "2020-04-22",
+                "max_supply": 1_000_000_000,
+                "base_mcap": 5_500_000_000,
+                "base_supply": 1_100_000_000,
+            },
+            "FTM": {
+                "sector": "Smart Contract Platform",
+                "consensus": "Lachesis aBFT",
+                "launch_date": "2019-12-27",
+                "max_supply": 3_175_000_000,
+                "base_mcap": 2_000_000_000,
+                "base_supply": 2_800_000_000,
+            },
+            "AAVE": {
+                "sector": "DeFi",
+                "consensus": "N/A (ERC-20)",
+                "launch_date": "2020-10-02",
+                "max_supply": 16_000_000,
+                "base_mcap": 4_200_000_000,
+                "base_supply": 14_900_000,
+            },
+            "MKR": {
+                "sector": "DeFi",
+                "consensus": "N/A (ERC-20)",
+                "launch_date": "2017-11-25",
+                "max_supply": 1_005_577,
+                "base_mcap": 2_500_000_000,
+                "base_supply": 900_000,
+            },
+            "SNX": {
+                "sector": "DeFi",
+                "consensus": "N/A (ERC-20)",
+                "launch_date": "2018-03-11",
+                "max_supply": 300_000_000,
+                "base_mcap": 800_000_000,
+                "base_supply": 320_000_000,
+            },
+            "CRV": {
+                "sector": "DeFi",
+                "consensus": "N/A (ERC-20)",
+                "launch_date": "2020-08-13",
+                "max_supply": 3_030_000_000,
+                "base_mcap": 700_000_000,
+                "base_supply": 1_900_000_000,
+            },
+            "LDO": {
+                "sector": "DeFi",
+                "consensus": "N/A (ERC-20)",
+                "launch_date": "2020-12-17",
+                "max_supply": 1_000_000_000,
+                "base_mcap": 1_800_000_000,
+                "base_supply": 890_000_000,
+            },
+            "INJ": {
+                "sector": "DeFi",
+                "consensus": "Tendermint BFT",
+                "launch_date": "2020-10-21",
+                "max_supply": 100_000_000,
+                "base_mcap": 2_500_000_000,
+                "base_supply": 93_000_000,
+            },
+            "SUI": {
+                "sector": "Smart Contract Platform",
+                "consensus": "Narwhal/Bullshark",
+                "launch_date": "2023-05-03",
+                "max_supply": 10_000_000_000,
+                "base_mcap": 3_800_000_000,
+                "base_supply": 2_700_000_000,
+            },
+            "SEI": {
+                "sector": "Smart Contract Platform",
+                "consensus": "Twin-Turbo Consensus",
+                "launch_date": "2023-08-15",
+                "max_supply": 10_000_000_000,
+                "base_mcap": 1_500_000_000,
+                "base_supply": 3_600_000_000,
+            },
+            "TIA": {
+                "sector": "Data Availability",
+                "consensus": "Tendermint BFT",
+                "launch_date": "2023-10-31",
+                "max_supply": 1_000_000_000,
+                "base_mcap": 2_000_000_000,
+                "base_supply": 210_000_000,
+            },
+            "JUP": {
+                "sector": "DeFi",
+                "consensus": "N/A (Solana SPL)",
+                "launch_date": "2024-01-31",
+                "max_supply": 10_000_000_000,
+                "base_mcap": 1_600_000_000,
+                "base_supply": 1_350_000_000,
+            },
+            "PENDLE": {
+                "sector": "DeFi",
+                "consensus": "N/A (ERC-20)",
+                "launch_date": "2021-04-28",
+                "max_supply": 258_000_000,
+                "base_mcap": 1_200_000_000,
+                "base_supply": 161_000_000,
+            },
+        }
+
+        # Build a lookup from symbol -> Asset object
+        asset_by_symbol = {a.symbol: a for a in assets if a.symbol}
+
+        # Crypto metadata map: key -> Metadata object
+
+        def _ts(days_ago: int) -> datetime.datetime:
+            return now.replace(microsecond=0) - datetime.timedelta(days=days_ago)
+
+        # Use Core inserts for temporal tables to avoid SQLAlchemy
+        # insertmanyvalues sentinel mismatch with TimescaleDB hypertables
+        from sqlalchemy import insert
+
+        def _insert_asset_meta(ts, aid, mid, val):
+            db.execute(
+                insert(AssetMetadata).values(timestamp=ts, asset_id=aid, metadata_id=mid, value=val)
+            )
+
+        def _insert_provider_meta(ts, pid, mid, val):
+            db.execute(
+                insert(ProviderMetadata).values(
+                    timestamp=ts, provider_id=pid, metadata_id=mid, value=val
                 )
             )
-            db.flush()
+
+        def _insert_pa_meta(ts, pid, aid, mid, val):
+            db.execute(
+                insert(ProviderAssetMetadata).values(
+                    timestamp=ts, provider_id=pid, asset_id=aid, metadata_id=mid, value=val
+                )
+            )
+
+        # Generate 3 temporal snapshots (90, 60, 30 days ago) for every crypto asset
+        random.seed(42)
+        for symbol, info in crypto_info.items():
+            asset_obj = asset_by_symbol.get(symbol)
+            if not asset_obj:
+                continue
+
+            base_mcap = info["base_mcap"]
+            base_supply = info["base_supply"]
+
+            for snap_idx, days_ago in enumerate([90, 60, 30]):
+                ts = _ts(days_ago)
+                growth = 1.0 - (2 - snap_idx) * random.uniform(0.08, 0.20)
+                mcap = int(base_mcap * growth)
+                supply = int(base_supply * (1.0 - (2 - snap_idx) * random.uniform(0.001, 0.01)))
+
+                _insert_asset_meta(ts, asset_obj.id, meta_market_cap.id, mcap)
+                _insert_asset_meta(ts, asset_obj.id, meta_circulating_supply.id, supply)
+
+                if snap_idx == 0:
+                    _insert_asset_meta(ts, asset_obj.id, meta_is_stablecoin.id, False)
+                    _insert_asset_meta(ts, asset_obj.id, meta_consensus.id, info["consensus"])
+                    _insert_asset_meta(ts, asset_obj.id, meta_sector.id, info["sector"])
+                    _insert_asset_meta(ts, asset_obj.id, meta_launch_date.id, info["launch_date"])
+                    if info["max_supply"] is not None:
+                        _insert_asset_meta(ts, asset_obj.id, meta_max_supply.id, info["max_supply"])
+
+        # USD (Fiat): single snapshot
+        fiat_ts = _ts(90)
+        _insert_asset_meta(fiat_ts, usd.id, meta_iso_code.id, "USD")
+        _insert_asset_meta(fiat_ts, usd.id, meta_country.id, "United States")
+        _insert_asset_meta(fiat_ts, usd.id, meta_market_cap.id, 0)
+        _insert_asset_meta(fiat_ts, usd.id, meta_sector.id, "Reserve Currency")
+        db.flush()
+
+        # --- Sample provider metadata (temporal entries with history) ---
+        # Kraken: 3 historical snapshots showing rate limit and fee changes over time
+        provider_meta_map = {
+            "api_key": meta_api_key,
+            "rate_limit": meta_rate_limit,
+            "supports_websocket": meta_supports_websocket,
+            "supported_markets": meta_supported_markets,
+            "fee_schedule": meta_fee_schedule,
+        }
+        kraken_history = [
+            (
+                90,
+                {
+                    "api_key": "KRAKEN_API_KEY",
+                    "rate_limit": 30,
+                    "supports_websocket": True,
+                    "supported_markets": ["spot"],
+                    "fee_schedule": {"maker": 0.0020, "taker": 0.0030},
+                },
+            ),
+            (
+                60,
+                {
+                    "api_key": "KRAKEN_API_KEY",
+                    "rate_limit": 45,
+                    "supports_websocket": True,
+                    "supported_markets": ["spot", "futures"],
+                    "fee_schedule": {
+                        "maker": 0.0018,
+                        "taker": 0.0028,
+                        "withdrawal": {"BTC": 0.0002},
+                    },
+                },
+            ),
+            (
+                30,
+                {
+                    "api_key": "KRAKEN_API_KEY",
+                    "rate_limit": 60,
+                    "supports_websocket": True,
+                    "supported_markets": ["spot", "futures", "margin"],
+                    "fee_schedule": {
+                        "maker": 0.0016,
+                        "taker": 0.0026,
+                        "withdrawal": {"BTC": 0.00015},
+                    },
+                },
+            ),
+        ]
+        for days_ago, values in kraken_history:
+            ts = _ts(days_ago)
+            for key, value in values.items():
+                _insert_provider_meta(ts, provider.id, provider_meta_map[key].id, value)
+        db.flush()
+
+        # --- Provider-asset metadata (per asset-provider link) ---
+        crypto_assets = [
+            btc,
+            eth,
+            sol,
+            ada,
+            xrp,
+            doge,
+            avax,
+            link,
+            dot,
+            matic,
+            atom,
+            uni,
+            apt,
+            arb,
+            op,
+            near,
+            ftm,
+            aave,
+            mkr,
+            snx,
+            crv,
+            ldo,
+            inj,
+            sui,
+            sei,
+            tia,
+            jup,
+            pendle,
+        ]
+        # Kraken-specific tickers (some differ from standard symbols)
+        kraken_tickers = {
+            "BTC": "XBT",
+            "ETH": "ETH",
+            "SOL": "SOL",
+            "ADA": "ADA",
+            "XRP": "XRP",
+            "DOGE": "XDG",
+            "AVAX": "AVAX",
+            "LINK": "LINK",
+            "DOT": "DOT",
+            "MATIC": "MATIC",
+            "ATOM": "ATOM",
+            "UNI": "UNI",
+            "APT": "APT",
+            "ARB": "ARB",
+            "OP": "OP",
+            "NEAR": "NEAR",
+            "FTM": "FTM",
+            "AAVE": "AAVE",
+            "MKR": "MKR",
+            "SNX": "SNX",
+            "CRV": "CRV",
+            "LDO": "LDO",
+            "INJ": "INJ",
+            "SUI": "SUI",
+            "SEI": "SEI",
+            "TIA": "TIA",
+            "JUP": "JUP",
+            "PENDLE": "PENDLE",
+        }
+        min_order_sizes = {
+            "BTC": 0.0001,
+            "ETH": 0.001,
+            "SOL": 0.01,
+            "ADA": 1.0,
+            "XRP": 1.0,
+            "DOGE": 10.0,
+            "AVAX": 0.1,
+            "LINK": 0.1,
+            "DOT": 0.1,
+            "MATIC": 1.0,
+            "ATOM": 0.1,
+            "UNI": 0.1,
+            "APT": 0.1,
+            "ARB": 1.0,
+            "OP": 0.1,
+            "NEAR": 0.1,
+            "FTM": 1.0,
+            "AAVE": 0.01,
+            "MKR": 0.001,
+            "SNX": 0.1,
+            "CRV": 1.0,
+            "LDO": 0.1,
+            "INJ": 0.01,
+            "SUI": 0.1,
+            "SEI": 1.0,
+            "TIA": 0.1,
+            "JUP": 1.0,
+            "PENDLE": 0.1,
+        }
+        pa_ts = _ts(90)
+        for asset_obj in crypto_assets:
+            sym = asset_obj.symbol
+            if not sym:
+                continue
+            ticker = kraken_tickers.get(sym, sym)
+            min_size = min_order_sizes.get(sym, 0.1)
+            _insert_pa_meta(pa_ts, provider.id, asset_obj.id, meta_symbol.id, ticker)
+            _insert_pa_meta(pa_ts, provider.id, asset_obj.id, meta_provider_ticker.id, ticker)
+            _insert_pa_meta(pa_ts, provider.id, asset_obj.id, meta_trading_pair.id, f"{ticker}USD")
+            _insert_pa_meta(pa_ts, provider.id, asset_obj.id, meta_min_order_size.id, min_size)
+        db.flush()
 
         # --- Portfolios ---
         portfolio_main = Portfolio(
@@ -614,11 +1091,6 @@ def run(
         random.seed(42)
 
         # --- Single-member Asset Groups (one per crypto/USD pair) ---
-        crypto_assets = [
-            btc, eth, sol, ada, xrp, doge, avax, link, dot, matic,
-            atom, uni, apt, arb, op, near, ftm, aave, mkr, snx,
-            crv, ldo, inj, sui, sei, tia, jup, pendle,
-        ]
         single_member_groups: dict = {}  # keyed by asset.id
         for asset in crypto_assets:
             grp = ProviderAssetGroup()
@@ -958,13 +1430,34 @@ def run(
         # All attribute data now goes through ProviderAssetGroupAttribute.
         # Single-member groups represent individual asset pairs.
         ref_prices_seed = {
-            btc.id: 67500.0, eth.id: 3400.0, sol.id: 145.0, ada.id: 0.45,
-            xrp.id: 0.52, doge.id: 0.12, avax.id: 35.0, link.id: 14.0,
-            dot.id: 7.20, matic.id: 0.58, atom.id: 9.50, uni.id: 7.80,
-            apt.id: 8.90, arb.id: 1.15, op.id: 1.85, near.id: 5.20,
-            ftm.id: 0.42, aave.id: 95.0, mkr.id: 1450.0, snx.id: 2.80,
-            crv.id: 0.55, ldo.id: 2.10, inj.id: 22.0, sui.id: 1.35,
-            sei.id: 0.38, tia.id: 8.50, jup.id: 0.85, pendle.id: 4.60,
+            btc.id: 67500.0,
+            eth.id: 3400.0,
+            sol.id: 145.0,
+            ada.id: 0.45,
+            xrp.id: 0.52,
+            doge.id: 0.12,
+            avax.id: 35.0,
+            link.id: 14.0,
+            dot.id: 7.20,
+            matic.id: 0.58,
+            atom.id: 9.50,
+            uni.id: 7.80,
+            apt.id: 8.90,
+            arb.id: 1.15,
+            op.id: 1.85,
+            near.id: 5.20,
+            ftm.id: 0.42,
+            aave.id: 95.0,
+            mkr.id: 1450.0,
+            snx.id: 2.80,
+            crv.id: 0.55,
+            ldo.id: 2.10,
+            inj.id: 22.0,
+            sui.id: 1.35,
+            sei.id: 0.38,
+            tia.id: 8.50,
+            jup.id: 0.85,
+            pendle.id: 4.60,
         }
         paga_count = 0
         for (feed_id_key, p_key), partition_obj in partition_cache.items():
@@ -1625,9 +2118,7 @@ def run(
         print(
             f"  {len(all_groups)} asset groups ({len(single_member_groups)} single-member, {len(pair_groups)} pairs, {len(basket_groups)} baskets)"
         )
-        print(
-            f"  {paga_count} provider_asset_group_attribute rows"
-        )
+        print(f"  {paga_count} provider_asset_group_attribute rows")
         print(
             f"  {len(strategy_objs)} strategies, {strat_run_count} strategy runs, {trade_count} trades"
         )

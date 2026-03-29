@@ -1,8 +1,9 @@
 import datetime
 import uuid
+from typing import Optional
 
-from sqlalchemy import String, Uuid, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import ForeignKey, String, Uuid, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ascent.database.models.base import Base
 
@@ -16,6 +17,12 @@ class AssetType(Base):
         primary_key=True,
         default=uuid.uuid4,
         comment="The unique identifier of the asset type",
+    )
+    parent_type_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("asset_type.id"),
+        nullable=True,
+        comment="The parent type in the type hierarchy. NULL means this is a root type.",
     )
     name: Mapped[str] = mapped_column(
         String(100), nullable=False, comment="The name of the asset type"
@@ -38,6 +45,11 @@ class AssetType(Base):
         comment="The timestamp of the last update of the asset type",
     )
 
+    parent_type: Mapped[Optional["AssetType"]] = relationship(
+        remote_side=[id], back_populates="child_types"
+    )
+    child_types: Mapped[list["AssetType"]] = relationship(back_populates="parent_type")
+
     def __repr__(self):
         return f"{AssetType.__name__}({self.id}, {self.name})"
 
@@ -51,6 +63,12 @@ class ProviderType(Base):
         primary_key=True,
         default=uuid.uuid4,
         comment="The unique identifier of the provider type",
+    )
+    parent_type_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("provider_type.id"),
+        nullable=True,
+        comment="The parent type in the type hierarchy. NULL means this is a root type.",
     )
     name: Mapped[str] = mapped_column(
         String(100), nullable=False, comment="The name of the provider type"
@@ -72,6 +90,11 @@ class ProviderType(Base):
         server_default=func.now(),
         comment="The timestamp of the last update of the provider type",
     )
+
+    parent_type: Mapped[Optional["ProviderType"]] = relationship(
+        remote_side=[id], back_populates="child_types"
+    )
+    child_types: Mapped[list["ProviderType"]] = relationship(back_populates="parent_type")
 
     def __repr__(self):
         return f"{ProviderType.__name__}({self.id}, {self.name})"

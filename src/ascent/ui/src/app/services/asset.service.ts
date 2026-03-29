@@ -6,8 +6,11 @@ import {
   AssetListItem, AssetDetail, AssetCreate, AssetUpdate,
   ProviderAssetLink, ProviderAssetLinkCreate,
   AssetGroup, AssetGroupCreate, AssetGroupMemberCreate,
-  TypeItem, MetadataEntry, MetadataEntryCreate, MetadataHistoryEntry, MetadataHistoryUpdate, MetadataType,
+  TypeItem, TypeHierarchyNode, MetadataEntry, MetadataEntryCreate,
+  MetadataHistoryEntry, MetadataHistoryUpdate, MetadataType,
   AssetTypeMetadataField, AssetTypeMetadataCreate,
+  AssetTypeProviderAssetMetadataField, AssetTypeProviderAssetMetadataCreate,
+  BatchMetadataCreate, MetadataHistoryGrid, BulkHistoryUpdate,
 } from '../models/asset.model';
 
 @Injectable({ providedIn: 'root' })
@@ -120,8 +123,12 @@ export class AssetService {
     this.loadMetadataTypes$.next();
   }
 
-  createAssetType(name: string, description?: string): Observable<TypeItem> {
-    return this.api.post<TypeItem>('/types/asset-types', { name, description });
+  createAssetType(name: string, description?: string, parentTypeId?: string): Observable<TypeItem> {
+    return this.api.post<TypeItem>('/types/asset-types', { name, description, parent_type_id: parentTypeId ?? null });
+  }
+
+  loadAssetTypeTree(): Observable<TypeHierarchyNode[]> {
+    return this.api.get<TypeHierarchyNode[]>('/types/asset-types/tree');
   }
 
   createAsset(data: AssetCreate) {
@@ -206,8 +213,20 @@ export class AssetService {
     return this.api.post<MetadataEntry>(`/provider-assets/${providerId}/${assetId}/metadata`, data);
   }
 
-  createMetadataType(name: string, description?: string, valueType = 'string'): Observable<MetadataType> {
-    return this.api.post<MetadataType>('/types/metadata-types', { name, description, value_type: valueType });
+  batchSaveProviderAssetMetadata(providerId: string, assetId: string, data: BatchMetadataCreate): Observable<MetadataEntry[]> {
+    return this.api.post<MetadataEntry[]>(`/provider-assets/${providerId}/${assetId}/metadata/batch`, data);
+  }
+
+  getProviderAssetMetadataHistoryGrid(providerId: string, assetId: string): Observable<MetadataHistoryGrid> {
+    return this.api.get<MetadataHistoryGrid>(`/provider-assets/${providerId}/${assetId}/metadata/history`);
+  }
+
+  bulkUpdateProviderAssetMetadataHistory(providerId: string, assetId: string, data: BulkHistoryUpdate): Observable<any> {
+    return this.api.put(`/provider-assets/${providerId}/${assetId}/metadata/history/bulk`, data);
+  }
+
+  createMetadataType(name: string, displayName: string, description?: string, valueType = 'string'): Observable<MetadataType> {
+    return this.api.post<MetadataType>('/types/metadata-types', { name, display_name: displayName, description, value_type: valueType });
   }
 
   // Asset Type Metadata Fields
@@ -221,5 +240,32 @@ export class AssetService {
 
   removeAssetTypeMetadata(assetTypeId: string, metadataId: string): Observable<any> {
     return this.api.delete(`/types/asset-types/${assetTypeId}/metadata/${metadataId}`);
+  }
+
+  // Asset Type Provider-Asset Metadata Fields
+  getAssetTypeProviderAssetMetadata(assetTypeId: string): Observable<AssetTypeProviderAssetMetadataField[]> {
+    return this.api.get<AssetTypeProviderAssetMetadataField[]>(`/types/asset-types/${assetTypeId}/provider-asset-metadata`);
+  }
+
+  addAssetTypeProviderAssetMetadata(assetTypeId: string, data: AssetTypeProviderAssetMetadataCreate): Observable<AssetTypeProviderAssetMetadataField> {
+    return this.api.post<AssetTypeProviderAssetMetadataField>(`/types/asset-types/${assetTypeId}/provider-asset-metadata`, data);
+  }
+
+  removeAssetTypeProviderAssetMetadata(assetTypeId: string, metadataId: string): Observable<any> {
+    return this.api.delete(`/types/asset-types/${assetTypeId}/provider-asset-metadata/${metadataId}`);
+  }
+
+  // Batch metadata
+  batchSaveAssetMetadata(assetId: string, data: BatchMetadataCreate): Observable<MetadataEntry[]> {
+    return this.api.post<MetadataEntry[]>(`/assets/${assetId}/metadata/batch`, data);
+  }
+
+  // History grid
+  getAssetMetadataHistoryGrid(assetId: string): Observable<MetadataHistoryGrid> {
+    return this.api.get<MetadataHistoryGrid>(`/assets/${assetId}/metadata/history`);
+  }
+
+  bulkUpdateAssetMetadataHistory(assetId: string, data: BulkHistoryUpdate): Observable<any> {
+    return this.api.put(`/assets/${assetId}/metadata/history/bulk`, data);
   }
 }
