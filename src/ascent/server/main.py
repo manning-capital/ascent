@@ -18,12 +18,13 @@ from ascent.server.routers import (
     admin,
     assets,
     attributes,
+    composites,
     dashboard,
     exchanges,
     feeds,
+    instruments,
     orders,
     portfolios,
-    provider_assets,
     providers,
     strategies,
     trades,
@@ -66,6 +67,12 @@ def _create_tables() -> None:
             text(
                 "ALTER TABLE provider_type ADD COLUMN IF NOT EXISTS "
                 "parent_type_id UUID REFERENCES provider_type(id)"
+            )
+        )
+        conn.execute(
+            text(
+                "ALTER TABLE instrument_type ADD COLUMN IF NOT EXISTS "
+                "parent_type_id UUID REFERENCES instrument_type(id)"
             )
         )
         conn.execute(
@@ -154,7 +161,8 @@ def create_app() -> FastAPI:
     app.include_router(types.router, prefix="/api")
     app.include_router(assets.router, prefix="/api")
     app.include_router(providers.router, prefix="/api")
-    app.include_router(provider_assets.router, prefix="/api")
+    app.include_router(instruments.router, prefix="/api")
+    app.include_router(composites.router, prefix="/api")
     app.include_router(exchanges.router, prefix="/api")
     app.include_router(attributes.router, prefix="/api")
 

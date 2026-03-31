@@ -33,6 +33,7 @@ export class ProviderListComponent implements OnInit {
   ];
 
   showCreateForm = signal(false);
+  newDisplayName = '';
   newName = '';
   newDescription = '';
   newTypeId = '';
@@ -49,6 +50,7 @@ export class ProviderListComponent implements OnInit {
   }
 
   openCreate(): void {
+    this.newDisplayName = '';
     this.newName = '';
     this.newDescription = '';
     this.newTypeId = this.providerService.providerTypes()[0]?.id ?? '';
@@ -62,10 +64,11 @@ export class ProviderListComponent implements OnInit {
   }
 
   submitCreate(): void {
-    if (!this.newName.trim() || !this.newTypeId) return;
+    if (!this.newName.trim() || !this.newDisplayName.trim() || !this.newTypeId) return;
     const data: ProviderCreate = {
       provider_type_id: this.newTypeId,
       name: this.newName.trim(),
+      display_name: this.newDisplayName.trim(),
       description: this.newDescription.trim() || null,
       provider_external_code: this.newExternalCode.trim() || null,
       url: this.newUrl.trim() || null,

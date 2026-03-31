@@ -3,8 +3,8 @@ export interface OrderListItem {
   timestamp: string;
   order_type: string;
   side: string;
-  from_asset_symbol: string;
-  to_asset_symbol: string;
+  instrument_id: string;
+  instrument_name: string;
   quantity: number;
   price: number;
   filled_quantity: number | null;

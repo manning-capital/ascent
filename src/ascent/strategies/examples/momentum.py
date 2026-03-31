@@ -33,14 +33,14 @@ def momentum_strategy(
 
     prices = ctx.get(market_data)
 
-    # Compute moving averages across all groups
-    grouped = prices.groupby("group_id")["close"]
+    # Compute moving averages across all instruments
+    grouped = prices.groupby("instrument_id")["close"]
     fast_ma = grouped.apply(lambda x: x.rolling(fast_period).mean().iloc[-1])
     slow_ma = grouped.apply(lambda x: x.rolling(slow_period).mean().iloc[-1])
 
     # Batch signal generation
-    waiting = ctx.groups[ctx.groups["state"] == "waiting"].index
-    in_trade = ctx.groups[ctx.groups["state"] == "in_trade"].index
+    waiting = ctx.instruments[ctx.instruments["state"] == "waiting"].index
+    in_trade = ctx.instruments[ctx.instruments["state"] == "in_trade"].index
 
     entries = waiting[fast_ma.loc[waiting] > slow_ma.loc[waiting]]
     exits = in_trade[fast_ma.loc[in_trade] < slow_ma.loc[in_trade]]

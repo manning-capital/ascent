@@ -23,7 +23,7 @@ def get_dashboard_stats(db: Session) -> DashboardStats:
             select(func.count())
             .select_from(Trade)
             .join(Trade.current_status_type)
-            .where(TradeStatusType.symbol == "OPEN")
+            .where(TradeStatusType.name == "OPEN")
         ).scalar()
         or 0
     )
@@ -47,7 +47,7 @@ def get_dashboard_stats(db: Session) -> DashboardStats:
             select(func.count())
             .select_from(Trade)
             .join(Trade.current_status_type)
-            .where(TradeStatusType.symbol == "CLOSED")
+            .where(TradeStatusType.name == "CLOSED")
         ).scalar()
         or 0
     )
@@ -57,7 +57,7 @@ def get_dashboard_stats(db: Session) -> DashboardStats:
             select(func.count())
             .select_from(Trade)
             .join(Trade.current_status_type)
-            .where(TradeStatusType.symbol == "CLOSED")
+            .where(TradeStatusType.name == "CLOSED")
             .where(Trade.total_realized_pnl > 0)
         ).scalar()
         or 0

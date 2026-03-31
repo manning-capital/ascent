@@ -24,7 +24,7 @@
     <div class="flex items-center gap-3 px-4 py-2 border-b border-surface shrink-0 bg-emphasis">
       <a routerLink="/feeds" class="text-sm text-primary hover:underline">&larr; Feeds</a>
       <span class="text-surface-300">|</span>
-      <h1 class="text-lg font-bold truncate">{{ feed.name }}</h1>
+      <h1 class="text-lg font-bold truncate">{{ feed.display_name }}</h1>
       <p-tag [value]="feed.is_active ? 'Active' : 'Inactive'" [severity]="feed.is_active ? 'success' : 'secondary'" [rounded]="true"/>
       <span class="text-xs text-surface-500 shrink-0">{{ scheduleLabel(feed.schedule) }}</span>
     </div>
@@ -133,11 +133,9 @@
       @if (activeTab() === 'Universe') {
         <app-universe-panel
           [items]="universeItems()"
-          subtitle="Asset groups and individual pairs this feed covers."
-          (addItem)="onAddUniverseItem($event)"
-          (createGroupAndAdd)="onCreateGroupAndAdd($event)"
-          (remove)="removeUniverseItem($event)"
-          (removeGroup)="removeUniverseGroup($event)"/>
+          subtitle="Instruments this feed covers."
+          (addInstruments)="onAddInstruments($event)"
+          (remove)="removeUniverseItem($event)"/>
       }
 
       <!-- Configuration Tab -->

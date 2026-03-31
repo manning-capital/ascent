@@ -32,15 +32,15 @@ export class AssetListComponent implements OnInit {
   ];
 
   showCreateForm = signal(false);
+  newAssetDisplayName = '';
   newAssetName = '';
-  newAssetSymbol = '';
   newAssetDescription = '';
   newAssetTypeId = '';
 
-  symbolTaken(): boolean {
-    const sym = this.newAssetSymbol.trim().toLowerCase();
-    if (!sym) return false;
-    return this.assetService.assets().some(a => a.symbol?.toLowerCase() === sym);
+  nameTaken(): boolean {
+    const n = this.newAssetName.trim().toLowerCase();
+    if (!n) return false;
+    return this.assetService.assets().some(a => a.name?.toLowerCase() === n);
   }
 
   ngOnInit(): void {
@@ -53,8 +53,8 @@ export class AssetListComponent implements OnInit {
   }
 
   openCreate(): void {
+    this.newAssetDisplayName = '';
     this.newAssetName = '';
-    this.newAssetSymbol = '';
     this.newAssetDescription = '';
     this.newAssetTypeId = this.assetService.assetTypes()[0]?.id ?? '';
     this.showCreateForm.set(true);
@@ -65,11 +65,11 @@ export class AssetListComponent implements OnInit {
   }
 
   submitCreate(): void {
-    if (!this.newAssetName.trim() || !this.newAssetSymbol.trim() || !this.newAssetTypeId || this.symbolTaken()) return;
+    if (!this.newAssetDisplayName.trim() || !this.newAssetName.trim() || !this.newAssetTypeId || this.nameTaken()) return;
     const data: AssetCreate = {
       asset_type_id: this.newAssetTypeId,
       name: this.newAssetName.trim(),
-      symbol: this.newAssetSymbol.trim(),
+      display_name: this.newAssetDisplayName.trim(),
       description: this.newAssetDescription.trim() || null,
     };
     this.assetService.createAsset(data).subscribe({

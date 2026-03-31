@@ -1,59 +1,39 @@
-<div class="p-6 max-w-5xl mx-auto">
-  <div class="flex items-center justify-between mb-6">
+<div class="flex flex-col h-full">
+  <div class="flex items-center justify-between p-6 pb-4 shrink-0">
     <div>
       <h1 class="text-2xl font-bold">Provider Types</h1>
       <p class="text-sm text-surface-500 mt-1">Define provider classifications and their required metadata fields. Click a node to view details.</p>
     </div>
-    <p-button (onClick)="openCreate()" severity="info" [outlined]="true" size="small" label="+ New Type"/>
   </div>
 
-  @if (showCreateForm()) {
-    <p-card class="mb-6">
-      <ng-template #header>
-        <div class="px-5 pt-5">
-          <h3 class="font-semibold">New Provider Type</h3>
-        </div>
-      </ng-template>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-          <label class="block text-xs text-surface-500 mb-1">Name *</label>
-          <input type="text" pInputText [(ngModel)]="newName" placeholder="e.g. Exchange, Broker, Data Provider" class="w-full"/>
-        </div>
-        <div>
-          <label class="block text-xs text-surface-500 mb-1">Parent Type</label>
-          <p-select [(ngModel)]="newParentTypeId" [options]="providerService.providerTypes()" optionLabel="name" optionValue="id" placeholder="None (root type)" [showClear]="true" class="w-full"/>
-        </div>
-        <div>
-          <label class="block text-xs text-surface-500 mb-1">Description</label>
-          <input type="text" pInputText [(ngModel)]="newDescription" placeholder="Optional description" class="w-full"/>
+  @if (treeData() === null) {
+    <!-- Loading skeleton -->
+    <div class="flex-1 min-h-0 px-6 pb-6">
+      <div class="w-full h-full rounded-lg border border-edge-dim flex items-center justify-center">
+        <div class="flex flex-col items-center gap-10">
+          <p-skeleton width="10rem" height="2.5rem" borderRadius="8px"/>
+          <div class="flex items-center gap-16">
+            <p-skeleton width="10rem" height="2.5rem" borderRadius="8px"/>
+            <p-skeleton width="10rem" height="2.5rem" borderRadius="8px"/>
+          </div>
         </div>
       </div>
-      <div class="flex gap-2 mt-4">
-        <p-button (onClick)="submitCreate()" severity="success" [outlined]="true" size="small" label="Create"/>
-        <p-button (onClick)="cancelCreate()" severity="secondary" [outlined]="true" size="small" label="Cancel"/>
-      </div>
-    </p-card>
-  }
-
-  @if (treeData().length > 0) {
-    <div class="overflow-x-auto">
-      <p-organizationchart [value]="treeData()" selectionMode="single" [(selection)]="selectedNode" (onNodeSelect)="onNodeSelect($event)" [collapsible]="true">
-        <ng-template pTemplate="root" let-node>
-          <div class="px-4 py-2 text-center">
-            <div class="font-semibold text-sm text-surface-400">{{ node.label }}</div>
-          </div>
-        </ng-template>
-        <ng-template pTemplate="default" let-node>
-          <div class="px-4 py-3 text-center cursor-pointer">
-            <div class="font-semibold text-sm">{{ node.data?.name || node.label }}</div>
-            @if (node.data?.description) {
-              <div class="text-xs text-surface-400 mt-1 max-w-48 truncate">{{ node.data.description }}</div>
-            }
-          </div>
-        </ng-template>
-      </p-organizationchart>
     </div>
   } @else {
-    <div class="text-center text-surface-400 py-12">No provider types defined. Click + New Type to get started.</div>
+    <div class="flex-1 min-h-0 px-6 pb-6">
+      <app-type-hierarchy-graph
+        [trees]="treeData()!"
+        (nodeClick)="onNodeClick($event)"
+        (createType)="onCreateType($event)"
+        (reparent)="onReparent($event)"/>
+    </div>
   }
 </div>
+
+<app-reparent-confirm-dialog
+  [(visible)]="reparentDialogVisible"
+  (visibleChange)="onReparentDialogClose()"
+  [preview]="reparentPreview()"
+  [reparenting]="reparenting()"
+  (confirm)="onReparentConfirm($event)"
+/>

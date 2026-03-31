@@ -4,9 +4,9 @@ import { RouterLink } from '@angular/router';
 export interface AssetPair {
   providerName: string;
   providerId: string;
-  fromAssetSymbol: string;
+  fromAssetName: string;
   fromAssetId: string;
-  toAssetSymbol: string;
+  toAssetName: string;
   toAssetId: string;
 }
 
@@ -20,9 +20,9 @@ export interface AssetPair {
         <span class="inline-flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-canvas/50 border border-surface">
           <a [routerLink]="['/settings/providers', pair.providerId]" class="text-muted-color hover:underline">{{ pair.providerName }}</a>
           <span class="text-surface-400">:</span>
-          <a [routerLink]="['/settings/assets', pair.fromAssetId]" class="font-medium text-primary hover:underline">{{ pair.fromAssetSymbol }}</a>
+          <a [routerLink]="['/settings/assets', pair.fromAssetId]" class="font-medium text-primary hover:underline">{{ pair.fromAssetName }}</a>
           <span class="text-surface-400">&rarr;</span>
-          <a [routerLink]="['/settings/assets', pair.toAssetId]" class="font-medium text-primary hover:underline">{{ pair.toAssetSymbol }}</a>
+          <a [routerLink]="['/settings/assets', pair.toAssetId]" class="font-medium text-primary hover:underline">{{ pair.toAssetName }}</a>
         </span>
       }
       @if (overflowCount > 0) {

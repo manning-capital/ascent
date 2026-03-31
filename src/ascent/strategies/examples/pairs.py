@@ -26,19 +26,19 @@ def pairs_strategy(
     ctx = get_context()
     logger = get_logger()
 
-    # Feed data as DataFrames — vectorized across ALL groups
+    # Feed data as DataFrames — vectorized across ALL instruments
     prices = ctx.get(market_data)
     ctx.get(ou_params)
 
-    # Vectorized z-score computation across all groups at once
-    z_scores = prices.groupby("group_id")["close"].apply(
+    # Vectorized z-score computation across all instruments at once
+    z_scores = prices.groupby("instrument_id")["close"].apply(
         lambda x: (x.iloc[-1] - x.rolling(lookback).mean().iloc[-1])
         / x.rolling(lookback).std().iloc[-1]
     )
 
-    # Batch signal generation using group states
-    waiting = ctx.groups[ctx.groups["state"] == "waiting"].index
-    in_trade = ctx.groups[ctx.groups["state"] == "in_trade"].index
+    # Batch signal generation using instrument states
+    waiting = ctx.instruments[ctx.instruments["state"] == "waiting"].index
+    in_trade = ctx.instruments[ctx.instruments["state"] == "in_trade"].index
 
     entries = waiting[z_scores.loc[waiting].abs() > entry_z]
     exits = in_trade[z_scores.loc[in_trade].abs() < exit_z]

@@ -2,8 +2,8 @@ import { OrderDetail } from './order.model';
 
 export interface TradeLegSummary {
   id: string;
-  from_asset_symbol: string;
-  to_asset_symbol: string;
+  instrument_id: string;
+  instrument_name: string;
   direction: string;
   quantity: number;
   entry_price: number | null;

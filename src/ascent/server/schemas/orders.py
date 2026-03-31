@@ -10,8 +10,7 @@ class OrderCreate(BaseModel):
     side: str
     exchange_id: uuid.UUID
     portfolio_id: uuid.UUID
-    from_asset_id: uuid.UUID
-    to_asset_id: uuid.UUID
+    instrument_id: uuid.UUID
     quantity: float
     price: float
     time_in_force: str | None = None
@@ -39,8 +38,8 @@ class OrderSchema(BaseModel):
     timestamp: datetime.datetime
     order_type: str
     side: str
-    from_asset_symbol: str
-    to_asset_symbol: str
+    instrument_id: uuid.UUID
+    instrument_name: str
     quantity: float
     price: float
     filled_quantity: float | None = None
@@ -67,8 +66,8 @@ class OrderDetailSchema(BaseModel):
     timestamp: datetime.datetime
     order_type: str
     side: str
-    from_asset_symbol: str
-    to_asset_symbol: str
+    instrument_id: uuid.UUID
+    instrument_name: str
     quantity: float
     price: float
     filled_quantity: float | None = None

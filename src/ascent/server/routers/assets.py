@@ -9,13 +9,13 @@ from ascent.server.schemas.assets import AssetCreate, AssetDetailSchema, AssetSc
 from ascent.server.schemas.metadata import (
     BatchMetadataCreate,
     BulkHistoryUpdate,
+    EntityUsage,
     MetadataEntryCreate,
     MetadataEntrySchema,
     MetadataHistoryEntry,
     MetadataHistoryGrid,
     MetadataHistoryUpdate,
 )
-from ascent.server.schemas.metadata import EntityUsage
 from ascent.server.services import asset_service, field_service, metadata_service
 
 router = APIRouter(prefix="/assets", tags=["assets"])

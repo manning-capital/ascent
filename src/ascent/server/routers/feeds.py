@@ -21,7 +21,13 @@ from ascent.server.schemas.feeds import (
     FeedUpdate,
     StrategyFeedItem,
 )
-from ascent.server.schemas.universe import UniverseItemCreate, UniverseItemSchema
+from ascent.server.schemas.universe import (
+    CompositeUniverseBatchAdd,
+    CompositeUniverseItemSchema,
+    UniverseBatchAddInstruments,
+    UniverseItemCreate,
+    UniverseItemSchema,
+)
 from ascent.server.services import feed_service, universe_service
 
 router = APIRouter(prefix="/feeds", tags=["feeds"])
@@ -155,17 +161,46 @@ def add_feed_universe_item(
 
 
 @router.delete(
-    "/{feed_id}/universe/{provider_id}/{from_asset_id}/{to_asset_id}",
+    "/{feed_id}/universe/{instrument_id}",
     status_code=204,
 )
 def remove_feed_universe_item(
     feed_id: uuid.UUID,
-    provider_id: uuid.UUID,
-    from_asset_id: uuid.UUID,
-    to_asset_id: uuid.UUID,
+    instrument_id: uuid.UUID,
     db: Session = Depends(get_db),
 ):
-    universe_service.remove_feed_universe_item(db, feed_id, provider_id, from_asset_id, to_asset_id)
+    universe_service.remove_feed_universe_item(db, feed_id, instrument_id)
+
+
+@router.post("/{feed_id}/universe/batch", response_model=list[UniverseItemSchema])
+def batch_add_feed_instruments(
+    feed_id: uuid.UUID, data: UniverseBatchAddInstruments, db: Session = Depends(get_db)
+):
+    return universe_service.batch_add_feed_instruments(db, feed_id, data)
+
+
+# ---- Composite Universe ----
+
+
+@router.get("/{feed_id}/composite-universe", response_model=list[CompositeUniverseItemSchema])
+def list_feed_composite_universe(feed_id: uuid.UUID, db: Session = Depends(get_db)):
+    return universe_service.get_feed_composite_universe(db, feed_id)
+
+
+@router.post(
+    "/{feed_id}/composite-universe/batch", response_model=list[CompositeUniverseItemSchema]
+)
+def batch_add_feed_composites(
+    feed_id: uuid.UUID, data: CompositeUniverseBatchAdd, db: Session = Depends(get_db)
+):
+    return universe_service.batch_add_feed_composites(db, feed_id, data)
+
+
+@router.delete("/{feed_id}/composite-universe/{composite_id}", status_code=204)
+def remove_feed_composite_universe_item(
+    feed_id: uuid.UUID, composite_id: uuid.UUID, db: Session = Depends(get_db)
+):
+    universe_service.remove_feed_composite_universe_item(db, feed_id, composite_id)
 
 
 @router.get("/{feed_id}/dependencies", response_model=list[FeedDependencySchema])

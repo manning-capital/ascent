@@ -6,13 +6,13 @@ from sqlalchemy import ForeignKey, String, Uuid, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from ascent.database.models.assets import Asset
 from ascent.database.models.base import Base
 from ascent.database.models.portfolio import Portfolio
 from ascent.database.models.types import TradeStatusType
 
 if TYPE_CHECKING:
     from ascent.database.models.exchanges import Exchange
+    from ascent.database.models.instruments import Instrument  # noqa: F401 (used by TradeLeg)
     from ascent.database.models.orders import Order
     from ascent.database.models.strategy import Strategy, StrategyRun
     from ascent.database.models.trade_analysis import (
@@ -130,7 +130,7 @@ class Trade(Base):
 class TradeLeg(Base):
     __tablename__ = "trade_leg"
     __table_args__ = {
-        "comment": "Represents an individual asset leg within a trade. For a pairs trade, there would be two legs (one long, one short). Each leg tracks entry/exit prices, orders, and transactions including partial fills."
+        "comment": "Represents an individual instrument leg within a trade. For a pairs trade, there would be two legs (one long, one short). Each leg tracks entry/exit prices, orders, and transactions including partial fills."
     }
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -143,20 +143,13 @@ class TradeLeg(Base):
         comment="The identifier of the trade this leg belongs to",
     )
     trade: Mapped["Trade"] = relationship("Trade", back_populates="legs")
-    from_asset_id: Mapped[uuid.UUID] = mapped_column(
+    instrument_id: Mapped[uuid.UUID] = mapped_column(
         Uuid,
-        ForeignKey("asset.id"),
+        ForeignKey("instrument.id"),
         nullable=False,
-        comment="The identifier of the from asset (base asset). Matches the ProviderAssetGroupMember convention.",
+        comment="The identifier of the instrument being traded on this leg",
     )
-    from_asset: Mapped["Asset"] = relationship("Asset", foreign_keys=[from_asset_id])
-    to_asset_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid,
-        ForeignKey("asset.id"),
-        nullable=False,
-        comment="The identifier of the to asset (quote asset). Matches the ProviderAssetGroupMember convention.",
-    )
-    to_asset: Mapped["Asset"] = relationship("Asset", foreign_keys=[to_asset_id])
+    instrument: Mapped["Instrument"] = relationship("Instrument")
     direction: Mapped[str] = mapped_column(
         String(10),
         nullable=False,
@@ -247,7 +240,7 @@ class TradeLeg(Base):
     )
 
     def __repr__(self):
-        return f"{TradeLeg.__name__}(id={self.id}, trade_id={self.trade_id}, from_asset_id={self.from_asset_id}, to_asset_id={self.to_asset_id}, direction={self.direction}, quantity={self.quantity})"
+        return f"{TradeLeg.__name__}(id={self.id}, trade_id={self.trade_id}, instrument_id={self.instrument_id}, direction={self.direction}, quantity={self.quantity})"
 
 
 class TradeStatus(Base):

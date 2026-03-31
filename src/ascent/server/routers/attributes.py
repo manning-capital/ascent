@@ -25,12 +25,8 @@ def get_attribute(attribute_id: str, db: Session = Depends(get_db)):
 
 
 @router.put("/{attribute_id}", response_model=AttributeSchema)
-def update_attribute(
-    attribute_id: str, data: AttributeUpdate, db: Session = Depends(get_db)
-):
-    return AttributeSchema.model_validate(
-        field_service.update_attribute(db, attribute_id, data)
-    )
+def update_attribute(attribute_id: str, data: AttributeUpdate, db: Session = Depends(get_db)):
+    return AttributeSchema.model_validate(field_service.update_attribute(db, attribute_id, data))
 
 
 @router.get("/{attribute_id}/usage", response_model=EntityUsage)

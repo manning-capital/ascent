@@ -10,17 +10,18 @@ import { Select } from 'primeng/select';
 import { Skeleton } from 'primeng/skeleton';
 import { Checkbox } from 'primeng/checkbox';
 import { TableModule } from 'primeng/table';
-import { Card } from 'primeng/card';
 import { Button } from 'primeng/button';
 import { InputText } from 'primeng/inputtext';
+import { Textarea } from 'primeng/textarea';
 import { Tag } from 'primeng/tag';
-import { Tabs, TabList, Tab, TabPanels, TabPanel } from 'primeng/tabs';
+import { Tabs, TabList, Tab } from 'primeng/tabs';
+import { Panel } from 'primeng/panel';
 import { SafeDeleteDialogComponent } from '../../shared/safe-delete-dialog.component';
 
 @Component({
   selector: 'app-asset-type-detail',
   standalone: true,
-  imports: [RouterLink, FormsModule, Select, Checkbox, TableModule, Card, Button, InputText, Tag, Skeleton, Tabs, TabList, Tab, TabPanels, TabPanel, SafeDeleteDialogComponent],
+  imports: [RouterLink, FormsModule, Select, Checkbox, TableModule, Button, InputText, Textarea, Tag, Skeleton, Tabs, TabList, Tab, Panel, SafeDeleteDialogComponent],
   templateUrl: './asset-type-detail.component.html',
 })
 export class AssetTypeDetailComponent implements OnInit {
@@ -32,7 +33,14 @@ export class AssetTypeDetailComponent implements OnInit {
 
   typeId = '';
   assetType = signal<TypeItem | null>(null);
-  activeTab = signal('0');
+  activeTab = signal('Details');
+
+  // Edit state
+  editing = signal(false);
+  editName = '';
+  editDisplayName = '';
+  editDescription = '';
+  saving = signal(false);
 
   // Delete
   showDeleteDialog = signal(false);
@@ -223,6 +231,49 @@ export class AssetTypeDetailComponent implements OnInit {
         this.loadFields();
       },
       error: () => this.toast.error('Failed to remove field'),
+    });
+  }
+
+  // ---- Details Edit ----
+
+  startEdit(): void {
+    const type = this.assetType();
+    if (!type) return;
+    this.editName = type.name;
+    this.editDisplayName = type.display_name;
+    this.editDescription = type.description ?? '';
+    this.editing.set(true);
+  }
+
+  cancelEdit(): void {
+    this.editing.set(false);
+  }
+
+  saveEdit(): void {
+    const type = this.assetType();
+    if (!type) return;
+    const patch: Record<string, string> = {};
+    if (this.editName.trim() !== type.name) patch['name'] = this.editName.trim();
+    if (this.editDisplayName.trim() !== type.display_name) patch['display_name'] = this.editDisplayName.trim();
+    const desc = this.editDescription.trim() || '';
+    if (desc !== (type.description ?? '')) patch['description'] = desc;
+    if (Object.keys(patch).length === 0) {
+      this.editing.set(false);
+      return;
+    }
+    this.saving.set(true);
+    this.assetService.patchAssetType(this.typeId, patch).subscribe({
+      next: updated => {
+        this.assetType.set(updated);
+        this.assetService.loadAssetTypes();
+        this.toast.success('Asset type updated');
+        this.editing.set(false);
+        this.saving.set(false);
+      },
+      error: () => {
+        this.toast.error('Failed to update asset type');
+        this.saving.set(false);
+      },
     });
   }
 

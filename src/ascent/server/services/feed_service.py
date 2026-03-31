@@ -54,6 +54,7 @@ def get_feeds(db: Session) -> list[FeedListItem]:
             FeedListItem(
                 id=f.id,
                 name=f.name,
+                display_name=f.display_name,
                 description=f.description,
                 feed_type_id=f.feed_type_id,
                 feed_ref=f.feed_ref,
@@ -94,6 +95,7 @@ def get_feed_detail(db: Session, feed_id: uuid.UUID) -> FeedDetail:
     return FeedDetail(
         id=feed.id,
         name=feed.name,
+        display_name=feed.display_name,
         description=feed.description,
         feed_type_id=feed.feed_type_id,
         feed_ref=feed.feed_ref,
@@ -420,29 +422,64 @@ _PARTITION_DATA_CONFIGS: dict[str, dict] = {
         ),
         "order": "p.name, ct.name",
     },
-    "provider_asset_group_attribute": {
-        "select": ("t.provider_asset_group_id, a.name AS attribute, t.attribute_value"),
-        "joins": ("LEFT JOIN attribute a ON a.id = t.attribute_id"),
-        "order": "t.provider_asset_group_id, a.name",
+    "instrument_attribute": {
+        "select": ("t.instrument_id, i.name AS instrument, a.name AS attribute, t.attribute_value"),
+        "joins": (
+            "LEFT JOIN instrument i ON i.id = t.instrument_id "
+            "LEFT JOIN attribute a ON a.id = t.attribute_id"
+        ),
+        "order": "i.name, a.name",
         "pivot": {
-            "group_columns": ["provider_asset_group_id"],
-            "eav_group_columns": ["provider_asset_group_id"],
+            "group_columns": ["instrument"],
+            "eav_group_columns": ["instrument_id"],
             "pivot_column": "attribute",
             "value_column": "attribute_value",
         },
     },
-    "provider_asset_group_period_attribute": {
+    "instrument_period_attribute": {
         "select": (
-            "t.provider_asset_group_id, pd.name AS period, a.name AS attribute, t.attribute_value"
+            "t.instrument_id, i.name AS instrument, pd.name AS period, a.name AS attribute, t.attribute_value"
         ),
         "joins": (
+            "LEFT JOIN instrument i ON i.id = t.instrument_id "
             "LEFT JOIN period pd ON pd.id = t.period_id "
             "LEFT JOIN attribute a ON a.id = t.attribute_id"
         ),
-        "order": "t.provider_asset_group_id, pd.name, a.name",
+        "order": "i.name, pd.name, a.name",
         "pivot": {
-            "group_columns": ["provider_asset_group_id", "period"],
-            "eav_group_columns": ["provider_asset_group_id", "period_id"],
+            "group_columns": ["instrument", "period"],
+            "eav_group_columns": ["instrument_id", "period_id"],
+            "pivot_column": "attribute",
+            "value_column": "attribute_value",
+        },
+    },
+    "composite_attribute": {
+        "select": ("t.composite_id, c.name AS composite, a.name AS attribute, t.attribute_value"),
+        "joins": (
+            "LEFT JOIN composite c ON c.id = t.composite_id "
+            "LEFT JOIN attribute a ON a.id = t.attribute_id"
+        ),
+        "order": "c.name, a.name",
+        "pivot": {
+            "group_columns": ["composite"],
+            "eav_group_columns": ["composite_id"],
+            "pivot_column": "attribute",
+            "value_column": "attribute_value",
+        },
+    },
+    "composite_period_attribute": {
+        "select": (
+            "t.composite_id, c.name AS composite, pd.name AS period, a.name AS attribute, t.attribute_value"
+        ),
+        "joins": (
+            "LEFT JOIN composite c ON c.id = t.composite_id "
+            "LEFT JOIN period pd ON pd.id = t.period_id "
+            "LEFT JOIN attribute a ON a.id = t.attribute_id"
+        ),
+        "order": "c.name, pd.name, a.name",
+        "pivot": {
+            "group_columns": ["composite", "period"],
+            "eav_group_columns": ["composite_id", "period_id"],
             "pivot_column": "attribute",
             "value_column": "attribute_value",
         },

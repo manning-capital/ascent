@@ -67,8 +67,8 @@ export class AssetDetailComponent implements OnInit {
 
   // Edit state
   editing = signal(false);
+  editDisplayName = '';
   editName = '';
-  editSymbol = '';
   editDescription = '';
   editIsActive = true;
   editTimestamp: Date = new Date();
@@ -214,8 +214,8 @@ export class AssetDetailComponent implements OnInit {
   startEdit(): void {
     const asset = this.assetService.selectedAsset();
     if (!asset) return;
+    this.editDisplayName = asset.display_name;
     this.editName = asset.name;
-    this.editSymbol = asset.symbol ?? '';
     this.editDescription = asset.description ?? '';
     this.editIsActive = asset.is_active;
     this.editTimestamp = new Date();
@@ -255,7 +255,7 @@ export class AssetDetailComponent implements OnInit {
   }
 
   submitEdit(): void {
-    if (!this.editName.trim()) return;
+    if (!this.editName.trim() || !this.editDisplayName.trim()) return;
     const asset = this.assetService.selectedAsset();
     if (!asset) return;
 
@@ -264,7 +264,7 @@ export class AssetDetailComponent implements OnInit {
     // 1. Save base fields
     calls.push(this.assetService.updateAsset(this.assetId, {
       name: this.editName.trim(),
-      symbol: this.editSymbol.trim() || null,
+      display_name: this.editDisplayName.trim(),
       description: this.editDescription.trim() || null,
       is_active: this.editIsActive,
     }));

@@ -18,7 +18,13 @@ from ascent.server.schemas.strategies import (
     StrategyUpdate,
 )
 from ascent.server.schemas.trades import TradeListItem
-from ascent.server.schemas.universe import UniverseItemCreate, UniverseItemSchema
+from ascent.server.schemas.universe import (
+    CompositeUniverseBatchAdd,
+    CompositeUniverseItemSchema,
+    UniverseBatchAddInstruments,
+    UniverseItemCreate,
+    UniverseItemSchema,
+)
 from ascent.server.services import order_service, strategy_service, trade_service, universe_service
 
 router = APIRouter(prefix="/strategies", tags=["strategies"])
@@ -125,19 +131,46 @@ def add_strategy_universe_item(
 
 
 @router.delete(
-    "/{strategy_id}/universe/{provider_id}/{from_asset_id}/{to_asset_id}",
+    "/{strategy_id}/universe/{instrument_id}",
     status_code=204,
 )
 def remove_strategy_universe_item(
     strategy_id: uuid.UUID,
-    provider_id: uuid.UUID,
-    from_asset_id: uuid.UUID,
-    to_asset_id: uuid.UUID,
+    instrument_id: uuid.UUID,
     db: Session = Depends(get_db),
 ):
-    universe_service.remove_strategy_universe_item(
-        db, strategy_id, provider_id, from_asset_id, to_asset_id
-    )
+    universe_service.remove_strategy_universe_item(db, strategy_id, instrument_id)
+
+
+@router.post("/{strategy_id}/universe/batch", response_model=list[UniverseItemSchema])
+def batch_add_strategy_instruments(
+    strategy_id: uuid.UUID, data: UniverseBatchAddInstruments, db: Session = Depends(get_db)
+):
+    return universe_service.batch_add_strategy_instruments(db, strategy_id, data)
+
+
+# ---- Composite Universe ----
+
+
+@router.get("/{strategy_id}/composite-universe", response_model=list[CompositeUniverseItemSchema])
+def list_strategy_composite_universe(strategy_id: uuid.UUID, db: Session = Depends(get_db)):
+    return universe_service.get_strategy_composite_universe(db, strategy_id)
+
+
+@router.post(
+    "/{strategy_id}/composite-universe/batch", response_model=list[CompositeUniverseItemSchema]
+)
+def batch_add_strategy_composites(
+    strategy_id: uuid.UUID, data: CompositeUniverseBatchAdd, db: Session = Depends(get_db)
+):
+    return universe_service.batch_add_strategy_composites(db, strategy_id, data)
+
+
+@router.delete("/{strategy_id}/composite-universe/{composite_id}", status_code=204)
+def remove_strategy_composite_universe_item(
+    strategy_id: uuid.UUID, composite_id: uuid.UUID, db: Session = Depends(get_db)
+):
+    universe_service.remove_strategy_composite_universe_item(db, strategy_id, composite_id)
 
 
 @router.get("/{strategy_id}/runs", response_model=PaginatedResponse[StrategyRunListItem])

@@ -1,32 +1,31 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal, ViewChild } from '@angular/core';
 import { Router } from '@angular/router';
-import { FormsModule } from '@angular/forms';
 import { AssetService } from '../../services/asset.service';
 import { ToastService } from '../../services/toast.service';
-import { TypeHierarchyNode } from '../../models/asset.model';
-import { Select } from 'primeng/select';
-import { Card } from 'primeng/card';
-import { Button } from 'primeng/button';
-import { InputText } from 'primeng/inputtext';
-import { AssetTypeGraphComponent } from './asset-type-graph.component';
+import { TypeHierarchyNode, ReparentPreview } from '../../models/asset.model';
+import { Skeleton } from 'primeng/skeleton';
+import { TypeHierarchyGraphComponent, TypeCreateRequest, TypeReparentRequest } from './type-hierarchy-graph.component';
+import { ReparentConfirmDialogComponent, ReparentConfirmEvent } from '../shared/reparent-confirm-dialog.component';
 
 @Component({
   selector: 'app-asset-type-list',
   standalone: true,
-  imports: [FormsModule, Select, Card, Button, InputText, AssetTypeGraphComponent],
+  imports: [Skeleton, TypeHierarchyGraphComponent, ReparentConfirmDialogComponent],
   templateUrl: './asset-type-list.component.html',
+  host: { class: 'block h-full' },
 })
 export class AssetTypeListComponent implements OnInit {
   assetService = inject(AssetService);
   private toast = inject(ToastService);
   private router = inject(Router);
 
-  treeData = signal<TypeHierarchyNode[]>([]);
+  @ViewChild(TypeHierarchyGraphComponent) graph?: TypeHierarchyGraphComponent;
 
-  showCreateForm = signal(false);
-  newName = '';
-  newDescription = '';
-  newParentTypeId = '';
+  treeData = signal<TypeHierarchyNode[] | null>(null);
+  reparentDialogVisible = signal(false);
+  reparentPreview = signal<ReparentPreview | null>(null);
+  reparenting = signal(false);
+  private pendingReparent: TypeReparentRequest | null = null;
 
   ngOnInit(): void {
     this.assetService.loadAssetTypes();
@@ -44,31 +43,58 @@ export class AssetTypeListComponent implements OnInit {
     this.router.navigate(['/settings/asset-types', nodeId]);
   }
 
-  openCreate(): void {
-    this.newName = '';
-    this.newDescription = '';
-    this.newParentTypeId = '';
-    this.showCreateForm.set(true);
-  }
-
-  cancelCreate(): void {
-    this.showCreateForm.set(false);
-  }
-
-  submitCreate(): void {
-    if (!this.newName.trim()) return;
+  onCreateType(req: TypeCreateRequest): void {
     this.assetService.createAssetType(
-      this.newName.trim(),
-      this.newDescription.trim() || undefined,
-      this.newParentTypeId || undefined,
+      req.name,
+      req.displayName,
+      req.description,
+      req.parentTypeId,
     ).subscribe({
       next: () => {
         this.toast.success('Asset type created');
-        this.showCreateForm.set(false);
         this.assetService.loadAssetTypes();
         this.loadTree();
       },
       error: () => this.toast.error('Failed to create asset type'),
+    });
+  }
+
+  onReparent(req: TypeReparentRequest): void {
+    this.pendingReparent = req;
+    this.reparentPreview.set(null);
+    this.assetService.getReparentPreview(req.childId, req.newParentId).subscribe({
+      next: preview => {
+        this.reparentPreview.set(preview);
+        this.reparentDialogVisible.set(true);
+      },
+      error: () => this.toast.error('Failed to load reparent preview'),
+    });
+  }
+
+  onReparentDialogClose(): void {
+    this.graph?.cancelReparent();
+  }
+
+  onReparentConfirm(event: ReparentConfirmEvent): void {
+    const req = this.pendingReparent;
+    if (!req) return;
+    this.reparenting.set(true);
+    this.assetService.updateAssetType(req.childId, {
+      parent_type_id: req.newParentId,
+      remove_metadata_ids: event.removeMetadataIds,
+      remove_provider_asset_metadata_ids: event.removeProviderAssetMetadataIds,
+    }).subscribe({
+      next: () => {
+        this.toast.success('Type reparented');
+        this.reparenting.set(false);
+        this.reparentDialogVisible.set(false);
+        this.assetService.loadAssetTypes();
+        this.loadTree();
+      },
+      error: () => {
+        this.toast.error('Failed to reparent type');
+        this.reparenting.set(false);
+      },
     });
   }
 }

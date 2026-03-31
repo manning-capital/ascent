@@ -5,13 +5,15 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict
 
+from ascent.server.schemas.common import Identifier
+from ascent.server.schemas.instruments import ProviderAssetLinkSchema
 from ascent.server.schemas.metadata import MetadataEntrySchema
-from ascent.server.schemas.provider_assets import ProviderAssetLinkSchema
 
 
 class ProviderCreate(BaseModel):
     provider_type_id: uuid.UUID
-    name: str
+    name: Identifier
+    display_name: str
     description: str | None = None
     provider_external_code: str | None = None
     underlying_provider_id: uuid.UUID | None = None
@@ -21,7 +23,8 @@ class ProviderCreate(BaseModel):
 
 
 class ProviderUpdate(BaseModel):
-    name: str | None = None
+    name: Identifier | None = None
+    display_name: str | None = None
     description: str | None = None
     provider_external_code: str | None = None
     url: str | None = None
@@ -36,6 +39,7 @@ class ProviderSchema(BaseModel):
     provider_type_id: uuid.UUID
     provider_type_name: str | None = None
     name: str
+    display_name: str
     description: str | None = None
     provider_external_code: str | None = None
     underlying_provider_id: uuid.UUID | None = None

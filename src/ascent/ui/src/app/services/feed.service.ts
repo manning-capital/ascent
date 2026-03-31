@@ -91,7 +91,24 @@ export class FeedService {
     return this.api.post(`/feeds/${feedId}/universe`, data);
   }
 
-  removeFeedUniverseItem(feedId: string, providerId: string, fromAssetId: string, toAssetId: string): Observable<any> {
-    return this.api.delete(`/feeds/${feedId}/universe/${providerId}/${fromAssetId}/${toAssetId}`);
+  batchAddFeedInstruments(feedId: string, instrumentIds: string[], startOrder: number): Observable<UniverseItem[]> {
+    return this.api.post<UniverseItem[]>(`/feeds/${feedId}/universe/batch`, { instrument_ids: instrumentIds, start_order: startOrder });
+  }
+
+  removeFeedUniverseItem(feedId: string, instrumentId: string): Observable<any> {
+    return this.api.delete(`/feeds/${feedId}/universe/${instrumentId}`);
+  }
+
+  // Composite universe
+  loadFeedCompositeUniverse(feedId: string): Observable<any[]> {
+    return this.api.get<any[]>(`/feeds/${feedId}/composite-universe`);
+  }
+
+  batchAddFeedComposites(feedId: string, compositeIds: string[], startOrder: number): Observable<any[]> {
+    return this.api.post<any[]>(`/feeds/${feedId}/composite-universe/batch`, { composite_ids: compositeIds, start_order: startOrder });
+  }
+
+  removeFeedCompositeUniverseItem(feedId: string, compositeId: string): Observable<any> {
+    return this.api.delete(`/feeds/${feedId}/composite-universe/${compositeId}`);
   }
 }

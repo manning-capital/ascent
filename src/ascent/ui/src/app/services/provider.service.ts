@@ -8,6 +8,7 @@ import {
   MetadataHistoryEntry, MetadataHistoryUpdate,
   ProviderTypeMetadataField, ProviderTypeMetadataCreate,
   BatchMetadataCreate, MetadataHistoryGrid, BulkHistoryUpdate,
+  ReparentPreview,
 } from '../models/asset.model';
 
 @Injectable({ providedIn: 'root' })
@@ -72,8 +73,20 @@ export class ProviderService {
     this.loadDetail$.next({ providerId, silent });
   }
 
-  createProviderType(name: string, description?: string, parentTypeId?: string): Observable<TypeItem> {
-    return this.api.post<TypeItem>('/types/provider-types', { name, description, parent_type_id: parentTypeId ?? null });
+  createProviderType(name: string, displayName: string, description?: string, parentTypeId?: string): Observable<TypeItem> {
+    return this.api.post<TypeItem>('/types/provider-types', { name, display_name: displayName, description, parent_type_id: parentTypeId ?? null });
+  }
+
+  updateProviderType(typeId: string, data: { parent_type_id: string | null; remove_metadata_ids?: string[] }): Observable<TypeItem> {
+    return this.api.put<TypeItem>(`/types/provider-types/${typeId}`, data);
+  }
+
+  patchProviderType(typeId: string, data: { name?: string; display_name?: string; description?: string }): Observable<TypeItem> {
+    return this.api.patch<TypeItem>(`/types/provider-types/${typeId}`, data);
+  }
+
+  getReparentPreview(childId: string, newParentId: string): Observable<ReparentPreview> {
+    return this.api.get<ReparentPreview>(`/types/provider-types/${childId}/reparent-preview`, { new_parent_id: newParentId });
   }
 
   loadProviderTypeTree(): Observable<TypeHierarchyNode[]> {

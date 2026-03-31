@@ -11,8 +11,8 @@ from ascent.server.schemas.providers import (
     ProviderSchema,
     ProviderUpdate,
 )
+from ascent.server.services.instrument_service import get_provider_asset_links
 from ascent.server.services.metadata_service import get_latest_provider_metadata
-from ascent.server.services.provider_asset_service import get_provider_asset_links
 
 
 def get_providers(db: Session) -> list[ProviderSchema]:
@@ -22,8 +22,9 @@ def get_providers(db: Session) -> list[ProviderSchema]:
         ProviderSchema(
             id=p.id,
             provider_type_id=p.provider_type_id,
-            provider_type_name=p.provider_type.name if p.provider_type else None,
+            provider_type_name=p.provider_type.display_name if p.provider_type else None,
             name=p.name,
+            display_name=p.display_name,
             description=p.description,
             provider_external_code=p.provider_external_code,
             underlying_provider_id=p.underlying_provider_id,
@@ -48,8 +49,9 @@ def get_provider(db: Session, provider_id: uuid.UUID) -> ProviderSchema:
     return ProviderSchema(
         id=p.id,
         provider_type_id=p.provider_type_id,
-        provider_type_name=p.provider_type.name if p.provider_type else None,
+        provider_type_name=p.provider_type.display_name if p.provider_type else None,
         name=p.name,
+        display_name=p.display_name,
         description=p.description,
         provider_external_code=p.provider_external_code,
         underlying_provider_id=p.underlying_provider_id,
@@ -74,8 +76,9 @@ def get_provider_detail(db: Session, provider_id: uuid.UUID) -> ProviderDetailSc
     return ProviderDetailSchema(
         id=p.id,
         provider_type_id=p.provider_type_id,
-        provider_type_name=p.provider_type.name if p.provider_type else None,
+        provider_type_name=p.provider_type.display_name if p.provider_type else None,
         name=p.name,
+        display_name=p.display_name,
         description=p.description,
         provider_external_code=p.provider_external_code,
         underlying_provider_id=p.underlying_provider_id,

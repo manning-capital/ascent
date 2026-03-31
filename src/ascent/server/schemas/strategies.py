@@ -3,12 +3,15 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict
 
+from ascent.server.schemas.common import Identifier
+
 
 class StrategyListItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
     name: str
+    display_name: str
     description: str | None = None
     strategy_type: str
     strategy_ref: str
@@ -26,7 +29,8 @@ class StrategyListItem(BaseModel):
 
 
 class StrategyCreate(BaseModel):
-    name: str
+    name: Identifier
+    display_name: str
     strategy_type_id: uuid.UUID
     strategy_ref: str
     portfolio_id: uuid.UUID
@@ -37,7 +41,8 @@ class StrategyCreate(BaseModel):
 
 
 class StrategyUpdate(BaseModel):
-    name: str | None = None
+    name: Identifier | None = None
+    display_name: str | None = None
     description: str | None = None
     strategy_ref: str | None = None
     parameters: dict | list | str | int | float | bool | None = None

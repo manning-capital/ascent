@@ -10,6 +10,15 @@ from ascent.database.models import (
     AssetTypeMetadata,
     AssetTypeProviderAssetMetadata,
     Attribute,
+    Composite,
+    CompositeAttribute,
+    CompositeMember,
+    CompositeMetadata,
+    CompositePeriodAttribute,
+    FeedCompositeScope,
+    FeedInstrumentScope,
+    Instrument,
+    InstrumentMetadata,
     Metadata,
     Order,
     Provider,
@@ -17,15 +26,14 @@ from ascent.database.models import (
     ProviderMetadata,
     ProviderType,
     ProviderTypeMetadata,
-    Trade,
+    StrategyCompositeScope,
+    StrategyInstrumentScope,
     TradeLeg,
 )
-from ascent.database.models.asset_groups import (
-    ProviderAssetGroupAttribute,
-    ProviderAssetGroupMember,
-    ProviderAssetGroupPeriodAttribute,
+from ascent.database.models.instruments import (
+    InstrumentAttribute,
+    InstrumentPeriodAttribute,
 )
-from ascent.database.models.feeds import FeedAssetScope
 from ascent.database.models.portfolio import PortfolioAssetHolding
 from ascent.database.models.provider_content import (
     AssetContent,
@@ -33,8 +41,6 @@ from ascent.database.models.provider_content import (
     ProviderContentAttribute,
     ProviderContentMetadata,
 )
-from ascent.database.models.strategy import StrategyAssetScope
-from ascent.database.models.trade_analysis import TradeCondition, TradeDataSeries
 from ascent.database.models.transactions import Transaction
 from ascent.server.exceptions import BadRequestError, ConflictError, NotFoundError
 from ascent.server.schemas.attributes import AttributeCreate, AttributeUpdate
@@ -71,23 +77,25 @@ def _count_or_in(db: Session, columns: list, values: list) -> int:
 
 def _build_usage(items: list[tuple[str, int, str]]) -> EntityUsage:
     """Build EntityUsage from (label, count, kind) tuples."""
-    usage_items = [EntityUsageItem(label=label, count=count, kind=kind) for label, count, kind in items]
+    usage_items = [
+        EntityUsageItem(label=label, count=count, kind=kind) for label, count, kind in items
+    ]
     return EntityUsage(items=usage_items, total=sum(c for _, c, _ in items))
 
 
 def _get_asset_ids_for_type(db: Session, asset_type_id: uuid.UUID) -> list:
     """Get all asset IDs belonging to a given asset type."""
-    rows = db.execute(
-        select(Asset.id).where(Asset.asset_type_id == asset_type_id)
-    ).scalars().all()
+    rows = db.execute(select(Asset.id).where(Asset.asset_type_id == asset_type_id)).scalars().all()
     return list(rows)
 
 
 def _get_provider_ids_for_type(db: Session, provider_type_id: uuid.UUID) -> list:
     """Get all provider IDs belonging to a given provider type."""
-    rows = db.execute(
-        select(Provider.id).where(Provider.provider_type_id == provider_type_id)
-    ).scalars().all()
+    rows = (
+        db.execute(select(Provider.id).where(Provider.provider_type_id == provider_type_id))
+        .scalars()
+        .all()
+    )
     return list(rows)
 
 
@@ -96,17 +104,29 @@ def _count_asset_cascade(db: Session, asset_ids: list) -> list[tuple[str, int, s
     if not asset_ids:
         return []
     return [
-        # Cascade deletions - rows that will be permanently deleted
         ("Asset Metadata", _count_in(db, AssetMetadata.asset_id, asset_ids), "cascade"),
-        ("Provider-Asset Metadata", _count_in(db, ProviderAssetMetadata.asset_id, asset_ids), "cascade"),
-        ("Asset Group Members", _count_or_in(db, [ProviderAssetGroupMember.from_asset_id, ProviderAssetGroupMember.to_asset_id], asset_ids), "cascade"),
+        (
+            "Provider-Asset Metadata",
+            _count_in(db, ProviderAssetMetadata.asset_id, asset_ids),
+            "cascade",
+        ),
+        (
+            "Instruments (from_asset)",
+            _count_in(db, Instrument.from_asset_id, asset_ids),
+            "reference",
+        ),
+        (
+            "Instruments (to_asset)",
+            _count_in(db, Instrument.to_asset_id, asset_ids),
+            "reference",
+        ),
         ("Asset Content Links", _count_in(db, AssetContent.asset_id, asset_ids), "cascade"),
         ("Portfolio Holdings", _count_in(db, PortfolioAssetHolding.asset_id, asset_ids), "cascade"),
-        ("Trade Legs", _count_or_in(db, [TradeLeg.from_asset_id, TradeLeg.to_asset_id], asset_ids), "cascade"),
-        ("Orders", _count_or_in(db, [Order.from_asset_id, Order.to_asset_id], asset_ids), "cascade"),
-        ("Feed Asset Scopes", _count_or_in(db, [FeedAssetScope.from_asset_id, FeedAssetScope.to_asset_id], asset_ids), "cascade"),
-        ("Strategy Asset Scopes", _count_or_in(db, [StrategyAssetScope.from_asset_id, StrategyAssetScope.to_asset_id], asset_ids), "cascade"),
-        ("Transactions", _count_or_in(db, [Transaction.from_asset_id, Transaction.to_asset_id], asset_ids), "cascade"),
+        (
+            "Transactions",
+            _count_or_in(db, [Transaction.from_asset_id, Transaction.to_asset_id], asset_ids),
+            "cascade",
+        ),
     ]
 
 
@@ -116,8 +136,16 @@ def _count_provider_cascade(db: Session, provider_ids: list) -> list[tuple[str, 
         return []
     return [
         ("Provider Metadata", _count_in(db, ProviderMetadata.provider_id, provider_ids), "cascade"),
-        ("Provider-Asset Metadata", _count_in(db, ProviderAssetMetadata.provider_id, provider_ids), "cascade"),
-        ("Asset Group Members", _count_in(db, ProviderAssetGroupMember.provider_id, provider_ids), "cascade"),
+        (
+            "Provider-Asset Metadata",
+            _count_in(db, ProviderAssetMetadata.provider_id, provider_ids),
+            "cascade",
+        ),
+        (
+            "Instruments",
+            _count_in(db, Instrument.provider_id, provider_ids),
+            "reference",
+        ),
         ("Content", _count_in(db, ProviderContent.provider_id, provider_ids), "cascade"),
     ]
 
@@ -134,11 +162,10 @@ def _delete_assets_cascade(db: Session, asset_ids: list) -> None:
     ]:
         db.execute(tbl.__table__.delete().where(col.in_(asset_ids)))
     for tbl, cols in [
-        (ProviderAssetGroupMember, [ProviderAssetGroupMember.from_asset_id, ProviderAssetGroupMember.to_asset_id]),
-        (TradeLeg, [TradeLeg.from_asset_id, TradeLeg.to_asset_id]),
-        (Order, [Order.from_asset_id, Order.to_asset_id]),
-        (FeedAssetScope, [FeedAssetScope.from_asset_id, FeedAssetScope.to_asset_id]),
-        (StrategyAssetScope, [StrategyAssetScope.from_asset_id, StrategyAssetScope.to_asset_id]),
+        (
+            InstrumentMember,
+            [InstrumentMember.from_asset_id, InstrumentMember.to_asset_id],
+        ),
         (Transaction, [Transaction.from_asset_id, Transaction.to_asset_id]),
     ]:
         db.execute(tbl.__table__.delete().where(or_(*(c.in_(asset_ids) for c in cols))))
@@ -158,7 +185,7 @@ def _delete_providers_cascade(db: Session, provider_ids: list) -> None:
     for tbl, col in [
         (ProviderMetadata, ProviderMetadata.provider_id),
         (ProviderAssetMetadata, ProviderAssetMetadata.provider_id),
-        (ProviderAssetGroupMember, ProviderAssetGroupMember.provider_id),
+        (InstrumentMember, InstrumentMember.provider_id),
         (ProviderContent, ProviderContent.provider_id),
     ]:
         db.execute(tbl.__table__.delete().where(col.in_(provider_ids)))
@@ -198,16 +225,13 @@ def create_metadata_type(db: Session, data: MetadataTypeCreate) -> Metadata:
     return obj
 
 
-def update_metadata_type(
-    db: Session, metadata_id: uuid.UUID, data: MetadataTypeUpdate
-) -> Metadata:
+def update_metadata_type(db: Session, metadata_id: uuid.UUID, data: MetadataTypeUpdate) -> Metadata:
     obj = get_metadata_type(db, metadata_id)
     updates = data.model_dump(exclude_none=True)
     if "name" in updates and updates["name"] != obj.name:
-        existing = (
-            db.execute(select(Metadata).where(Metadata.name == updates["name"]))
-            .scalar_one_or_none()
-        )
+        existing = db.execute(
+            select(Metadata).where(Metadata.name == updates["name"])
+        ).scalar_one_or_none()
         if existing:
             raise ConflictError(f"Metadata type with name '{updates['name']}' already exists")
     for key, val in updates.items():
@@ -219,15 +243,52 @@ def update_metadata_type(
 
 def get_metadata_type_usage(db: Session, metadata_id: uuid.UUID) -> EntityUsage:
     get_metadata_type(db, metadata_id)
-    return _build_usage([
-        ("Asset Metadata", _count(db, AssetMetadata, AssetMetadata.metadata_id, metadata_id), "cascade"),
-        ("Provider Metadata", _count(db, ProviderMetadata, ProviderMetadata.metadata_id, metadata_id), "cascade"),
-        ("Provider-Asset Metadata", _count(db, ProviderAssetMetadata, ProviderAssetMetadata.metadata_id, metadata_id), "cascade"),
-        ("Content Metadata", _count(db, ProviderContentMetadata, ProviderContentMetadata.metadata_id, metadata_id), "cascade"),
-        ("Asset Type Fields", _count(db, AssetTypeMetadata, AssetTypeMetadata.metadata_id, metadata_id), "cascade"),
-        ("Provider Type Fields", _count(db, ProviderTypeMetadata, ProviderTypeMetadata.metadata_id, metadata_id), "cascade"),
-        ("Provider-Asset Type Fields", _count(db, AssetTypeProviderAssetMetadata, AssetTypeProviderAssetMetadata.metadata_id, metadata_id), "cascade"),
-    ])
+    return _build_usage(
+        [
+            (
+                "Asset Metadata",
+                _count(db, AssetMetadata, AssetMetadata.metadata_id, metadata_id),
+                "cascade",
+            ),
+            (
+                "Provider Metadata",
+                _count(db, ProviderMetadata, ProviderMetadata.metadata_id, metadata_id),
+                "cascade",
+            ),
+            (
+                "Provider-Asset Metadata",
+                _count(db, ProviderAssetMetadata, ProviderAssetMetadata.metadata_id, metadata_id),
+                "cascade",
+            ),
+            (
+                "Content Metadata",
+                _count(
+                    db, ProviderContentMetadata, ProviderContentMetadata.metadata_id, metadata_id
+                ),
+                "cascade",
+            ),
+            (
+                "Asset Type Fields",
+                _count(db, AssetTypeMetadata, AssetTypeMetadata.metadata_id, metadata_id),
+                "cascade",
+            ),
+            (
+                "Provider Type Fields",
+                _count(db, ProviderTypeMetadata, ProviderTypeMetadata.metadata_id, metadata_id),
+                "cascade",
+            ),
+            (
+                "Provider-Asset Type Fields",
+                _count(
+                    db,
+                    AssetTypeProviderAssetMetadata,
+                    AssetTypeProviderAssetMetadata.metadata_id,
+                    metadata_id,
+                ),
+                "cascade",
+            ),
+        ]
+    )
 
 
 def delete_metadata_type(db: Session, metadata_id: uuid.UUID) -> None:
@@ -263,9 +324,7 @@ def get_attribute(db: Session, attribute_id: uuid.UUID) -> Attribute:
 
 
 def create_attribute(db: Session, data: AttributeCreate) -> Attribute:
-    existing = (
-        db.execute(select(Attribute).where(Attribute.name == data.name)).scalar_one_or_none()
-    )
+    existing = db.execute(select(Attribute).where(Attribute.name == data.name)).scalar_one_or_none()
     if existing:
         raise ConflictError(f"Attribute with name '{data.name}' already exists")
     obj = Attribute(**data.model_dump())
@@ -275,16 +334,13 @@ def create_attribute(db: Session, data: AttributeCreate) -> Attribute:
     return obj
 
 
-def update_attribute(
-    db: Session, attribute_id: uuid.UUID, data: AttributeUpdate
-) -> Attribute:
+def update_attribute(db: Session, attribute_id: uuid.UUID, data: AttributeUpdate) -> Attribute:
     obj = get_attribute(db, attribute_id)
     updates = data.model_dump(exclude_none=True)
     if "name" in updates and updates["name"] != obj.name:
-        existing = (
-            db.execute(select(Attribute).where(Attribute.name == updates["name"]))
-            .scalar_one_or_none()
-        )
+        existing = db.execute(
+            select(Attribute).where(Attribute.name == updates["name"])
+        ).scalar_one_or_none()
         if existing:
             raise ConflictError(f"Attribute with name '{updates['name']}' already exists")
     for key, val in updates.items():
@@ -296,18 +352,47 @@ def update_attribute(
 
 def get_attribute_usage(db: Session, attribute_id: uuid.UUID) -> EntityUsage:
     get_attribute(db, attribute_id)
-    return _build_usage([
-        ("Asset Group Attributes", _count(db, ProviderAssetGroupAttribute, ProviderAssetGroupAttribute.attribute_id, attribute_id), "cascade"),
-        ("Asset Group Period Attributes", _count(db, ProviderAssetGroupPeriodAttribute, ProviderAssetGroupPeriodAttribute.attribute_id, attribute_id), "cascade"),
-        ("Content Attributes", _count(db, ProviderContentAttribute, ProviderContentAttribute.attribute_id, attribute_id), "cascade"),
-    ])
+    return _build_usage(
+        [
+            (
+                "Instrument Attributes",
+                _count(
+                    db,
+                    InstrumentAttribute,
+                    InstrumentAttribute.attribute_id,
+                    attribute_id,
+                ),
+                "cascade",
+            ),
+            (
+                "Instrument Period Attributes",
+                _count(
+                    db,
+                    InstrumentPeriodAttribute,
+                    InstrumentPeriodAttribute.attribute_id,
+                    attribute_id,
+                ),
+                "cascade",
+            ),
+            (
+                "Content Attributes",
+                _count(
+                    db,
+                    ProviderContentAttribute,
+                    ProviderContentAttribute.attribute_id,
+                    attribute_id,
+                ),
+                "cascade",
+            ),
+        ]
+    )
 
 
 def delete_attribute(db: Session, attribute_id: uuid.UUID) -> None:
     obj = get_attribute(db, attribute_id)
     for model, col in [
-        (ProviderAssetGroupAttribute, ProviderAssetGroupAttribute.attribute_id),
-        (ProviderAssetGroupPeriodAttribute, ProviderAssetGroupPeriodAttribute.attribute_id),
+        (InstrumentAttribute, InstrumentAttribute.attribute_id),
+        (InstrumentPeriodAttribute, InstrumentPeriodAttribute.attribute_id),
         (ProviderContentAttribute, ProviderContentAttribute.attribute_id),
     ]:
         db.execute(model.__table__.delete().where(col == attribute_id))
@@ -330,9 +415,26 @@ def get_asset_type_usage(db: Session, asset_type_id: uuid.UUID) -> EntityUsage:
 
     items: list[tuple[str, int, str]] = [
         ("Assets", asset_count, "cascade"),
-        ("Child Types", _count(db, AssetType, AssetType.parent_type_id, asset_type_id), "reference"),
-        ("Metadata Field Definitions", _count(db, AssetTypeMetadata, AssetTypeMetadata.asset_type_id, asset_type_id), "cascade"),
-        ("Provider-Asset Field Definitions", _count(db, AssetTypeProviderAssetMetadata, AssetTypeProviderAssetMetadata.asset_type_id, asset_type_id), "cascade"),
+        (
+            "Child Types",
+            _count(db, AssetType, AssetType.parent_type_id, asset_type_id),
+            "reference",
+        ),
+        (
+            "Metadata Field Definitions",
+            _count(db, AssetTypeMetadata, AssetTypeMetadata.asset_type_id, asset_type_id),
+            "cascade",
+        ),
+        (
+            "Provider-Asset Field Definitions",
+            _count(
+                db,
+                AssetTypeProviderAssetMetadata,
+                AssetTypeProviderAssetMetadata.asset_type_id,
+                asset_type_id,
+            ),
+            "cascade",
+        ),
     ]
     # Add transitive counts from assets that would be deleted
     items.extend(_count_asset_cascade(db, asset_ids))
@@ -347,7 +449,9 @@ def delete_asset_type(db: Session, asset_type_id: uuid.UUID) -> None:
     # Block only on child types (must delete children first to avoid orphans)
     child_count = _count(db, AssetType, AssetType.parent_type_id, asset_type_id)
     if child_count > 0:
-        raise BadRequestError("Cannot delete asset type with child types. Delete child types first.")
+        raise BadRequestError(
+            "Cannot delete asset type with child types. Delete child types first."
+        )
 
     # Cascade delete all assets of this type and their data
     asset_ids = _get_asset_ids_for_type(db, asset_type_id)
@@ -355,9 +459,7 @@ def delete_asset_type(db: Session, asset_type_id: uuid.UUID) -> None:
 
     # Clean up type-level junction tables
     db.execute(
-        AssetTypeMetadata.__table__.delete().where(
-            AssetTypeMetadata.asset_type_id == asset_type_id
-        )
+        AssetTypeMetadata.__table__.delete().where(AssetTypeMetadata.asset_type_id == asset_type_id)
     )
     db.execute(
         AssetTypeProviderAssetMetadata.__table__.delete().where(
@@ -383,8 +485,18 @@ def get_provider_type_usage(db: Session, provider_type_id: uuid.UUID) -> EntityU
 
     items: list[tuple[str, int, str]] = [
         ("Providers", provider_count, "cascade"),
-        ("Child Types", _count(db, ProviderType, ProviderType.parent_type_id, provider_type_id), "reference"),
-        ("Metadata Field Definitions", _count(db, ProviderTypeMetadata, ProviderTypeMetadata.provider_type_id, provider_type_id), "cascade"),
+        (
+            "Child Types",
+            _count(db, ProviderType, ProviderType.parent_type_id, provider_type_id),
+            "reference",
+        ),
+        (
+            "Metadata Field Definitions",
+            _count(
+                db, ProviderTypeMetadata, ProviderTypeMetadata.provider_type_id, provider_type_id
+            ),
+            "cascade",
+        ),
     ]
     # Add transitive counts from providers that would be deleted
     items.extend(_count_provider_cascade(db, provider_ids))
@@ -399,7 +511,9 @@ def delete_provider_type(db: Session, provider_type_id: uuid.UUID) -> None:
     # Block only on child types
     child_count = _count(db, ProviderType, ProviderType.parent_type_id, provider_type_id)
     if child_count > 0:
-        raise BadRequestError("Cannot delete provider type with child types. Delete child types first.")
+        raise BadRequestError(
+            "Cannot delete provider type with child types. Delete child types first."
+        )
 
     # Cascade delete all providers of this type and their data
     provider_ids = _get_provider_ids_for_type(db, provider_type_id)
@@ -426,7 +540,9 @@ def get_asset_usage(db: Session, asset_id: uuid.UUID) -> EntityUsage:
         raise NotFoundError("Asset not found")
 
     items: list[tuple[str, int, str]] = _count_asset_cascade(db, [asset_id])
-    items.append(("Underlying Assets", _count(db, Asset, Asset.underlying_asset_id, asset_id), "reference"))
+    items.append(
+        ("Underlying Assets", _count(db, Asset, Asset.underlying_asset_id, asset_id), "reference")
+    )
 
     return _build_usage(items)
 
@@ -442,6 +558,122 @@ def get_provider_usage(db: Session, provider_id: uuid.UUID) -> EntityUsage:
         raise NotFoundError("Provider not found")
 
     items: list[tuple[str, int, str]] = _count_provider_cascade(db, [provider_id])
-    items.append(("Underlying Providers", _count(db, Provider, Provider.underlying_provider_id, provider_id), "reference"))
+    items.append(
+        (
+            "Underlying Providers",
+            _count(db, Provider, Provider.underlying_provider_id, provider_id),
+            "reference",
+        )
+    )
+
+    return _build_usage(items)
+
+
+# ---------------------------------------------------------------------------
+# Instrument usage
+# ---------------------------------------------------------------------------
+
+
+def get_instrument_usage(db: Session, instrument_id: uuid.UUID) -> EntityUsage:
+    obj = db.get(Instrument, instrument_id)
+    if not obj:
+        raise NotFoundError("Instrument not found")
+
+    items: list[tuple[str, int, str]] = [
+        # Cascade — deleted with the instrument
+        (
+            "Instrument Metadata",
+            _count(db, InstrumentMetadata, InstrumentMetadata.instrument_id, instrument_id),
+            "cascade",
+        ),
+        (
+            "Instrument Attributes",
+            _count(db, InstrumentAttribute, InstrumentAttribute.instrument_id, instrument_id),
+            "cascade",
+        ),
+        (
+            "Instrument Period Attributes",
+            _count(
+                db,
+                InstrumentPeriodAttribute,
+                InstrumentPeriodAttribute.instrument_id,
+                instrument_id,
+            ),
+            "cascade",
+        ),
+        # References — entities that use this instrument
+        (
+            "Composite Members",
+            _count(db, CompositeMember, CompositeMember.instrument_id, instrument_id),
+            "reference",
+        ),
+        (
+            "Feed Scopes",
+            _count(db, FeedInstrumentScope, FeedInstrumentScope.instrument_id, instrument_id),
+            "reference",
+        ),
+        (
+            "Strategy Scopes",
+            _count(
+                db, StrategyInstrumentScope, StrategyInstrumentScope.instrument_id, instrument_id
+            ),
+            "reference",
+        ),
+        ("Orders", _count(db, Order, Order.instrument_id, instrument_id), "reference"),
+        ("Trade Legs", _count(db, TradeLeg, TradeLeg.instrument_id, instrument_id), "reference"),
+    ]
+
+    return _build_usage(items)
+
+
+# ---------------------------------------------------------------------------
+# Composite usage
+# ---------------------------------------------------------------------------
+
+
+def get_composite_usage(db: Session, composite_id: uuid.UUID) -> EntityUsage:
+    obj = db.get(Composite, composite_id)
+    if not obj:
+        raise NotFoundError("Composite not found")
+
+    items: list[tuple[str, int, str]] = [
+        # Cascade — deleted with the composite
+        (
+            "Members",
+            _count(db, CompositeMember, CompositeMember.composite_id, composite_id),
+            "cascade",
+        ),
+        (
+            "Composite Metadata",
+            _count(db, CompositeMetadata, CompositeMetadata.composite_id, composite_id),
+            "cascade",
+        ),
+        (
+            "Composite Attributes",
+            _count(db, CompositeAttribute, CompositeAttribute.composite_id, composite_id),
+            "cascade",
+        ),
+        (
+            "Composite Period Attributes",
+            _count(
+                db,
+                CompositePeriodAttribute,
+                CompositePeriodAttribute.composite_id,
+                composite_id,
+            ),
+            "cascade",
+        ),
+        # References
+        (
+            "Feed Scopes",
+            _count(db, FeedCompositeScope, FeedCompositeScope.composite_id, composite_id),
+            "reference",
+        ),
+        (
+            "Strategy Scopes",
+            _count(db, StrategyCompositeScope, StrategyCompositeScope.composite_id, composite_id),
+            "reference",
+        ),
+    ]
 
     return _build_usage(items)

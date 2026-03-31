@@ -10,8 +10,8 @@ class TradeLegSummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
-    from_asset_symbol: str
-    to_asset_symbol: str
+    instrument_id: uuid.UUID
+    instrument_name: str
     direction: str
     quantity: float
     entry_price: float | None = None
@@ -81,8 +81,7 @@ class TradeLegDetail(TradeLegSummary):
 
 
 class TradeLegCreate(BaseModel):
-    from_asset_id: uuid.UUID
-    to_asset_id: uuid.UUID
+    instrument_id: uuid.UUID
     direction: str
     quantity: float
     expected_entry_price: float | None = None
@@ -133,7 +132,8 @@ class TradeConditionCreate(BaseModel):
     threshold_value: float
     is_met: bool = False
     met_at: datetime.datetime | None = None
-    provider_asset_group_id: uuid.UUID | None = None
+    instrument_id: uuid.UUID | None = None
+    composite_id: uuid.UUID | None = None
     provider_id: uuid.UUID | None = None
     from_asset_id: uuid.UUID | None = None
     to_asset_id: uuid.UUID | None = None
@@ -145,13 +145,16 @@ class TradeSnapshotCreate(BaseModel):
     snapshot_type: str
     attribute_value: float
     timestamp: datetime.datetime
+    instrument_id: uuid.UUID | None = None
+    composite_id: uuid.UUID | None = None
 
 
 class TradeDataSeriesCreate(BaseModel):
     attribute_id: uuid.UUID
     label: str | None = None
     data_source: str
-    provider_asset_group_id: uuid.UUID | None = None
+    instrument_id: uuid.UUID | None = None
+    composite_id: uuid.UUID | None = None
     period_id: uuid.UUID | None = None
 
 

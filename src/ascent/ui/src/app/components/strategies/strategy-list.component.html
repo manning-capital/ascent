@@ -36,7 +36,7 @@
         <a [routerLink]="['/strategies', strategy.id]" class="block no-underline">
           <p-card styleClass="hover:bg-emphasis transition-colors cursor-pointer">
             <div class="flex items-center justify-between mb-2">
-              <h3 class="font-semibold">{{ strategy.name }}</h3>
+              <h3 class="font-semibold">{{ strategy.display_name }}</h3>
               <span class="w-2.5 h-2.5 rounded-full" [class]="strategy.is_active ? 'bg-green-500' : 'bg-surface-400'"></span>
             </div>
             <p class="text-xs text-surface-500 mb-1">{{ strategy.strategy_type }}</p>

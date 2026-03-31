@@ -7,7 +7,7 @@ from pandera.typing.pandas import DataFrame
 from pydantic import Field
 
 from ascent.feeds import Schedule, feed
-from ascent.feeds.output import GroupAttributes
+from ascent.feeds.output import InstrumentAttributes
 
 
 @feed(
@@ -19,7 +19,7 @@ def market_data(
     provider_name: str = "kraken",
     attributes: list[str] = Field(default=["close"]),
     lookback_minutes: int = Field(default=5, ge=1, le=1440),
-) -> DataFrame[GroupAttributes]:
+) -> DataFrame[InstrumentAttributes]:
     from ascent.engine import get_logger
 
     logger = get_logger()
@@ -29,7 +29,7 @@ def market_data(
     return pd.DataFrame(
         columns=[
             "timestamp",
-            "provider_asset_group_id",
+            "instrument_id",
             "attribute_id",
             "attribute_value",
         ]

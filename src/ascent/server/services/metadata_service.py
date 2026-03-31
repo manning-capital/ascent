@@ -5,7 +5,14 @@ from typing import Any
 from sqlalchemy import insert, select
 from sqlalchemy.orm import Session, joinedload
 
-from ascent.database.models import AssetMetadata, Metadata, ProviderAssetMetadata, ProviderMetadata
+from ascent.database.models import (
+    AssetMetadata,
+    CompositeMetadata,
+    InstrumentMetadata,
+    Metadata,
+    ProviderAssetMetadata,
+    ProviderMetadata,
+)
 from ascent.server.exceptions import NotFoundError
 from ascent.server.schemas.metadata import (
     BatchMetadataCreate,
@@ -646,6 +653,282 @@ def bulk_update_provider_asset_metadata_history(
             timestamp=i.timestamp,
             provider_id=provider_id,
             asset_id=asset_id,
+            metadata_id=i.metadata_id,
+            value=i.value,
+        )
+        db.add(record)
+
+    db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Instrument Metadata
+# ---------------------------------------------------------------------------
+
+
+def get_latest_instrument_metadata(
+    db: Session, instrument_id: uuid.UUID
+) -> list[MetadataEntrySchema]:
+    query = (
+        select(InstrumentMetadata)
+        .options(joinedload(InstrumentMetadata.metadata_type))
+        .where(InstrumentMetadata.instrument_id == instrument_id)
+        .order_by(InstrumentMetadata.metadata_id, InstrumentMetadata.timestamp.desc())
+    )
+    rows = db.execute(query).unique().scalars().all()
+    return _dedup_metadata_rows(rows)
+
+
+def create_instrument_metadata_entry(
+    db: Session, instrument_id: uuid.UUID, data: MetadataEntryCreate
+) -> MetadataEntrySchema:
+    ts = data.timestamp or datetime.datetime.now(datetime.UTC)
+    db.execute(
+        insert(InstrumentMetadata).values(
+            timestamp=ts,
+            instrument_id=instrument_id,
+            metadata_id=data.metadata_id,
+            value=data.value,
+        )
+    )
+    db.commit()
+    md = db.get(Metadata, data.metadata_id)
+    return MetadataEntrySchema(
+        metadata_id=data.metadata_id,
+        metadata_name=md.name if md else "",
+        metadata_display_name=md.display_name if md else None,
+        value=data.value,
+        timestamp=ts,
+    )
+
+
+def batch_create_instrument_metadata(
+    db: Session, instrument_id: uuid.UUID, data: BatchMetadataCreate
+) -> list[MetadataEntrySchema]:
+    for entry in data.entries:
+        db.execute(
+            insert(InstrumentMetadata).values(
+                timestamp=data.timestamp,
+                instrument_id=instrument_id,
+                metadata_id=entry.metadata_id,
+                value=entry.value,
+            )
+        )
+    db.commit()
+    results: list[MetadataEntrySchema] = []
+    for entry in data.entries:
+        md = db.get(Metadata, entry.metadata_id)
+        results.append(
+            MetadataEntrySchema(
+                metadata_id=entry.metadata_id,
+                metadata_name=md.name if md else "",
+                metadata_display_name=md.display_name if md else None,
+                value=entry.value,
+                timestamp=data.timestamp,
+            )
+        )
+    return results
+
+
+def get_instrument_metadata_history_grid(
+    db: Session, instrument_id: uuid.UUID
+) -> MetadataHistoryGrid:
+    query = (
+        select(InstrumentMetadata)
+        .options(joinedload(InstrumentMetadata.metadata_type))
+        .where(InstrumentMetadata.instrument_id == instrument_id)
+        .order_by(InstrumentMetadata.timestamp.desc())
+    )
+    rows = db.execute(query).unique().scalars().all()
+    return _build_history_grid(rows, InstrumentMetadata)
+
+
+def bulk_update_instrument_metadata_history(
+    db: Session, instrument_id: uuid.UUID, data: BulkHistoryUpdate
+) -> None:
+    for d in data.deletes:
+        if d.metadata_id:
+            row = db.get(InstrumentMetadata, (d.timestamp, instrument_id, d.metadata_id))
+            if row:
+                db.delete(row)
+        else:
+            rows = (
+                db.execute(
+                    select(InstrumentMetadata).where(
+                        InstrumentMetadata.instrument_id == instrument_id,
+                        InstrumentMetadata.timestamp == d.timestamp,
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            for row in rows:
+                db.delete(row)
+
+    db.flush()
+
+    for u in data.updates:
+        row = db.get(InstrumentMetadata, (u.old_timestamp, instrument_id, u.metadata_id))
+        if not row:
+            continue
+        new_ts = u.new_timestamp if u.new_timestamp is not None else u.old_timestamp
+        if new_ts != u.old_timestamp:
+            db.delete(row)
+            db.flush()
+            new_row = InstrumentMetadata(
+                timestamp=new_ts,
+                instrument_id=instrument_id,
+                metadata_id=u.metadata_id,
+                value=u.value,
+            )
+            db.add(new_row)
+        else:
+            row.value = u.value
+
+    db.flush()
+
+    for i in data.inserts:
+        record = InstrumentMetadata(
+            timestamp=i.timestamp,
+            instrument_id=instrument_id,
+            metadata_id=i.metadata_id,
+            value=i.value,
+        )
+        db.add(record)
+
+    db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Composite Metadata
+# ---------------------------------------------------------------------------
+
+
+def get_latest_composite_metadata(
+    db: Session, composite_id: uuid.UUID
+) -> list[MetadataEntrySchema]:
+    query = (
+        select(CompositeMetadata)
+        .options(joinedload(CompositeMetadata.metadata_type))
+        .where(CompositeMetadata.composite_id == composite_id)
+        .order_by(CompositeMetadata.metadata_id, CompositeMetadata.timestamp.desc())
+    )
+    rows = db.execute(query).unique().scalars().all()
+    return _dedup_metadata_rows(rows)
+
+
+def create_composite_metadata_entry(
+    db: Session, composite_id: uuid.UUID, data: MetadataEntryCreate
+) -> MetadataEntrySchema:
+    ts = data.timestamp or datetime.datetime.now(datetime.UTC)
+    db.execute(
+        insert(CompositeMetadata).values(
+            timestamp=ts,
+            composite_id=composite_id,
+            metadata_id=data.metadata_id,
+            value=data.value,
+        )
+    )
+    db.commit()
+    md = db.get(Metadata, data.metadata_id)
+    return MetadataEntrySchema(
+        metadata_id=data.metadata_id,
+        metadata_name=md.name if md else "",
+        metadata_display_name=md.display_name if md else None,
+        value=data.value,
+        timestamp=ts,
+    )
+
+
+def batch_create_composite_metadata(
+    db: Session, composite_id: uuid.UUID, data: BatchMetadataCreate
+) -> list[MetadataEntrySchema]:
+    for entry in data.entries:
+        db.execute(
+            insert(CompositeMetadata).values(
+                timestamp=data.timestamp,
+                composite_id=composite_id,
+                metadata_id=entry.metadata_id,
+                value=entry.value,
+            )
+        )
+    db.commit()
+    results: list[MetadataEntrySchema] = []
+    for entry in data.entries:
+        md = db.get(Metadata, entry.metadata_id)
+        results.append(
+            MetadataEntrySchema(
+                metadata_id=entry.metadata_id,
+                metadata_name=md.name if md else "",
+                metadata_display_name=md.display_name if md else None,
+                value=entry.value,
+                timestamp=data.timestamp,
+            )
+        )
+    return results
+
+
+def get_composite_metadata_history_grid(
+    db: Session, composite_id: uuid.UUID
+) -> MetadataHistoryGrid:
+    query = (
+        select(CompositeMetadata)
+        .options(joinedload(CompositeMetadata.metadata_type))
+        .where(CompositeMetadata.composite_id == composite_id)
+        .order_by(CompositeMetadata.timestamp.desc())
+    )
+    rows = db.execute(query).unique().scalars().all()
+    return _build_history_grid(rows, CompositeMetadata)
+
+
+def bulk_update_composite_metadata_history(
+    db: Session, composite_id: uuid.UUID, data: BulkHistoryUpdate
+) -> None:
+    for d in data.deletes:
+        if d.metadata_id:
+            row = db.get(CompositeMetadata, (d.timestamp, composite_id, d.metadata_id))
+            if row:
+                db.delete(row)
+        else:
+            rows = (
+                db.execute(
+                    select(CompositeMetadata).where(
+                        CompositeMetadata.composite_id == composite_id,
+                        CompositeMetadata.timestamp == d.timestamp,
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            for row in rows:
+                db.delete(row)
+
+    db.flush()
+
+    for u in data.updates:
+        row = db.get(CompositeMetadata, (u.old_timestamp, composite_id, u.metadata_id))
+        if not row:
+            continue
+        new_ts = u.new_timestamp if u.new_timestamp is not None else u.old_timestamp
+        if new_ts != u.old_timestamp:
+            db.delete(row)
+            db.flush()
+            new_row = CompositeMetadata(
+                timestamp=new_ts,
+                composite_id=composite_id,
+                metadata_id=u.metadata_id,
+                value=u.value,
+            )
+            db.add(new_row)
+        else:
+            row.value = u.value
+
+    db.flush()
+
+    for i in data.inserts:
+        record = CompositeMetadata(
+            timestamp=i.timestamp,
+            composite_id=composite_id,
             metadata_id=i.metadata_id,
             value=i.value,
         )

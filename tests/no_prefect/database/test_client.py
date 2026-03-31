@@ -10,10 +10,11 @@ from ascent.database.models import (
     Asset,
     AssetType,
     Attribute,
+    Instrument,
+    InstrumentAttribute,
+    InstrumentMember,
+    InstrumentType,
     Provider,
-    ProviderAssetGroup,
-    ProviderAssetGroupAttribute,
-    ProviderAssetGroupMember,
     ProviderType,
 )
 
@@ -57,14 +58,25 @@ def fake_data(postgres_engine: Engine):
         session.refresh(btc_asset)
         session.refresh(usd_asset)
 
-    # Create a single-member asset group for BTC/USD.
-    group = ProviderAssetGroup()
+    # Create an instrument type.
+    instrument_type = InstrumentType(name="TEST_PAIR", display_name="Test Pair")
+    with Session(postgres_engine) as session:
+        session.add(instrument_type)
+        session.commit()
+        session.refresh(instrument_type)
+
+    # Create a single-member instrument for BTC/USD.
+    group = Instrument(
+        name="TEST_BTC_USD",
+        display_name="Test BTC/USD",
+        instrument_type_id=instrument_type.id,
+    )
     with Session(postgres_engine) as session:
         session.add(group)
         session.commit()
         session.refresh(group)
-    member = ProviderAssetGroupMember(
-        provider_asset_group_id=group.id,
+    member = InstrumentMember(
+        instrument_id=group.id,
         provider_id=provider.id,
         from_asset_id=btc_asset.id,
         to_asset_id=usd_asset.id,
@@ -84,7 +96,7 @@ def fake_data(postgres_engine: Engine):
         session.refresh(close_attribute)
         session.refresh(volume_attribute)
 
-    # Add provider asset group attribute data.
+    # Add instrument attribute data.
     with Session(postgres_engine) as session:
         start_timestamp = dt.datetime(2025, 1, 1, 0, 0, 0)
         end_timestamp = start_timestamp + dt.timedelta(days=7)
@@ -92,7 +104,7 @@ def fake_data(postgres_engine: Engine):
         fake_close_df = pd.DataFrame(
             {
                 "timestamp": timestamps,
-                "provider_asset_group_id": [str(group.id)] * len(timestamps),
+                "instrument_id": [str(group.id)] * len(timestamps),
                 "attribute_id": [str(close_attribute.id)] * len(timestamps),
                 "attribute_value": [float(i) for i in range(len(timestamps))],
             }
@@ -100,27 +112,28 @@ def fake_data(postgres_engine: Engine):
         fake_volume_df = pd.DataFrame(
             {
                 "timestamp": timestamps,
-                "provider_asset_group_id": [str(group.id)] * len(timestamps),
+                "instrument_id": [str(group.id)] * len(timestamps),
                 "attribute_id": [str(volume_attribute.id)] * len(timestamps),
                 "attribute_value": [10.0 * float(i) for i in range(len(timestamps))],
             }
         )
         fake_df = pd.concat([fake_close_df, fake_volume_df])
         fake_df.to_sql(
-            ProviderAssetGroupAttribute.__tablename__,
+            InstrumentAttribute.__tablename__,
             postgres_engine,
             if_exists="append",
             index=False,
         )
 
-        # Yield the fake data along with the group ID.
-        yield {"df": fake_df, "group_id": group.id}
+        # Yield the fake data along with the instrument ID.
+        yield {"df": fake_df, "instrument_id": group.id}
 
     # Delete the fake data.
     with Session(postgres_engine) as session:
-        session.query(ProviderAssetGroupAttribute).delete()
-        session.query(ProviderAssetGroupMember).delete()
-        session.query(ProviderAssetGroup).delete()
+        session.query(InstrumentAttribute).delete()
+        session.query(InstrumentMember).delete()
+        session.query(Instrument).delete()
+        session.query(InstrumentType).delete()
         session.query(Attribute).delete()
         session.query(Provider).delete()
         session.query(ProviderType).delete()
@@ -137,13 +150,13 @@ def test_attributes_are_created(postgres_engine: Engine):
         assert "volume" in [attribute.name for attribute in attributes]
 
 
-def test_database_client_can_read_group_attributes(fake_data, postgres_engine: Engine):
-    group_id = fake_data["group_id"]
+def test_database_client_can_read_instrument_attributes(fake_data, postgres_engine: Engine):
+    instrument_id = fake_data["instrument_id"]
     with AscentClient(postgres_engine) as database_client:
         start_timestamp = dt.datetime(2025, 1, 1, 0, 0, 0)
         end_timestamp = start_timestamp + dt.timedelta(days=7)
-        group_attributes = database_client.get_group_attribute(
-            provider_asset_group_id=group_id,
+        group_attributes = database_client.get_instrument_attribute(
+            instrument_id=instrument_id,
             start_timestamp=start_timestamp,
             end_timestamp=end_timestamp,
             attributes=["close", "volume"],

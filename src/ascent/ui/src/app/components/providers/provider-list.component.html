@@ -10,6 +10,10 @@
       <h3 class="font-semibold mb-4">New Provider</h3>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
+          <label class="block text-xs text-surface-500 mb-1">Display Name *</label>
+          <input type="text" pInputText [(ngModel)]="newDisplayName" class="w-full"/>
+        </div>
+        <div>
           <label class="block text-xs text-surface-500 mb-1">Name *</label>
           <input type="text" pInputText [(ngModel)]="newName" class="w-full"/>
         </div>
@@ -38,74 +42,99 @@
   }
 
   <!-- Providers Table -->
-  <p-card styleClass="overflow-hidden">
-    <p-table [value]="providerService.providers()" [paginator]="true" [rows]="10" [rowsPerPageOptions]="[10, 25, 50, 100]"
-             [showCurrentPageReport]="true" currentPageReportTemplate="Showing {first} to {last} of {totalRecords} providers"
-             [loading]="providerService.loading()"
-             [tableStyle]="{'width': '100%'}">
-      <ng-template #header>
-        <tr>
-          <th pSortableColumn="name">Name <p-sortIcon field="name"/></th>
-          <th pSortableColumn="provider_type_name">Type <p-sortIcon field="provider_type_name"/></th>
-          <th pSortableColumn="provider_external_code">Code <p-sortIcon field="provider_external_code"/></th>
-          <th pSortableColumn="is_active" class="w-28">Status <p-sortIcon field="is_active"/></th>
-        </tr>
-        <tr>
-          <th>
-            <p-columnFilter field="name" matchMode="contains" [showMenu]="false">
-              <ng-template #filter let-filter="filterCallback">
-                <input type="text" pInputText (input)="filter($any($event.target).value)" placeholder="Filter name" class="w-full"/>
-              </ng-template>
-            </p-columnFilter>
-          </th>
-          <th>
-            <p-columnFilter field="provider_type_name" matchMode="in" [showMenu]="false">
-              <ng-template #filter let-filter="filterCallback">
-                <p-multiselect [options]="typeNames()" (onChange)="filter($event.value)" placeholder="All Types"
-                               [maxSelectedLabels]="1" selectedItemsLabel="{0} types"/>
-              </ng-template>
-            </p-columnFilter>
-          </th>
-          <th>
-            <p-columnFilter field="provider_external_code" matchMode="contains" [showMenu]="false">
-              <ng-template #filter let-filter="filterCallback">
-                <input type="text" pInputText (input)="filter($any($event.target).value)" placeholder="Filter code" class="w-full"/>
-              </ng-template>
-            </p-columnFilter>
-          </th>
-          <th>
-            <p-columnFilter field="is_active" matchMode="equals" [showMenu]="false">
-              <ng-template #filter let-filter="filterCallback">
-                <p-select [options]="statusOptions" (onChange)="filter($event.value)" placeholder="All"
-                           optionLabel="label" optionValue="value" [showClear]="true"/>
-              </ng-template>
-            </p-columnFilter>
-          </th>
-        </tr>
-      </ng-template>
-      <ng-template #body let-provider>
-        <tr class="cursor-pointer hover:bg-emphasis transition-colors" (click)="navigateToProvider(provider.id)">
-          <td class="font-medium">{{ provider.name }}</td>
-          <td>{{ provider.provider_type_name ?? 'Unknown' }}</td>
-          <td class="font-mono text-surface-500">{{ provider.provider_external_code ?? '—' }}</td>
-          <td>
-            <p-tag [value]="provider.is_active ? 'Active' : 'Inactive'" [severity]="provider.is_active ? 'success' : 'secondary'" [rounded]="true"/>
-          </td>
-        </tr>
-      </ng-template>
-      <ng-template #loadingicon/>
-      <ng-template #loadingbody>
-        <tr>
-          @for (_ of [1,2,3,4]; track $index) {
-            <td><p-skeleton width="75%" height="1rem"/></td>
+  @if (providerService.loading() && providerService.providers().length === 0) {
+    <p-card styleClass="overflow-hidden">
+      <table class="w-full">
+        <thead>
+          <tr>
+            <th class="text-left p-4 font-semibold">Display Name</th>
+            <th class="text-left p-4 font-semibold">Name</th>
+            <th class="text-left p-4 font-semibold">Type</th>
+            <th class="text-left p-4 font-semibold">Code</th>
+            <th class="text-left p-4 font-semibold w-28">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (_ of [1,2,3,4,5]; track $index) {
+            <tr>
+              @for (_ of [1,2,3,4,5]; track $index) {
+                <td class="p-4"><p-skeleton width="75%" height="1rem"/></td>
+              }
+            </tr>
           }
-        </tr>
-      </ng-template>
-      <ng-template #emptymessage>
-        <tr>
-          <td colspan="4" class="text-center text-surface-400 py-8">No providers found.</td>
-        </tr>
-      </ng-template>
-    </p-table>
-  </p-card>
+        </tbody>
+      </table>
+    </p-card>
+  } @else {
+    <p-card styleClass="overflow-hidden">
+      <p-table [value]="providerService.providers()" [paginator]="true" [rows]="10" [rowsPerPageOptions]="[10, 25, 50, 100]"
+               [showCurrentPageReport]="true" currentPageReportTemplate="Showing {first} to {last} of {totalRecords} providers"
+               [tableStyle]="{'width': '100%'}">
+        <ng-template #header>
+          <tr>
+            <th pSortableColumn="display_name">Display Name <p-sortIcon field="display_name"/></th>
+            <th pSortableColumn="name">Name <p-sortIcon field="name"/></th>
+            <th pSortableColumn="provider_type_name">Type <p-sortIcon field="provider_type_name"/></th>
+            <th pSortableColumn="provider_external_code">Code <p-sortIcon field="provider_external_code"/></th>
+            <th pSortableColumn="is_active" class="w-28">Status <p-sortIcon field="is_active"/></th>
+          </tr>
+          <tr>
+            <th>
+              <p-columnFilter field="display_name" matchMode="contains" [showMenu]="false">
+                <ng-template #filter let-filter="filterCallback">
+                  <input type="text" pInputText (input)="filter($any($event.target).value)" placeholder="Filter display name" class="w-full"/>
+                </ng-template>
+              </p-columnFilter>
+            </th>
+            <th>
+              <p-columnFilter field="name" matchMode="contains" [showMenu]="false">
+                <ng-template #filter let-filter="filterCallback">
+                  <input type="text" pInputText (input)="filter($any($event.target).value)" placeholder="Filter name" class="w-full"/>
+                </ng-template>
+              </p-columnFilter>
+            </th>
+            <th>
+              <p-columnFilter field="provider_type_name" matchMode="in" [showMenu]="false">
+                <ng-template #filter let-filter="filterCallback">
+                  <p-multiselect [options]="typeNames()" (onChange)="filter($event.value)" placeholder="All Types"
+                                 [maxSelectedLabels]="1" selectedItemsLabel="{0} types"/>
+                </ng-template>
+              </p-columnFilter>
+            </th>
+            <th>
+              <p-columnFilter field="provider_external_code" matchMode="contains" [showMenu]="false">
+                <ng-template #filter let-filter="filterCallback">
+                  <input type="text" pInputText (input)="filter($any($event.target).value)" placeholder="Filter code" class="w-full"/>
+                </ng-template>
+              </p-columnFilter>
+            </th>
+            <th>
+              <p-columnFilter field="is_active" matchMode="equals" [showMenu]="false">
+                <ng-template #filter let-filter="filterCallback">
+                  <p-select [options]="statusOptions" (onChange)="filter($event.value)" placeholder="All"
+                             optionLabel="label" optionValue="value" [showClear]="true"/>
+                </ng-template>
+              </p-columnFilter>
+            </th>
+          </tr>
+        </ng-template>
+        <ng-template #body let-provider>
+          <tr class="cursor-pointer hover:bg-emphasis transition-colors" (click)="navigateToProvider(provider.id)">
+            <td class="font-medium">{{ provider.display_name }}</td>
+            <td class="font-mono text-surface-500">{{ provider.name }}</td>
+            <td>{{ provider.provider_type_name ?? 'Unknown' }}</td>
+            <td class="font-mono text-surface-500">{{ provider.provider_external_code ?? '—' }}</td>
+            <td>
+              <p-tag [value]="provider.is_active ? 'Active' : 'Inactive'" [severity]="provider.is_active ? 'success' : 'secondary'" [rounded]="true"/>
+            </td>
+          </tr>
+        </ng-template>
+        <ng-template #emptymessage>
+          <tr>
+            <td colspan="4" class="text-center text-surface-400 py-8">No providers found.</td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </p-card>
+  }
 </div>

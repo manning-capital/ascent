@@ -5,7 +5,6 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from ascent.database.models import (
-    Asset,
     Order,
     OrderStatus,
     Trade,
@@ -65,10 +64,9 @@ def _compute_tags(trade: Trade) -> list[str]:
 def _compute_display_symbol(trade: Trade) -> str:
     symbols = []
     for leg in trade.legs:
-        from_sym = leg.from_asset.symbol or leg.from_asset.name
-        to_sym = leg.to_asset.symbol or leg.to_asset.name
-        symbols.append(f"{from_sym}/{to_sym}")
-    return " + ".join(symbols)
+        if leg.instrument and leg.instrument.display_name:
+            symbols.append(leg.instrument.display_name)
+    return " + ".join(symbols) if symbols else ""
 
 
 def _build_trade_list_item(trade: Trade) -> TradeListItem:
@@ -77,8 +75,8 @@ def _build_trade_list_item(trade: Trade) -> TradeListItem:
         legs.append(
             TradeLegSummary(
                 id=leg.id,
-                from_asset_symbol=leg.from_asset.symbol or leg.from_asset.name,
-                to_asset_symbol=leg.to_asset.symbol or leg.to_asset.name,
+                instrument_id=leg.instrument_id,
+                instrument_name=leg.instrument.display_name if leg.instrument else "",
                 direction=leg.direction,
                 quantity=leg.quantity,
                 entry_price=leg.entry_price,
@@ -89,11 +87,11 @@ def _build_trade_list_item(trade: Trade) -> TradeListItem:
     return TradeListItem(
         id=trade.id,
         strategy_id=trade.strategy_id,
-        strategy_name=trade.strategy.name,
+        strategy_name=trade.strategy.display_name,
         is_paper=trade.is_paper,
         entry_at=trade.entry_at,
         exit_at=trade.exit_at,
-        current_status=(trade.current_status_type.symbol if trade.current_status_type else None),
+        current_status=(trade.current_status_type.name if trade.current_status_type else None),
         total_realized_pnl=trade.total_realized_pnl,
         total_unrealized_pnl=trade.total_unrealized_pnl,
         total_fees=trade.total_fees,
@@ -114,15 +112,16 @@ def get_trades(
     page: int = 1,
     page_size: int = 10,
 ) -> tuple[list[TradeListItem], int]:
+    from ascent.database.models.instruments import Instrument
+
     query = select(Trade).options(
         joinedload(Trade.strategy),
         joinedload(Trade.current_status_type),
-        selectinload(Trade.legs).joinedload(TradeLeg.from_asset),
-        selectinload(Trade.legs).joinedload(TradeLeg.to_asset),
+        selectinload(Trade.legs).joinedload(TradeLeg.instrument),
     )
 
     if status:
-        query = query.join(Trade.current_status_type).where(TradeStatusType.symbol == status)
+        query = query.join(Trade.current_status_type).where(TradeStatusType.name == status)
     if strategy_id:
         query = query.where(Trade.strategy_id == strategy_id)
     if start_date:
@@ -131,19 +130,14 @@ def get_trades(
         query = query.where(Trade.entry_at <= end_date)
     if search:
         query = query.where(
-            Trade.legs.any(
-                TradeLeg.from_asset.has(Asset.symbol.ilike(f"%{search}%"))
-                | TradeLeg.to_asset.has(Asset.symbol.ilike(f"%{search}%"))
-                | TradeLeg.from_asset.has(Asset.name.ilike(f"%{search}%"))
-                | TradeLeg.to_asset.has(Asset.name.ilike(f"%{search}%"))
-            )
+            Trade.legs.any(TradeLeg.instrument.has(Instrument.display_name.ilike(f"%{search}%")))
         )
 
     # Count total
     count_query = select(func.count()).select_from(Trade)
     if status:
         count_query = count_query.join(Trade.current_status_type).where(
-            TradeStatusType.symbol == status
+            TradeStatusType.name == status
         )
     if strategy_id:
         count_query = count_query.where(Trade.strategy_id == strategy_id)
@@ -153,12 +147,7 @@ def get_trades(
         count_query = count_query.where(Trade.entry_at <= end_date)
     if search:
         count_query = count_query.where(
-            Trade.legs.any(
-                TradeLeg.from_asset.has(Asset.symbol.ilike(f"%{search}%"))
-                | TradeLeg.to_asset.has(Asset.symbol.ilike(f"%{search}%"))
-                | TradeLeg.from_asset.has(Asset.name.ilike(f"%{search}%"))
-                | TradeLeg.to_asset.has(Asset.name.ilike(f"%{search}%"))
-            )
+            Trade.legs.any(TradeLeg.instrument.has(Instrument.display_name.ilike(f"%{search}%")))
         )
 
     total = db.execute(count_query).scalar() or 0
@@ -184,12 +173,10 @@ def get_trade_detail(db: Session, trade_id: uuid.UUID) -> TradeDetail:
         .options(
             joinedload(Trade.strategy),
             joinedload(Trade.current_status_type),
-            selectinload(Trade.legs).joinedload(TradeLeg.from_asset),
-            selectinload(Trade.legs).joinedload(TradeLeg.to_asset),
+            selectinload(Trade.legs).joinedload(TradeLeg.instrument),
             selectinload(Trade.legs).selectinload(TradeLeg.orders).joinedload(Order.order_type),
             selectinload(Trade.legs).selectinload(TradeLeg.orders).joinedload(Order.exchange),
-            selectinload(Trade.legs).selectinload(TradeLeg.orders).joinedload(Order.from_asset),
-            selectinload(Trade.legs).selectinload(TradeLeg.orders).joinedload(Order.to_asset),
+            selectinload(Trade.legs).selectinload(TradeLeg.orders).joinedload(Order.instrument),
             selectinload(Trade.legs)
             .selectinload(TradeLeg.orders)
             .selectinload(Order.statuses)
@@ -212,7 +199,7 @@ def get_trade_detail(db: Session, trade_id: uuid.UUID) -> TradeDetail:
             order_statuses = [
                 OrderStatusSchema(
                     timestamp=s.timestamp,
-                    status=s.order_status_type.symbol,
+                    status=s.order_status_type.name,
                     error_message=s.error_message,
                     error_code=s.error_code,
                 )
@@ -222,10 +209,10 @@ def get_trade_detail(db: Session, trade_id: uuid.UUID) -> TradeDetail:
                 OrderDetailSchema(
                     id=o.id,
                     timestamp=o.timestamp,
-                    order_type=o.order_type.name,
+                    order_type=o.order_type.display_name,
                     side=o.side,
-                    from_asset_symbol=o.from_asset.symbol or o.from_asset.name,
-                    to_asset_symbol=o.to_asset.symbol or o.to_asset.name,
+                    instrument_id=o.instrument_id,
+                    instrument_name=o.instrument.display_name if o.instrument else "",
                     quantity=o.quantity,
                     price=o.price,
                     filled_quantity=o.filled_quantity,
@@ -233,17 +220,17 @@ def get_trade_detail(db: Session, trade_id: uuid.UUID) -> TradeDetail:
                     external_order_id=o.external_order_id,
                     time_in_force=o.time_in_force,
                     current_status=(
-                        latest_status.order_status_type.symbol if latest_status else None
+                        latest_status.order_status_type.name if latest_status else None
                     ),
-                    exchange_name=o.exchange.name if o.exchange else None,
+                    exchange_name=o.exchange.display_name if o.exchange else None,
                     statuses=order_statuses,
                 )
             )
         legs.append(
             TradeLegDetail(
                 id=leg.id,
-                from_asset_symbol=leg.from_asset.symbol or leg.from_asset.name,
-                to_asset_symbol=leg.to_asset.symbol or leg.to_asset.name,
+                instrument_id=leg.instrument_id,
+                instrument_name=leg.instrument.display_name if leg.instrument else "",
                 direction=leg.direction,
                 quantity=leg.quantity,
                 entry_price=leg.entry_price,
@@ -291,7 +278,7 @@ def get_trade_detail(db: Session, trade_id: uuid.UUID) -> TradeDetail:
     statuses = [
         TradeStatusSchema(
             timestamp=s.timestamp,
-            status=s.trade_status_type.symbol,
+            status=s.trade_status_type.name,
         )
         for s in trade.statuses
     ]
@@ -299,11 +286,11 @@ def get_trade_detail(db: Session, trade_id: uuid.UUID) -> TradeDetail:
     return TradeDetail(
         id=trade.id,
         strategy_id=trade.strategy_id,
-        strategy_name=trade.strategy.name,
+        strategy_name=trade.strategy.display_name,
         is_paper=trade.is_paper,
         entry_at=trade.entry_at,
         exit_at=trade.exit_at,
-        current_status=(trade.current_status_type.symbol if trade.current_status_type else None),
+        current_status=(trade.current_status_type.name if trade.current_status_type else None),
         total_realized_pnl=trade.total_realized_pnl,
         total_unrealized_pnl=trade.total_unrealized_pnl,
         total_fees=trade.total_fees,
@@ -394,18 +381,16 @@ def add_trade_status(db: Session, trade_id: uuid.UUID, data: TradeStatusCreate) 
 
     # Validate transition
     if trade.current_status_type_id is None:
-        if new_status_type.symbol != "PENDING":
-            raise BadRequestError(
-                f"First trade status must be PENDING, got {new_status_type.symbol}"
-            )
+        if new_status_type.name != "PENDING":
+            raise BadRequestError(f"First trade status must be PENDING, got {new_status_type.name}")
     else:
         current_type = db.get(TradeStatusType, trade.current_status_type_id)
-        current_symbol = current_type.symbol if current_type else None
+        current_symbol = current_type.name if current_type else None
         if current_symbol:
             allowed = TRADE_STATUS_TRANSITIONS.get(current_symbol, set())
-            if new_status_type.symbol not in allowed:
+            if new_status_type.name not in allowed:
                 raise BadRequestError(
-                    f"Invalid trade status transition: {current_symbol} -> {new_status_type.symbol}. "
+                    f"Invalid trade status transition: {current_symbol} -> {new_status_type.name}. "
                     f"Allowed transitions from {current_symbol}: {sorted(allowed)}"
                 )
 

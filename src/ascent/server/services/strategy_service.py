@@ -39,7 +39,7 @@ def _build_strategy_stats(db: Session, strategy_id: uuid.UUID) -> dict:
             .select_from(Trade)
             .join(Trade.current_status_type)
             .where(Trade.strategy_id == strategy_id)
-            .where(TradeStatusType.symbol == "OPEN")
+            .where(TradeStatusType.name == "OPEN")
         ).scalar()
         or 0
     )
@@ -50,7 +50,7 @@ def _build_strategy_stats(db: Session, strategy_id: uuid.UUID) -> dict:
             .select_from(Trade)
             .join(Trade.current_status_type)
             .where(Trade.strategy_id == strategy_id)
-            .where(TradeStatusType.symbol == "CLOSED")
+            .where(TradeStatusType.name == "CLOSED")
         ).scalar()
         or 0
     )
@@ -61,7 +61,7 @@ def _build_strategy_stats(db: Session, strategy_id: uuid.UUID) -> dict:
             .select_from(Trade)
             .join(Trade.current_status_type)
             .where(Trade.strategy_id == strategy_id)
-            .where(TradeStatusType.symbol == "CLOSED")
+            .where(TradeStatusType.name == "CLOSED")
             .where(Trade.total_realized_pnl > 0)
         ).scalar()
         or 0
@@ -122,7 +122,7 @@ def get_strategy_stats(db: Session, strategy_id: uuid.UUID) -> StrategyStats:
         select(Trade.id)
         .join(Trade.current_status_type)
         .where(Trade.strategy_id == strategy_id)
-        .where(TradeStatusType.symbol == "CLOSED")
+        .where(TradeStatusType.name == "CLOSED")
     ).correlate(None)
 
     agg = db.execute(
@@ -152,7 +152,7 @@ def get_strategy_stats(db: Session, strategy_id: uuid.UUID) -> StrategyStats:
         .select_from(Trade)
         .join(Trade.current_status_type)
         .where(Trade.strategy_id == strategy_id)
-        .where(TradeStatusType.symbol == "CLOSED")
+        .where(TradeStatusType.name == "CLOSED")
     ).one()
 
     total_trades_all = (
@@ -167,7 +167,7 @@ def get_strategy_stats(db: Session, strategy_id: uuid.UUID) -> StrategyStats:
             .select_from(Trade)
             .join(Trade.current_status_type)
             .where(Trade.strategy_id == strategy_id)
-            .where(TradeStatusType.symbol == "OPEN")
+            .where(TradeStatusType.name == "OPEN")
         ).scalar()
         or 0
     )
@@ -204,7 +204,7 @@ def get_strategy_stats(db: Session, strategy_id: uuid.UUID) -> StrategyStats:
         .select_from(Trade)
         .join(Trade.current_status_type)
         .where(Trade.strategy_id == strategy_id)
-        .where(TradeStatusType.symbol == "CLOSED")
+        .where(TradeStatusType.name == "CLOSED")
         .where(Trade.entry_at.is_not(None))
         .where(Trade.exit_at.is_not(None))
     ).one()
@@ -214,7 +214,7 @@ def get_strategy_stats(db: Session, strategy_id: uuid.UUID) -> StrategyStats:
         select(Trade.entry_at, Trade.total_realized_pnl)
         .join(Trade.current_status_type)
         .where(Trade.strategy_id == strategy_id)
-        .where(TradeStatusType.symbol == "CLOSED")
+        .where(TradeStatusType.name == "CLOSED")
         .where(Trade.total_realized_pnl.is_not(None))
         .order_by(Trade.entry_at.asc())
     ).all()
@@ -372,8 +372,9 @@ def get_strategies(db: Session) -> list[StrategyListItem]:
             StrategyListItem(
                 id=s.id,
                 name=s.name,
+                display_name=s.display_name,
                 description=s.description,
-                strategy_type=s.strategy_type.name,
+                strategy_type=s.strategy_type.display_name,
                 strategy_ref=s.strategy_ref,
                 parameters=s.parameters,
                 portfolio_id=s.portfolio_id,
@@ -439,13 +440,14 @@ def get_strategy_detail(db: Session, strategy_id: uuid.UUID) -> StrategyDetail:
     return StrategyDetail(
         id=strategy.id,
         name=strategy.name,
+        display_name=strategy.display_name,
         description=strategy.description,
-        strategy_type=strategy.strategy_type.name,
+        strategy_type=strategy.strategy_type.display_name,
         strategy_ref=strategy.strategy_ref,
         parameters=strategy.parameters,
         portfolio_id=strategy.portfolio_id,
         is_active=strategy.is_active,
-        portfolio_name=strategy.portfolio.name if strategy.portfolio else None,
+        portfolio_name=strategy.portfolio.display_name if strategy.portfolio else None,
         parameter_schema=strategy.parameter_schema,
         created_at=strategy.created_at,
         **stats,

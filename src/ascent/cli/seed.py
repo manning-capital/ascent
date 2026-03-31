@@ -49,57 +49,87 @@ def run(
 
     print("Creating types...")
     # --- Type tables ---
-    currency_type = client.create_asset_type(name="Currency", description="Any form of currency")
+    currency_type = client.create_asset_type(
+        name="CURRENCY", display_name="Currency", description="Any form of currency"
+    )
     crypto_type = client.create_asset_type(
-        name="Cryptocurrency",
+        name="CRYPTOCURRENCY",
+        display_name="Cryptocurrency",
         description="Digital currency",
         parent_type_id=uuid.UUID(currency_type["id"]),
     )
     fiat_type = client.create_asset_type(
-        name="Fiat Currency",
+        name="FIAT_CURRENCY",
+        display_name="Fiat Currency",
         description="Government-issued currency",
         parent_type_id=uuid.UUID(currency_type["id"]),
     )
-    stock_type = client.create_asset_type(name="Stock", description="Equity share")
+    stock_type = client.create_asset_type(
+        name="STOCK", display_name="Stock", description="Equity share"
+    )
 
     market_participant_type = client.create_provider_type(
-        name="Market Participant", description="Any entity participating in the market"
+        name="MARKET_PARTICIPANT",
+        display_name="Market Participant",
+        description="Any entity participating in the market",
     )
     exchange_ptype = client.create_provider_type(
-        name="Exchange",
+        name="EXCHANGE",
+        display_name="Exchange",
         description="Cryptocurrency or stock exchange",
         parent_type_id=uuid.UUID(market_participant_type["id"]),
     )
     client.create_provider_type(
-        name="Data Vendor",
+        name="DATA_VENDOR",
+        display_name="Data Vendor",
         description="Market data provider",
         parent_type_id=uuid.UUID(market_participant_type["id"]),
     )
 
-    spot_etype = client.create_exchange_type(name="Spot", description="Spot/cash market exchange")
-    client.create_exchange_type(name="Futures", description="Futures/derivatives exchange")
-    paper_etype = client.create_exchange_type(
-        name="Paper", description="Paper/simulated trading exchange"
+    spot_etype = client.create_exchange_type(
+        name="SPOT", display_name="Spot", description="Spot/cash market exchange"
     )
-    client.create_exchange_type(name="OTC", description="Over-the-counter trading")
+    client.create_exchange_type(
+        name="FUTURES", display_name="Futures", description="Futures/derivatives exchange"
+    )
+    paper_etype = client.create_exchange_type(
+        name="PAPER", display_name="Paper", description="Paper/simulated trading exchange"
+    )
+    client.create_exchange_type(
+        name="OTC", display_name="OTC", description="Over-the-counter trading"
+    )
 
     client.create_strategy_type(
-        symbol="PAIRS_TRADING",
-        name="Pairs Trading",
+        name="PAIRS_TRADING",
+        display_name="Pairs Trading",
         description="Statistical arbitrage between correlated assets",
     )
     client.create_strategy_type(
-        symbol="MOMENTUM", name="Momentum", description="Trend-following strategy"
+        name="MOMENTUM", display_name="Momentum", description="Trend-following strategy"
     )
     client.create_strategy_type(
-        symbol="MEAN_REVERSION",
-        name="Mean Reversion",
+        name="MEAN_REVERSION",
+        display_name="Mean Reversion",
         description="Strategy based on price reverting to the mean",
     )
     strategy_types = client.get_strategy_types()
-    strategy_type_by_symbol = {t["symbol"]: t for t in strategy_types}
+    strategy_type_by_name = {t["name"]: t for t in strategy_types}
 
-    trade_status_symbols = [
+    security_itype = client.create_instrument_type(
+        name="SECURITY",
+        display_name="Security",
+        description="Single tradeable security (e.g. BTC/USD, AAPL.US)",
+    )
+
+    spread_ctype = client.create_composite_type(
+        name="SPREAD",
+        display_name="Spread",
+        description="Pairs trading spread between two correlated securities",
+        min_members=2,
+        max_members=2,
+    )
+
+    trade_status_defs = [
         ("PENDING", "Pending", "Trade is pending entry"),
         ("OPENING", "Opening", "Entry orders have been submitted"),
         ("OPEN", "Open", "Trade is currently open"),
@@ -108,22 +138,22 @@ def run(
         ("CANCELLED", "Cancelled", "Trade was cancelled"),
         ("ERROR", "Error", "Trade encountered an error"),
     ]
-    for sym, name, desc in trade_status_symbols:
-        client.create_trade_status_type(symbol=sym, name=name, description=desc)
+    for name, display_name, desc in trade_status_defs:
+        client.create_trade_status_type(name=name, display_name=display_name, description=desc)
     trade_status_types = client.get_trade_status_types()
-    status_map = {t["symbol"]: t for t in trade_status_types}
+    status_map = {t["name"]: t for t in trade_status_types}
 
-    order_type_symbols = [
+    order_type_defs = [
         ("MARKET", "Market", "Market order"),
         ("LIMIT", "Limit", "Limit order"),
         ("STOP", "Stop", "Stop order"),
     ]
-    for sym, name, desc in order_type_symbols:
-        client.create_order_type(symbol=sym, name=name, description=desc)
+    for name, display_name, desc in order_type_defs:
+        client.create_order_type(name=name, display_name=display_name, description=desc)
     order_types = client.get_order_types()
-    order_type_by_symbol = {t["symbol"]: t for t in order_types}
+    order_type_by_name = {t["name"]: t for t in order_types}
 
-    order_status_symbols = [
+    order_status_defs = [
         ("SUBMITTED", "Submitted", "Order submitted"),
         ("ACCEPTED", "Accepted", "Order accepted by exchange"),
         ("PARTIALLY_FILLED", "Partially Filled", "Order partially filled"),
@@ -131,10 +161,10 @@ def run(
         ("REJECTED", "Rejected", "Order rejected"),
         ("CANCELLED", "Cancelled", "Order cancelled"),
     ]
-    for sym, name, desc in order_status_symbols:
-        client.create_order_status_type(symbol=sym, name=name, description=desc)
+    for name, display_name, desc in order_status_defs:
+        client.create_order_status_type(name=name, display_name=display_name, description=desc)
     order_status_types = client.get_order_status_types()
-    order_status_map = {t["symbol"]: t for t in order_status_types}
+    order_status_map = {t["name"]: t for t in order_status_types}
 
     print("Creating assets...")
     # --- Assets ---
@@ -170,8 +200,10 @@ def run(
         (crypto_type["id"], "Pendle", "PENDLE"),
     ]
     assets = {}
-    for type_id, name, symbol in asset_defs:
-        a = client.create_asset(asset_type_id=uuid.UUID(type_id), name=name, symbol=symbol)
+    for type_id, display_name, symbol in asset_defs:
+        a = client.create_asset(
+            asset_type_id=uuid.UUID(type_id), name=symbol.upper(), display_name=display_name
+        )
         assets[symbol] = a
     asset_by_symbol = assets
 
@@ -179,31 +211,36 @@ def run(
     # --- Providers ---
     kraken_provider = client.create_provider(
         provider_type_id=uuid.UUID(exchange_ptype["id"]),
-        name="Kraken",
+        name="KRAKEN",
+        display_name="Kraken",
         description="Kraken Exchange",
     )
     coinbase_provider = client.create_provider(
         provider_type_id=uuid.UUID(exchange_ptype["id"]),
-        name="Coinbase",
+        name="COINBASE",
+        display_name="Coinbase",
         description="Coinbase Exchange",
     )
 
     # --- Exchanges ---
     kraken_exchange = client.create_exchange(
         exchange_type_id=uuid.UUID(spot_etype["id"]),
-        name="Kraken",
+        name="KRAKEN",
+        display_name="Kraken",
         description="Kraken Spot Exchange",
         provider_id=uuid.UUID(kraken_provider["id"]),
     )
     coinbase_exchange = client.create_exchange(
         exchange_type_id=uuid.UUID(spot_etype["id"]),
-        name="Coinbase",
+        name="COINBASE",
+        display_name="Coinbase",
         description="Coinbase Spot Exchange",
         provider_id=uuid.UUID(coinbase_provider["id"]),
     )
     client.create_exchange(
         exchange_type_id=uuid.UUID(paper_etype["id"]),
-        name="Paper Trading",
+        name="PAPER_TRADING",
+        display_name="Paper Trading",
         description="Simulated paper trading exchange",
         implementation_class="ascent.exchanges.paper.PaperExchange",
         config={"initial_balance": 100000},
@@ -211,53 +248,83 @@ def run(
 
     print("Creating attributes and metadata types...")
     # --- Attributes ---
-    attr_close = client.create_attribute(name="close", description="Close price")
-    attr_spread = client.create_attribute(
-        name="spread", description="Price spread between correlated assets"
+    attr_close = client.create_attribute(
+        name="CLOSE", display_name="Close", description="Close price"
     )
-    attr_zscore = client.create_attribute(name="z_score", description="Z-score of the spread")
-    attr_rsi = client.create_attribute(name="rsi", description="Relative Strength Index")
+    attr_spread = client.create_attribute(
+        name="SPREAD", display_name="Spread", description="Price spread between correlated assets"
+    )
+    attr_zscore = client.create_attribute(
+        name="Z_SCORE", display_name="Z Score", description="Z-score of the spread"
+    )
+    attr_rsi = client.create_attribute(
+        name="RSI", display_name="RSI", description="Relative Strength Index"
+    )
     all_attributes = [attr_close, attr_spread, attr_zscore, attr_rsi]
 
     # --- Metadata types ---
     meta_defs = [
-        ("market_cap", "Market Cap", "Market capitalization in USD", "float"),
-        ("sector", "Sector", "Industry sector classification", "string"),
-        ("circulating_supply", "Circulating Supply", "Circulating supply of the asset", "float"),
-        ("max_supply", "Max Supply", "Maximum supply of the asset", "float"),
-        ("launch_date", "Launch Date", "Date the asset was launched", "date"),
-        ("is_stablecoin", "Is Stablecoin", "Whether the asset is a stablecoin", "boolean"),
+        ("MARKET_CAP", "Market Cap", "Market capitalization in USD", "float"),
+        ("SECTOR", "Sector", "Industry sector classification", "string"),
+        ("CIRCULATING_SUPPLY", "Circulating Supply", "Circulating supply of the asset", "float"),
+        ("MAX_SUPPLY", "Max Supply", "Maximum supply of the asset", "float"),
+        ("LAUNCH_DATE", "Launch Date", "Date the asset was launched", "date"),
+        ("IS_STABLECOIN", "Is Stablecoin", "Whether the asset is a stablecoin", "boolean"),
         (
-            "consensus_mechanism",
+            "CONSENSUS_MECHANISM",
             "Consensus Mechanism",
             "Consensus mechanism (e.g. PoW, PoS)",
             "string",
         ),
-        ("whitepaper_url", "Whitepaper URL", "URL to the project whitepaper", "string"),
-        ("iso_currency_code", "ISO Currency Code", "ISO 4217 currency code", "string"),
-        ("issuing_country", "Issuing Country", "Country that issues the currency", "string"),
-        ("api_key_name", "API Key Name", "Name of the API key environment variable", "string"),
-        ("rate_limit", "Rate Limit", "API rate limit (requests/minute)", "integer"),
+        ("WHITEPAPER_URL", "Whitepaper URL", "URL to the project whitepaper", "string"),
+        ("ISO_CURRENCY_CODE", "ISO Currency Code", "ISO 4217 currency code", "string"),
+        ("ISSUING_COUNTRY", "Issuing Country", "Country that issues the currency", "string"),
+        ("API_KEY_NAME", "API Key Name", "Name of the API key environment variable", "string"),
+        ("RATE_LIMIT", "Rate Limit", "API rate limit (requests/minute)", "integer"),
         (
-            "supports_websocket",
+            "SUPPORTS_WEBSOCKET",
             "Supports WebSocket",
             "Whether the provider supports WebSocket connections",
             "boolean",
         ),
-        ("symbol", "Symbol", "The identifier/symbol used by this provider for the asset", "string"),
+        ("SYMBOL", "Symbol", "The identifier/symbol used by this provider for the asset", "string"),
         (
-            "provider_ticker",
+            "PROVIDER_TICKER",
             "Provider Ticker",
             "The ticker/symbol used by this provider for the asset",
             "string",
         ),
         (
-            "trading_pair_symbol",
+            "TRADING_PAIR_SYMBOL",
             "Trading Pair Symbol",
             "The trading pair symbol on this provider (e.g. XBTUSD)",
             "string",
         ),
-        ("min_order_size", "Min Order Size", "Minimum order size on this provider", "float"),
+        ("MIN_ORDER_SIZE", "Min Order Size", "Minimum order size on this provider", "float"),
+        # Instrument metadata types
+        ("TICK_SIZE", "Tick Size", "Minimum price increment", "float"),
+        ("LOT_SIZE", "Lot Size", "Minimum quantity increment", "float"),
+        ("CONTRACT_SIZE", "Contract Size", "Number of units per contract", "float"),
+        (
+            "MARGIN_REQUIREMENT",
+            "Margin Requirement",
+            "Initial margin requirement as a percentage",
+            "float",
+        ),
+        (
+            "TRADING_HOURS",
+            "Trading Hours",
+            "Hours during which the instrument can be traded",
+            "string",
+        ),
+        ("CORRELATION", "Correlation", "Correlation coefficient between pair members", "float"),
+        ("HALF_LIFE", "Half Life", "Mean reversion half-life in periods", "float"),
+        (
+            "COINTEGRATION_PVALUE",
+            "Cointegration P-Value",
+            "Engle-Granger cointegration test p-value",
+            "float",
+        ),
     ]
     meta = {}
     for name, display_name, description, value_type in meta_defs:
@@ -271,13 +338,13 @@ def run(
     # Currency (parent) fields
     client.add_asset_type_metadata(
         uuid.UUID(currency_type["id"]),
-        metadata_id=uuid.UUID(meta["market_cap"]["id"]),
+        metadata_id=uuid.UUID(meta["MARKET_CAP"]["id"]),
         is_required=True,
         display_order=0,
     )
     client.add_asset_type_metadata(
         uuid.UUID(currency_type["id"]),
-        metadata_id=uuid.UUID(meta["sector"]["id"]),
+        metadata_id=uuid.UUID(meta["SECTOR"]["id"]),
         is_required=False,
         display_order=1,
     )
@@ -285,12 +352,12 @@ def run(
     # Cryptocurrency own fields
     for i, (name, req) in enumerate(
         [
-            ("circulating_supply", True),
-            ("max_supply", False),
-            ("launch_date", False),
-            ("is_stablecoin", True),
-            ("consensus_mechanism", False),
-            ("whitepaper_url", False),
+            ("CIRCULATING_SUPPLY", True),
+            ("MAX_SUPPLY", False),
+            ("LAUNCH_DATE", False),
+            ("IS_STABLECOIN", True),
+            ("CONSENSUS_MECHANISM", False),
+            ("WHITEPAPER_URL", False),
         ]
     ):
         client.add_asset_type_metadata(
@@ -303,13 +370,13 @@ def run(
     # Fiat Currency own fields
     client.add_asset_type_metadata(
         uuid.UUID(fiat_type["id"]),
-        metadata_id=uuid.UUID(meta["iso_currency_code"]["id"]),
+        metadata_id=uuid.UUID(meta["ISO_CURRENCY_CODE"]["id"]),
         is_required=True,
         display_order=0,
     )
     client.add_asset_type_metadata(
         uuid.UUID(fiat_type["id"]),
-        metadata_id=uuid.UUID(meta["issuing_country"]["id"]),
+        metadata_id=uuid.UUID(meta["ISSUING_COUNTRY"]["id"]),
         is_required=True,
         display_order=1,
     )
@@ -317,13 +384,13 @@ def run(
     # Stock fields
     client.add_asset_type_metadata(
         uuid.UUID(stock_type["id"]),
-        metadata_id=uuid.UUID(meta["market_cap"]["id"]),
+        metadata_id=uuid.UUID(meta["MARKET_CAP"]["id"]),
         is_required=True,
         display_order=0,
     )
     client.add_asset_type_metadata(
         uuid.UUID(stock_type["id"]),
-        metadata_id=uuid.UUID(meta["sector"]["id"]),
+        metadata_id=uuid.UUID(meta["SECTOR"]["id"]),
         is_required=True,
         display_order=1,
     )
@@ -332,9 +399,9 @@ def run(
     # Market Participant (parent) fields
     for i, (name, req) in enumerate(
         [
-            ("api_key_name", True),
-            ("rate_limit", True),
-            ("supports_websocket", False),
+            ("API_KEY_NAME", True),
+            ("RATE_LIMIT", True),
+            ("SUPPORTS_WEBSOCKET", False),
         ]
     ):
         client.add_provider_type_metadata(
@@ -347,22 +414,55 @@ def run(
     # --- Asset type provider-asset metadata field definitions ---
     client.add_asset_type_provider_asset_metadata(
         uuid.UUID(currency_type["id"]),
-        metadata_id=uuid.UUID(meta["provider_ticker"]["id"]),
+        metadata_id=uuid.UUID(meta["PROVIDER_TICKER"]["id"]),
         is_required=True,
         display_order=0,
     )
     client.add_asset_type_provider_asset_metadata(
         uuid.UUID(crypto_type["id"]),
-        metadata_id=uuid.UUID(meta["trading_pair_symbol"]["id"]),
+        metadata_id=uuid.UUID(meta["TRADING_PAIR_SYMBOL"]["id"]),
         is_required=True,
         display_order=0,
     )
     client.add_asset_type_provider_asset_metadata(
         uuid.UUID(crypto_type["id"]),
-        metadata_id=uuid.UUID(meta["min_order_size"]["id"]),
+        metadata_id=uuid.UUID(meta["MIN_ORDER_SIZE"]["id"]),
         is_required=False,
         display_order=1,
     )
+
+    # --- Instrument type metadata field definitions ---
+    # Security (single-member) fields
+    for i, (name, req) in enumerate(
+        [
+            ("TICK_SIZE", True),
+            ("LOT_SIZE", True),
+            ("CONTRACT_SIZE", False),
+            ("MARGIN_REQUIREMENT", False),
+            ("TRADING_HOURS", False),
+        ]
+    ):
+        client.add_instrument_type_metadata(
+            uuid.UUID(security_itype["id"]),
+            metadata_id=uuid.UUID(meta[name]["id"]),
+            is_required=req,
+            display_order=i,
+        )
+
+    # Spread composite type fields
+    for i, (name, req) in enumerate(
+        [
+            ("CORRELATION", True),
+            ("HALF_LIFE", False),
+            ("COINTEGRATION_PVALUE", False),
+        ]
+    ):
+        client.add_composite_type_metadata(
+            uuid.UUID(spread_ctype["id"]),
+            metadata_id=uuid.UUID(meta[name]["id"]),
+            is_required=req,
+            display_order=i,
+        )
 
     print("Creating asset metadata...")
     # --- Sample asset metadata (temporal entries with history) ---
@@ -609,33 +709,33 @@ def run(
             supply = int(base_supply * (1.0 - (2 - snap_idx) * random.uniform(0.001, 0.01)))
 
             entries = [
-                {"metadata_id": uuid.UUID(meta["market_cap"]["id"]), "value": mcap},
-                {"metadata_id": uuid.UUID(meta["circulating_supply"]["id"]), "value": supply},
+                {"metadata_id": uuid.UUID(meta["MARKET_CAP"]["id"]), "value": mcap},
+                {"metadata_id": uuid.UUID(meta["CIRCULATING_SUPPLY"]["id"]), "value": supply},
             ]
 
             if snap_idx == 0:
                 entries.append(
-                    {"metadata_id": uuid.UUID(meta["is_stablecoin"]["id"]), "value": False}
+                    {"metadata_id": uuid.UUID(meta["IS_STABLECOIN"]["id"]), "value": False}
                 )
                 entries.append(
                     {
-                        "metadata_id": uuid.UUID(meta["consensus_mechanism"]["id"]),
+                        "metadata_id": uuid.UUID(meta["CONSENSUS_MECHANISM"]["id"]),
                         "value": info["consensus"],
                     }
                 )
                 entries.append(
-                    {"metadata_id": uuid.UUID(meta["sector"]["id"]), "value": info["sector"]}
+                    {"metadata_id": uuid.UUID(meta["SECTOR"]["id"]), "value": info["sector"]}
                 )
                 entries.append(
                     {
-                        "metadata_id": uuid.UUID(meta["launch_date"]["id"]),
+                        "metadata_id": uuid.UUID(meta["LAUNCH_DATE"]["id"]),
                         "value": info["launch_date"],
                     }
                 )
                 if info["max_supply"] is not None:
                     entries.append(
                         {
-                            "metadata_id": uuid.UUID(meta["max_supply"]["id"]),
+                            "metadata_id": uuid.UUID(meta["MAX_SUPPLY"]["id"]),
                             "value": info["max_supply"],
                         }
                     )
@@ -649,11 +749,11 @@ def run(
         usd_id,
         timestamp=_ts(90),
         entries=[
-            {"metadata_id": uuid.UUID(meta["iso_currency_code"]["id"]), "value": "USD"},
-            {"metadata_id": uuid.UUID(meta["issuing_country"]["id"]), "value": "United States"},
-            {"metadata_id": uuid.UUID(meta["is_stablecoin"]["id"]), "value": False},
-            {"metadata_id": uuid.UUID(meta["market_cap"]["id"]), "value": 0},
-            {"metadata_id": uuid.UUID(meta["sector"]["id"]), "value": "Fiat"},
+            {"metadata_id": uuid.UUID(meta["ISO_CURRENCY_CODE"]["id"]), "value": "USD"},
+            {"metadata_id": uuid.UUID(meta["ISSUING_COUNTRY"]["id"]), "value": "United States"},
+            {"metadata_id": uuid.UUID(meta["IS_STABLECOIN"]["id"]), "value": False},
+            {"metadata_id": uuid.UUID(meta["MARKET_CAP"]["id"]), "value": 0},
+            {"metadata_id": uuid.UUID(meta["SECTOR"]["id"]), "value": "Fiat"},
         ],
     )
 
@@ -665,25 +765,25 @@ def run(
         (
             90,
             {
-                "api_key_name": "KRAKEN_API_KEY",
-                "rate_limit": 30,
-                "supports_websocket": True,
+                "API_KEY_NAME": "KRAKEN_API_KEY",
+                "RATE_LIMIT": 30,
+                "SUPPORTS_WEBSOCKET": True,
             },
         ),
         (
             60,
             {
-                "api_key_name": "KRAKEN_API_KEY",
-                "rate_limit": 45,
-                "supports_websocket": True,
+                "API_KEY_NAME": "KRAKEN_API_KEY",
+                "RATE_LIMIT": 45,
+                "SUPPORTS_WEBSOCKET": True,
             },
         ),
         (
             30,
             {
-                "api_key_name": "KRAKEN_API_KEY",
-                "rate_limit": 60,
-                "supports_websocket": True,
+                "API_KEY_NAME": "KRAKEN_API_KEY",
+                "RATE_LIMIT": 60,
+                "SUPPORTS_WEBSOCKET": True,
             },
         ),
     ]
@@ -697,9 +797,9 @@ def run(
 
     # --- Provider metadata (Coinbase history) ---
     coinbase_history = [
-        (90, {"api_key_name": "COINBASE_API_KEY", "rate_limit": 25, "supports_websocket": True}),
-        (60, {"api_key_name": "COINBASE_API_KEY", "rate_limit": 40, "supports_websocket": True}),
-        (30, {"api_key_name": "COINBASE_API_KEY", "rate_limit": 50, "supports_websocket": True}),
+        (90, {"API_KEY_NAME": "COINBASE_API_KEY", "RATE_LIMIT": 25, "SUPPORTS_WEBSOCKET": True}),
+        (60, {"API_KEY_NAME": "COINBASE_API_KEY", "RATE_LIMIT": 40, "SUPPORTS_WEBSOCKET": True}),
+        (30, {"API_KEY_NAME": "COINBASE_API_KEY", "RATE_LIMIT": 50, "SUPPORTS_WEBSOCKET": True}),
     ]
     for days_ago, values in coinbase_history:
         ts = _ts(days_ago)
@@ -815,13 +915,13 @@ def run(
             asset_id,
             timestamp=pa_ts,
             entries=[
-                {"metadata_id": uuid.UUID(meta["symbol"]["id"]), "value": ticker},
-                {"metadata_id": uuid.UUID(meta["provider_ticker"]["id"]), "value": ticker},
+                {"metadata_id": uuid.UUID(meta["SYMBOL"]["id"]), "value": ticker},
+                {"metadata_id": uuid.UUID(meta["PROVIDER_TICKER"]["id"]), "value": ticker},
                 {
-                    "metadata_id": uuid.UUID(meta["trading_pair_symbol"]["id"]),
+                    "metadata_id": uuid.UUID(meta["TRADING_PAIR_SYMBOL"]["id"]),
                     "value": f"{ticker}USD",
                 },
-                {"metadata_id": uuid.UUID(meta["min_order_size"]["id"]), "value": min_size},
+                {"metadata_id": uuid.UUID(meta["MIN_ORDER_SIZE"]["id"]), "value": min_size},
             ],
         )
 
@@ -885,32 +985,35 @@ def run(
             asset_id,
             timestamp=pa_ts,
             entries=[
-                {"metadata_id": uuid.UUID(meta["symbol"]["id"]), "value": sym},
-                {"metadata_id": uuid.UUID(meta["provider_ticker"]["id"]), "value": sym},
+                {"metadata_id": uuid.UUID(meta["SYMBOL"]["id"]), "value": sym},
+                {"metadata_id": uuid.UUID(meta["PROVIDER_TICKER"]["id"]), "value": sym},
                 {
-                    "metadata_id": uuid.UUID(meta["trading_pair_symbol"]["id"]),
+                    "metadata_id": uuid.UUID(meta["TRADING_PAIR_SYMBOL"]["id"]),
                     "value": f"{sym}-USD",
                 },
-                {"metadata_id": uuid.UUID(meta["min_order_size"]["id"]), "value": min_size},
+                {"metadata_id": uuid.UUID(meta["MIN_ORDER_SIZE"]["id"]), "value": min_size},
             ],
         )
 
-    print("Creating portfolios and asset groups...")
+    print("Creating portfolios and instruments...")
     # --- Portfolios ---
     portfolio_main = client.create_portfolio(
-        name="Main Portfolio",
+        name="MAIN_PORTFOLIO",
+        display_name="Main Portfolio",
         description="Primary trading portfolio",
         base_currency_asset_id=uuid.UUID(usd["id"]),
         pricing_provider_id=kraken_id,
     )
     portfolio_paper = client.create_portfolio(
-        name="Paper Trading",
+        name="PAPER_TRADING",
+        display_name="Paper Trading",
         description="Simulated trading portfolio",
         base_currency_asset_id=uuid.UUID(usd["id"]),
         pricing_provider_id=kraken_id,
     )
     portfolio_coinbase = client.create_portfolio(
-        name="Coinbase Portfolio",
+        name="COINBASE_PORTFOLIO",
+        display_name="Coinbase Portfolio",
         description="Coinbase trading portfolio",
         base_currency_asset_id=uuid.UUID(usd["id"]),
         pricing_provider_id=coinbase_id,
@@ -918,39 +1021,37 @@ def run(
 
     random.seed(42)
 
-    # --- Single-member Asset Groups (Kraken) ---
-    single_member_groups = {}
+    # --- Instruments (Kraken) ---
+    kraken_instruments = {}
     for sym in crypto_symbols:
         asset = asset_by_symbol[sym]
-        grp = client.create_asset_group(
-            members=[
-                {
-                    "provider_id": kraken_id,
-                    "from_asset_id": uuid.UUID(asset["id"]),
-                    "to_asset_id": uuid.UUID(usd["id"]),
-                    "order": 1,
-                }
-            ]
+        display_name = asset["display_name"]
+        inst = client.create_instrument(
+            name=f"KRAKEN_{sym}_USD",
+            display_name=f"Kraken {display_name}/USD",
+            instrument_type_id=uuid.UUID(security_itype["id"]),
+            provider_id=kraken_id,
+            from_asset_id=uuid.UUID(asset["id"]),
+            to_asset_id=uuid.UUID(usd["id"]),
         )
-        single_member_groups[asset["id"]] = grp
+        kraken_instruments[sym] = inst
 
-    # --- Single-member Asset Groups (Coinbase) ---
-    coinbase_single_member_groups = {}
+    # --- Instruments (Coinbase) ---
+    coinbase_instruments = {}
     for sym in coinbase_symbols:
         asset = asset_by_symbol[sym]
-        grp = client.create_asset_group(
-            members=[
-                {
-                    "provider_id": coinbase_id,
-                    "from_asset_id": uuid.UUID(asset["id"]),
-                    "to_asset_id": uuid.UUID(usd["id"]),
-                    "order": 1,
-                }
-            ]
+        display_name = asset["display_name"]
+        inst = client.create_instrument(
+            name=f"COINBASE_{sym}_USD",
+            display_name=f"Coinbase {display_name}/USD",
+            instrument_type_id=uuid.UUID(security_itype["id"]),
+            provider_id=coinbase_id,
+            from_asset_id=uuid.UUID(asset["id"]),
+            to_asset_id=uuid.UUID(usd["id"]),
         )
-        coinbase_single_member_groups[asset["id"]] = grp
+        coinbase_instruments[sym] = inst
 
-    # --- Multi-member Asset Groups (Kraken) ---
+    # --- Composites (Kraken Spreads) ---
     pair_defs = [
         ("BTC-ETH", ["BTC", "ETH"]),
         ("SOL-AVAX", ["SOL", "AVAX"]),
@@ -958,65 +1059,170 @@ def run(
         ("ADA-XRP", ["ADA", "XRP"]),
         ("UNI-AAVE", ["UNI", "AAVE"]),
     ]
-    pair_groups = []
+    kraken_composites = []
     for _label, syms in pair_defs:
         members = [
             {
-                "provider_id": kraken_id,
-                "from_asset_id": uuid.UUID(asset_by_symbol[s]["id"]),
-                "to_asset_id": uuid.UUID(usd["id"]),
+                "instrument_id": uuid.UUID(kraken_instruments[s]["id"]),
                 "order": i + 1,
             }
             for i, s in enumerate(syms)
         ]
-        grp = client.create_asset_group(members=members)
-        pair_groups.append(grp)
+        comp_name = f"KRAKEN_{'_'.join(syms)}_SPREAD"
+        comp_display = f"Kraken {'-'.join(syms)} Spread"
+        comp = client.create_composite(
+            name=comp_name,
+            display_name=comp_display,
+            composite_type_id=uuid.UUID(spread_ctype["id"]),
+            members=members,
+        )
+        kraken_composites.append(comp)
 
-    basket_defs = [
-        ("DeFi Blue Chip", ["AAVE", "MKR", "UNI", "SNX", "CRV", "LDO"]),
-        ("L1 Majors", ["ETH", "SOL", "AVAX", "DOT", "ATOM", "NEAR", "APT", "SUI"]),
-    ]
-    basket_groups = []
-    for _label, syms in basket_defs:
-        members = [
-            {
-                "provider_id": kraken_id,
-                "from_asset_id": uuid.UUID(asset_by_symbol[s]["id"]),
-                "to_asset_id": uuid.UUID(usd["id"]),
-                "order": i + 1,
-            }
-            for i, s in enumerate(syms)
-        ]
-        grp = client.create_asset_group(members=members)
-        basket_groups.append(grp)
-
-    # --- Multi-member Asset Groups (Coinbase) ---
+    # --- Composites (Coinbase Spreads) ---
     coinbase_pair_defs = [
         ("BTC-ETH", ["BTC", "ETH"]),
         ("SOL-AVAX", ["SOL", "AVAX"]),
         ("LINK-DOT", ["LINK", "DOT"]),
     ]
-    coinbase_pair_groups = []
+    coinbase_composites = []
     for _label, syms in coinbase_pair_defs:
         members = [
             {
-                "provider_id": coinbase_id,
-                "from_asset_id": uuid.UUID(asset_by_symbol[s]["id"]),
-                "to_asset_id": uuid.UUID(usd["id"]),
+                "instrument_id": uuid.UUID(coinbase_instruments[s]["id"]),
                 "order": i + 1,
             }
             for i, s in enumerate(syms)
         ]
-        grp = client.create_asset_group(members=members)
-        coinbase_pair_groups.append(grp)
+        comp_name = f"COINBASE_{'_'.join(syms)}_SPREAD"
+        comp_display = f"Coinbase {'-'.join(syms)} Spread"
+        comp = client.create_composite(
+            name=comp_name,
+            display_name=comp_display,
+            composite_type_id=uuid.UUID(spread_ctype["id"]),
+            members=members,
+        )
+        coinbase_composites.append(comp)
 
-    all_groups = (
-        list(single_member_groups.values())
-        + pair_groups
-        + basket_groups
-        + list(coinbase_single_member_groups.values())
-        + coinbase_pair_groups
-    )
+    all_instruments = list(kraken_instruments.values()) + list(coinbase_instruments.values())
+    all_composites = kraken_composites + coinbase_composites
+
+    # Build lookup: (provider_id, from_asset_id, to_asset_id) -> instrument_id
+    pair_to_instrument = {}
+    for inst in all_instruments:
+        key = (inst["provider_id"], inst["from_asset_id"], inst["to_asset_id"])
+        pair_to_instrument[key] = inst["id"]
+
+    print("Creating instrument metadata history...")
+    # --- Instrument metadata (temporal entries with history) ---
+    # Security instruments: tick_size, lot_size evolving over time
+    for sym, inst in kraken_instruments.items():
+        inst_id = uuid.UUID(inst["id"])
+        tick = round(random.uniform(0.01, 0.5), 2)
+        lot = round(random.uniform(0.0001, 0.01), 4)
+        # Snapshot 90 days ago
+        client.batch_create_instrument_metadata(
+            inst_id,
+            _ts(90).isoformat(),
+            [
+                {"metadata_id": uuid.UUID(meta["TICK_SIZE"]["id"]), "value": tick * 2},
+                {"metadata_id": uuid.UUID(meta["LOT_SIZE"]["id"]), "value": lot * 2},
+            ],
+        )
+        # Snapshot 30 days ago (tighter spreads)
+        client.batch_create_instrument_metadata(
+            inst_id,
+            _ts(30).isoformat(),
+            [
+                {"metadata_id": uuid.UUID(meta["TICK_SIZE"]["id"]), "value": tick},
+                {"metadata_id": uuid.UUID(meta["LOT_SIZE"]["id"]), "value": lot},
+            ],
+        )
+        # Current snapshot
+        client.batch_create_instrument_metadata(
+            inst_id,
+            _ts(0).isoformat(),
+            [
+                {"metadata_id": uuid.UUID(meta["TICK_SIZE"]["id"]), "value": tick},
+                {"metadata_id": uuid.UUID(meta["LOT_SIZE"]["id"]), "value": lot},
+                {"metadata_id": uuid.UUID(meta["CONTRACT_SIZE"]["id"]), "value": 1.0},
+                {"metadata_id": uuid.UUID(meta["TRADING_HOURS"]["id"]), "value": "24/7"},
+            ],
+        )
+
+    # Coinbase security instruments: similar pattern
+    for sym, inst in coinbase_instruments.items():
+        inst_id = uuid.UUID(inst["id"])
+        tick = round(random.uniform(0.01, 0.5), 2)
+        lot = round(random.uniform(0.0001, 0.01), 4)
+        client.batch_create_instrument_metadata(
+            inst_id,
+            _ts(60).isoformat(),
+            [
+                {"metadata_id": uuid.UUID(meta["TICK_SIZE"]["id"]), "value": tick},
+                {"metadata_id": uuid.UUID(meta["LOT_SIZE"]["id"]), "value": lot},
+            ],
+        )
+        client.batch_create_instrument_metadata(
+            inst_id,
+            _ts(0).isoformat(),
+            [
+                {"metadata_id": uuid.UUID(meta["TICK_SIZE"]["id"]), "value": tick},
+                {"metadata_id": uuid.UUID(meta["LOT_SIZE"]["id"]), "value": lot},
+                {"metadata_id": uuid.UUID(meta["CONTRACT_SIZE"]["id"]), "value": 1.0},
+                {"metadata_id": uuid.UUID(meta["TRADING_HOURS"]["id"]), "value": "24/7"},
+            ],
+        )
+
+    # Composites: correlation, half_life, cointegration evolving
+    for comp in kraken_composites:
+        comp_id = uuid.UUID(comp["id"])
+        corr = round(random.uniform(0.6, 0.95), 3)
+        half_life = round(random.uniform(5, 30), 1)
+        pval = round(random.uniform(0.001, 0.05), 4)
+        # 60 days ago
+        client.batch_create_composite_metadata(
+            comp_id,
+            _ts(60).isoformat(),
+            [
+                {"metadata_id": uuid.UUID(meta["CORRELATION"]["id"]), "value": corr - 0.05},
+                {"metadata_id": uuid.UUID(meta["HALF_LIFE"]["id"]), "value": half_life + 3},
+            ],
+        )
+        # 30 days ago
+        client.batch_create_composite_metadata(
+            comp_id,
+            _ts(30).isoformat(),
+            [
+                {"metadata_id": uuid.UUID(meta["CORRELATION"]["id"]), "value": corr},
+                {"metadata_id": uuid.UUID(meta["HALF_LIFE"]["id"]), "value": half_life},
+                {"metadata_id": uuid.UUID(meta["COINTEGRATION_PVALUE"]["id"]), "value": pval},
+            ],
+        )
+        # Current
+        client.batch_create_composite_metadata(
+            comp_id,
+            _ts(0).isoformat(),
+            [
+                {"metadata_id": uuid.UUID(meta["CORRELATION"]["id"]), "value": corr + 0.01},
+                {"metadata_id": uuid.UUID(meta["HALF_LIFE"]["id"]), "value": half_life - 1},
+                {"metadata_id": uuid.UUID(meta["COINTEGRATION_PVALUE"]["id"]), "value": pval * 0.9},
+            ],
+        )
+
+    for comp in coinbase_composites:
+        comp_id = uuid.UUID(comp["id"])
+        corr = round(random.uniform(0.6, 0.95), 3)
+        half_life = round(random.uniform(5, 30), 1)
+        pval = round(random.uniform(0.001, 0.05), 4)
+        client.batch_create_composite_metadata(
+            comp_id,
+            _ts(45).isoformat(),
+            [
+                {"metadata_id": uuid.UUID(meta["CORRELATION"]["id"]), "value": corr},
+                {"metadata_id": uuid.UUID(meta["HALF_LIFE"]["id"]), "value": half_life},
+                {"metadata_id": uuid.UUID(meta["COINTEGRATION_PVALUE"]["id"]), "value": pval},
+            ],
+        )
 
     print("Creating feeds...")
     # --- Feed Types ---
@@ -1027,8 +1233,8 @@ def run(
         ("EXTERNAL", "External", "Data published via the Ascent API by an external process"),
     ]
     feed_types_created = []
-    for sym, name, desc in feed_type_defs:
-        ft = client.create_feed_type(symbol=sym, name=name, description=desc)
+    for name, display_name, desc in feed_type_defs:
+        ft = client.create_feed_type(name=name, display_name=display_name, description=desc)
         feed_types_created.append(ft)
 
     # --- Feeds ---
@@ -1036,10 +1242,11 @@ def run(
     from ascent.feeds.examples.ou_params import ou_params
 
     feed_market = client.create_feed(
-        name="Market Data",
+        name="MARKET_DATA",
+        display_name="Market Data",
         feed_type_id=uuid.UUID(feed_types_created[0]["id"]),
         feed_ref="ascent.feeds.examples.market:market_data",
-        output_table="provider_asset_group_attribute",
+        output_table="instrument_attribute",
         channel="ascent.feed.market_data",
         description="Pulls minutely OHLCV pricing data 1s before each minute close.",
         parameters={"provider_name": "kraken", "attributes": ["close"], "lookback_minutes": 5},
@@ -1047,77 +1254,85 @@ def run(
         schedule={"interval": 60, "offset": -1.0, "start_date": "2024-01-01T00:00:00+00:00"},
     )
     feed_orderbook = client.create_feed(
-        name="Order Book",
+        name="ORDER_BOOK",
+        display_name="Order Book",
         feed_type_id=uuid.UUID(feed_types_created[0]["id"]),
         feed_ref="ascent.feeds.examples.orderbook:orderbook",
-        output_table="provider_asset_group_attribute",
+        output_table="instrument_attribute",
         channel="ascent.feed.orderbook",
         description="Snapshots top-of-book bid/ask every 30 seconds.",
         parameters={"depth": 10, "provider_name": "kraken"},
         schedule={"interval": 30, "start_date": "2024-01-01T00:00:00+00:00"},
     )
     feed_sentiment = client.create_feed(
-        name="Sentiment",
+        name="SENTIMENT",
+        display_name="Sentiment",
         feed_type_id=uuid.UUID(feed_types_created[2]["id"]),
         feed_ref="ascent.feeds.examples.sentiment:sentiment",
-        output_table="provider_asset_group_attribute",
+        output_table="instrument_attribute",
         channel="ascent.feed.sentiment",
         description="Aggregated social sentiment scores every 5 minutes.",
         parameters={"sources": ["twitter", "reddit"]},
         schedule={"interval": 300, "start_date": "2024-01-01T00:00:00+00:00"},
     )
     feed_cointegration = client.create_feed(
-        name="Cointegration",
+        name="COINTEGRATION",
+        display_name="Cointegration",
         feed_type_id=uuid.UUID(feed_types_created[1]["id"]),
         feed_ref="ascent.feeds.examples.cointegration:cointegration",
-        output_table="provider_asset_group_attribute",
+        output_table="instrument_attribute",
         channel="ascent.feed.cointegration",
         description="Cointegration test statistics for asset pair groups every 5 minutes.",
         parameters={"test": "engle_granger", "lookback_days": 30},
         schedule={"interval": 300, "start_date": "2024-01-01T00:00:00+00:00"},
     )
     feed_ou = client.create_feed(
-        name="OU Parameters",
+        name="OU_PARAMETERS",
+        display_name="OU Parameters",
         feed_type_id=uuid.UUID(feed_types_created[3]["id"]),
         feed_ref="ascent.feeds.examples.ou_params:ou_params",
-        output_table="provider_asset_group_attribute",
+        output_table="instrument_attribute",
         channel="ascent.feed.ou_params",
         description="Ornstein-Uhlenbeck parameters computed externally.",
         parameters={"lookback_days": 60},
         parameter_schema=ou_params.parameter_schema(),
     )
     feed_funding = client.create_feed(
-        name="Funding Rates",
+        name="FUNDING_RATES",
+        display_name="Funding Rates",
         feed_type_id=uuid.UUID(feed_types_created[3]["id"]),
         feed_ref="ascent.feeds.examples.funding:funding_rates",
-        output_table="provider_asset_group_attribute",
+        output_table="instrument_attribute",
         channel="ascent.feed.funding_rates",
         description="Perpetual swap funding rates computed externally.",
         parameters={"exchanges": ["kraken", "binance"]},
     )
     feed_spread = client.create_feed(
-        name="Spread Analytics",
+        name="SPREAD_ANALYTICS",
+        display_name="Spread Analytics",
         feed_type_id=uuid.UUID(feed_types_created[1]["id"]),
         feed_ref="ascent.feeds.examples.spread:spread_analytics",
-        output_table="provider_asset_group_attribute",
+        output_table="instrument_attribute",
         channel="ascent.feed.spread",
         description="Computes bid-ask spread metrics from order book and market data.",
         parameters={"window": 20},
     )
     feed_sent_score = client.create_feed(
-        name="Sentiment Score",
+        name="SENTIMENT_SCORE",
+        display_name="Sentiment Score",
         feed_type_id=uuid.UUID(feed_types_created[1]["id"]),
         feed_ref="ascent.feeds.examples.sentiment:sentiment_score",
-        output_table="provider_asset_group_attribute",
+        output_table="instrument_attribute",
         channel="ascent.feed.sentiment_score",
         description="Normalised sentiment z-score derived from raw sentiment feed.",
         parameters={"lookback_hours": 24},
     )
     feed_half_life = client.create_feed(
-        name="Half-Life",
+        name="HALF_LIFE",
+        display_name="Half-Life",
         feed_type_id=uuid.UUID(feed_types_created[1]["id"]),
         feed_ref="ascent.feeds.examples.half_life:half_life",
-        output_table="provider_asset_group_attribute",
+        output_table="instrument_attribute",
         channel="ascent.feed.half_life",
         description="Mean-reversion half-life estimate derived from OU parameters.",
         parameters={"min_samples": 30},
@@ -1125,10 +1340,11 @@ def run(
 
     # Coinbase-specific feeds
     feed_cb_market = client.create_feed(
-        name="Market Data (Coinbase)",
+        name="MARKET_DATA_COINBASE",
+        display_name="Market Data (Coinbase)",
         feed_type_id=uuid.UUID(feed_types_created[0]["id"]),
         feed_ref="ascent.feeds.examples.market:market_data",
-        output_table="provider_asset_group_attribute",
+        output_table="instrument_attribute",
         channel="ascent.feed.coinbase_market_data",
         description="Minutely OHLCV pricing data from Coinbase.",
         parameters={"provider_name": "coinbase", "attributes": ["close"], "lookback_minutes": 5},
@@ -1136,10 +1352,11 @@ def run(
         schedule={"interval": 60, "offset": -1.0, "start_date": "2024-01-01T00:00:00+00:00"},
     )
     feed_cb_orderbook = client.create_feed(
-        name="Order Book (Coinbase)",
+        name="ORDER_BOOK_COINBASE",
+        display_name="Order Book (Coinbase)",
         feed_type_id=uuid.UUID(feed_types_created[0]["id"]),
         feed_ref="ascent.feeds.examples.orderbook:orderbook",
-        output_table="provider_asset_group_attribute",
+        output_table="instrument_attribute",
         channel="ascent.feed.coinbase_orderbook",
         description="Snapshots top-of-book bid/ask from Coinbase every 30 seconds.",
         parameters={"depth": 10, "provider_name": "coinbase"},
@@ -1235,8 +1452,8 @@ def run(
             )
             feed_runs_by_feed[feed_obj["id"]].append(run)
 
-    print("Creating provider asset group attribute data...")
-    # --- Provider Asset Group Attribute data for MATERIALIZED partitions ---
+    print("Creating instrument attribute data...")
+    # --- Instrument Attribute data for MATERIALIZED partitions ---
     ref_prices_seed = {
         "BTC": 67500.0,
         "ETH": 3400.0,
@@ -1270,6 +1487,8 @@ def run(
 
     paga_batch = []
     paga_count = 0
+    comp_batch = []
+    comp_count = 0
     for cache_key, partition_obj in partition_cache.items():
         if partition_obj["status"] != "MATERIALIZED":
             continue
@@ -1277,7 +1496,7 @@ def run(
         feed_for_partition = next((f for f in all_feeds if f["id"] == feed_id_key), None)
         if (
             feed_for_partition is None
-            or feed_for_partition.get("output_table") != "provider_asset_group_attribute"
+            or feed_for_partition.get("output_table") != "instrument_attribute"
         ):
             continue
         w_start = datetime.datetime.fromisoformat(partition_obj["window_start"])
@@ -1285,43 +1504,65 @@ def run(
         window_secs = (w_end - w_start).total_seconds()
         ts = w_start + datetime.timedelta(seconds=window_secs * 0.5 + random.uniform(-0.5, 0.5))
 
-        for grp in all_groups:
+        # Instrument attributes (CLOSE, RSI)
+        for inst in all_instruments:
             for attr in all_attributes:
-                if attr["name"] == "close":
+                if attr["name"] not in ("CLOSE", "RSI"):
+                    continue
+                if attr["name"] == "CLOSE":
                     base = 100.0
-                    for asset_id_str, smg in single_member_groups.items():
-                        if smg["id"] == grp["id"]:
-                            sym_for_price = next(
-                                (s for s, a in asset_by_symbol.items() if a["id"] == asset_id_str),
-                                None,
-                            )
-                            if sym_for_price:
-                                base = ref_prices_seed.get(sym_for_price, 100.0)
-                            break
+                    sym_for_price = next(
+                        (
+                            s
+                            for s, a in asset_by_symbol.items()
+                            if a["id"] == inst.get("from_asset_id")
+                        ),
+                        None,
+                    )
+                    if sym_for_price:
+                        base = ref_prices_seed.get(sym_for_price, 100.0)
                     value = round(base * (1 + random.uniform(-0.02, 0.02)), 4)
-                elif attr["name"] == "spread":
-                    value = round(random.uniform(-500, 500), 4)
-                elif attr["name"] == "z_score":
-                    value = round(random.uniform(-3.0, 3.0), 4)
-                elif attr["name"] == "rsi":
-                    value = round(random.uniform(20.0, 80.0), 4)
                 else:
-                    value = round(random.uniform(0, 100), 4)
+                    value = round(random.uniform(20.0, 80.0), 4)
                 paga_batch.append(
                     {
                         "timestamp": ts,
-                        "provider_asset_group_id": uuid.UUID(grp["id"]),
+                        "instrument_id": uuid.UUID(inst["id"]),
                         "attribute_id": uuid.UUID(attr["id"]),
                         "attribute_value": value,
                     }
                 )
                 paga_count += 1
-                # Flush in batches of 1000
                 if len(paga_batch) >= 1000:
-                    client.batch_create_paga(paga_batch)
+                    client.batch_create_instrument_attributes(paga_batch)
                     paga_batch = []
+
+        # Composite attributes (SPREAD, Z_SCORE)
+        for comp in all_composites:
+            for attr in all_attributes:
+                if attr["name"] not in ("SPREAD", "Z_SCORE"):
+                    continue
+                if attr["name"] == "SPREAD":
+                    value = round(random.uniform(-500, 500), 4)
+                else:
+                    value = round(random.uniform(-3.0, 3.0), 4)
+                comp_batch.append(
+                    {
+                        "timestamp": ts,
+                        "composite_id": uuid.UUID(comp["id"]),
+                        "attribute_id": uuid.UUID(attr["id"]),
+                        "attribute_value": value,
+                    }
+                )
+                comp_count += 1
+                if len(comp_batch) >= 1000:
+                    client.batch_create_composite_attributes(comp_batch)
+                    comp_batch = []
+
     if paga_batch:
-        client.batch_create_paga(paga_batch)
+        client.batch_create_instrument_attributes(paga_batch)
+    if comp_batch:
+        client.batch_create_composite_attributes(comp_batch)
 
     print("Creating strategies...")
     # --- Strategies ---
@@ -1333,6 +1574,7 @@ def run(
 
     strategies_data = [
         (
+            "BTC_ETH_PAIRS",
             "BTC-ETH Pairs",
             "Pairs trading BTC/ETH spread",
             "PAIRS_TRADING",
@@ -1349,6 +1591,7 @@ def run(
             [feed_market, feed_ou, feed_half_life, feed_spread],
         ),
         (
+            "SOL_MOMENTUM",
             "SOL Momentum",
             "Momentum strategy on SOL/USD",
             "MOMENTUM",
@@ -1367,6 +1610,7 @@ def run(
             [feed_market, feed_funding, feed_sentiment, feed_sent_score],
         ),
         (
+            "ADA_MEAN_REV",
             "ADA Mean Rev",
             "Mean reversion on ADA/USD",
             "MEAN_REVERSION",
@@ -1385,6 +1629,7 @@ def run(
             [feed_market, feed_ou, feed_half_life],
         ),
         (
+            "XRP_DOGE_PAIRS",
             "XRP-DOGE Pairs",
             "Pairs trading XRP/DOGE spread",
             "PAIRS_TRADING",
@@ -1401,6 +1646,7 @@ def run(
             [feed_market, feed_orderbook, feed_funding, feed_ou, feed_spread, feed_half_life],
         ),
         (
+            "AVAX_MOMENTUM_COINBASE",
             "AVAX Momentum (Coinbase)",
             "Momentum strategy on AVAX/USD via Coinbase",
             "MOMENTUM",
@@ -1419,6 +1665,7 @@ def run(
             [feed_cb_market, feed_cb_orderbook],
         ),
         (
+            "LINK_MEAN_REV_COINBASE",
             "LINK Mean Rev (Coinbase)",
             "Mean reversion on LINK/USD via Coinbase",
             "MEAN_REVERSION",
@@ -1436,11 +1683,12 @@ def run(
         ),
     ]
     strategies = []
-    for name, desc, st_sym, ref, pid, params, schema, feeds in strategies_data:
+    for name, display_name, desc, st_name, ref, pid, params, schema, feeds in strategies_data:
         s = client.create_strategy(
             name=name,
+            display_name=display_name,
             description=desc,
-            strategy_type_id=uuid.UUID(strategy_type_by_symbol[st_sym]["id"]),
+            strategy_type_id=uuid.UUID(strategy_type_by_name[st_name]["id"]),
             strategy_ref=ref,
             portfolio_id=uuid.UUID(pid),
             parameters=params,
@@ -1564,6 +1812,13 @@ def run(
         "LINK": 14,
     }
 
+    # Map portfolio to provider for instrument lookup
+    portfolio_provider_map = {
+        portfolio_main["id"]: str(kraken_id),
+        portfolio_paper["id"]: str(kraken_id),
+        portfolio_coinbase["id"]: str(coinbase_id),
+    }
+
     all_trades = []
     for strat_idx, strat in enumerate(strategy_objs):
         pairs = strategy_pairs[strat_idx]
@@ -1590,6 +1845,9 @@ def run(
                 close_reason = "MANUAL"
 
             is_paper = strat.get("portfolio_id") == portfolio_paper.get("id")
+            trade_provider_id = portfolio_provider_map.get(
+                strat.get("portfolio_id", portfolio_main["id"]), str(kraken_id)
+            )
 
             legs = []
             total_pnl = 0.0
@@ -1606,7 +1864,7 @@ def run(
 
                 exit_price = None
                 realized_pnl = None
-                if trade_status["symbol"] == "CLOSED":
+                if trade_status["name"] == "CLOSED":
                     pnl_pct = random.uniform(-0.08, 0.12)
                     if direction == "LONG":
                         exit_price = round(entry_price * (1 + pnl_pct), 2)
@@ -1621,10 +1879,18 @@ def run(
                     round(exit_price * random.uniform(0.998, 1.002), 2) if exit_price else None
                 )
 
+                leg_instrument_key = (
+                    trade_provider_id,
+                    asset_by_symbol[from_sym]["id"],
+                    asset_by_symbol[to_sym]["id"],
+                )
+                leg_instrument_id = pair_to_instrument.get(leg_instrument_key)
+
                 legs.append(
                     {
-                        "from_asset_id": uuid.UUID(asset_by_symbol[from_sym]["id"]),
-                        "to_asset_id": uuid.UUID(asset_by_symbol[to_sym]["id"]),
+                        "instrument_id": uuid.UUID(leg_instrument_id)
+                        if leg_instrument_id
+                        else None,
                         "direction": direction,
                         "quantity": quantity,
                         "entry_price": entry_price,
@@ -1633,7 +1899,6 @@ def run(
                         "expected_exit_price": expected_exit,
                     }
                 )
-
             trade = client.create_trade(
                 strategy_id=uuid.UUID(strat["id"]),
                 portfolio_id=uuid.UUID(strat.get("portfolio_id", portfolio_main["id"])),
@@ -1645,13 +1910,13 @@ def run(
 
             # Update PnL fields
             update_kwargs = {"total_fees": round(random.uniform(0.5, 25.0), 2)}
-            if trade_status["symbol"] == "CLOSED":
+            if trade_status["name"] == "CLOSED":
                 update_kwargs["total_realized_pnl"] = round(total_pnl, 2)
                 update_kwargs["exit_at"] = exit_at
                 update_kwargs["close_reason"] = close_reason
-            if trade_status["symbol"] == "OPEN":
+            if trade_status["name"] == "OPEN":
                 update_kwargs["total_unrealized_pnl"] = round(random.uniform(-500, 500), 2)
-            if trade_status["symbol"] == "CANCELLED":
+            if trade_status["name"] == "CANCELLED":
                 update_kwargs["close_reason"] = close_reason
             client.update_trade(uuid.UUID(trade["id"]), **update_kwargs)
 
@@ -1664,7 +1929,7 @@ def run(
                 timestamp=pending_ts,
             )
 
-            if trade_status["symbol"] == "CANCELLED":
+            if trade_status["name"] == "CANCELLED":
                 # PENDING → CANCELLED
                 close_ts = entry_at + datetime.timedelta(minutes=30)
                 client.add_trade_status(
@@ -1685,7 +1950,7 @@ def run(
                     timestamp=entry_at,
                 )
 
-                if trade_status["symbol"] == "CLOSED":
+                if trade_status["name"] == "CLOSED":
                     # OPEN → CLOSING → CLOSED
                     close_ts = exit_at or (entry_at + datetime.timedelta(minutes=30))
                     client.add_trade_status(
@@ -1724,15 +1989,15 @@ def run(
 
         # Data series reference
         first_pair = strategy_pairs[all_trades.index(trade) % len(strategy_pairs)]
-        first_asset_id = asset_by_symbol[first_pair[0][0]]["id"]
-        ds_group = single_member_groups.get(first_asset_id)
-        if ds_group:
+        first_sym = first_pair[0][0]
+        ds_inst = kraken_instruments.get(first_sym) or coinbase_instruments.get(first_sym)
+        if ds_inst:
             client.add_trade_data_series(
                 trade_id,
                 attribute_id=uuid.UUID(attr_close["id"]),
                 label="Close Price",
-                data_source="GROUP_ATTRIBUTE",
-                provider_asset_group_id=uuid.UUID(ds_group["id"]),
+                data_source="INSTRUMENT_ATTRIBUTE",
+                instrument_id=uuid.UUID(ds_inst["id"]),
             )
 
         # Entry snapshot
@@ -1778,6 +2043,10 @@ def run(
             trade.get("portfolio_id"), kraken_exchange["id"]
         )
 
+        order_provider_id = portfolio_provider_map.get(
+            trade.get("portfolio_id", portfolio_main["id"]), str(kraken_id)
+        )
+
         for pair_idx, (from_sym, to_sym) in enumerate(pairs):
             base_price = ref_prices.get(from_sym, 100)
             entry_price = round(base_price + base_price * random.uniform(-0.05, 0.05), 2)
@@ -1789,14 +2058,20 @@ def run(
             )
             quantity = round(random.uniform(0.01, 10.0), 4)
 
+            order_instrument_key = (
+                order_provider_id,
+                asset_by_symbol[from_sym]["id"],
+                asset_by_symbol[to_sym]["id"],
+            )
+            order_instrument_id = pair_to_instrument.get(order_instrument_key)
+
             entry_order = client.create_order(
                 timestamp=trade_entry_at,
-                order_type_id=uuid.UUID(order_type_by_symbol["MARKET"]["id"]),
+                order_type_id=uuid.UUID(order_type_by_name["MARKET"]["id"]),
                 side="BUY" if direction == "LONG" else "SELL",
                 exchange_id=uuid.UUID(trade_exchange_id),
                 portfolio_id=uuid.UUID(trade.get("portfolio_id", portfolio_main["id"])),
-                from_asset_id=uuid.UUID(asset_by_symbol[from_sym]["id"]),
-                to_asset_id=uuid.UUID(asset_by_symbol[to_sym]["id"]),
+                instrument_id=uuid.UUID(order_instrument_id) if order_instrument_id else None,
                 quantity=quantity,
                 price=entry_price,
                 time_in_force="GTC",
@@ -1830,12 +2105,11 @@ def run(
 
                 exit_order = client.create_order(
                     timestamp=trade_exit_at,
-                    order_type_id=uuid.UUID(order_type_by_symbol["MARKET"]["id"]),
+                    order_type_id=uuid.UUID(order_type_by_name["MARKET"]["id"]),
                     side="SELL" if direction == "LONG" else "BUY",
                     exchange_id=uuid.UUID(trade_exchange_id),
                     portfolio_id=uuid.UUID(trade.get("portfolio_id", portfolio_main["id"])),
-                    from_asset_id=uuid.UUID(asset_by_symbol[from_sym]["id"]),
-                    to_asset_id=uuid.UUID(asset_by_symbol[to_sym]["id"]),
+                    instrument_id=uuid.UUID(order_instrument_id) if order_instrument_id else None,
                     quantity=quantity,
                     price=exit_price,
                     time_in_force="GTC",
@@ -1865,10 +2139,9 @@ def run(
     print(f"  4 asset types, {len(assets)} assets")
     print(f"  {len(meta)} metadata types")
     print(f"  {len(feed_type_defs)} feed types, {len(all_feeds)} feeds")
-    print(
-        f"  {len(all_groups)} asset groups ({len(single_member_groups)} single-member, {len(pair_groups)} pairs, {len(basket_groups)} baskets)"
-    )
-    print(f"  {paga_count} provider_asset_group_attribute rows")
+    print(f"  {len(all_instruments)} instruments")
+    print(f"  {len(all_composites)} composites")
+    print(f"  {paga_count} instrument_attribute rows, {comp_count} composite_attribute rows")
     print(f"  {len(strategy_objs)} strategies")
     print(f"  {link_count} strategy-run ↔ feed-run links")
     print(f"  {len(all_trades)} trades")

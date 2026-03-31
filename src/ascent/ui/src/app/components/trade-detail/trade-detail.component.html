@@ -84,7 +84,7 @@
           <p-table [value]="trade.legs">
             <ng-template #header>
               <tr>
-                <th>Pair</th>
+                <th>Instrument</th>
                 <th>Direction</th>
                 <th>Quantity</th>
                 <th>Entry</th>
@@ -94,7 +94,7 @@
             </ng-template>
             <ng-template #body let-leg>
               <tr>
-                <td class="text-sm font-medium">{{ leg.from_asset_symbol }}/{{ leg.to_asset_symbol }}</td>
+                <td class="text-sm font-medium">{{ leg.instrument_name }}</td>
                 <td><app-badge [label]="leg.direction"/></td>
                 <td class="text-sm">{{ leg.quantity }}</td>
                 <td class="text-sm">
@@ -119,7 +119,7 @@
         <!-- Orders per Leg -->
         @for (leg of trade.legs; track leg.id) {
           @if (leg.orders && leg.orders.length > 0) {
-            <p-card [header]="'Orders \u2014 ' + leg.from_asset_symbol + '/' + leg.to_asset_symbol">
+            <p-card [header]="'Orders \u2014 ' + leg.instrument_name">
               <p-table [value]="leg.orders" [tableStyle]="{'width': '100%'}">
                 <ng-template #header>
                   <tr>

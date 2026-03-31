@@ -18,6 +18,9 @@
   --edge: rgba(0, 0, 0, 0.1);
   --edge-dim: rgba(0, 0, 0, 0.05);
   --overlay: rgba(0, 0, 0, 0.5);
+  --graph-accent-1: #f59e0b;
+  --graph-accent-2: #43aa8b;
+  --graph-accent-3: #a78bfa;
 }
 
 .dark {
@@ -30,6 +33,9 @@
   --edge: rgba(255, 255, 255, 0.1);
   --edge-dim: rgba(255, 255, 255, 0.05);
   --overlay: rgba(0, 0, 0, 0.7);
+  --graph-accent-1: #f59e0b;
+  --graph-accent-2: #43aa8b;
+  --graph-accent-3: #a78bfa;
 }
 
 html {
@@ -69,6 +75,11 @@ html {
   --color-negative: #ef4444;
   --color-warning: #f97316;
   --color-info: #3b82f6;
+
+  /* ── Graph accent colors ── */
+  --color-graph-accent-1: var(--graph-accent-1);
+  --color-graph-accent-2: var(--graph-accent-2);
+  --color-graph-accent-3: var(--graph-accent-3);
 }
 
 @layer tw-utilities {

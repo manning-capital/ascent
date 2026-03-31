@@ -220,7 +220,7 @@
     <div class="flex items-center gap-3 px-4 py-2 border-b border-surface shrink-0 bg-emphasis">
       <a routerLink="/strategies" class="text-sm text-primary hover:underline">&larr; Strategies</a>
       <span class="text-surface-300">|</span>
-      <h1 class="text-lg font-bold truncate">{{ strategy.name }}</h1>
+      <h1 class="text-lg font-bold truncate">{{ strategy.display_name }}</h1>
       <p-tag [value]="strategy.is_active ? 'Active' : 'Inactive'" [severity]="strategy.is_active ? 'success' : 'secondary'" [rounded]="true"/>
       <span class="text-xs text-surface-500 shrink-0">{{ strategy.strategy_type }}</span>
     </div>
@@ -503,7 +503,7 @@
                   </ng-template>
                   <ng-template #body let-order>
                     <tr>
-                      <td class="font-medium text-sm">{{ order.from_asset_symbol }}/{{ order.to_asset_symbol }}</td>
+                      <td class="font-medium text-sm">{{ order.instrument_name }}</td>
                       <td>
                         <p-tag [value]="order.side" [severity]="orderSideSeverity(order.side)" [rounded]="true"/>
                       </td>
@@ -582,11 +582,9 @@
       @if (activeTab() === 'Universe') {
         <app-universe-panel
           [items]="universeItems()"
-          subtitle="Asset groups and individual pairs this strategy trades."
-          (addItem)="onAddUniverseItem($event)"
-          (createGroupAndAdd)="onCreateGroupAndAdd($event)"
-          (remove)="removeUniverseItem($event)"
-          (removeGroup)="removeUniverseGroup($event)"/>
+          subtitle="Instruments this strategy trades."
+          (addInstruments)="onAddInstruments($event)"
+          (remove)="removeUniverseItem($event)"/>
       }
 
       <!-- Runs Tab -->

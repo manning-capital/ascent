@@ -1,6 +1,7 @@
 export interface StrategyListItem {
   id: string;
   name: string;
+  display_name: string;
   description: string | null;
   strategy_type: string;
   strategy_ref: string;

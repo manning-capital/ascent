@@ -4,21 +4,42 @@ from pydantic import BaseModel, ConfigDict
 
 
 class UniverseItemCreate(BaseModel):
-    provider_id: uuid.UUID
-    from_asset_id: uuid.UUID
-    to_asset_id: uuid.UUID
-    provider_asset_group_id: uuid.UUID | None = None
+    instrument_id: uuid.UUID
     order: int
+
+
+class UniverseBatchAddInstruments(BaseModel):
+    instrument_ids: list[uuid.UUID]
+    start_order: int = 1
 
 
 class UniverseItemSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    provider_id: uuid.UUID
-    provider_name: str | None = None
-    from_asset_id: uuid.UUID
-    from_asset_symbol: str | None = None
-    to_asset_id: uuid.UUID
-    to_asset_symbol: str | None = None
-    provider_asset_group_id: uuid.UUID
+    instrument_id: uuid.UUID
+    instrument_name: str | None = None
+    instrument_display_name: str | None = None
+    instrument_type_id: uuid.UUID | None = None
+    is_active: bool = True
+    order: int
+
+
+class CompositeUniverseItemCreate(BaseModel):
+    composite_id: uuid.UUID
+    order: int
+
+
+class CompositeUniverseBatchAdd(BaseModel):
+    composite_ids: list[uuid.UUID]
+    start_order: int = 1
+
+
+class CompositeUniverseItemSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    composite_id: uuid.UUID
+    composite_name: str | None = None
+    composite_display_name: str | None = None
+    composite_type_id: uuid.UUID | None = None
+    is_active: bool = True
     order: int

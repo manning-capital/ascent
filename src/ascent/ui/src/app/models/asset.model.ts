@@ -3,7 +3,7 @@ export interface AssetListItem {
   asset_type_id: string;
   asset_type_name: string | null;
   name: string;
-  symbol: string | null;
+  display_name: string;
   description: string | null;
   underlying_asset_id: string | null;
   is_active: boolean;
@@ -13,7 +13,7 @@ export interface AssetListItem {
 export interface AssetCreate {
   asset_type_id: string;
   name: string;
-  symbol: string;
+  display_name: string;
   description?: string | null;
   underlying_asset_id?: string | null;
   is_active?: boolean;
@@ -21,7 +21,7 @@ export interface AssetCreate {
 
 export interface AssetUpdate {
   name?: string;
-  symbol?: string | null;
+  display_name?: string;
   description?: string | null;
   is_active?: boolean;
 }
@@ -42,34 +42,31 @@ export interface ProviderAssetLinkCreate {
   identifier: string;
 }
 
-export interface AssetGroupMember {
-  provider_asset_group_id: string;
+export interface Instrument {
+  id: string;
+  name: string;
+  display_name: string;
+  instrument_type_id: string;
   provider_id: string;
   provider_name: string | null;
   from_asset_id: string;
-  from_asset_symbol: string | null;
+  from_asset_name: string | null;
   to_asset_id: string;
-  to_asset_symbol: string | null;
-  order: number;
-}
-
-export interface AssetGroup {
-  id: string;
+  to_asset_name: string | null;
+  description: string | null;
   is_active: boolean;
-  members: AssetGroupMember[];
   created_at: string | null;
 }
 
-export interface AssetGroupCreate {
-  is_active?: boolean;
-  members?: AssetGroupMemberCreate[];
-}
-
-export interface AssetGroupMemberCreate {
+export interface InstrumentCreate {
+  name: string;
+  display_name: string;
+  instrument_type_id: string;
   provider_id: string;
   from_asset_id: string;
   to_asset_id: string;
-  order: number;
+  description?: string;
+  is_active?: boolean;
 }
 
 export interface AssetDetail extends AssetListItem {
@@ -156,12 +153,60 @@ export interface ProviderTypeMetadataCreate {
 export interface TypeItem {
   id: string;
   name: string;
+  display_name: string;
   description: string | null;
   parent_type_id: string | null;
 }
 
 export interface TypeHierarchyNode extends TypeItem {
   children: TypeHierarchyNode[];
+}
+
+export interface InstrumentTypeItem extends TypeItem {}
+
+export interface InstrumentTypeCreate {
+  name: string;
+  display_name: string;
+  description?: string;
+  parent_type_id?: string | null;
+}
+
+export interface InstrumentTypeMetadataField {
+  metadata_id: string;
+  metadata_name: string;
+  metadata_display_name: string | null;
+  metadata_description: string | null;
+  value_type: string;
+  is_required: boolean;
+  display_order: number;
+  is_inherited: boolean;
+  source_type_id: string | null;
+  source_type_name: string | null;
+}
+
+export type InstrumentTypeMetadataCreate = AssetTypeMetadataCreate;
+
+export interface MetadataConflict {
+  metadata_id: string;
+  metadata_name: string;
+  metadata_display_name: string;
+  value_type: string;
+  child_is_required: boolean;
+  parent_is_required: boolean;
+  parent_source_type_name: string;
+}
+
+export interface ReparentPreview {
+  child_id: string;
+  child_name: string;
+  new_parent_id: string;
+  new_parent_name: string;
+  child_own_fields: AssetTypeMetadataField[];
+  parent_effective_fields: AssetTypeMetadataField[];
+  conflicts: MetadataConflict[];
+  child_own_provider_asset_fields?: AssetTypeMetadataField[] | null;
+  parent_effective_provider_asset_fields?: AssetTypeMetadataField[] | null;
+  provider_asset_conflicts?: MetadataConflict[] | null;
 }
 
 export interface BatchMetadataEntry {
@@ -216,20 +261,15 @@ export interface BulkHistoryUpdate {
 }
 
 export interface UniverseItem {
-  provider_id: string;
-  provider_name: string | null;
-  from_asset_id: string;
-  from_asset_symbol: string | null;
-  to_asset_id: string;
-  to_asset_symbol: string | null;
-  provider_asset_group_id: string;
+  instrument_id: string;
+  instrument_name: string | null;
+  instrument_display_name: string | null;
+  instrument_type_id: string | null;
+  is_active: boolean;
   order: number;
 }
 
 export interface UniverseItemCreate {
-  provider_id: string;
-  from_asset_id: string;
-  to_asset_id: string;
-  provider_asset_group_id?: string | null;
+  instrument_id: string;
   order: number;
 }

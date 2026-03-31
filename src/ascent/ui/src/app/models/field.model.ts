@@ -39,6 +39,7 @@ export interface MetadataTypeUpdate {
 export interface AttributeItem {
   id: string;
   name: string;
+  display_name: string;
   description: string | null;
   is_active: boolean;
   created_at: string | null;
@@ -46,12 +47,14 @@ export interface AttributeItem {
 
 export interface AttributeCreate {
   name: string;
+  display_name: string;
   description?: string | null;
   is_active?: boolean;
 }
 
 export interface AttributeUpdate {
   name?: string;
+  display_name?: string;
   description?: string | null;
   is_active?: boolean;
 }

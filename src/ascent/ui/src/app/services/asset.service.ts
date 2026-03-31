@@ -5,12 +5,15 @@ import { ApiService } from './api.service';
 import {
   AssetListItem, AssetDetail, AssetCreate, AssetUpdate,
   ProviderAssetLink, ProviderAssetLinkCreate,
-  AssetGroup, AssetGroupCreate, AssetGroupMemberCreate,
+  Instrument, InstrumentCreate,
   TypeItem, TypeHierarchyNode, MetadataEntry, MetadataEntryCreate,
   MetadataHistoryEntry, MetadataHistoryUpdate, MetadataType,
   AssetTypeMetadataField, AssetTypeMetadataCreate,
   AssetTypeProviderAssetMetadataField, AssetTypeProviderAssetMetadataCreate,
   BatchMetadataCreate, MetadataHistoryGrid, BulkHistoryUpdate,
+  ReparentPreview,
+  InstrumentTypeItem, InstrumentTypeCreate,
+  InstrumentTypeMetadataField, InstrumentTypeMetadataCreate,
 } from '../models/asset.model';
 
 @Injectable({ providedIn: 'root' })
@@ -20,7 +23,8 @@ export class AssetService {
   assets = signal<AssetListItem[]>([]);
   assetTypes = signal<TypeItem[]>([]);
   providerAssetLinks = signal<ProviderAssetLink[]>([]);
-  assetGroups = signal<AssetGroup[]>([]);
+  instruments = signal<Instrument[]>([]);
+  instrumentTypes = signal<InstrumentTypeItem[]>([]);
   metadataTypes = signal<MetadataType[]>([]);
   selectedAsset = signal<AssetDetail | null>(null);
   loading = signal(true);
@@ -29,7 +33,8 @@ export class AssetService {
   private loadAssets$ = new Subject<void>();
   private loadTypes$ = new Subject<void>();
   private loadLinks$ = new Subject<Record<string, string> | undefined>();
-  private loadGroups$ = new Subject<Record<string, string> | undefined>();
+  private loadInstruments$ = new Subject<Record<string, string> | undefined>();
+  private loadInstrumentTypes$ = new Subject<void>();
   private loadDetail$ = new Subject<{ assetId: string; silent: boolean }>();
   private loadMetadataTypes$ = new Subject<void>();
 
@@ -66,14 +71,24 @@ export class AssetService {
       this.providerAssetLinks.set(links);
     });
 
-    this.loadGroups$.pipe(
+    this.loadInstruments$.pipe(
       switchMap(params =>
-        this.api.get<AssetGroup[]>('/asset-groups', params).pipe(
+        this.api.get<Instrument[]>('/instruments', params).pipe(
           catchError(() => EMPTY)
         )
       ),
-    ).subscribe(groups => {
-      this.assetGroups.set(groups);
+    ).subscribe(instruments => {
+      this.instruments.set(instruments);
+    });
+
+    this.loadInstrumentTypes$.pipe(
+      switchMap(() =>
+        this.api.get<InstrumentTypeItem[]>('/types/instrument-types').pipe(
+          catchError(() => EMPTY)
+        )
+      ),
+    ).subscribe(types => {
+      this.instrumentTypes.set(types);
     });
 
     this.loadDetail$.pipe(
@@ -111,8 +126,64 @@ export class AssetService {
     this.loadLinks$.next(params);
   }
 
-  loadAssetGroups(params?: Record<string, string>): void {
-    this.loadGroups$.next(params);
+  loadInstruments(params?: Record<string, string>): void {
+    this.loadInstruments$.next(params);
+  }
+
+  loadInstrumentTypes(): void {
+    this.loadInstrumentTypes$.next();
+  }
+
+  createInstrumentType(name: string, displayName: string, description?: string, parentTypeId?: string): Observable<InstrumentTypeItem> {
+    return this.api.post<InstrumentTypeItem>('/types/instrument-types', {
+      name, display_name: displayName, description,
+      parent_type_id: parentTypeId ?? null,
+    });
+  }
+
+  updateInstrumentType(typeId: string, data: { parent_type_id: string | null; remove_metadata_ids?: string[] }): Observable<InstrumentTypeItem> {
+    return this.api.put<InstrumentTypeItem>(`/types/instrument-types/${typeId}`, data);
+  }
+
+  patchInstrumentType(typeId: string, data: { name?: string; display_name?: string; description?: string }): Observable<InstrumentTypeItem> {
+    return this.api.patch<InstrumentTypeItem>(`/types/instrument-types/${typeId}`, data);
+  }
+
+  getInstrumentTypeReparentPreview(childId: string, newParentId: string): Observable<ReparentPreview> {
+    return this.api.get<ReparentPreview>(`/types/instrument-types/${childId}/reparent-preview`, { new_parent_id: newParentId });
+  }
+
+  loadInstrumentTypeTree(): Observable<TypeHierarchyNode[]> {
+    return this.api.get<TypeHierarchyNode[]>('/types/instrument-types/tree');
+  }
+
+  getInstrumentTypeMetadata(instrumentTypeId: string): Observable<InstrumentTypeMetadataField[]> {
+    return this.api.get<InstrumentTypeMetadataField[]>(`/types/instrument-types/${instrumentTypeId}/metadata`);
+  }
+
+  addInstrumentTypeMetadata(instrumentTypeId: string, data: InstrumentTypeMetadataCreate): Observable<InstrumentTypeMetadataField> {
+    return this.api.post<InstrumentTypeMetadataField>(`/types/instrument-types/${instrumentTypeId}/metadata`, data);
+  }
+
+  removeInstrumentTypeMetadata(instrumentTypeId: string, metadataId: string): Observable<any> {
+    return this.api.delete(`/types/instrument-types/${instrumentTypeId}/metadata/${metadataId}`);
+  }
+
+  // Instrument Metadata
+  getInstrumentMetadata(instrumentId: string): Observable<MetadataEntry[]> {
+    return this.api.get<MetadataEntry[]>(`/instruments/${instrumentId}/metadata`);
+  }
+
+  batchSaveInstrumentMetadata(instrumentId: string, data: BatchMetadataCreate): Observable<MetadataEntry[]> {
+    return this.api.post<MetadataEntry[]>(`/instruments/${instrumentId}/metadata/batch`, data);
+  }
+
+  getInstrumentMetadataHistoryGrid(instrumentId: string): Observable<MetadataHistoryGrid> {
+    return this.api.get<MetadataHistoryGrid>(`/instruments/${instrumentId}/metadata/history`);
+  }
+
+  bulkUpdateInstrumentMetadataHistory(instrumentId: string, data: BulkHistoryUpdate): Observable<any> {
+    return this.api.put(`/instruments/${instrumentId}/metadata/history/bulk`, data);
   }
 
   loadAssetDetail(assetId: string, silent = false): void {
@@ -123,8 +194,20 @@ export class AssetService {
     this.loadMetadataTypes$.next();
   }
 
-  createAssetType(name: string, description?: string, parentTypeId?: string): Observable<TypeItem> {
-    return this.api.post<TypeItem>('/types/asset-types', { name, description, parent_type_id: parentTypeId ?? null });
+  createAssetType(name: string, displayName: string, description?: string, parentTypeId?: string): Observable<TypeItem> {
+    return this.api.post<TypeItem>('/types/asset-types', { name, display_name: displayName, description, parent_type_id: parentTypeId ?? null });
+  }
+
+  updateAssetType(typeId: string, data: { parent_type_id: string | null; remove_metadata_ids?: string[]; remove_provider_asset_metadata_ids?: string[] }): Observable<TypeItem> {
+    return this.api.put<TypeItem>(`/types/asset-types/${typeId}`, data);
+  }
+
+  patchAssetType(typeId: string, data: { name?: string; display_name?: string; description?: string }): Observable<TypeItem> {
+    return this.api.patch<TypeItem>(`/types/asset-types/${typeId}`, data);
+  }
+
+  getReparentPreview(childId: string, newParentId: string): Observable<ReparentPreview> {
+    return this.api.get<ReparentPreview>(`/types/asset-types/${childId}/reparent-preview`, { new_parent_id: newParentId });
   }
 
   loadAssetTypeTree(): Observable<TypeHierarchyNode[]> {
@@ -159,24 +242,20 @@ export class AssetService {
     return this.api.delete(`/provider-assets/${providerId}/${assetId}`);
   }
 
-  getAssetGroupDetail(groupId: string): Observable<AssetGroup> {
-    return this.api.get<AssetGroup>(`/asset-groups/${groupId}`);
+  getInstrumentDetail(instrumentId: string): Observable<Instrument> {
+    return this.api.get<Instrument>(`/instruments/${instrumentId}`);
   }
 
-  createAssetGroup(data: AssetGroupCreate) {
-    return this.api.post<AssetGroup>('/asset-groups', data);
+  createInstrument(data: InstrumentCreate) {
+    return this.api.post<Instrument>('/instruments', data);
   }
 
-  deleteAssetGroup(id: string) {
-    return this.api.delete(`/asset-groups/${id}`);
+  updateInstrument(id: string, data: { is_active?: boolean }) {
+    return this.api.put(`/instruments/${id}`, data);
   }
 
-  addGroupMember(groupId: string, data: AssetGroupMemberCreate) {
-    return this.api.post(`/asset-groups/${groupId}/members`, data);
-  }
-
-  removeGroupMember(groupId: string, providerId: string, fromAssetId: string, toAssetId: string) {
-    return this.api.delete(`/asset-groups/${groupId}/members/${providerId}/${fromAssetId}/${toAssetId}`);
+  deleteInstrument(id: string) {
+    return this.api.delete(`/instruments/${id}`);
   }
 
   // Metadata CRUD

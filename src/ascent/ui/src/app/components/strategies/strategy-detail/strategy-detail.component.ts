@@ -5,10 +5,9 @@ import { FormsModule } from '@angular/forms';
 import { StrategyService } from '../../../services/strategy.service';
 import { FeedService } from '../../../services/feed.service';
 import { TradeService } from '../../../services/trade.service';
-import { AssetService } from '../../../services/asset.service';
 import { ToastService } from '../../../services/toast.service';
 import { StrategyFeedDAG, StrategyRunListItem } from '../../../models/feed.model';
-import { UniverseItem, UniverseItemCreate, AssetGroupMemberCreate } from '../../../models/asset.model';
+import { UniverseItem } from '../../../models/asset.model';
 import { UniversePanelComponent } from '../../shared/universe-panel.component';
 import { Tabs, TabList, Tab } from 'primeng/tabs';
 import { SchemaFormComponent } from '../../shared/schema-form.component';
@@ -65,7 +64,6 @@ export class StrategyDetailComponent implements OnInit {
   strategyService = inject(StrategyService);
   feedService = inject(FeedService);
   tradeService = inject(TradeService);
-  private assetService = inject(AssetService);
 
   tabs = ['Performance', 'Trades', 'Universe', 'Runs', 'Configuration'];
   activeTab = signal('Performance');
@@ -372,73 +370,24 @@ export class StrategyDetailComponent implements OnInit {
     });
   }
 
-  onAddUniverseItem(data: UniverseItemCreate): void {
-    this.strategyService.addUniverseItem(this.strategyId, data).subscribe({
+  onAddInstruments(event: { instrumentIds: string[]; startOrder: number }): void {
+    this.strategyService.batchAddInstruments(this.strategyId, event.instrumentIds, event.startOrder).subscribe({
       next: () => {
-        this.toast.success('Pair added to universe');
+        this.toast.success(`${event.instrumentIds.length} instrument(s) added to universe`);
         this.loadUniverse();
       },
-      error: () => this.toast.error('Failed to add pair to universe'),
+      error: () => this.toast.error('Failed to add instruments to universe'),
     });
   }
 
-  onCreateGroupAndAdd(event: { members: AssetGroupMemberCreate[]; startOrder: number }): void {
-    this.assetService.createAssetGroup({ members: event.members }).subscribe({
-      next: (group) => {
-        let completed = 0;
-        const total = event.members.length;
-        for (const member of event.members) {
-          const data: UniverseItemCreate = {
-            provider_id: member.provider_id,
-            from_asset_id: member.from_asset_id,
-            to_asset_id: member.to_asset_id,
-            provider_asset_group_id: group.id,
-            order: event.startOrder + member.order - 1,
-          };
-          this.strategyService.addUniverseItem(this.strategyId, data).subscribe({
-            next: () => {
-              completed++;
-              if (completed === total) {
-                this.toast.success(`Asset group created & linked (${total} pairs)`);
-                this.loadUniverse();
-              }
-            },
-            error: () => this.toast.error('Failed to add pair to universe'),
-          });
-        }
-      },
-      error: () => this.toast.error('Failed to create asset group'),
-    });
-  }
-
-  removeUniverseItem(item: UniverseItem): void {
-    this.strategyService.removeUniverseItem(
-      this.strategyId, item.provider_id, item.from_asset_id, item.to_asset_id
-    ).subscribe({
+  removeUniverseItem(instrumentId: string): void {
+    this.strategyService.removeUniverseItem(this.strategyId, instrumentId).subscribe({
       next: () => {
-        this.toast.success('Pair removed from universe');
+        this.toast.success('Instrument removed from universe');
         this.loadUniverse();
       },
-      error: () => this.toast.error('Failed to remove pair'),
+      error: () => this.toast.error('Failed to remove instrument'),
     });
-  }
-
-  removeUniverseGroup(items: UniverseItem[]): void {
-    let completed = 0;
-    for (const item of items) {
-      this.strategyService.removeUniverseItem(
-        this.strategyId, item.provider_id, item.from_asset_id, item.to_asset_id
-      ).subscribe({
-        next: () => {
-          completed++;
-          if (completed === items.length) {
-            this.toast.success('Asset group removed from universe');
-            this.loadUniverse();
-          }
-        },
-        error: () => this.toast.error('Failed to remove asset group'),
-      });
-    }
   }
 
   private buildRunsFilter(): RunFilter | undefined {

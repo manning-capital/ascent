@@ -26,18 +26,18 @@ def _build_order_schemas(orders: list[Order]) -> list[OrderSchema]:
             OrderSchema(
                 id=o.id,
                 timestamp=o.timestamp,
-                order_type=o.order_type.name,
+                order_type=o.order_type.display_name,
                 side=o.side,
-                from_asset_symbol=o.from_asset.symbol or o.from_asset.name,
-                to_asset_symbol=o.to_asset.symbol or o.to_asset.name,
+                instrument_id=o.instrument_id,
+                instrument_name=o.instrument.display_name if o.instrument else "",
                 quantity=o.quantity,
                 price=o.price,
                 filled_quantity=o.filled_quantity,
                 average_fill_price=o.average_fill_price,
                 external_order_id=o.external_order_id,
                 time_in_force=o.time_in_force,
-                current_status=(latest_status.order_status_type.symbol if latest_status else None),
-                exchange_name=o.exchange.name if o.exchange else None,
+                current_status=(latest_status.order_status_type.name if latest_status else None),
+                exchange_name=o.exchange.display_name if o.exchange else None,
             )
         )
     return items
@@ -49,8 +49,7 @@ def get_orders(db: Session) -> list[OrderSchema]:
         .options(
             joinedload(Order.order_type),
             joinedload(Order.exchange),
-            joinedload(Order.from_asset),
-            joinedload(Order.to_asset),
+            joinedload(Order.instrument),
             selectinload(Order.statuses).joinedload(OrderStatus.order_status_type),
         )
         .order_by(Order.timestamp.desc())
@@ -80,8 +79,7 @@ def get_strategy_orders(
         base.options(
             joinedload(Order.order_type),
             joinedload(Order.exchange),
-            joinedload(Order.from_asset),
-            joinedload(Order.to_asset),
+            joinedload(Order.instrument),
             selectinload(Order.statuses).joinedload(OrderStatus.order_status_type),
         )
         .order_by(Order.timestamp.desc())
@@ -121,20 +119,19 @@ def add_order_status(db: Session, order_id: uuid.UUID, data: OrderStatusCreate) 
         raise NotFoundError("Order status type not found")
 
     # Validate transition
-    # Eager-load statuses if not already loaded
     if order.statuses:
         current_status = order.statuses[-1]
         current_symbol = (
-            current_status.order_status_type.symbol if current_status.order_status_type else None
+            current_status.order_status_type.name if current_status.order_status_type else None
         )
         if not current_symbol:
             current_type = db.get(OrderStatusType, current_status.order_status_type_id)
-            current_symbol = current_type.symbol if current_type else None
+            current_symbol = current_type.name if current_type else None
         if current_symbol:
             allowed = ORDER_STATUS_TRANSITIONS.get(current_symbol, set())
-            if new_status_type.symbol not in allowed:
+            if new_status_type.name not in allowed:
                 raise BadRequestError(
-                    f"Invalid order status transition: {current_symbol} -> {new_status_type.symbol}. "
+                    f"Invalid order status transition: {current_symbol} -> {new_status_type.name}. "
                     f"Allowed transitions from {current_symbol}: {sorted(allowed)}"
                 )
 

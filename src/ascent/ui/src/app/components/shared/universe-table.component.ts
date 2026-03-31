@@ -1,23 +1,28 @@
-import { Component, Input, Output, EventEmitter } from '@angular/core';
+import { Component, computed, inject, input, Output, EventEmitter } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { TableModule } from 'primeng/table';
+import { Tag } from 'primeng/tag';
 import { Button } from 'primeng/button';
 import { EmptyStateComponent } from './empty-state.component';
 import { AssetPairBadgeComponent, AssetPair } from './asset-pair-badge.component';
-import { UniverseItem } from '../../models/asset.model';
+import { UniverseItem, Instrument } from '../../models/asset.model';
+import { AssetService } from '../../services/asset.service';
 
-/** A flattened row for the combined universe table. */
+/** A row representing one instrument in the universe. */
 interface UniverseRow {
-  items: UniverseItem[];
-  isGroup: boolean;
-  groupId: string | null;
-  memberCount: number;
+  instrumentId: string;
+  instrumentName: string;
+  instrumentDisplayName: string;
+  instrumentTypeId: string;
+  isActive: boolean;
+  pair: AssetPair | null;
+  order: number;
 }
 
 @Component({
   selector: 'app-universe-table',
   standalone: true,
-  imports: [RouterLink, TableModule, Button, EmptyStateComponent, AssetPairBadgeComponent],
+  imports: [RouterLink, TableModule, Tag, Button, EmptyStateComponent, AssetPairBadgeComponent],
   styles: [`
     :host ::ng-deep .p-datatable {
       border-radius: 0.5rem;
@@ -25,44 +30,47 @@ interface UniverseRow {
     }
   `],
   template: `
-    <p-table [value]="rows" [paginator]="true" [rows]="pageSize" [showCurrentPageReport]="true"
+    <p-table [value]="rows()" [paginator]="true" [rows]="pageSize" [showCurrentPageReport]="true"
              currentPageReportTemplate="{first}–{last} of {totalRecords}" [rowsPerPageOptions]="[5, 10, 25]">
       <ng-template #header>
         <tr>
-          <th class="w-12">#</th>
-          <th>Pairs</th>
-          <th class="w-24 text-center">Members</th>
-          <th>Group</th>
+          <th>Instrument</th>
+          <th>Pair</th>
+          <th>Instrument Type</th>
+          <th class="w-24">Status</th>
           <th class="w-20"></th>
         </tr>
       </ng-template>
-      <ng-template #body let-row let-i="rowIndex">
+      <ng-template #body let-row>
         <tr>
-          <td class="text-surface-500 font-mono text-xs">{{ i + 1 }}</td>
           <td>
-            <app-asset-pair-badge [pairs]="toPairs(row.items)"/>
-          </td>
-          <td class="text-center font-mono text-xs text-surface-500">{{ row.memberCount }}</td>
-          <td>
-            @if (row.groupId) {
-              <a [routerLink]="['/settings/asset-groups', row.groupId]" class="text-xs text-primary hover:underline">View Group</a>
-            } @else {
-              <span class="text-xs text-surface-400">–</span>
+            <a [routerLink]="['/settings/instruments', row.instrumentId]" class="text-primary hover:underline font-medium">{{ row.instrumentDisplayName || row.instrumentName }}</a>
+            @if (row.instrumentDisplayName && row.instrumentName) {
+              <div class="text-[0.6875rem] font-mono text-surface-400">{{ row.instrumentName }}</div>
             }
           </td>
           <td>
-            @if (row.isGroup) {
-              <p-button label="Remove" severity="danger" [text]="true" size="small" (onClick)="removeGroup.emit(row.items)"/>
-            } @else {
-              <p-button label="Remove" severity="danger" [text]="true" size="small" (onClick)="remove.emit(row.items[0])"/>
+            @if (row.pair) {
+              <app-asset-pair-badge [pairs]="[row.pair]" [maxVisible]="1"/>
             }
+          </td>
+          <td class="text-xs">
+            @if (row.instrumentTypeId) {
+              <a [routerLink]="['/settings/instrument-types', row.instrumentTypeId]" class="text-primary hover:underline">{{ getTypeDisplayName(row.instrumentTypeId) }}</a>
+            }
+          </td>
+          <td>
+            <p-tag [value]="row.isActive ? 'Active' : 'Inactive'" [severity]="row.isActive ? 'success' : 'secondary'" [rounded]="true"/>
+          </td>
+          <td>
+            <p-button label="Remove" severity="danger" [text]="true" size="small" (onClick)="remove.emit(row.instrumentId)"/>
           </td>
         </tr>
       </ng-template>
       <ng-template #emptymessage>
         <tr>
           <td colspan="5">
-            <app-empty-state title="No universe items" message="Add asset pairs or link asset groups to this universe." icon="inbox"/>
+            <app-empty-state title="No instruments" message="Add instruments to this universe." icon="data"/>
           </td>
         </tr>
       </ng-template>
@@ -70,45 +78,43 @@ interface UniverseRow {
   `,
 })
 export class UniverseTableComponent {
-  @Input() items: UniverseItem[] = [];
-  @Output() remove = new EventEmitter<UniverseItem>();
-  @Output() removeGroup = new EventEmitter<UniverseItem[]>();
+  private assetService = inject(AssetService);
+
+  items = input<UniverseItem[]>([]);
+  @Output() remove = new EventEmitter<string>();
 
   pageSize = 10;
 
-  toPairs(items: UniverseItem[]): AssetPair[] {
-    return items.map(m => ({
-      providerName: m.provider_name ?? '',
-      providerId: m.provider_id,
-      fromAssetSymbol: m.from_asset_symbol ?? '',
-      fromAssetId: m.from_asset_id,
-      toAssetSymbol: m.to_asset_symbol ?? '',
-      toAssetId: m.to_asset_id,
-    }));
-  }
+  rows = computed<UniverseRow[]>(() => {
+    const instruments = this.assetService.instruments();
+    const instrumentMap = new Map<string, Instrument>();
+    for (const inst of instruments) instrumentMap.set(inst.id, inst);
 
-  get rows(): UniverseRow[] {
-    const groupMap = new Map<string, UniverseItem[]>();
+    return this.items().map(item => {
+      const inst = instrumentMap.get(item.instrument_id);
+      const pair: AssetPair | null = inst ? {
+        providerName: inst.provider_name ?? '',
+        providerId: inst.provider_id,
+        fromAssetName: inst.from_asset_name ?? '',
+        fromAssetId: inst.from_asset_id,
+        toAssetName: inst.to_asset_name ?? '',
+        toAssetId: inst.to_asset_id,
+      } : null;
+      return {
+        instrumentId: item.instrument_id,
+        instrumentName: item.instrument_name ?? inst?.name ?? item.instrument_id,
+        instrumentDisplayName: item.instrument_display_name ?? inst?.display_name ?? '',
+        instrumentTypeId: item.instrument_type_id ?? inst?.instrument_type_id ?? '',
+        isActive: item.is_active ?? inst?.is_active ?? true,
+        pair,
+        order: item.order,
+      };
+    }).sort((a, b) => a.order - b.order);
+  });
 
-    for (const item of this.items) {
-      const existing = groupMap.get(item.provider_asset_group_id) || [];
-      existing.push(item);
-      groupMap.set(item.provider_asset_group_id, existing);
-    }
-
-    const rows: UniverseRow[] = [];
-
-    for (const [groupId, items] of groupMap) {
-      const sorted = items.sort((a, b) => a.order - b.order);
-      const isMultiMember = sorted.length > 1;
-      rows.push({
-        items: sorted,
-        isGroup: isMultiMember,
-        groupId: groupId,
-        memberCount: sorted.length,
-      });
-    }
-
-    return rows;
+  getTypeDisplayName(typeId: string): string {
+    if (!typeId) return '';
+    const t = this.assetService.instrumentTypes().find(t => t.id === typeId);
+    return t?.display_name || t?.name || '';
   }
 }

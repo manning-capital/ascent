@@ -4,19 +4,19 @@ import { FormsModule } from '@angular/forms';
 import { FieldService } from '../../../services/field.service';
 import { ToastService } from '../../../services/toast.service';
 import { AttributeItem, EntityUsage } from '../../../models/field.model';
-import { Card } from 'primeng/card';
 import { Button } from 'primeng/button';
 import { InputText } from 'primeng/inputtext';
 import { Select } from 'primeng/select';
 import { Tag } from 'primeng/tag';
 import { Skeleton } from 'primeng/skeleton';
-import { Tabs, TabList, Tab, TabPanels, TabPanel } from 'primeng/tabs';
+import { Tabs, TabList, Tab } from 'primeng/tabs';
+import { Panel } from 'primeng/panel';
 import { SafeDeleteDialogComponent } from '../../shared/safe-delete-dialog.component';
 
 @Component({
   selector: 'app-attribute-detail',
   standalone: true,
-  imports: [RouterLink, FormsModule, Card, Button, InputText, Select, Tag, Skeleton, Tabs, TabList, Tab, TabPanels, TabPanel, SafeDeleteDialogComponent],
+  imports: [RouterLink, FormsModule, Button, InputText, Select, Tag, Skeleton, Tabs, TabList, Tab, Panel, SafeDeleteDialogComponent],
   templateUrl: './attribute-detail.component.html',
 })
 export class AttributeDetailComponent implements OnInit {

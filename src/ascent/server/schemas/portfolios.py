@@ -3,9 +3,12 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict
 
+from ascent.server.schemas.common import Identifier
+
 
 class PortfolioCreate(BaseModel):
-    name: str
+    name: Identifier
+    display_name: str
     description: str | None = None
     base_currency_asset_id: uuid.UUID | None = None
     pricing_provider_id: uuid.UUID | None = None
@@ -13,7 +16,8 @@ class PortfolioCreate(BaseModel):
 
 
 class PortfolioUpdate(BaseModel):
-    name: str | None = None
+    name: Identifier | None = None
+    display_name: str | None = None
     description: str | None = None
     base_currency_asset_id: uuid.UUID | None = None
     pricing_provider_id: uuid.UUID | None = None
@@ -25,6 +29,7 @@ class PortfolioSchema(BaseModel):
 
     id: uuid.UUID
     name: str
+    display_name: str
     description: str | None = None
     base_currency: str | None = None
     is_active: bool = True

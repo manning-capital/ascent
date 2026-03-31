@@ -24,6 +24,7 @@ export class AttributeListComponent implements OnInit {
 
   showCreateForm = signal(false);
   newName = '';
+  newDisplayName = '';
   newDescription = '';
 
   ngOnInit(): void {
@@ -37,6 +38,7 @@ export class AttributeListComponent implements OnInit {
 
   openCreate(): void {
     this.newName = '';
+    this.newDisplayName = '';
     this.newDescription = '';
     this.showCreateForm.set(true);
   }
@@ -50,6 +52,7 @@ export class AttributeListComponent implements OnInit {
     if (!name) return;
     this.fieldService.createAttribute({
       name,
+      display_name: this.newDisplayName.trim() || name,
       description: this.newDescription.trim() || undefined,
     }).subscribe({
       next: () => {

@@ -48,12 +48,12 @@ def _build_strategy_context(
     cache: EngineCache,
     strategy_id: uuid.UUID,
 ) -> StrategyContext:
-    """Build a StrategyContext from cached feed data and group state.
+    """Build a StrategyContext from cached feed data and instrument state.
 
     Args:
         strategy_feeds: The strategy's feed associations.
         latest_data: Map of feed_id → latest DataFrame from Redis.
-        cache: The engine cache for group state.
+        cache: The engine cache for instrument state.
         strategy_id: The strategy's database ID.
 
     Returns:
@@ -66,21 +66,30 @@ def _build_strategy_context(
         if df is not None:
             feed_frames[sf.feed_id] = df
 
-    # Load group state from Redis
-    group_state = cache.get_strategy_state(strategy_id)
-    if group_state and "groups" in group_state:
-        groups_data = group_state["groups"]
-        groups_df = pd.DataFrame.from_dict(groups_data, orient="index")
-        groups_df.index = groups_df.index.astype(int)
-        groups_df.index.name = "group_id"
-    else:
-        # No cached state — start with empty groups
-        groups_df = pd.DataFrame(
-            columns=["state", "trade_id", "members"],
-        )
-        groups_df.index.name = "group_id"
+    # Load instrument and composite state from Redis
+    cached_state = cache.get_strategy_state(strategy_id)
 
-    return StrategyContext(groups=groups_df, feed_frames=feed_frames)
+    if cached_state and "instruments" in cached_state:
+        instruments_data = cached_state["instruments"]
+        instruments_df = pd.DataFrame.from_dict(instruments_data, orient="index")
+        instruments_df.index = instruments_df.index.astype(int)
+        instruments_df.index.name = "instrument_id"
+    else:
+        instruments_df = pd.DataFrame(columns=["state", "trade_id"])
+        instruments_df.index.name = "instrument_id"
+
+    if cached_state and "composites" in cached_state:
+        composites_data = cached_state["composites"]
+        composites_df = pd.DataFrame.from_dict(composites_data, orient="index")
+        composites_df.index = composites_df.index.astype(int)
+        composites_df.index.name = "composite_id"
+    else:
+        composites_df = pd.DataFrame(columns=["state", "trade_id", "member_instrument_ids"])
+        composites_df.index.name = "composite_id"
+
+    return StrategyContext(
+        instruments=instruments_df, composites=composites_df, feed_frames=feed_frames
+    )
 
 
 def _cold_start_feeds(
@@ -269,10 +278,14 @@ def run_strategy(
                     )
                     strategy_obj(**parameters)
 
-                    # Persist updated group states to Redis
-                    if not ctx.groups.empty:
-                        group_states = {"groups": ctx.groups.to_dict(orient="index")}
-                        cache.set_strategy_state(strategy_id, group_states)
+                    # Persist updated instrument and composite states to Redis
+                    state_data: dict = {}
+                    if not ctx.instruments.empty:
+                        state_data["instruments"] = ctx.instruments.to_dict(orient="index")
+                    if not ctx.composites.empty:
+                        state_data["composites"] = ctx.composites.to_dict(orient="index")
+                    if state_data:
+                        cache.set_strategy_state(strategy_id, state_data)
 
                     run_logger.info("Strategy %s evaluation complete", strategy_ref)
                 finally:

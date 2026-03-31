@@ -3,15 +3,19 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict
 
+from ascent.server.schemas.common import Identifier
+
 
 class AttributeCreate(BaseModel):
-    name: str
+    name: Identifier
+    display_name: str
     description: str | None = None
     is_active: bool = True
 
 
 class AttributeUpdate(BaseModel):
-    name: str | None = None
+    name: Identifier | None = None
+    display_name: str | None = None
     description: str | None = None
     is_active: bool | None = None
 
@@ -21,6 +25,7 @@ class AttributeSchema(BaseModel):
 
     id: uuid.UUID
     name: str
+    display_name: str
     description: str | None = None
     is_active: bool = True
     created_at: datetime.datetime | None = None

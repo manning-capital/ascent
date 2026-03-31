@@ -3,6 +3,7 @@ import { JsonSchema } from './strategy.model';
 export interface FeedListItem {
   id: string;
   name: string;
+  display_name: string;
   description: string | null;
   feed_type_id: string;
   feed_ref: string;

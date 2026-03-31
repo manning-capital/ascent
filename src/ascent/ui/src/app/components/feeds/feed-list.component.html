@@ -31,7 +31,7 @@
         <a [routerLink]="['/feeds', feed.id]" class="block no-underline">
           <p-card styleClass="hover:bg-emphasis transition-colors cursor-pointer">
             <div class="flex items-center justify-between mb-2">
-              <h3 class="font-semibold truncate">{{ feed.name }}</h3>
+              <h3 class="font-semibold truncate">{{ feed.display_name }}</h3>
               <span class="w-2.5 h-2.5 rounded-full shrink-0" [class]="feed.is_active ? 'bg-green-500' : 'bg-surface-400'"></span>
             </div>
             @if (feed.description) {

@@ -1,34 +1,31 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal, ViewChild } from '@angular/core';
 import { Router } from '@angular/router';
-import { FormsModule } from '@angular/forms';
 import { ProviderService } from '../../services/provider.service';
 import { ToastService } from '../../services/toast.service';
-import { TypeHierarchyNode } from '../../models/asset.model';
-import { TreeNode, SharedModule } from 'primeng/api';
-import { OrganizationChart } from 'primeng/organizationchart';
-import { Select } from 'primeng/select';
-import { Card } from 'primeng/card';
-import { Button } from 'primeng/button';
-import { InputText } from 'primeng/inputtext';
+import { TypeHierarchyNode, ReparentPreview } from '../../models/asset.model';
+import { Skeleton } from 'primeng/skeleton';
+import { TypeHierarchyGraphComponent, TypeCreateRequest, TypeReparentRequest } from './type-hierarchy-graph.component';
+import { ReparentConfirmDialogComponent, ReparentConfirmEvent } from '../shared/reparent-confirm-dialog.component';
 
 @Component({
   selector: 'app-provider-type-list',
   standalone: true,
-  imports: [FormsModule, OrganizationChart, SharedModule, Select, Card, Button, InputText],
+  imports: [Skeleton, TypeHierarchyGraphComponent, ReparentConfirmDialogComponent],
   templateUrl: './provider-type-list.component.html',
+  host: { class: 'block h-full' },
 })
 export class ProviderTypeListComponent implements OnInit {
   providerService = inject(ProviderService);
   private toast = inject(ToastService);
   private router = inject(Router);
 
-  treeData = signal<TreeNode[]>([]);
-  selectedNode: TreeNode | null = null;
+  @ViewChild(TypeHierarchyGraphComponent) graph?: TypeHierarchyGraphComponent;
 
-  showCreateForm = signal(false);
-  newName = '';
-  newDescription = '';
-  newParentTypeId = '';
+  treeData = signal<TypeHierarchyNode[] | null>(null);
+  reparentDialogVisible = signal(false);
+  reparentPreview = signal<ReparentPreview | null>(null);
+  reparenting = signal(false);
+  private pendingReparent: TypeReparentRequest | null = null;
 
   ngOnInit(): void {
     this.providerService.loadProviderTypes();
@@ -37,65 +34,66 @@ export class ProviderTypeListComponent implements OnInit {
 
   loadTree(): void {
     this.providerService.loadProviderTypeTree().subscribe({
-      next: tree => {
-        const nodes = this.toTreeNodes(tree);
-        if (nodes.length > 1) {
-          this.treeData.set([{
-            label: 'Provider Types',
-            expanded: true,
-            type: 'root',
-            children: nodes,
-          }]);
-        } else {
-          this.treeData.set(nodes);
-        }
-      },
+      next: tree => this.treeData.set(tree),
       error: () => this.toast.error('Failed to load type hierarchy'),
     });
   }
 
-  private toTreeNodes(nodes: TypeHierarchyNode[]): TreeNode[] {
-    return nodes.map(n => ({
-      label: n.name,
-      data: n,
-      expanded: true,
-      children: n.children.length > 0 ? this.toTreeNodes(n.children) : [],
-    }));
+  onNodeClick(nodeId: string): void {
+    this.router.navigate(['/settings/provider-types', nodeId]);
   }
 
-  onNodeSelect(event: any): void {
-    const node = event.node;
-    if (node?.data?.id) {
-      this.router.navigate(['/settings/provider-types', node.data.id]);
-    }
-    setTimeout(() => this.selectedNode = null);
-  }
-
-  openCreate(): void {
-    this.newName = '';
-    this.newDescription = '';
-    this.newParentTypeId = '';
-    this.showCreateForm.set(true);
-  }
-
-  cancelCreate(): void {
-    this.showCreateForm.set(false);
-  }
-
-  submitCreate(): void {
-    if (!this.newName.trim()) return;
+  onCreateType(req: TypeCreateRequest): void {
     this.providerService.createProviderType(
-      this.newName.trim(),
-      this.newDescription.trim() || undefined,
-      this.newParentTypeId || undefined,
+      req.name,
+      req.displayName,
+      req.description,
+      req.parentTypeId,
     ).subscribe({
       next: () => {
         this.toast.success('Provider type created');
-        this.showCreateForm.set(false);
         this.providerService.loadProviderTypes();
         this.loadTree();
       },
       error: () => this.toast.error('Failed to create provider type'),
+    });
+  }
+
+  onReparent(req: TypeReparentRequest): void {
+    this.pendingReparent = req;
+    this.reparentPreview.set(null);
+    this.providerService.getReparentPreview(req.childId, req.newParentId).subscribe({
+      next: preview => {
+        this.reparentPreview.set(preview);
+        this.reparentDialogVisible.set(true);
+      },
+      error: () => this.toast.error('Failed to load reparent preview'),
+    });
+  }
+
+  onReparentDialogClose(): void {
+    this.graph?.cancelReparent();
+  }
+
+  onReparentConfirm(event: ReparentConfirmEvent): void {
+    const req = this.pendingReparent;
+    if (!req) return;
+    this.reparenting.set(true);
+    this.providerService.updateProviderType(req.childId, {
+      parent_type_id: req.newParentId,
+      remove_metadata_ids: event.removeMetadataIds,
+    }).subscribe({
+      next: () => {
+        this.toast.success('Type reparented');
+        this.reparenting.set(false);
+        this.reparentDialogVisible.set(false);
+        this.providerService.loadProviderTypes();
+        this.loadTree();
+      },
+      error: () => {
+        this.toast.error('Failed to reparent type');
+        this.reparenting.set(false);
+      },
     });
   }
 }

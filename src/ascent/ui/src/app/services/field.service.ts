@@ -113,6 +113,15 @@ export class FieldService {
     return this.api.delete(`/types/provider-types/${id}`);
   }
 
+  // Instrument Type usage + delete
+  getInstrumentTypeUsage(id: string): Observable<EntityUsage> {
+    return this.api.get<EntityUsage>(`/types/instrument-types/${id}/usage`);
+  }
+
+  deleteInstrumentType(id: string): Observable<any> {
+    return this.api.delete(`/types/instrument-types/${id}`);
+  }
+
   // Asset usage
   getAssetUsage(id: string): Observable<EntityUsage> {
     return this.api.get<EntityUsage>(`/assets/${id}/usage`);
@@ -121,5 +130,24 @@ export class FieldService {
   // Provider usage
   getProviderUsage(id: string): Observable<EntityUsage> {
     return this.api.get<EntityUsage>(`/providers/${id}/usage`);
+  }
+
+  // Instrument usage
+  getInstrumentUsage(id: string): Observable<EntityUsage> {
+    return this.api.get<EntityUsage>(`/instruments/${id}/usage`);
+  }
+
+  // Composite usage
+  getCompositeUsage(id: string): Observable<EntityUsage> {
+    return this.api.get<EntityUsage>(`/composites/${id}/usage`);
+  }
+
+  // Composite Type usage + delete
+  getCompositeTypeUsage(id: string): Observable<EntityUsage> {
+    return this.api.get<EntityUsage>(`/types/composite-types/${id}/usage`);
+  }
+
+  deleteCompositeType(id: string): Observable<any> {
+    return this.api.delete(`/types/composite-types/${id}`);
   }
 }

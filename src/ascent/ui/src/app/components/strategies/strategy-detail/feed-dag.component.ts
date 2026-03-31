@@ -3,14 +3,15 @@ import {
   Input,
   computed,
   signal,
-  ElementRef,
-  ViewChild,
   AfterViewInit,
   OnChanges,
   SimpleChanges,
-  HostListener,
+  NgZone,
+  ViewChild,
 } from '@angular/core';
+import * as d3 from 'd3';
 import { StrategyFeedNode, StrategyFeedDAG } from '../../../models/feed.model';
+import { GraphCanvasComponent, GraphBounds } from '../../shared/graph-canvas.component';
 
 export interface FeedRunStatusOverride {
   status: string;
@@ -25,149 +26,31 @@ interface DagNodeLayout {
   col: number;
 }
 
+interface DagEdgeLayout {
+  key: string;
+  path: string;
+}
+
 @Component({
   selector: 'app-feed-dag',
   standalone: true,
-  imports: [],
+  imports: [GraphCanvasComponent],
+  host: { class: 'block h-full' },
   template: `
     @if (dag && dag.nodes.length > 0) {
-      <div
-        #container
-        class="w-full h-full overflow-hidden cursor-grab active:cursor-grabbing relative select-none"
-        (mousedown)="onMouseDown($event)"
-        (wheel)="onWheel($event)">
-
-        <svg
-          [attr.width]="contentWidth()"
-          [attr.height]="contentHeight()"
-          [style.transform]="svgTransform()"
-          [style.transform-origin]="'0 0'"
-          class="absolute top-0 left-0">
-
-          <defs>
-            <marker id="dag-arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-              <polygon points="0 0, 8 3, 0 6" fill="#52525b"/>
-            </marker>
-            <marker id="dag-arrow-strategy" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
-              <polygon points="0 0, 8 3, 0 6" fill="#f59e0b"/>
-            </marker>
-          </defs>
-
-          <!-- Feed-to-feed edges -->
-          @for (edge of edgeLayouts(); track edge.key) {
-            <path
-              [attr.d]="edge.path"
-              fill="none"
-              stroke="#52525b"
-              stroke-width="1.5"
-              marker-end="url(#dag-arrow)"
-              [attr.opacity]="getEdgeOpacity(edge.key)"/>
-          }
-
-          <!-- Feed-to-strategy edges (from leaf nodes) -->
-          @for (edge of strategyEdges(); track edge.key) {
-            <path
-              [attr.d]="edge.path"
-              fill="none"
-              stroke="#f59e0b"
-              stroke-width="1.5"
-              [attr.stroke-dasharray]="triggerPath().edges.has(edge.key) ? 'none' : '4 3'"
-              [attr.opacity]="getEdgeOpacity(edge.key)"
-              marker-end="url(#dag-arrow-strategy)"/>
-          }
-
-          <!-- Feed nodes -->
-          @for (nl of nodeLayouts(); track nl.node.id) {
-            <g class="cursor-pointer"
-               (click)="navigateToFeed(nl.node.id)"
-               (mouseenter)="hoveredNodeId.set(nl.node.id)"
-               (mouseleave)="hoveredNodeId.set(null)"
-               [attr.opacity]="getNodeOpacity(nl.node)">
-
-              <rect
-                [attr.x]="nl.x"
-                [attr.y]="nl.y"
-                [attr.width]="nodeWidth"
-                [attr.height]="nodeHeight"
-                rx="8"
-                fill="#18181b"
-                [attr.stroke]="nodeStroke(nl.node)"
-                [attr.stroke-width]="getNodeStrokeWidth(nl.node)"/>
-
-              <!-- Run status indicator -->
-              <circle
-                [attr.cx]="nl.x + 16"
-                [attr.cy]="nl.y + 16"
-                r="5"
-                [attr.fill]="statusColor(getNodeStatus(nl.node))"/>
-
-              <!-- Name -->
-              <text
-                [attr.x]="nl.x + 28"
-                [attr.y]="nl.y + 20"
-                fill="white"
-                font-size="11"
-                font-weight="600">
-                {{ nl.node.name }}
-              </text>
-
-              <!-- Type + status -->
-              <text
-                [attr.x]="nl.x + 16"
-                [attr.y]="nl.y + 38"
-                fill="#a1a1aa"
-                font-size="9">
-                {{ nl.node.schedule ? 'Scheduled' : 'Triggered' }}
-                · {{ getNodeStatusLabel(nl.node) }}
-              </text>
-            </g>
-          }
-
-          <!-- Strategy node -->
-          <rect
-            [attr.x]="strategyNodeX()"
-            [attr.y]="strategyNodeY()"
-            [attr.width]="strategyNodeWidth"
-            [attr.height]="nodeHeight"
-            rx="8"
-            fill="#18181b"
-            stroke="#f59e0b"
-            stroke-width="1.5"/>
-          <text
-            [attr.x]="strategyNodeX() + strategyNodeWidth / 2"
-            [attr.y]="strategyNodeY() + 20"
-            fill="white"
-            font-size="11"
-            font-weight="600"
-            text-anchor="middle">
-            Strategy
-          </text>
-          <text
-            [attr.x]="strategyNodeX() + strategyNodeWidth / 2"
-            [attr.y]="strategyNodeY() + 36"
-            fill="#a1a1aa"
-            font-size="9"
-            text-anchor="middle">
-            {{ strategyName }}
-          </text>
-        </svg>
-
-        <!-- Zoom controls -->
-        <div class="absolute bottom-3 left-3 flex items-center gap-1 bg-surface/80 rounded-lg border border-edge p-1">
-          <button (click)="zoomOut()" class="w-7 h-7 flex items-center justify-center text-fg-muted hover:text-fg rounded hover:bg-fg/10 text-sm">-</button>
-          <span class="text-xs text-fg-faint w-10 text-center">{{ Math.round(scale() * 100) }}%</span>
-          <button (click)="zoomIn()" class="w-7 h-7 flex items-center justify-center text-fg-muted hover:text-fg rounded hover:bg-fg/10 text-sm">+</button>
-          <button (click)="resetView()" class="w-7 h-7 flex items-center justify-center text-fg-muted hover:text-fg rounded hover:bg-fg/10 text-xs">Fit</button>
-        </div>
+      <app-graph-canvas
+        [contentBounds]="bounds()"
+        [ready]="ready()"
+        [maxFitScale]="1.2">
 
         <!-- Legend -->
-        <div class="absolute top-3 left-3 flex items-center gap-3 text-[10px] text-fg-faint">
+        <div graphOverlay class="absolute top-3 left-3 flex items-center gap-3 text-[10px] text-fg-faint">
           <div class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-positive inline-block"></span> OK</div>
           <div class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-negative inline-block"></span> Failed</div>
           <div class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-warning inline-block"></span> Running</div>
           <div class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-fg-faint inline-block"></span> No runs</div>
         </div>
-      </div>
+      </app-graph-canvas>
     } @else {
       <div class="flex items-center justify-center h-full text-sm text-fg-faint">
         No feeds connected to this strategy.
@@ -179,9 +62,8 @@ export class FeedDagComponent implements AfterViewInit, OnChanges {
   @Input() dag: StrategyFeedDAG | null = null;
   @Input() strategyName: string = '';
   @Input() feedRunStatuses: Map<string, FeedRunStatusOverride> | null = null;
-  @ViewChild('container') containerRef!: ElementRef<HTMLElement>;
 
-  Math = Math;
+  @ViewChild(GraphCanvasComponent) canvas?: GraphCanvasComponent;
 
   readonly nodeWidth = 170;
   readonly nodeHeight = 50;
@@ -190,27 +72,22 @@ export class FeedDagComponent implements AfterViewInit, OnChanges {
   readonly rowGap = 20;
   readonly padding = 30;
 
-  // Hover state
   hoveredNodeId = signal<string | null>(null);
+  ready = signal(false);
 
-  // Signal mirror of @Input for use in computed()
   private feedRunStatusesSignal = signal<Map<string, FeedRunStatusOverride> | null>(null);
+  private viewReady = false;
 
-  // Pan & zoom state
-  scale = signal(1);
-  panX = signal(0);
-  panY = signal(0);
-  private dragging = false;
-  private dragStartX = 0;
-  private dragStartY = 0;
-  private panStartX = 0;
-  private panStartY = 0;
+  // D3 groups created programmatically
+  private feedEdgesGroup!: d3.Selection<SVGGElement, unknown, null, undefined>;
+  private strategyEdgesGroup!: d3.Selection<SVGGElement, unknown, null, undefined>;
+  private feedNodesGroup!: d3.Selection<SVGGElement, unknown, null, undefined>;
+  private strategyNodeGroup!: d3.Selection<SVGGElement, unknown, null, undefined>;
 
-  svgTransform = computed(() => {
-    return `translate(${this.panX()}px, ${this.panY()}px) scale(${this.scale()})`;
-  });
+  constructor(private ngZone: NgZone) {}
 
-  /** Topological column assignment (left-to-right). */
+  // --- Layout computeds ---
+
   private colAssignment = computed(() => {
     if (!this.dag || this.dag.nodes.length === 0) return new Map<string, number>();
 
@@ -274,7 +151,6 @@ export class FeedDagComponent implements AfterViewInit, OnChanges {
       colGroupsByCol.get(col)!.push(node);
     }
 
-    // Find max nodes in any column for centering
     const maxRows = Math.max(...[...colGroupsByCol.values()].map(g => g.length));
     const totalHeight = maxRows * this.nodeHeight + (maxRows - 1) * this.rowGap;
 
@@ -297,7 +173,7 @@ export class FeedDagComponent implements AfterViewInit, OnChanges {
     return layouts;
   });
 
-  edgeLayouts = computed(() => {
+  edgeLayouts = computed<DagEdgeLayout[]>(() => {
     if (!this.dag) return [];
     const layoutMap = new Map<string, DagNodeLayout>();
     for (const nl of this.nodeLayouts()) layoutMap.set(nl.node.id, nl);
@@ -319,8 +195,7 @@ export class FeedDagComponent implements AfterViewInit, OnChanges {
       });
   });
 
-  /** Leaf nodes connect to the strategy node. */
-  strategyEdges = computed(() => {
+  strategyEdgesComputed = computed<DagEdgeLayout[]>(() => {
     if (!this.dag) return [];
     const parentIds = new Set(this.dag.edges.map(([from]) => from));
     const leafNodes = this.nodeLayouts().filter(nl => !parentIds.has(nl.node.id));
@@ -340,13 +215,11 @@ export class FeedDagComponent implements AfterViewInit, OnChanges {
     });
   });
 
-  /** Compute trigger path: node IDs and edge keys from roots to trigger feed to strategy. */
   triggerPath = computed<{ nodes: Set<string>; edges: Set<string> }>(() => {
     const empty = { nodes: new Set<string>(), edges: new Set<string>() };
     const statuses = this.feedRunStatusesSignal();
     if (!statuses || !this.dag) return empty;
 
-    // Find the trigger feed
     let triggerFeedId: string | null = null;
     for (const [feedId, override] of statuses.entries()) {
       if (override.is_trigger) {
@@ -356,7 +229,6 @@ export class FeedDagComponent implements AfterViewInit, OnChanges {
     }
     if (triggerFeedId === null) return empty;
 
-    // BFS backward from trigger node through DAG edges
     const visited = new Set<string>([triggerFeedId]);
     const queue = [triggerFeedId];
     const pathEdges = new Set<string>();
@@ -372,9 +244,7 @@ export class FeedDagComponent implements AfterViewInit, OnChanges {
       }
     }
 
-    // Include the feed-to-strategy edge for the trigger
     pathEdges.add(`feed-${triggerFeedId}-strategy`);
-
     return { nodes: visited, edges: pathEdges };
   });
 
@@ -382,7 +252,6 @@ export class FeedDagComponent implements AfterViewInit, OnChanges {
     if (!this.dag || this.dag.nodes.length === 0) return 0;
     const cols = this.colAssignment();
     const maxCol = Math.max(...cols.values());
-    // Feed columns + strategy column
     return this.padding * 2 + (maxCol + 1) * (this.nodeWidth + this.colGap) + this.strategyNodeWidth;
   });
 
@@ -406,18 +275,49 @@ export class FeedDagComponent implements AfterViewInit, OnChanges {
     return (this.contentHeight() - this.nodeHeight) / 2;
   });
 
+  bounds = computed<GraphBounds | null>(() => {
+    const w = this.contentWidth();
+    const h = this.contentHeight();
+    if (w === 0 || h === 0) return null;
+    return { minX: 0, maxX: w, minY: 0, maxY: h };
+  });
+
+  // --- Lifecycle ---
+
   ngAfterViewInit(): void {
-    setTimeout(() => this.fitToContainer(), 0);
+    this.viewReady = true;
+    if (this.dag && this.dag.nodes.length > 0) {
+      this.initD3Groups();
+      this.renderGraph();
+      setTimeout(() => {
+        this.canvas?.fitToContainer(false);
+        this.ready.set(true);
+      }, 0);
+    }
   }
 
   ngOnChanges(changes: SimpleChanges): void {
-    if (changes['dag']) {
-      setTimeout(() => this.fitToContainer(), 0);
-    }
     if (changes['feedRunStatuses']) {
       this.feedRunStatusesSignal.set(this.feedRunStatuses);
     }
+    if (changes['dag'] && this.viewReady) {
+      this.ready.set(false);
+      setTimeout(() => {
+        if (this.dag && this.dag.nodes.length > 0 && this.canvas) {
+          this.initD3Groups();
+          this.renderGraph();
+          setTimeout(() => {
+            this.canvas?.fitToContainer(false);
+            this.ready.set(true);
+          }, 0);
+        }
+      }, 0);
+    } else if (changes['feedRunStatuses'] && this.viewReady && this.feedNodesGroup) {
+      this.renderGraph();
+    }
   }
+
+  // --- Status helpers ---
 
   getNodeStatus(node: StrategyFeedNode): string | null {
     if (this.feedRunStatuses) {
@@ -447,23 +347,19 @@ export class FeedDagComponent implements AfterViewInit, OnChanges {
     return this.triggerPath().edges.has(edgeKey) ? 1 : 0.3;
   }
 
-  getNodeStrokeWidth(node: StrategyFeedNode): number {
-    return this.hoveredNodeId() === node.id ? 2.5 : 1.5;
-  }
-
   nodeStroke(node: StrategyFeedNode): string {
-    if (this.hoveredNodeId() === node.id) return '#e4e4e7';  // bright on hover
-    if (this.feedRunStatuses && !this.triggerPath().nodes.has(node.id)) return '#52525b';
-    if (node.schedule) return '#43aa8b';  // info/teal for scheduled
-    return '#a78bfa';  // purple for triggered
+    if (this.hoveredNodeId() === node.id) return 'var(--fg-muted)';
+    if (this.feedRunStatuses && !this.triggerPath().nodes.has(node.id)) return 'var(--fg-faint)';
+    if (node.schedule) return 'var(--graph-accent-2)';
+    return 'var(--graph-accent-3)';
   }
 
   statusColor(status: string | null): string {
     switch (status) {
-      case 'COMPLETED': return '#90be6d';
-      case 'FAILED': return '#f94144';
-      case 'RUNNING': return '#f3722c';
-      default: return '#52525b';
+      case 'COMPLETED': return 'var(--positive)';
+      case 'FAILED': return 'var(--negative)';
+      case 'RUNNING': return 'var(--warning)';
+      default: return 'var(--fg-faint)';
     }
   }
 
@@ -473,60 +369,230 @@ export class FeedDagComponent implements AfterViewInit, OnChanges {
     window.open(`/feeds/${feedId}${runParam}`, '_blank');
   }
 
-  // --- Pan & Zoom ---
-  onMouseDown(e: MouseEvent): void {
-    if (e.button !== 0) return;
-    this.dragging = true;
-    this.dragStartX = e.clientX;
-    this.dragStartY = e.clientY;
-    this.panStartX = this.panX();
-    this.panStartY = this.panY();
+  // --- D3 setup and rendering ---
+
+  private initD3Groups(): void {
+    if (!this.canvas) return;
+    const zoomGroup = d3.select(this.canvas.zoomGroupRef.nativeElement);
+
+    // Clear any previous groups (re-init on dag change)
+    zoomGroup.selectAll('*').remove();
+
+    // Create arrow markers in the SVG defs
+    const svg = d3.select(this.canvas.svgRef.nativeElement);
+    let defs = svg.select<SVGDefsElement>('defs');
+    if (defs.empty()) {
+      defs = svg.insert('defs', ':first-child');
+    }
+    // Remove old markers and re-add
+    defs.selectAll('marker').remove();
+
+    const arrow = defs.append('marker')
+      .attr('id', 'dag-arrow')
+      .attr('markerWidth', 8).attr('markerHeight', 6)
+      .attr('refX', 8).attr('refY', 3).attr('orient', 'auto');
+    arrow.append('polygon').attr('points', '0 0, 8 3, 0 6').attr('fill', 'var(--fg-faint)');
+
+    const arrowStrategy = defs.append('marker')
+      .attr('id', 'dag-arrow-strategy')
+      .attr('markerWidth', 8).attr('markerHeight', 6)
+      .attr('refX', 8).attr('refY', 3).attr('orient', 'auto');
+    arrowStrategy.append('polygon').attr('points', '0 0, 8 3, 0 6').attr('fill', 'var(--graph-accent-1)');
+
+    this.feedEdgesGroup = zoomGroup.append('g').attr('class', 'feed-edges');
+    this.strategyEdgesGroup = zoomGroup.append('g').attr('class', 'strategy-edges');
+    this.feedNodesGroup = zoomGroup.append('g').attr('class', 'feed-nodes');
+    this.strategyNodeGroup = zoomGroup.append('g').attr('class', 'strategy-node-container');
   }
 
-  @HostListener('window:mousemove', ['$event'])
-  onMouseMove(e: MouseEvent): void {
-    if (!this.dragging) return;
-    this.panX.set(this.panStartX + (e.clientX - this.dragStartX));
-    this.panY.set(this.panStartY + (e.clientY - this.dragStartY));
+  private renderGraph(): void {
+    this.renderFeedEdges();
+    this.renderStrategyEdges();
+    this.renderFeedNodes();
+    this.renderStrategyNode();
   }
 
-  @HostListener('window:mouseup')
-  onMouseUp(): void {
-    this.dragging = false;
+  private renderFeedEdges(): void {
+    if (!this.feedEdgesGroup) return;
+
+    const edges = this.edgeLayouts();
+    const component = this;
+
+    const paths = this.feedEdgesGroup.selectAll<SVGPathElement, DagEdgeLayout>('path')
+      .data(edges, d => d.key);
+
+    paths.enter()
+      .append('path')
+      .attr('fill', 'none')
+      .attr('stroke', 'var(--fg-faint)')
+      .attr('stroke-width', 1.5)
+      .attr('marker-end', 'url(#dag-arrow)')
+      .attr('d', d => d.path)
+      .attr('opacity', d => component.getEdgeOpacity(d.key));
+
+    paths
+      .attr('d', d => d.path)
+      .attr('opacity', d => component.getEdgeOpacity(d.key));
+
+    paths.exit().remove();
   }
 
-  onWheel(e: WheelEvent): void {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? -0.03 : 0.03;
-    const newScale = Math.min(3, Math.max(0.2, this.scale() + delta));
-    this.scale.set(newScale);
+  private renderStrategyEdges(): void {
+    if (!this.strategyEdgesGroup) return;
+
+    const edges = this.strategyEdgesComputed();
+    const component = this;
+    const tp = this.triggerPath();
+
+    const paths = this.strategyEdgesGroup.selectAll<SVGPathElement, DagEdgeLayout>('path')
+      .data(edges, d => d.key);
+
+    paths.enter()
+      .append('path')
+      .attr('fill', 'none')
+      .attr('stroke', 'var(--graph-accent-1)')
+      .attr('stroke-width', 1.5)
+      .attr('marker-end', 'url(#dag-arrow-strategy)')
+      .attr('d', d => d.path)
+      .attr('stroke-dasharray', d => tp.edges.has(d.key) ? 'none' : '4 3')
+      .attr('opacity', d => component.getEdgeOpacity(d.key));
+
+    paths
+      .attr('d', d => d.path)
+      .attr('stroke-dasharray', d => tp.edges.has(d.key) ? 'none' : '4 3')
+      .attr('opacity', d => component.getEdgeOpacity(d.key));
+
+    paths.exit().remove();
   }
 
-  zoomIn(): void {
-    this.scale.set(Math.min(3, this.scale() + 0.15));
+  private renderFeedNodes(): void {
+    if (!this.feedNodesGroup) return;
+
+    const nodes = this.nodeLayouts();
+    const nw = this.nodeWidth;
+    const nh = this.nodeHeight;
+    const component = this;
+
+    const groups = this.feedNodesGroup.selectAll<SVGGElement, DagNodeLayout>('g.feed-node')
+      .data(nodes, d => d.node.id);
+
+    const enter = groups.enter()
+      .append('g')
+      .attr('class', 'feed-node')
+      .attr('cursor', 'pointer')
+      .attr('transform', d => `translate(${d.x},${d.y})`)
+      .on('click', function(_event, d) {
+        component.ngZone.run(() => component.navigateToFeed(d.node.id));
+      })
+      .on('mouseenter', function(_event, d) {
+        component.ngZone.run(() => component.hoveredNodeId.set(d.node.id));
+        d3.select(this).select('rect.feed-bg')
+          .attr('stroke', 'var(--fg-muted)')
+          .attr('stroke-width', 2.5);
+      })
+      .on('mouseleave', function(_event, d) {
+        component.ngZone.run(() => component.hoveredNodeId.set(null));
+        d3.select(this).select('rect.feed-bg')
+          .attr('stroke', component.nodeStroke(d.node))
+          .attr('stroke-width', 1.5);
+      });
+
+    enter.append('rect')
+      .attr('class', 'feed-bg')
+      .attr('x', 0).attr('y', 0)
+      .attr('width', nw).attr('height', nh)
+      .attr('rx', 8)
+      .attr('fill', 'var(--surface)')
+      .attr('stroke', d => component.nodeStroke(d.node))
+      .attr('stroke-width', 1.5);
+
+    enter.append('circle')
+      .attr('class', 'status-dot')
+      .attr('cx', 16).attr('cy', 16).attr('r', 5)
+      .attr('fill', d => component.statusColor(component.getNodeStatus(d.node)));
+
+    enter.append('text')
+      .attr('class', 'feed-name')
+      .attr('x', 28).attr('y', 20)
+      .attr('fill', 'var(--fg)')
+      .attr('font-size', 11).attr('font-weight', 600)
+      .text(d => d.node.name);
+
+    enter.append('text')
+      .attr('class', 'feed-type')
+      .attr('x', 16).attr('y', 38)
+      .attr('fill', 'var(--fg-muted)')
+      .attr('font-size', 9)
+      .text(d => `${d.node.schedule ? 'Scheduled' : 'Triggered'} · ${component.getNodeStatusLabel(d.node)}`);
+
+    enter.attr('opacity', d => component.getNodeOpacity(d.node));
+
+    // Update
+    groups
+      .attr('transform', d => `translate(${d.x},${d.y})`)
+      .attr('opacity', d => component.getNodeOpacity(d.node));
+
+    groups.select('rect.feed-bg')
+      .attr('stroke', d => component.nodeStroke(d.node));
+
+    groups.select('circle.status-dot')
+      .attr('fill', d => component.statusColor(component.getNodeStatus(d.node)));
+
+    groups.select('text.feed-name')
+      .text(d => d.node.name);
+
+    groups.select('text.feed-type')
+      .text(d => `${d.node.schedule ? 'Scheduled' : 'Triggered'} · ${component.getNodeStatusLabel(d.node)}`);
+
+    groups.exit().remove();
   }
 
-  zoomOut(): void {
-    this.scale.set(Math.max(0.2, this.scale() - 0.15));
-  }
+  private renderStrategyNode(): void {
+    if (!this.strategyNodeGroup) return;
 
-  resetView(): void {
-    this.fitToContainer();
-  }
+    const sx = this.strategyNodeX();
+    const sy = this.strategyNodeY();
+    const snw = this.strategyNodeWidth;
+    const nh = this.nodeHeight;
+    const name = this.strategyName;
 
-  private fitToContainer(): void {
-    if (!this.containerRef?.nativeElement) return;
-    const cw = this.containerRef.nativeElement.clientWidth;
-    const ch = this.containerRef.nativeElement.clientHeight;
-    const sw = this.contentWidth();
-    const sh = this.contentHeight();
-    if (sw === 0 || sh === 0) return;
+    const data = this.dag && this.dag.nodes.length > 0 ? [{ x: sx, y: sy }] : [];
 
-    const scaleX = cw / sw;
-    const scaleY = ch / sh;
-    const fitScale = Math.min(scaleX, scaleY, 1.2);
-    this.scale.set(fitScale);
-    this.panX.set((cw - sw * fitScale) / 2);
-    this.panY.set((ch - sh * fitScale) / 2);
+    const groups = this.strategyNodeGroup.selectAll<SVGGElement, { x: number; y: number }>('g.strategy-node')
+      .data(data);
+
+    const enter = groups.enter()
+      .append('g')
+      .attr('class', 'strategy-node')
+      .attr('transform', d => `translate(${d.x},${d.y})`);
+
+    enter.append('rect')
+      .attr('x', 0).attr('y', 0)
+      .attr('width', snw).attr('height', nh)
+      .attr('rx', 8)
+      .attr('fill', 'var(--surface)')
+      .attr('stroke', 'var(--graph-accent-1)')
+      .attr('stroke-width', 1.5);
+
+    enter.append('text')
+      .attr('class', 'strat-label')
+      .attr('x', snw / 2).attr('y', 20)
+      .attr('fill', 'var(--fg)')
+      .attr('font-size', 11).attr('font-weight', 600)
+      .attr('text-anchor', 'middle')
+      .text('Strategy');
+
+    enter.append('text')
+      .attr('class', 'strat-name')
+      .attr('x', snw / 2).attr('y', 36)
+      .attr('fill', 'var(--fg-muted)')
+      .attr('font-size', 9)
+      .attr('text-anchor', 'middle')
+      .text(name);
+
+    groups.attr('transform', d => `translate(${d.x},${d.y})`);
+    groups.select('text.strat-name').text(name);
+
+    groups.exit().remove();
   }
 }

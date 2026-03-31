@@ -6,7 +6,7 @@ from pydantic import Field
 
 from ascent.feeds import feed
 from ascent.feeds.examples.market import market_data
-from ascent.feeds.output import GroupAttributes
+from ascent.feeds.output import InstrumentAttributes
 
 
 @feed(
@@ -16,7 +16,7 @@ from ascent.feeds.output import GroupAttributes
 )
 def ou_params(
     lookback_days: int = Field(default=60, ge=7, le=365),
-) -> DataFrame[GroupAttributes]:
+) -> DataFrame[InstrumentAttributes]:
     from ascent.engine import get_feed, get_logger
 
     logger = get_logger()
@@ -27,7 +27,7 @@ def ou_params(
     return pd.DataFrame(
         columns=[
             "timestamp",
-            "provider_asset_group_id",
+            "instrument_id",
             "attribute_id",
             "attribute_value",
         ]

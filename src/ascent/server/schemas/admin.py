@@ -81,12 +81,23 @@ class StrategyRunFeedRunSchema(BaseModel):
     is_trigger: bool
 
 
-class PAGAEntry(BaseModel):
+class InstrumentAttributeEntry(BaseModel):
     timestamp: datetime.datetime
-    provider_asset_group_id: uuid.UUID
+    instrument_id: uuid.UUID
     attribute_id: uuid.UUID
     attribute_value: float
 
 
-class PAGABatchCreate(BaseModel):
-    entries: list[PAGAEntry]
+class InstrumentAttributeBatchCreate(BaseModel):
+    entries: list[InstrumentAttributeEntry]
+
+
+class CompositeAttributeEntry(BaseModel):
+    timestamp: datetime.datetime
+    composite_id: uuid.UUID
+    attribute_id: uuid.UUID
+    attribute_value: float
+
+
+class CompositeAttributeBatchCreate(BaseModel):
+    entries: list[CompositeAttributeEntry]

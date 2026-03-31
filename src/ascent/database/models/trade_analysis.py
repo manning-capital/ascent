@@ -60,12 +60,18 @@ class TradeCondition(Base):
         nullable=True,
         comment="The timestamp when this condition was met. Null if not yet met.",
     )
-    # Context FKs — group-level or asset-level (one set populated per condition)
-    provider_asset_group_id: Mapped[uuid.UUID | None] = mapped_column(
+    # Context FKs — instrument-level, composite-level, or asset-level (one set populated per condition)
+    instrument_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid,
-        ForeignKey("provider_asset_group.id"),
+        ForeignKey("instrument.id"),
         nullable=True,
-        comment="The identifier of the provider asset group, for group-level attributes like spread. Mutually exclusive with provider/asset FKs.",
+        comment="The identifier of the instrument, for instrument-level attributes like close price.",
+    )
+    composite_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("composite.id"),
+        nullable=True,
+        comment="The identifier of the composite, for composite-level attributes like spread, z-score.",
     )
     provider_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid,
@@ -114,7 +120,7 @@ class TradeCondition(Base):
 class TradeDataSeries(Base):
     __tablename__ = "trade_data_series"
     __table_args__ = {
-        "comment": "Links a trade to relevant market data series for visualization. This is a pure reference table that tells the UI what data series are relevant to a trade. The UI decides how to display them. Actual time-series data lives in ProviderAssetGroupAttribute tables."
+        "comment": "Links a trade to relevant market data series for visualization. This is a pure reference table that tells the UI what data series are relevant to a trade. The UI decides how to display them. Actual time-series data lives in InstrumentAttribute tables."
     }
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -148,11 +154,17 @@ class TradeDataSeries(Base):
         comment="The source table for the time-series data: GROUP_ATTRIBUTE, GROUP_PERIOD_ATTRIBUTE",
     )
     # Context FKs
-    provider_asset_group_id: Mapped[uuid.UUID | None] = mapped_column(
+    instrument_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid,
-        ForeignKey("provider_asset_group.id"),
+        ForeignKey("instrument.id"),
         nullable=True,
-        comment="The identifier of the provider asset group whose attribute data to display",
+        comment="The identifier of the instrument whose attribute data to display",
+    )
+    composite_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("composite.id"),
+        nullable=True,
+        comment="The identifier of the composite whose attribute data to display",
     )
     period_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid,
@@ -206,6 +218,18 @@ class TradeSnapshot(Base):
     timestamp: Mapped[datetime.datetime] = mapped_column(
         nullable=False,
         comment="The timestamp when this snapshot was taken",
+    )
+    instrument_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("instrument.id"),
+        nullable=True,
+        comment="Optional context: which instrument this snapshot value is from",
+    )
+    composite_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("composite.id"),
+        nullable=True,
+        comment="Optional context: which composite this snapshot value is from",
     )
     created_at: Mapped[datetime.datetime] = mapped_column(
         nullable=False,

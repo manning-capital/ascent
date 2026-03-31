@@ -8,6 +8,7 @@ from ascent.server.dependencies import get_db
 from ascent.server.schemas.metadata import (
     BatchMetadataCreate,
     BulkHistoryUpdate,
+    EntityUsage,
     MetadataEntryCreate,
     MetadataEntrySchema,
     MetadataHistoryEntry,
@@ -20,7 +21,6 @@ from ascent.server.schemas.providers import (
     ProviderSchema,
     ProviderUpdate,
 )
-from ascent.server.schemas.metadata import EntityUsage
 from ascent.server.services import field_service, metadata_service, provider_service
 
 router = APIRouter(prefix="/providers", tags=["providers"])

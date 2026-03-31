@@ -7,12 +7,12 @@ auto-persist and auto-cold-start.
 
 Table mapping:
 
-=========================  =====================================
-Schema                     DB Table
-=========================  =====================================
-GroupAttributes            provider_asset_group_attribute
-GroupPeriodAttributes      provider_asset_group_period_attribute
-=========================  =====================================
+==============================  =====================================
+Schema                          DB Table
+==============================  =====================================
+InstrumentAttributes            instrument_attribute
+InstrumentPeriodAttributes      instrument_period_attribute
+==============================  =====================================
 """
 
 import pandera.pandas as pa
@@ -27,32 +27,64 @@ class FeedOutput(pa.DataFrameModel):
 
 
 # ---------------------------------------------------------------------------
-# Group-level (per provider asset group)
+# Instrument-level (per instrument)
 # ---------------------------------------------------------------------------
 
 
-class GroupAttributes(FeedOutput):
-    """Maps to ``ProviderAssetGroupAttribute`` table."""
+class InstrumentAttributes(FeedOutput):
+    """Maps to ``InstrumentAttribute`` table."""
 
     timestamp: Series[pa.DateTime] = pa.Field()
-    provider_asset_group_id: Series[int] = pa.Field(ge=1)
+    instrument_id: Series[int] = pa.Field(ge=1)
     attribute_id: Series[int] = pa.Field(ge=1)
     attribute_value: Series[float] = pa.Field()
 
     class Config:
         strict = True
-        name = "provider_asset_group_attribute"
+        name = "instrument_attribute"
 
 
-class GroupPeriodAttributes(FeedOutput):
-    """Maps to ``ProviderAssetGroupPeriodAttribute`` table."""
+class InstrumentPeriodAttributes(FeedOutput):
+    """Maps to ``InstrumentPeriodAttribute`` table."""
 
     timestamp: Series[pa.DateTime] = pa.Field()
-    provider_asset_group_id: Series[int] = pa.Field(ge=1)
+    instrument_id: Series[int] = pa.Field(ge=1)
     period_id: Series[int] = pa.Field(ge=1)
     attribute_id: Series[int] = pa.Field(ge=1)
     attribute_value: Series[float] = pa.Field()
 
     class Config:
         strict = True
-        name = "provider_asset_group_period_attribute"
+        name = "instrument_period_attribute"
+
+
+# ---------------------------------------------------------------------------
+# Composite-level (per composite)
+# ---------------------------------------------------------------------------
+
+
+class CompositeAttributes(FeedOutput):
+    """Maps to ``CompositeAttribute`` table."""
+
+    timestamp: Series[pa.DateTime] = pa.Field()
+    composite_id: Series[int] = pa.Field(ge=1)
+    attribute_id: Series[int] = pa.Field(ge=1)
+    attribute_value: Series[float] = pa.Field()
+
+    class Config:
+        strict = True
+        name = "composite_attribute"
+
+
+class CompositePeriodAttributes(FeedOutput):
+    """Maps to ``CompositePeriodAttribute`` table."""
+
+    timestamp: Series[pa.DateTime] = pa.Field()
+    composite_id: Series[int] = pa.Field(ge=1)
+    period_id: Series[int] = pa.Field(ge=1)
+    attribute_id: Series[int] = pa.Field(ge=1)
+    attribute_value: Series[float] = pa.Field()
+
+    class Config:
+        strict = True
+        name = "composite_period_attribute"

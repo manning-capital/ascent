@@ -15,14 +15,14 @@ class EngineCache:
 
     Three concerns:
       (a) Latest feed data (DataFrames serialized as JSON records)
-      (b) Active trade/position state per strategy (group states)
+      (b) Active trade/position state per strategy (instrument states)
       (c) Pub/sub event notifications (replaces Kafka)
 
     Key structure::
 
         ascent:feed:{feed_id}:latest         -> JSON (DataFrame records)
         ascent:feed:{feed_id}:updated_at     -> ISO timestamp string
-        ascent:strategy:{strategy_id}:state  -> JSON {groups: {group_id: {state, trade, position}}}
+        ascent:strategy:{strategy_id}:state  -> JSON {instruments: {instrument_id: {state, trade, position}}}
 
     Pub/sub channels follow the pattern ``ascent.feed.{feed_id}``.
 
@@ -74,16 +74,16 @@ class EngineCache:
         return self._redis.exists(f"ascent:feed:{feed_id}:latest") > 0
 
     # ------------------------------------------------------------------
-    # Group state cache
+    # Instrument state cache
     # ------------------------------------------------------------------
 
-    def set_strategy_state(self, strategy_id: uuid.UUID, group_states: dict[str, Any]) -> None:
-        """Atomically write strategy group states after evaluate()."""
+    def set_strategy_state(self, strategy_id: uuid.UUID, instrument_states: dict[str, Any]) -> None:
+        """Atomically write strategy instrument states after evaluate()."""
         key = f"ascent:strategy:{strategy_id}:state"
-        self._redis.set(key, json.dumps(group_states))
+        self._redis.set(key, json.dumps(instrument_states))
 
     def get_strategy_state(self, strategy_id: uuid.UUID) -> dict[str, Any] | None:
-        """Retrieve strategy group states, or None if not cached."""
+        """Retrieve strategy instrument states, or None if not cached."""
         key = f"ascent:strategy:{strategy_id}:state"
         data = self._redis.get(key)
         if data is None:

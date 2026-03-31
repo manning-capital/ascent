@@ -3,8 +3,9 @@ from sqlalchemy import insert, text
 from sqlalchemy.orm import Session
 
 from ascent.database.models import StrategyRun
-from ascent.database.models.asset_groups import ProviderAssetGroupAttribute
 from ascent.database.models.feeds import FeedPartition, FeedRun
+from ascent.database.models.composites import CompositeAttribute
+from ascent.database.models.instruments import InstrumentAttribute
 from ascent.database.models.strategy_run_feeds import StrategyRunFeedRun
 from ascent.server.dependencies import engine, get_db
 from ascent.server.schemas.admin import (
@@ -12,7 +13,8 @@ from ascent.server.schemas.admin import (
     FeedPartitionSchema,
     FeedRunCreate,
     FeedRunSchema,
-    PAGABatchCreate,
+    CompositeAttributeBatchCreate,
+    InstrumentAttributeBatchCreate,
     StrategyRunCreate,
     StrategyRunFeedRunCreate,
     StrategyRunFeedRunSchema,
@@ -86,11 +88,25 @@ def create_strategy_run_feed_run(data: StrategyRunFeedRunCreate, db: Session = D
     return obj
 
 
-@router.post("/provider-asset-group-attributes/batch", status_code=201)
-def batch_create_paga(data: PAGABatchCreate, db: Session = Depends(get_db)):
+@router.post("/instrument-attributes/batch", status_code=201)
+def batch_create_instrument_attributes(
+    data: InstrumentAttributeBatchCreate, db: Session = Depends(get_db)
+):
     if not data.entries:
         return {"count": 0}
     rows = [e.model_dump() for e in data.entries]
-    db.execute(insert(ProviderAssetGroupAttribute).values(rows))
+    db.execute(insert(InstrumentAttribute).values(rows))
+    db.commit()
+    return {"count": len(rows)}
+
+
+@router.post("/composite-attributes/batch", status_code=201)
+def batch_create_composite_attributes(
+    data: CompositeAttributeBatchCreate, db: Session = Depends(get_db)
+):
+    if not data.entries:
+        return {"count": 0}
+    rows = [e.model_dump() for e in data.entries]
+    db.execute(insert(CompositeAttribute).values(rows))
     db.commit()
     return {"count": len(rows)}

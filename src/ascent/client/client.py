@@ -191,6 +191,26 @@ class AscentClient:
         self._raise(resp)
         return resp.json()
 
+    def get_instrument_types(self) -> list[dict[str, Any]]:
+        resp = self._client.get("/types/instrument-types")
+        self._raise(resp)
+        return resp.json()
+
+    def create_instrument_type(self, **kwargs: Any) -> dict[str, Any]:
+        resp = self._client.post("/types/instrument-types", json=_body(**kwargs))
+        self._raise(resp)
+        return resp.json()
+
+    def get_composite_types(self) -> list[dict[str, Any]]:
+        resp = self._client.get("/types/composite-types")
+        self._raise(resp)
+        return resp.json()
+
+    def create_composite_type(self, **kwargs: Any) -> dict[str, Any]:
+        resp = self._client.post("/types/composite-types", json=_body(**kwargs))
+        self._raise(resp)
+        return resp.json()
+
     # Type-metadata links
 
     def add_asset_type_metadata(self, asset_type_id: uuid.UUID, **kwargs: Any) -> dict[str, Any]:
@@ -205,6 +225,24 @@ class AscentClient:
     ) -> dict[str, Any]:
         resp = self._client.post(
             f"/types/provider-types/{provider_type_id}/metadata", json=_body(**kwargs)
+        )
+        self._raise(resp)
+        return resp.json()
+
+    def add_instrument_type_metadata(
+        self, instrument_type_id: uuid.UUID, **kwargs: Any
+    ) -> dict[str, Any]:
+        resp = self._client.post(
+            f"/types/instrument-types/{instrument_type_id}/metadata", json=_body(**kwargs)
+        )
+        self._raise(resp)
+        return resp.json()
+
+    def add_composite_type_metadata(
+        self, composite_type_id: uuid.UUID, **kwargs: Any
+    ) -> dict[str, Any]:
+        resp = self._client.post(
+            f"/types/composite-types/{composite_type_id}/metadata", json=_body(**kwargs)
         )
         self._raise(resp)
         return resp.json()
@@ -368,25 +406,65 @@ class AscentClient:
         return resp.json()
 
     # ------------------------------------------------------------------
-    # Asset Groups
+    # Instruments
     # ------------------------------------------------------------------
 
-    def get_asset_groups(self) -> list[dict[str, Any]]:
-        resp = self._client.get("/asset-groups")
+    def get_instruments(self) -> list[dict[str, Any]]:
+        resp = self._client.get("/instruments")
         self._raise(resp)
         return resp.json()
 
-    def create_asset_group(self, **kwargs: Any) -> dict[str, Any]:
+    def create_instrument(self, **kwargs: Any) -> dict[str, Any]:
+        resp = self._client.post("/instruments", json=_body(**kwargs))
+        self._raise(resp)
+        return resp.json()
+
+    def get_instrument_metadata(self, instrument_id: uuid.UUID) -> list[dict[str, Any]]:
+        resp = self._client.get(f"/instruments/{instrument_id}/metadata")
+        self._raise(resp)
+        return resp.json()
+
+    def batch_create_instrument_metadata(
+        self, instrument_id: uuid.UUID, timestamp: str, entries: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        payload = {
+            "timestamp": timestamp,
+            "entries": [{k: _str(v) for k, v in e.items()} for e in entries],
+        }
+        resp = self._client.post(f"/instruments/{instrument_id}/metadata/batch", json=payload)
+        self._raise(resp)
+        return resp.json()
+
+    # ------------------------------------------------------------------
+    # Composites
+    # ------------------------------------------------------------------
+
+    def get_composites(self) -> list[dict[str, Any]]:
+        resp = self._client.get("/composites")
+        self._raise(resp)
+        return resp.json()
+
+    def create_composite(self, **kwargs: Any) -> dict[str, Any]:
         body = _body(**kwargs)
-        # Stringify UUIDs in nested members
         if "members" in body:
             body["members"] = [{k: _str(v) for k, v in m.items()} for m in body["members"]]
-        resp = self._client.post("/asset-groups", json=body)
+        resp = self._client.post("/composites", json=body)
         self._raise(resp)
         return resp.json()
 
-    def add_asset_group_member(self, group_id: uuid.UUID, **kwargs: Any) -> dict[str, Any]:
-        resp = self._client.post(f"/asset-groups/{group_id}/members", json=_body(**kwargs))
+    def add_composite_member(self, composite_id: uuid.UUID, **kwargs: Any) -> dict[str, Any]:
+        resp = self._client.post(f"/composites/{composite_id}/members", json=_body(**kwargs))
+        self._raise(resp)
+        return resp.json()
+
+    def batch_create_composite_metadata(
+        self, composite_id: uuid.UUID, timestamp: str, entries: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        payload = {
+            "timestamp": timestamp,
+            "entries": [{k: _str(v) for k, v in e.items()} for e in entries],
+        }
+        resp = self._client.post(f"/composites/{composite_id}/metadata/batch", json=payload)
         self._raise(resp)
         return resp.json()
 
@@ -612,9 +690,15 @@ class AscentClient:
         self._raise(resp)
         return resp.json()
 
-    def batch_create_paga(self, entries: list[dict[str, Any]]) -> dict[str, Any]:
+    def batch_create_instrument_attributes(self, entries: list[dict[str, Any]]) -> dict[str, Any]:
         payload = {"entries": [{k: _str(v) for k, v in e.items()} for e in entries]}
-        resp = self._client.post("/admin/provider-asset-group-attributes/batch", json=payload)
+        resp = self._client.post("/admin/instrument-attributes/batch", json=payload)
+        self._raise(resp)
+        return resp.json()
+
+    def batch_create_composite_attributes(self, entries: list[dict[str, Any]]) -> dict[str, Any]:
+        payload = {"entries": [{k: _str(v) for k, v in e.items()} for e in entries]}
+        resp = self._client.post("/admin/composite-attributes/batch", json=payload)
         self._raise(resp)
         return resp.json()
 
@@ -639,6 +723,4 @@ class AscentClient:
             if self.ping():
                 return
             time.sleep(interval)
-        raise TimeoutError(
-            f"Server at {self._base_url} did not become ready within {timeout}s"
-        )
+        raise TimeoutError(f"Server at {self._base_url} did not become ready within {timeout}s")

@@ -5,6 +5,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
+from ascent.server.schemas.common import Identifier
+
 
 class MetadataValueType(str, enum.Enum):
     STRING = "string"
@@ -81,14 +83,14 @@ class MetadataTypeSchema(BaseModel):
 
 
 class MetadataTypeCreate(BaseModel):
-    name: str
+    name: Identifier
     display_name: str
     description: str | None = None
     value_type: MetadataValueType = MetadataValueType.STRING
 
 
 class MetadataTypeUpdate(BaseModel):
-    name: str | None = None
+    name: Identifier | None = None
     display_name: str | None = None
     description: str | None = None
     value_type: MetadataValueType | None = None
@@ -169,6 +171,48 @@ class ProviderTypeMetadataSchema(BaseModel):
 
 
 class ProviderTypeMetadataCreate(BaseModel):
+    metadata_id: uuid.UUID
+    is_required: bool = True
+    display_order: int = 0
+
+
+class InstrumentTypeMetadataSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    metadata_id: uuid.UUID
+    metadata_name: str
+    metadata_display_name: str = ""
+    metadata_description: str | None = None
+    value_type: str
+    is_required: bool
+    display_order: int
+    is_inherited: bool = False
+    source_type_id: uuid.UUID | None = None
+    source_type_name: str | None = None
+
+
+class InstrumentTypeMetadataCreate(BaseModel):
+    metadata_id: uuid.UUID
+    is_required: bool = True
+    display_order: int = 0
+
+
+class CompositeTypeMetadataSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    metadata_id: uuid.UUID
+    metadata_name: str
+    metadata_display_name: str = ""
+    metadata_description: str | None = None
+    value_type: str
+    is_required: bool
+    display_order: int
+    is_inherited: bool = False
+    source_type_id: uuid.UUID | None = None
+    source_type_name: str | None = None
+
+
+class CompositeTypeMetadataCreate(BaseModel):
     metadata_id: uuid.UUID
     is_required: bool = True
     display_order: int = 0

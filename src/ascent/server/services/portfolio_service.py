@@ -16,11 +16,8 @@ def get_portfolios(db: Session) -> list[PortfolioSchema]:
             id=p.id,
             name=p.name,
             description=p.description,
-            base_currency=(
-                p.base_currency_asset.symbol or p.base_currency_asset.name
-                if p.base_currency_asset
-                else None
-            ),
+            display_name=p.display_name,
+            base_currency=(p.base_currency_asset.display_name if p.base_currency_asset else None),
             is_active=p.is_active,
             created_at=p.created_at,
         )

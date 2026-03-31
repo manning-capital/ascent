@@ -4,9 +4,9 @@ import uuid
 from sqlalchemy import ForeignKey, String, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from ascent.database.models.assets import Asset
 from ascent.database.models.base import Base
 from ascent.database.models.exchanges import Exchange
+from ascent.database.models.instruments import Instrument
 from ascent.database.models.portfolio import Portfolio
 from ascent.database.models.types import OrderStatusType, OrderType
 
@@ -49,20 +49,13 @@ class Order(Base):
         comment="The identifier of the portfolio this order belongs to",
     )
     portfolio: Mapped["Portfolio"] = relationship("Portfolio")
-    from_asset_id: Mapped[uuid.UUID] = mapped_column(
+    instrument_id: Mapped[uuid.UUID] = mapped_column(
         Uuid,
-        ForeignKey("asset.id"),
+        ForeignKey("instrument.id"),
         nullable=False,
-        comment="The identifier of the from asset (base asset)",
+        comment="The identifier of the instrument this order is for",
     )
-    from_asset: Mapped["Asset"] = relationship("Asset", foreign_keys=[from_asset_id])
-    to_asset_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid,
-        ForeignKey("asset.id"),
-        nullable=False,
-        comment="The identifier of the to asset (quote asset)",
-    )
-    to_asset: Mapped["Asset"] = relationship("Asset", foreign_keys=[to_asset_id])
+    instrument: Mapped["Instrument"] = relationship("Instrument")
     quantity: Mapped[float] = mapped_column(
         nullable=False, comment="The requested number of units/shares in the order"
     )
@@ -114,7 +107,7 @@ class Order(Base):
     )
 
     def __repr__(self):
-        return f"{Order.__name__}(id={self.id}, timestamp={self.timestamp}, side={self.side}, exchange_id={self.exchange_id}, from_asset_id={self.from_asset_id}, to_asset_id={self.to_asset_id}, quantity={self.quantity}, price={self.price})"
+        return f"{Order.__name__}(id={self.id}, timestamp={self.timestamp}, side={self.side}, exchange_id={self.exchange_id}, instrument_id={self.instrument_id}, quantity={self.quantity}, price={self.price})"
 
 
 class OrderStatus(Base):

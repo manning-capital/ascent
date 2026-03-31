@@ -5,6 +5,7 @@ export interface ProviderListItem {
   provider_type_id: string;
   provider_type_name: string | null;
   name: string;
+  display_name: string;
   description: string | null;
   provider_external_code: string | null;
   underlying_provider_id: string | null;
@@ -22,6 +23,7 @@ export interface ProviderDetail extends ProviderListItem {
 export interface ProviderCreate {
   provider_type_id: string;
   name: string;
+  display_name: string;
   description?: string | null;
   provider_external_code?: string | null;
   underlying_provider_id?: string | null;
@@ -32,6 +34,7 @@ export interface ProviderCreate {
 
 export interface ProviderUpdate {
   name?: string;
+  display_name?: string;
   description?: string | null;
   provider_external_code?: string | null;
   url?: string | null;

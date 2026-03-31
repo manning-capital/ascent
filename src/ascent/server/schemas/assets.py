@@ -5,22 +5,23 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict
 
+from ascent.server.schemas.common import Identifier
+from ascent.server.schemas.instruments import ProviderAssetLinkSchema
 from ascent.server.schemas.metadata import MetadataEntrySchema
-from ascent.server.schemas.provider_assets import ProviderAssetLinkSchema
 
 
 class AssetCreate(BaseModel):
     asset_type_id: uuid.UUID
-    name: str
-    symbol: str | None = None
+    name: Identifier
+    display_name: str
     description: str | None = None
     underlying_asset_id: uuid.UUID | None = None
     is_active: bool = True
 
 
 class AssetUpdate(BaseModel):
-    name: str | None = None
-    symbol: str | None = None
+    name: Identifier | None = None
+    display_name: str | None = None
     description: str | None = None
     is_active: bool | None = None
 
@@ -32,7 +33,7 @@ class AssetSchema(BaseModel):
     asset_type_id: uuid.UUID
     asset_type_name: str | None = None
     name: str
-    symbol: str | None = None
+    display_name: str
     description: str | None = None
     underlying_asset_id: uuid.UUID | None = None
     is_active: bool = True

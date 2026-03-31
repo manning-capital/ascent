@@ -6,8 +6,8 @@ from sqlalchemy.orm import Session, joinedload
 from ascent.database.models import Asset
 from ascent.server.exceptions import NotFoundError
 from ascent.server.schemas.assets import AssetCreate, AssetDetailSchema, AssetSchema, AssetUpdate
+from ascent.server.services.instrument_service import get_provider_asset_links
 from ascent.server.services.metadata_service import get_latest_asset_metadata
-from ascent.server.services.provider_asset_service import get_provider_asset_links
 
 
 def get_assets(db: Session) -> list[AssetSchema]:
@@ -17,9 +17,9 @@ def get_assets(db: Session) -> list[AssetSchema]:
         AssetSchema(
             id=a.id,
             asset_type_id=a.asset_type_id,
-            asset_type_name=a.asset_type.name if a.asset_type else None,
+            asset_type_name=a.asset_type.display_name if a.asset_type else None,
             name=a.name,
-            symbol=a.symbol,
+            display_name=a.display_name,
             description=a.description,
             underlying_asset_id=a.underlying_asset_id,
             is_active=a.is_active,
@@ -41,7 +41,7 @@ def get_asset(db: Session, asset_id: uuid.UUID) -> AssetDetailSchema:
         asset_type_id=a.asset_type_id,
         asset_type_name=a.asset_type.name if a.asset_type else None,
         name=a.name,
-        symbol=a.symbol,
+        display_name=a.display_name,
         description=a.description,
         underlying_asset_id=a.underlying_asset_id,
         is_active=a.is_active,

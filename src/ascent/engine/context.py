@@ -125,28 +125,32 @@ def get_partition() -> PartitionInfo:
 class StrategyContext:
     """Vectorized evaluation context retrieved via ``get_context()`` inside ``@strategy`` functions.
 
-    All data is DataFrame-based for vectorized evaluation across groups.
+    All data is DataFrame-based for vectorized evaluation across instruments.
     No Python ``for`` loops — strategies use pandas/numpy for C-level speed.
 
     Attributes:
-        groups: One row per asset group. Index = ``group_id``. Columns:
+        instruments: One row per instrument. Index = ``instrument_id``. Columns:
+            ``state`` ('waiting' | 'in_trade'), ``trade_id`` (int | None).
+        composites: One row per composite. Index = ``composite_id``. Columns:
             ``state`` ('waiting' | 'in_trade'), ``trade_id`` (int | None),
-            ``members`` (list[dict]).
+            ``member_instrument_ids`` (list[int]).
     """
 
     def __init__(
         self,
-        groups: pd.DataFrame,
+        instruments: pd.DataFrame,
+        composites: pd.DataFrame,
         feed_frames: dict[int, pd.DataFrame],
     ) -> None:
-        self.groups = groups
+        self.instruments = instruments
+        self.composites = composites
         self._feed_frames = feed_frames
 
     def get(self, feed: Feed) -> pd.DataFrame:
-        """Get feed data as a DataFrame for ALL groups.
+        """Get feed data as a DataFrame for ALL instruments.
 
         Returns a DataFrame with columns:
-          - ``group_id``: int (matches ``groups.index``)
+          - ``instrument_id``: int (matches ``instruments.index``)
           - ``timestamp``: datetime
           - ``{attribute_name}``: float (one column per attribute, pivoted from EAV rows)
 
@@ -161,6 +165,7 @@ class StrategyContext:
         return self._feed_frames[feed._feed_id]
 
     def __repr__(self) -> str:
-        n_groups = len(self.groups)
+        n_instruments = len(self.instruments)
+        n_composites = len(self.composites)
         n_feeds = len(self._feed_frames)
-        return f"StrategyContext(groups={n_groups}, feeds={n_feeds})"
+        return f"StrategyContext(instruments={n_instruments}, composites={n_composites}, feeds={n_feeds})"
