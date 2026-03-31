@@ -1,0 +1,315 @@
+@if (loading()) {
+  <div class="flex flex-col h-[calc(100vh-3.5rem)]">
+    <div class="flex items-center gap-3 px-4 py-2 border-b border-surface shrink-0 bg-emphasis">
+      <p-skeleton width="5rem" height="0.875rem"/>
+      <span class="text-surface-300">|</span>
+      <p-skeleton width="8rem" height="1.125rem"/>
+      <p-skeleton shape="circle" size="0.5rem"/>
+      <p-skeleton width="4rem" height="1.375rem" borderRadius="0.25rem"/>
+    </div>
+    <div class="flex gap-2 px-4 py-3 border-b border-surface">
+      @for (_ of [1,2,3]; track $index) {
+        <p-skeleton width="5rem" height="1rem"/>
+      }
+    </div>
+    <div class="p-6 space-y-5">
+      <p-panel header="General">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
+          @for (_ of [1,2,3,4]; track $index) {
+            <div>
+              <p-skeleton width="40%" height="0.75rem" styleClass="mb-2"/>
+              <p-skeleton width="100%" height="2.25rem" borderRadius="0.375rem"/>
+            </div>
+          }
+        </div>
+      </p-panel>
+      <p-panel header="Metadata">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
+          @for (_ of [1,2,3]; track $index) {
+            <div>
+              <p-skeleton width="40%" height="0.75rem" styleClass="mb-2"/>
+              <p-skeleton width="100%" height="2.25rem" borderRadius="0.375rem"/>
+            </div>
+          }
+        </div>
+      </p-panel>
+    </div>
+  </div>
+} @else {
+  @let inst = instrument();
+  @if (inst) {
+  <div class="flex flex-col h-[calc(100vh-3.5rem)]">
+    <!-- Header Bar -->
+    <div class="flex items-center gap-3 px-4 py-2 border-b border-surface shrink-0 bg-emphasis">
+      <a routerLink="/settings/instruments" class="text-sm text-primary hover:underline">&larr; Instruments</a>
+      <span class="text-surface-300">|</span>
+      <h1 class="text-lg font-bold truncate">{{ inst.display_name }}</h1>
+      <span class="text-sm text-surface-500 font-mono">({{ inst.name }})</span>
+      <span class="w-2 h-2 rounded-full shrink-0" [class]="inst.is_active ? 'bg-green-500' : 'bg-surface-400'"></span>
+      @if (instrumentType(); as iType) {
+        <p-tag [value]="iType.display_name || iType.name" severity="info"/>
+      }
+      <div class="ml-auto flex items-center gap-2">
+        @if (!editing()) {
+          <p-button label="Edit" severity="secondary" [text]="true" size="small" (onClick)="startEdit()"/>
+        }
+      </div>
+    </div>
+
+    <!-- Tab Bar -->
+    <p-tabs [value]="activeTab()" (valueChange)="onTabChange($any($event))">
+      <p-tablist>
+        @for (tab of tabs; track tab) {
+          <p-tab [value]="tab">{{ tab }}</p-tab>
+        }
+      </p-tablist>
+    </p-tabs>
+
+    <!-- Content -->
+    <div class="flex-1 overflow-y-auto">
+
+      <!-- ==================== DETAILS TAB ==================== -->
+      @if (activeTab() === 'Details') {
+        <div class="p-6 space-y-5">
+
+          <!-- EDIT MODE -->
+          @if (editing()) {
+            <!-- As-of Timestamp -->
+            <div class="p-3 rounded-lg bg-emphasis border border-surface inline-flex items-center gap-3">
+              <label class="text-xs text-surface-500 whitespace-nowrap">As-of Timestamp</label>
+              <p-datepicker [(ngModel)]="editTimestamp" [showTime]="true" dateFormat="yy-mm-dd" hourFormat="24" [style]="{'width': '16rem'}"/>
+            </div>
+
+            <p-panel header="General">
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
+                <div>
+                  <label class="block text-xs text-surface-500 mb-1">Display Name</label>
+                  <div class="text-sm font-medium py-1.5">{{ inst.display_name }}</div>
+                </div>
+                <div>
+                  <label class="block text-xs text-surface-500 mb-1">Name</label>
+                  <div class="text-sm font-mono py-1.5">{{ inst.name }}</div>
+                </div>
+                <div>
+                  <label class="block text-xs text-surface-500 mb-1">Type</label>
+                  <div class="text-sm py-1.5">{{ getTypeName() }}</div>
+                </div>
+                <div>
+                  <label class="block text-xs text-surface-500 mb-1">Active</label>
+                  <div class="flex items-center h-[2.375rem]">
+                    <p-checkbox [(ngModel)]="editIsActive" [binary]="true" inputId="editActive"/>
+                    <label for="editActive" class="text-sm text-surface-500 ml-2">{{ editIsActive ? 'Yes' : 'No' }}</label>
+                  </div>
+                </div>
+              </div>
+            </p-panel>
+
+            <!-- Metadata Fields (editable) -->
+            @if (metadataLoading()) {
+              <p-panel header="Metadata">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
+                  @for (_ of [1,2,3]; track $index) {
+                    <div>
+                      <p-skeleton width="40%" height="0.75rem" styleClass="mb-2"/>
+                      <p-skeleton width="100%" height="2.25rem" borderRadius="0.375rem"/>
+                    </div>
+                  }
+                </div>
+              </p-panel>
+            } @else if (typeFields().length > 0) {
+              <p-panel header="Metadata">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
+                  @for (field of typeFields(); track field.metadata_id) {
+                    <div>
+                      <label class="block text-xs text-surface-500 mb-1">
+                        {{ field.metadata_display_name || field.metadata_name }}
+                        @if (field.is_required) { <span class="text-red-500">*</span> }
+                        @if (field.is_inherited) { <span class="text-surface-400 italic">(inherited)</span> }
+                      </label>
+                      @if (field.value_type === 'boolean') {
+                        <p-select [(ngModel)]="editFieldValues[field.metadata_id]" [options]="[{label: 'true', value: 'true'}, {label: 'false', value: 'false'}]" optionLabel="label" optionValue="value" placeholder="-- select --" class="w-full"/>
+                      } @else if (field.value_type === 'integer') {
+                        <input [(ngModel)]="editFieldValues[field.metadata_id]" type="number" step="1" pInputText placeholder="Enter integer..." class="w-full"/>
+                      } @else if (field.value_type === 'float') {
+                        <input [(ngModel)]="editFieldValues[field.metadata_id]" type="number" step="any" pInputText placeholder="Enter number..." class="w-full"/>
+                      } @else if (field.value_type === 'date') {
+                        <input [(ngModel)]="editFieldValues[field.metadata_id]" type="date" pInputText class="w-full"/>
+                      } @else if (field.value_type === 'time') {
+                        <input [(ngModel)]="editFieldValues[field.metadata_id]" type="time" step="1" pInputText class="w-full"/>
+                      } @else if (field.value_type === 'datetime') {
+                        <input [(ngModel)]="editFieldValues[field.metadata_id]" type="datetime-local" step="1" pInputText class="w-full"/>
+                      } @else {
+                        <input [(ngModel)]="editFieldValues[field.metadata_id]" type="text" pInputText placeholder="Enter value..." class="w-full"/>
+                      }
+                    </div>
+                  }
+                </div>
+              </p-panel>
+            }
+
+            <div class="flex gap-2">
+              <p-button label="Save" severity="info" (onClick)="submitEdit()"/>
+              <p-button label="Cancel" severity="secondary" [text]="true" (onClick)="cancelEdit()"/>
+            </div>
+
+          <!-- READ MODE -->
+          } @else {
+            <!-- General -->
+            <p-panel header="General">
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
+                <div>
+                  <label class="block text-xs text-surface-500 mb-1">Display Name</label>
+                  <div class="text-sm font-medium py-1.5">{{ inst.display_name }}</div>
+                </div>
+                <div>
+                  <label class="block text-xs text-surface-500 mb-1">Name</label>
+                  <div class="text-sm font-mono py-1.5">{{ inst.name }}</div>
+                </div>
+                <div>
+                  <label class="block text-xs text-surface-500 mb-1">Type</label>
+                  <div class="text-sm py-1.5">
+                    @if (instrumentType(); as iType) {
+                      <a [routerLink]="['/settings/instrument-types', iType.id]" class="text-primary hover:underline">{{ iType.display_name || iType.name }}</a>
+                    } @else {
+                      Unknown
+                    }
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-xs text-surface-500 mb-1">Active</label>
+                  <div class="text-sm py-1.5">
+                    <span class="inline-flex items-center gap-1.5">
+                      <span class="w-2 h-2 rounded-full" [class]="inst.is_active ? 'bg-green-500' : 'bg-surface-400'"></span>
+                      {{ inst.is_active ? 'Yes' : 'No' }}
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-xs text-surface-500 mb-1">Provider</label>
+                  <div class="text-sm py-1.5">{{ inst.provider_name || '-' }}</div>
+                </div>
+                <div>
+                  <label class="block text-xs text-surface-500 mb-1">From Asset</label>
+                  <div class="text-sm py-1.5">{{ inst.from_asset_name || '-' }}</div>
+                </div>
+                <div>
+                  <label class="block text-xs text-surface-500 mb-1">To Asset</label>
+                  <div class="text-sm py-1.5">{{ inst.to_asset_name || '-' }}</div>
+                </div>
+                @if (inst.created_at) {
+                  <div>
+                    <label class="block text-xs text-surface-500 mb-1">Created</label>
+                    <div class="text-sm py-1.5">{{ inst.created_at | date:'mediumDate' }}</div>
+                  </div>
+                }
+                @if (inst.description) {
+                  <div class="sm:col-span-2 lg:col-span-3 xl:col-span-4">
+                    <label class="block text-xs text-surface-500 mb-1">Description</label>
+                    <div class="text-sm py-1.5">{{ inst.description }}</div>
+                  </div>
+                }
+              </div>
+            </p-panel>
+
+            <!-- Metadata -->
+            @if (metadataLoading()) {
+              <p-panel header="Metadata">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
+                  @for (_ of [1,2,3]; track $index) {
+                    <div>
+                      <p-skeleton width="40%" height="0.75rem" styleClass="mb-2"/>
+                      <p-skeleton width="100%" height="1.25rem" borderRadius="0.375rem"/>
+                    </div>
+                  }
+                </div>
+              </p-panel>
+            } @else if (typeFields().length > 0) {
+              <p-panel header="Metadata">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-4">
+                  @for (field of typeFields(); track field.metadata_id) {
+                    @let val = fieldValue(field.metadata_id);
+                    @let ts = fieldTimestamp(field.metadata_id);
+                    <div>
+                      <label class="block text-xs text-surface-500 mb-1">
+                        {{ field.metadata_display_name || field.metadata_name }}
+                        @if (field.is_inherited) { <span class="text-surface-400 italic">(inherited)</span> }
+                      </label>
+                      @if (val !== null) {
+                        <div class="text-sm font-mono py-1.5">{{ formatValue(val) }}</div>
+                        @if (ts) {
+                          <div class="text-[0.6875rem] text-surface-400 -mt-0.5">as of {{ ts | date:'shortDate' }}</div>
+                        }
+                      } @else {
+                        <div class="text-sm text-surface-400 italic py-1.5">Not set</div>
+                      }
+                    </div>
+                  }
+                </div>
+              </p-panel>
+            }
+
+          }
+
+        </div>
+
+      <!-- ==================== HISTORY TAB ==================== -->
+      } @else if (activeTab() === 'History') {
+        <div class="p-6 space-y-5">
+          <p-panel header="Instrument Metadata History">
+            @if (historyLoading()) {
+              <div class="space-y-3">
+                <div class="flex gap-4">
+                  @for (_ of [1,2,3,4]; track $index) {
+                    <p-skeleton width="100%" height="2rem"/>
+                  }
+                </div>
+                @for (_ of [1,2,3]; track $index) {
+                  <div class="flex gap-4">
+                    @for (_ of [1,2,3,4]; track $index) {
+                      <p-skeleton width="100%" height="2.5rem"/>
+                    }
+                  </div>
+                }
+              </div>
+            } @else if (historyGrid()) {
+              <app-metadata-history-table
+                [fields]="historyGrid()!.fields"
+                [snapshots]="historyGrid()!.snapshots"
+                (save)="onHistorySave($event)"/>
+            } @else {
+              <div class="text-sm text-surface-400 italic py-2">No metadata history.</div>
+            }
+          </p-panel>
+        </div>
+
+      <!-- ==================== SETTINGS TAB ==================== -->
+      } @else if (activeTab() === 'Settings') {
+        <div class="p-6">
+          <div class="border border-red-500/30 rounded-lg overflow-hidden max-w-3xl">
+            <div class="px-5 py-4 border-b border-red-500/30 bg-red-500/5">
+              <h3 class="text-lg font-semibold text-red-500">Danger Zone</h3>
+            </div>
+            <div class="px-5 py-4 flex items-center justify-between">
+              <div>
+                <p class="font-medium">Delete this instrument</p>
+                <p class="text-sm text-surface-400 mt-1">Once deleted, all associated members and metadata will be permanently removed.</p>
+              </div>
+              <p-button (onClick)="openDelete()" severity="danger" [outlined]="true" size="small" label="Delete instrument"/>
+            </div>
+          </div>
+        </div>
+      }
+
+    </div>
+  </div>
+
+  <app-safe-delete-dialog
+    [(visible)]="showDeleteDialog"
+    [entityLabel]="'Instrument'"
+    [entityName]="inst.display_name || inst.name"
+    [usage]="deleteUsage()"
+    [deleting]="deleting()"
+    (confirm)="confirmDelete()"
+  />
+  }
+}

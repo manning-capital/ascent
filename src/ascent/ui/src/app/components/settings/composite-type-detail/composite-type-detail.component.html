@@ -1,0 +1,268 @@
+@let type = compositeType();
+@if (!type) {
+  <div class="flex flex-col h-[calc(100vh-3.5rem)]">
+    <div class="flex items-center gap-3 px-4 py-2 border-b border-surface shrink-0 bg-emphasis">
+      <p-skeleton width="8rem" height="0.875rem"/>
+      <span class="text-surface-300">|</span>
+      <p-skeleton width="10rem" height="1.125rem"/>
+    </div>
+    <div class="flex gap-2 px-4 py-3 border-b border-surface">
+      @for (_ of [1,2,3]; track $index) {
+        <p-skeleton width="5rem" height="1rem"/>
+      }
+    </div>
+    <div class="p-6 space-y-5">
+      <p-panel header="General">
+        <div class="flex flex-col gap-3">
+          @for (_ of [1,2,3]; track $index) {
+            <div class="flex items-center gap-4">
+              <p-skeleton width="20%" height="1rem"/>
+              <p-skeleton width="15%" height="1rem"/>
+              <p-skeleton width="10%" height="1rem"/>
+              <p-skeleton width="8%" height="1rem"/>
+              <div class="flex-1"></div>
+              <p-skeleton width="10%" height="1rem"/>
+            </div>
+          }
+        </div>
+      </p-panel>
+    </div>
+  </div>
+} @else {
+  <div class="flex flex-col h-[calc(100vh-3.5rem)]">
+    <!-- Header Bar -->
+    <div class="flex items-center gap-3 px-4 py-2 border-b border-surface shrink-0 bg-emphasis">
+      <a routerLink="/settings/composite-types" class="text-sm text-primary hover:underline">&larr; Composite Types</a>
+      <span class="text-surface-300">|</span>
+      <h1 class="text-lg font-bold truncate">{{ type.display_name }}</h1>
+      @if (type.parent_type_id) {
+        <span class="text-surface-300">|</span>
+        <a [routerLink]="['/settings/composite-types', type.parent_type_id]" class="text-xs text-primary hover:underline">Parent: {{ inheritedFields()[0]?.source_type_name || 'View Parent' }}</a>
+      }
+      <span class="text-surface-300">|</span>
+      <span class="text-xs text-surface-400">Members: {{ type.min_members }}–{{ type.max_members }}</span>
+      @if (type.description) {
+        <span class="text-sm text-surface-500 hidden lg:inline truncate max-w-xs">{{ type.description }}</span>
+      }
+      <div class="ml-auto flex items-center gap-2">
+        @if (activeTab() === 'Details' && !editing()) {
+          <p-button label="Edit" severity="secondary" [text]="true" size="small" (onClick)="startEdit()"/>
+        }
+      </div>
+    </div>
+
+    <!-- Tab Bar -->
+    <p-tabs [value]="activeTab()" (valueChange)="activeTab.set($event + '')">
+      <p-tablist>
+        <p-tab value="Details">Details</p-tab>
+        <p-tab value="Fields">Fields</p-tab>
+        <p-tab value="Settings">Settings</p-tab>
+      </p-tablist>
+    </p-tabs>
+
+    <!-- Content -->
+    <div class="flex-1 overflow-y-auto">
+
+      @if (activeTab() === 'Details') {
+        <div class="p-6 space-y-5">
+          @if (editing()) {
+            <p-panel header="General">
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
+                <div>
+                  <label class="block text-xs text-surface-500 mb-1">Name</label>
+                  <input type="text" pInputText [(ngModel)]="editName" class="w-full"/>
+                </div>
+                <div>
+                  <label class="block text-xs text-surface-500 mb-1">Display Name</label>
+                  <input type="text" pInputText [(ngModel)]="editDisplayName" class="w-full"/>
+                </div>
+                <div>
+                  <label class="block text-xs text-surface-500 mb-1">Min Members</label>
+                  <p-inputNumber [(ngModel)]="editMinMembers" [min]="1" [showButtons]="true" class="w-full"/>
+                </div>
+                <div>
+                  <label class="block text-xs text-surface-500 mb-1">Max Members</label>
+                  <p-inputNumber [(ngModel)]="editMaxMembers" [min]="1" [showButtons]="true" class="w-full"/>
+                </div>
+                <div class="sm:col-span-2 lg:col-span-3">
+                  <label class="block text-xs text-surface-500 mb-1">Description</label>
+                  <textarea pTextarea [(ngModel)]="editDescription" rows="3" class="w-full"></textarea>
+                </div>
+              </div>
+              <div class="flex gap-2 mt-4">
+                <p-button (onClick)="saveEdit()" severity="success" [outlined]="true" size="small" label="Save" [loading]="saving()"/>
+                <p-button (onClick)="cancelEdit()" severity="secondary" [outlined]="true" size="small" label="Cancel"/>
+              </div>
+            </p-panel>
+          } @else {
+            <p-panel header="General">
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
+                <div>
+                  <label class="block text-xs text-surface-500 mb-1">Name</label>
+                  <span class="text-sm font-mono">{{ type.name }}</span>
+                </div>
+                <div>
+                  <label class="block text-xs text-surface-500 mb-1">Display Name</label>
+                  <span class="text-sm">{{ type.display_name }}</span>
+                </div>
+                <div>
+                  <label class="block text-xs text-surface-500 mb-1">Min Members</label>
+                  <span class="text-sm">{{ type.min_members }}</span>
+                </div>
+                <div>
+                  <label class="block text-xs text-surface-500 mb-1">Max Members</label>
+                  <span class="text-sm">{{ type.max_members }}</span>
+                </div>
+                <div class="sm:col-span-2 lg:col-span-3">
+                  <label class="block text-xs text-surface-500 mb-1">Description</label>
+                  <span class="text-sm text-surface-400">{{ type.description || '-' }}</span>
+                </div>
+              </div>
+            </p-panel>
+          }
+        </div>
+
+      } @else if (activeTab() === 'Fields') {
+        <div class="p-6 space-y-5">
+
+          <p-panel>
+            <ng-template #header>
+              <div class="flex items-center justify-between w-full">
+                <div>
+                  <span class="p-panel-title">Metadata Fields</span>
+                  <p class="text-xs text-surface-400 mt-1 font-normal">Fields for this composite type, including inherited from parent types.</p>
+                </div>
+                <p-button (onClick)="openAddField()" severity="info" [outlined]="true" size="small" label="+ Add Field"/>
+              </div>
+            </ng-template>
+
+            @if (showAddField()) {
+              <div class="mb-4 p-4 rounded-lg bg-emphasis border border-surface">
+                <h4 class="font-semibold text-sm mb-3">Add Metadata Field</h4>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                  <div>
+                    <label class="block text-xs text-surface-500 mb-1">Metadata Type *</label>
+                    <p-select [(ngModel)]="newFieldMetadataId" [options]="availableMetadataTypes()" optionLabel="name" optionValue="id" placeholder="Select metadata type"/>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <p-checkbox [(ngModel)]="newFieldRequired" [binary]="true" inputId="fieldRequired"/>
+                    <label for="fieldRequired" class="text-sm text-surface-500">Required</label>
+                  </div>
+                  <div>
+                    <button (click)="openCreateMetadata()" class="text-xs text-primary hover:underline">or create new metadata type...</button>
+                  </div>
+                </div>
+
+                @if (showCreateMetadata()) {
+                  <div class="mt-4 p-4 rounded-lg bg-surface border border-surface">
+                    <h4 class="font-medium text-sm mb-3">New Metadata Type</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                      <div>
+                        <label class="block text-xs text-surface-500 mb-1">Name *</label>
+                        <input type="text" pInputText [(ngModel)]="newMetaName" placeholder="e.g. tick_size" class="w-full"/>
+                      </div>
+                      <div>
+                        <label class="block text-xs text-surface-500 mb-1">Display Name *</label>
+                        <input type="text" pInputText [(ngModel)]="newMetaDisplayName" placeholder="e.g. Tick Size" class="w-full"/>
+                      </div>
+                      <div>
+                        <label class="block text-xs text-surface-500 mb-1">Value Type *</label>
+                        <p-select [(ngModel)]="newMetaValueType" [options]="['string', 'integer', 'float', 'boolean', 'date', 'time', 'datetime']" placeholder="Select value type"/>
+                      </div>
+                      <div>
+                        <label class="block text-xs text-surface-500 mb-1">Description</label>
+                        <input type="text" pInputText [(ngModel)]="newMetaDescription" placeholder="Optional" class="w-full"/>
+                      </div>
+                    </div>
+                    <div class="flex gap-2 mt-3">
+                      <p-button (onClick)="submitCreateMetadata()" severity="success" [outlined]="true" size="small" label="Create"/>
+                      <p-button (onClick)="cancelCreateMetadata()" severity="secondary" [outlined]="true" size="small" label="Cancel"/>
+                    </div>
+                  </div>
+                }
+
+                <div class="flex gap-2 mt-4">
+                  <p-button (onClick)="submitAddField()" severity="success" [outlined]="true" size="small" label="Add"/>
+                  <p-button (onClick)="cancelAddField()" severity="secondary" [outlined]="true" size="small" label="Cancel"/>
+                </div>
+              </div>
+            }
+
+            <p-table [value]="allFields()">
+              <ng-template #header>
+                <tr>
+                  <th class="w-10">#</th>
+                  <th>Field Name</th>
+                  <th>Value Type</th>
+                  <th>Required</th>
+                  <th>Source</th>
+                  <th>Description</th>
+                  <th class="w-20"></th>
+                </tr>
+              </ng-template>
+              <ng-template #body let-field let-i="rowIndex">
+                <tr [class]="field.is_inherited ? 'text-surface-400' : ''">
+                  <td class="font-mono text-xs">{{ i + 1 }}</td>
+                  <td class="font-medium">{{ field.metadata_name }}</td>
+                  <td><p-tag [value]="valueTypeLabel(field.value_type)" severity="secondary"/></td>
+                  <td>
+                    @if (field.is_required) {
+                      <span class="text-xs font-medium" [class]="field.is_inherited ? 'text-red-400' : 'text-red-500'">Required</span>
+                    } @else {
+                      <span class="text-xs text-surface-400">Optional</span>
+                    }
+                  </td>
+                  <td class="text-xs">
+                    @if (field.is_inherited) {
+                      <a [routerLink]="['/settings/composite-types', field.source_type_id]" class="text-primary hover:underline">{{ field.source_type_name }}</a>
+                    } @else {
+                      <span class="text-surface-400">This type</span>
+                    }
+                  </td>
+                  <td class="text-xs text-surface-400">{{ field.metadata_description || '-' }}</td>
+                  <td>
+                    @if (!field.is_inherited) {
+                      <p-button (onClick)="removeField(field.metadata_id)" severity="danger" [text]="true" size="small" label="Remove"/>
+                    }
+                  </td>
+                </tr>
+              </ng-template>
+              <ng-template #emptymessage>
+                <tr>
+                  <td colspan="7" class="text-center text-surface-400 py-8">No metadata fields defined. Click + Add Field to get started.</td>
+                </tr>
+              </ng-template>
+            </p-table>
+          </p-panel>
+
+        </div>
+
+      } @else if (activeTab() === 'Settings') {
+        <div class="p-6">
+          <div class="border border-red-500/30 rounded-lg overflow-hidden max-w-3xl">
+            <div class="px-5 py-4 border-b border-red-500/30 bg-red-500/5">
+              <h3 class="text-lg font-semibold text-red-500">Danger Zone</h3>
+            </div>
+            <div class="px-5 py-4 flex items-center justify-between">
+              <div>
+                <p class="font-medium">Delete this composite type</p>
+                <p class="text-sm text-surface-400 mt-1">Once deleted, all associated metadata field definitions will be permanently removed.</p>
+              </div>
+              <p-button (onClick)="openDelete()" severity="danger" [outlined]="true" size="small" label="Delete composite type"/>
+            </div>
+          </div>
+        </div>
+      }
+
+    </div>
+  </div>
+
+  <app-safe-delete-dialog
+    [(visible)]="showDeleteDialog"
+    [entityLabel]="'Composite Type'"
+    [entityName]="type.name"
+    [usage]="usage()"
+    [deleting]="deleting()"
+    (confirm)="confirmDelete()"
+  />
+}
