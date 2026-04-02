@@ -250,7 +250,7 @@ export class AssetService {
     return this.api.post<Instrument>('/instruments', data);
   }
 
-  updateInstrument(id: string, data: { is_active?: boolean }) {
+  updateInstrument(id: string, data: { is_active?: boolean; instrument_type_id?: string; provider_id?: string; from_asset_id?: string; to_asset_id?: string }) {
     return this.api.put(`/instruments/${id}`, data);
   }
 

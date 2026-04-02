@@ -1,22 +1,21 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { FieldService } from '../../../services/field.service';
 import { ToastService } from '../../../services/toast.service';
 import { AttributeItem, EntityUsage } from '../../../models/field.model';
 import { Button } from 'primeng/button';
-import { InputText } from 'primeng/inputtext';
-import { Select } from 'primeng/select';
 import { Tag } from 'primeng/tag';
 import { Skeleton } from 'primeng/skeleton';
 import { Tabs, TabList, Tab } from 'primeng/tabs';
 import { Panel } from 'primeng/panel';
 import { SafeDeleteDialogComponent } from '../../shared/safe-delete-dialog.component';
+import { FieldPanelComponent, PanelField } from '../../shared/field-panel.component';
 
 @Component({
   selector: 'app-attribute-detail',
   standalone: true,
-  imports: [RouterLink, FormsModule, Button, InputText, Select, Tag, Skeleton, Tabs, TabList, Tab, Panel, SafeDeleteDialogComponent],
+  imports: [RouterLink, FormsModule, Button, Tag, Skeleton, Tabs, TabList, Tab, Panel, SafeDeleteDialogComponent, FieldPanelComponent],
   templateUrl: './attribute-detail.component.html',
 })
 export class AttributeDetailComponent implements OnInit {
@@ -29,6 +28,20 @@ export class AttributeDetailComponent implements OnInit {
   attribute = signal<AttributeItem | null>(null);
   editing = signal(false);
   activeTab = signal('0');
+
+  generalFields = computed<PanelField[]>(() => {
+    const attr = this.attribute();
+    if (!attr) return [];
+    return [
+      { type: 'mono', key: 'name', label: 'Name', value: attr.name },
+      { type: 'text', key: 'displayName', label: 'Display Name', value: attr.display_name },
+      { type: 'active', key: 'isActive', label: 'Active', value: attr.is_active },
+      { type: 'date', key: 'created', label: 'Created', value: attr.created_at },
+      { type: 'text', key: 'description', label: 'Description', value: attr.description },
+    ];
+  });
+
+  generalEditValues = signal<Record<string, any>>({});
 
   editName = '';
   editDescription = '';
@@ -65,7 +78,19 @@ export class AttributeDetailComponent implements OnInit {
   startEdit(): void {
     const item = this.attribute();
     if (item) this.resetEditForm(item);
+    this.generalEditValues.set({
+      name: this.editName,
+      isActive: this.editIsActive,
+      description: this.editDescription,
+    });
     this.editing.set(true);
+  }
+
+  onGeneralEditChange(e: { key: string; value: any }): void {
+    this.generalEditValues.update(v => ({ ...v, [e.key]: e.value }));
+    if (e.key === 'name') this.editName = e.value;
+    else if (e.key === 'isActive') this.editIsActive = e.value;
+    else if (e.key === 'description') this.editDescription = e.value;
   }
 
   cancelEdit(): void {

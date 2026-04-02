@@ -1,6 +1,5 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { forkJoin } from 'rxjs';
 import { CompositeService } from '../../../services/composite.service';
@@ -18,35 +17,32 @@ import { EntityUsage } from '../../../models/field.model';
 import { Tabs, TabList, Tab } from 'primeng/tabs';
 import { Skeleton } from 'primeng/skeleton';
 import { Select } from 'primeng/select';
-import { Checkbox } from 'primeng/checkbox';
 import { DatePicker } from 'primeng/datepicker';
 import { TableModule } from 'primeng/table';
 import { Tag } from 'primeng/tag';
 import { Button } from 'primeng/button';
-import { InputText } from 'primeng/inputtext';
 import { Panel } from 'primeng/panel';
 import { MetadataHistoryTableComponent } from '../../shared/metadata-history-table.component';
 import { SafeDeleteDialogComponent } from '../../shared/safe-delete-dialog.component';
+import { FieldPanelComponent, PanelField } from '../../shared/field-panel.component';
 
 @Component({
   selector: 'app-composite-detail',
   standalone: true,
   imports: [
     RouterLink,
-    DatePipe,
     FormsModule,
     Tabs, TabList, Tab,
     Select,
-    Checkbox,
     DatePicker,
     TableModule,
     Tag,
     Button,
-    InputText,
     Skeleton,
     Panel,
     MetadataHistoryTableComponent,
     SafeDeleteDialogComponent,
+    FieldPanelComponent,
   ],
   templateUrl: './composite-detail.component.html',
 })
@@ -71,8 +67,54 @@ export class CompositeDetailComponent implements OnInit {
   metadataEntries = signal<MetadataEntry[]>([]);
   metadataLoading = signal(true);
 
+  // General panel fields
+  generalFields = computed<PanelField[]>(() => {
+    const comp = this.composite();
+    const cType = this.compositeType();
+    if (!comp) return [];
+    return [
+      { type: 'mono', key: 'name', label: 'Name', value: comp.name },
+      { type: 'text', key: 'displayName', label: 'Display Name', value: comp.display_name },
+      { type: 'link', key: 'type', label: 'Type', value: cType?.display_name ?? cType?.name ?? null, route: cType ? ['/settings/composite-types', cType.id] : [], fallback: 'Unknown',
+        options: this.compositeService.compositeTypes().map(t => ({ label: t.display_name || t.name, value: t.id })) },
+      { type: 'text', key: 'members', label: 'Members', value: comp.members.length },
+      { type: 'active', key: 'isActive', label: 'Active', value: comp.is_active },
+      { type: 'date', key: 'createdAt', label: 'Created', value: comp.created_at },
+      { type: 'text', key: 'description', label: 'Description', value: comp.description },
+    ];
+  });
+  generalEditValues = signal<Record<string, any>>({});
+
+  // Metadata panel fields
+  metadataFields = computed<PanelField[]>(() => {
+    const fields = this.typeFields();
+    const entries = this.metadataEntries();
+    return fields.map(field => {
+      const entry = entries.find(e => e.metadata_id === field.metadata_id);
+      const base = {
+        key: field.metadata_id,
+        label: field.metadata_display_name || field.metadata_name,
+        required: field.is_required,
+        inherited: field.is_inherited,
+        subtitle: entry?.timestamp ? `as of ${new Date(entry.timestamp).toLocaleDateString()}` : undefined,
+      };
+      const val = entry?.value ?? null;
+      switch (field.value_type) {
+        case 'boolean': return { ...base, type: 'boolean' as const, value: val, fallback: 'Not set' };
+        case 'integer': return { ...base, type: 'number' as const, value: val, step: 1, fallback: 'Not set' };
+        case 'float': return { ...base, type: 'number' as const, value: val, step: 0.01, fallback: 'Not set' };
+        case 'date': return { ...base, type: 'text' as const, value: val != null ? String(val) : null, fallback: 'Not set' };
+        case 'time': return { ...base, type: 'time' as const, value: val != null ? String(val) : null, fallback: 'Not set' };
+        case 'datetime': return { ...base, type: 'datetime' as const, value: val != null ? String(val) : null, fallback: 'Not set' };
+        default: return { ...base, type: 'text' as const, value: val != null ? String(val) : null, fallback: 'Not set' };
+      }
+    });
+  });
+  metadataEditValues = signal<Record<string, any>>({});
+
   // Edit state
   editing = signal(false);
+  editCompositeTypeId = '';
   editIsActive = true;
   editTimestamp: Date = new Date();
   editFieldValues: Record<string, string> = {};
@@ -184,8 +226,13 @@ export class CompositeDetailComponent implements OnInit {
   startEdit(): void {
     const comp = this.composite();
     if (!comp) return;
+    this.editCompositeTypeId = comp.composite_type_id;
     this.editIsActive = comp.is_active;
     this.editTimestamp = new Date();
+    this.generalEditValues.set({
+      type: this.editCompositeTypeId,
+      isActive: this.editIsActive,
+    });
 
     this.editFieldValues = {};
     for (const field of this.typeFields()) {
@@ -198,12 +245,24 @@ export class CompositeDetailComponent implements OnInit {
         this.editFieldValues[field.metadata_id] = '';
       }
     }
+    this.metadataEditValues.set({ ...this.editFieldValues });
 
     this.editing.set(true);
   }
 
   cancelEdit(): void {
     this.editing.set(false);
+  }
+
+  onGeneralEditChange(e: { key: string; value: any }): void {
+    this.generalEditValues.update(v => ({ ...v, [e.key]: e.value }));
+    if (e.key === 'type') this.editCompositeTypeId = e.value;
+    else if (e.key === 'isActive') this.editIsActive = e.value;
+  }
+
+  onMetadataEditChange(e: { key: string; value: any }): void {
+    this.editFieldValues[e.key] = String(e.value);
+    this.metadataEditValues.update(v => ({ ...v, [e.key]: String(e.value) }));
   }
 
   submitEdit(): void {
@@ -214,6 +273,7 @@ export class CompositeDetailComponent implements OnInit {
 
     calls.push(this.compositeService.updateComposite(this.compositeId, {
       is_active: this.editIsActive,
+      composite_type_id: this.editCompositeTypeId,
     }));
 
     const changedEntries: { metadata_id: string; value: any }[] = [];

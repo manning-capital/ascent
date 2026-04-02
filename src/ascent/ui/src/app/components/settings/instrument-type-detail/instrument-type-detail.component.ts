@@ -12,16 +12,16 @@ import { Checkbox } from 'primeng/checkbox';
 import { TableModule } from 'primeng/table';
 import { Button } from 'primeng/button';
 import { InputText } from 'primeng/inputtext';
-import { Textarea } from 'primeng/textarea';
 import { Tag } from 'primeng/tag';
 import { Tabs, TabList, Tab } from 'primeng/tabs';
 import { Panel } from 'primeng/panel';
 import { SafeDeleteDialogComponent } from '../../shared/safe-delete-dialog.component';
+import { FieldPanelComponent, PanelField } from '../../shared/field-panel.component';
 
 @Component({
   selector: 'app-instrument-type-detail',
   standalone: true,
-  imports: [RouterLink, FormsModule, Select, Checkbox, TableModule, Button, InputText, Textarea, Tag, Skeleton, Tabs, TabList, Tab, Panel, SafeDeleteDialogComponent],
+  imports: [RouterLink, FormsModule, Select, Checkbox, TableModule, Button, InputText, Tag, Skeleton, Tabs, TabList, Tab, Panel, SafeDeleteDialogComponent, FieldPanelComponent],
   templateUrl: './instrument-type-detail.component.html',
 })
 export class InstrumentTypeDetailComponent implements OnInit {
@@ -34,6 +34,18 @@ export class InstrumentTypeDetailComponent implements OnInit {
   typeId = '';
   instrumentType = signal<InstrumentTypeItem | null>(null);
   activeTab = signal('Details');
+
+  generalFields = computed<PanelField[]>(() => {
+    const type = this.instrumentType();
+    if (!type) return [];
+    return [
+      { type: 'mono', key: 'name', label: 'Name', value: type.name },
+      { type: 'text', key: 'displayName', label: 'Display Name', value: type.display_name },
+      { type: 'text', key: 'description', label: 'Description', value: type.description },
+    ];
+  });
+
+  generalEditValues = signal<Record<string, any>>({});
 
   // Edit state
   editing = signal(false);
@@ -177,7 +189,19 @@ export class InstrumentTypeDetailComponent implements OnInit {
     this.editName = type.name;
     this.editDisplayName = type.display_name;
     this.editDescription = type.description ?? '';
+    this.generalEditValues.set({
+      name: this.editName,
+      displayName: this.editDisplayName,
+      description: this.editDescription,
+    });
     this.editing.set(true);
+  }
+
+  onGeneralEditChange(e: { key: string; value: any }): void {
+    this.generalEditValues.update(v => ({ ...v, [e.key]: e.value }));
+    if (e.key === 'name') this.editName = e.value;
+    else if (e.key === 'displayName') this.editDisplayName = e.value;
+    else if (e.key === 'description') this.editDescription = e.value;
   }
 
   cancelEdit(): void {

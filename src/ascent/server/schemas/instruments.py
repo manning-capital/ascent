@@ -34,6 +34,10 @@ class InstrumentCreate(BaseModel):
 
 
 class InstrumentUpdate(BaseModel):
+    instrument_type_id: uuid.UUID | None = None
+    provider_id: uuid.UUID | None = None
+    from_asset_id: uuid.UUID | None = None
+    to_asset_id: uuid.UUID | None = None
     is_active: bool | None = None
 
 

@@ -1,4 +1,4 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, effect, inject, OnInit, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -11,17 +11,16 @@ import { MetadataEntry, AssetTypeMetadataField, AssetTypeProviderAssetMetadataFi
 import { EntityUsage } from '../../../models/field.model';
 import { Skeleton } from 'primeng/skeleton';
 import { Select } from 'primeng/select';
-import { Checkbox } from 'primeng/checkbox';
 import { DatePicker } from 'primeng/datepicker';
 import { TableModule } from 'primeng/table';
 import { Tag } from 'primeng/tag';
 import { Button } from 'primeng/button';
 import { InputText } from 'primeng/inputtext';
-import { Textarea } from 'primeng/textarea';
 import { Tabs, TabList, Tab } from 'primeng/tabs';
 import { Panel } from 'primeng/panel';
 import { MetadataHistoryTableComponent } from '../../shared/metadata-history-table.component';
 import { SafeDeleteDialogComponent } from '../../shared/safe-delete-dialog.component';
+import { FieldPanelComponent, PanelField } from '../../shared/field-panel.component';
 
 @Component({
   selector: 'app-asset-detail',
@@ -31,18 +30,17 @@ import { SafeDeleteDialogComponent } from '../../shared/safe-delete-dialog.compo
     DatePipe,
     FormsModule,
     Select,
-    Checkbox,
     DatePicker,
     TableModule,
     Tag,
     Button,
     InputText,
-    Textarea,
     Skeleton,
     Tabs, TabList, Tab,
     Panel,
     MetadataHistoryTableComponent,
     SafeDeleteDialogComponent,
+    FieldPanelComponent,
   ],
   templateUrl: './asset-detail.component.html',
 })
@@ -55,6 +53,57 @@ export class AssetDetailComponent implements OnInit {
   private fieldService = inject(FieldService);
 
   assetId = '';
+
+  // Type lookup
+  assetType = computed(() => {
+    const asset = this.assetService.selectedAsset();
+    if (!asset) return null;
+    return this.assetService.assetTypes().find(t => t.id === asset.asset_type_id) ?? null;
+  });
+
+  // General panel fields
+  generalFields = computed<PanelField[]>(() => {
+    const asset = this.assetService.selectedAsset();
+    const aType = this.assetType();
+    if (!asset) return [];
+    return [
+      { type: 'mono', key: 'name', label: 'Name', value: asset.name },
+      { type: 'text', key: 'displayName', label: 'Display Name', value: asset.display_name },
+      { type: 'link', key: 'type', label: 'Type', value: aType?.display_name ?? aType?.name ?? null, route: aType ? ['/settings/asset-types', aType.id] : [], fallback: '-',
+        options: this.assetService.assetTypes().map(t => ({ label: t.display_name || t.name, value: t.id })) },
+      { type: 'active', key: 'isActive', label: 'Active', value: asset.is_active },
+      { type: 'date', key: 'createdAt', label: 'Created', value: asset.created_at },
+      { type: 'text', key: 'description', label: 'Description', value: asset.description },
+    ];
+  });
+  generalEditValues = signal<Record<string, any>>({});
+
+  // Metadata panel fields
+  metadataFields = computed<PanelField[]>(() => {
+    const fields = this.assetTypeFields();
+    const entries = this.metadataEntries();
+    return fields.map(field => {
+      const entry = entries.find(e => e.metadata_id === field.metadata_id);
+      const base = {
+        key: field.metadata_id,
+        label: field.metadata_display_name || field.metadata_name,
+        required: field.is_required,
+        inherited: field.is_inherited,
+        subtitle: entry?.timestamp ? `as of ${new Date(entry.timestamp).toLocaleDateString()}` : undefined,
+      };
+      const val = entry?.value ?? null;
+      switch (field.value_type) {
+        case 'boolean': return { ...base, type: 'boolean' as const, value: val, fallback: 'Not set' };
+        case 'integer': return { ...base, type: 'number' as const, value: val, step: 1, fallback: 'Not set' };
+        case 'float': return { ...base, type: 'number' as const, value: val, step: 0.01, fallback: 'Not set' };
+        case 'date': return { ...base, type: 'text' as const, value: val != null ? String(val) : null, fallback: 'Not set' };
+        case 'time': return { ...base, type: 'time' as const, value: val != null ? String(val) : null, fallback: 'Not set' };
+        case 'datetime': return { ...base, type: 'datetime' as const, value: val != null ? String(val) : null, fallback: 'Not set' };
+        default: return { ...base, type: 'text' as const, value: val != null ? String(val) : null, fallback: 'Not set' };
+      }
+    });
+  });
+  metadataEditValues = signal<Record<string, any>>({});
 
   // Tabs
   tabs = ['Details', 'History', 'Settings'];
@@ -70,6 +119,7 @@ export class AssetDetailComponent implements OnInit {
   editDisplayName = '';
   editName = '';
   editDescription = '';
+  editAssetTypeId = '';
   editIsActive = true;
   editTimestamp: Date = new Date();
   editFieldValues: Record<string, string> = {};
@@ -130,6 +180,7 @@ export class AssetDetailComponent implements OnInit {
 
       this.metadataLoading.set(true);
       this.assetService.loadAssetDetail(this.assetId);
+      this.assetService.loadAssetTypes();
       this.loadMetadata();
       this.loadAssetTypeFields();
     });
@@ -217,8 +268,16 @@ export class AssetDetailComponent implements OnInit {
     this.editDisplayName = asset.display_name;
     this.editName = asset.name;
     this.editDescription = asset.description ?? '';
+    this.editAssetTypeId = asset.asset_type_id;
     this.editIsActive = asset.is_active;
     this.editTimestamp = new Date();
+    this.generalEditValues.set({
+      name: this.editName,
+      displayName: this.editDisplayName,
+      type: this.editAssetTypeId,
+      isActive: this.editIsActive,
+      description: this.editDescription,
+    });
 
     // Pre-populate metadata field values from current entries
     this.editFieldValues = {};
@@ -232,6 +291,7 @@ export class AssetDetailComponent implements OnInit {
         this.editFieldValues[field.metadata_id] = '';
       }
     }
+    this.metadataEditValues.set({ ...this.editFieldValues });
 
     // Pre-populate provider-asset metadata field values
     this.editPAFieldValues = {};
@@ -248,6 +308,20 @@ export class AssetDetailComponent implements OnInit {
     }
 
     this.editing.set(true);
+  }
+
+  onGeneralEditChange(e: { key: string; value: any }): void {
+    this.generalEditValues.update(v => ({ ...v, [e.key]: e.value }));
+    if (e.key === 'name') this.editName = e.value;
+    else if (e.key === 'displayName') this.editDisplayName = e.value;
+    else if (e.key === 'type') this.editAssetTypeId = e.value;
+    else if (e.key === 'isActive') this.editIsActive = e.value;
+    else if (e.key === 'description') this.editDescription = e.value;
+  }
+
+  onMetadataEditChange(e: { key: string; value: any }): void {
+    this.editFieldValues[e.key] = String(e.value);
+    this.metadataEditValues.update(v => ({ ...v, [e.key]: String(e.value) }));
   }
 
   cancelEdit(): void {
@@ -267,6 +341,7 @@ export class AssetDetailComponent implements OnInit {
       display_name: this.editDisplayName.trim(),
       description: this.editDescription.trim() || null,
       is_active: this.editIsActive,
+      asset_type_id: this.editAssetTypeId,
     }));
 
     // 2. Collect changed asset metadata fields

@@ -23,6 +23,7 @@ class AssetUpdate(BaseModel):
     name: Identifier | None = None
     display_name: str | None = None
     description: str | None = None
+    asset_type_id: uuid.UUID | None = None
     is_active: bool | None = None
 
 

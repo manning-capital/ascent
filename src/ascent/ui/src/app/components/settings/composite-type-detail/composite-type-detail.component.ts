@@ -14,17 +14,16 @@ import { Checkbox } from 'primeng/checkbox';
 import { TableModule } from 'primeng/table';
 import { Button } from 'primeng/button';
 import { InputText } from 'primeng/inputtext';
-import { InputNumber } from 'primeng/inputnumber';
-import { Textarea } from 'primeng/textarea';
 import { Tag } from 'primeng/tag';
 import { Tabs, TabList, Tab } from 'primeng/tabs';
 import { Panel } from 'primeng/panel';
 import { SafeDeleteDialogComponent } from '../../shared/safe-delete-dialog.component';
+import { FieldPanelComponent, PanelField } from '../../shared/field-panel.component';
 
 @Component({
   selector: 'app-composite-type-detail',
   standalone: true,
-  imports: [RouterLink, FormsModule, Select, Checkbox, TableModule, Button, InputText, InputNumber, Textarea, Tag, Skeleton, Tabs, TabList, Tab, Panel, SafeDeleteDialogComponent],
+  imports: [RouterLink, FormsModule, Select, Checkbox, TableModule, Button, InputText, Tag, Skeleton, Tabs, TabList, Tab, Panel, SafeDeleteDialogComponent, FieldPanelComponent],
   templateUrl: './composite-type-detail.component.html',
 })
 export class CompositeTypeDetailComponent implements OnInit {
@@ -38,6 +37,20 @@ export class CompositeTypeDetailComponent implements OnInit {
   typeId = '';
   compositeType = signal<CompositeTypeItem | null>(null);
   activeTab = signal('Details');
+
+  generalFields = computed<PanelField[]>(() => {
+    const type = this.compositeType();
+    if (!type) return [];
+    return [
+      { type: 'mono', key: 'name', label: 'Name', value: type.name },
+      { type: 'text', key: 'displayName', label: 'Display Name', value: type.display_name },
+      { type: 'number', key: 'minMembers', label: 'Min Members', value: type.min_members, step: 1 },
+      { type: 'number', key: 'maxMembers', label: 'Max Members', value: type.max_members, step: 1 },
+      { type: 'text', key: 'description', label: 'Description', value: type.description },
+    ];
+  });
+
+  generalEditValues = signal<Record<string, any>>({});
 
   // Edit state
   editing = signal(false);
@@ -185,7 +198,23 @@ export class CompositeTypeDetailComponent implements OnInit {
     this.editDescription = type.description ?? '';
     this.editMinMembers = type.min_members;
     this.editMaxMembers = type.max_members;
+    this.generalEditValues.set({
+      name: this.editName,
+      displayName: this.editDisplayName,
+      minMembers: this.editMinMembers,
+      maxMembers: this.editMaxMembers,
+      description: this.editDescription,
+    });
     this.editing.set(true);
+  }
+
+  onGeneralEditChange(e: { key: string; value: any }): void {
+    this.generalEditValues.update(v => ({ ...v, [e.key]: e.value }));
+    if (e.key === 'name') this.editName = e.value;
+    else if (e.key === 'displayName') this.editDisplayName = e.value;
+    else if (e.key === 'minMembers') this.editMinMembers = e.value;
+    else if (e.key === 'maxMembers') this.editMaxMembers = e.value;
+    else if (e.key === 'description') this.editDescription = e.value;
   }
 
   cancelEdit(): void {

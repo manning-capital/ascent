@@ -26,6 +26,7 @@ class ProviderUpdate(BaseModel):
     name: Identifier | None = None
     display_name: str | None = None
     description: str | None = None
+    provider_type_id: uuid.UUID | None = None
     provider_external_code: str | None = None
     url: str | None = None
     image_url: str | None = None

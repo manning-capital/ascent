@@ -31,25 +31,10 @@
     <!-- Content -->
     <div class="flex-1 overflow-y-auto">
       <div class="max-w-3xl mx-auto p-6 space-y-6">
-        <!-- Info Card -->
-        <p-card header="Info">
-          <div class="space-y-2 text-sm">
-            <div class="flex justify-between"><span class="text-surface-500">Name</span><span>{{ exchange.name }}</span></div>
-            <div class="flex justify-between"><span class="text-surface-500">Type</span><span>{{ exchange.exchange_type_name ?? '--' }}</span></div>
-            <div class="flex justify-between"><span class="text-surface-500">Provider</span><span>{{ exchange.provider_name ?? 'None' }}</span></div>
-            <div class="flex justify-between"><span class="text-surface-500">Active</span><span>{{ exchange.is_active ? 'Yes' : 'No' }}</span></div>
-            @if (exchange.created_at) {
-              <div class="flex justify-between"><span class="text-surface-500">Created</span><span>{{ exchange.created_at | date:'mediumDate' }}</span></div>
-            }
-          </div>
-        </p-card>
-
-        <!-- Description -->
-        @if (exchange.description) {
-          <p-card header="Description">
-            <p class="text-sm text-surface-500">{{ exchange.description }}</p>
-          </p-card>
-        }
+        <!-- General -->
+        <app-field-panel
+          header="General"
+          [fields]="generalFields()"/>
 
         <!-- Implementation -->
         @if (exchange.implementation_class) {

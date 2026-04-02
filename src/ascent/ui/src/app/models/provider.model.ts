@@ -36,6 +36,7 @@ export interface ProviderUpdate {
   name?: string;
   display_name?: string;
   description?: string | null;
+  provider_type_id?: string;
   provider_external_code?: string | null;
   url?: string | null;
   image_url?: string | null;

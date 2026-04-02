@@ -58,7 +58,7 @@ export class CompositeService {
     return this.api.post<Composite>('/composites', data);
   }
 
-  updateComposite(id: string, data: { is_active?: boolean }): Observable<Composite> {
+  updateComposite(id: string, data: { is_active?: boolean; composite_type_id?: string }): Observable<Composite> {
     return this.api.put<Composite>(`/composites/${id}`, data);
   }
 

@@ -29,6 +29,7 @@ class CompositeCreate(BaseModel):
 
 
 class CompositeUpdate(BaseModel):
+    composite_type_id: uuid.UUID | None = None
     is_active: bool | None = None
 
 

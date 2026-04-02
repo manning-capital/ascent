@@ -1,6 +1,5 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { forkJoin } from 'rxjs';
 import { AssetService } from '../../../services/asset.service';
@@ -14,36 +13,31 @@ import {
 import { EntityUsage } from '../../../models/field.model';
 import { Tabs, TabList, Tab } from 'primeng/tabs';
 import { Skeleton } from 'primeng/skeleton';
-import { Select } from 'primeng/select';
-import { Checkbox } from 'primeng/checkbox';
 import { DatePicker } from 'primeng/datepicker';
 import { TableModule } from 'primeng/table';
 import { Tag } from 'primeng/tag';
 import { Button } from 'primeng/button';
-import { InputText } from 'primeng/inputtext';
 import { Panel } from 'primeng/panel';
 import { MetadataHistoryTableComponent } from '../../shared/metadata-history-table.component';
 import { SafeDeleteDialogComponent } from '../../shared/safe-delete-dialog.component';
+import { FieldPanelComponent, PanelField } from '../../shared/field-panel.component';
 
 @Component({
   selector: 'app-instrument-detail',
   standalone: true,
   imports: [
     RouterLink,
-    DatePipe,
     FormsModule,
     Tabs, TabList, Tab,
-    Select,
-    Checkbox,
     DatePicker,
     TableModule,
     Tag,
     Button,
-    InputText,
     Skeleton,
     Panel,
     MetadataHistoryTableComponent,
     SafeDeleteDialogComponent,
+    FieldPanelComponent,
   ],
   templateUrl: './instrument-detail.component.html',
 })
@@ -68,8 +62,82 @@ export class InstrumentDetailComponent implements OnInit {
   metadataEntries = signal<MetadataEntry[]>([]);
   metadataLoading = signal(true);
 
+  // Resolved entity lookups
+  instrumentProvider = computed(() => {
+    const inst = this.instrument();
+    if (!inst) return null;
+    return this.providerService.providers().find(p => p.id === inst.provider_id) ?? null;
+  });
+  fromAsset = computed(() => {
+    const inst = this.instrument();
+    if (!inst) return null;
+    return this.assetService.assets().find(a => a.id === inst.from_asset_id) ?? null;
+  });
+  toAsset = computed(() => {
+    const inst = this.instrument();
+    if (!inst) return null;
+    return this.assetService.assets().find(a => a.id === inst.to_asset_id) ?? null;
+  });
+
+  // General panel fields
+  generalFields = computed<PanelField[]>(() => {
+    const inst = this.instrument();
+    const iType = this.instrumentType();
+    const prov = this.instrumentProvider();
+    const fAsset = this.fromAsset();
+    const tAsset = this.toAsset();
+    if (!inst) return [];
+    return [
+      { type: 'mono', key: 'name', label: 'Name', value: inst.name },
+      { type: 'text', key: 'displayName', label: 'Display Name', value: inst.display_name },
+      { type: 'link', key: 'type', label: 'Type', value: iType?.display_name ?? iType?.name ?? null, route: iType ? ['/settings/instrument-types', iType.id] : [], fallback: 'Unknown',
+        options: this.assetService.instrumentTypes().map(t => ({ label: t.display_name || t.name, value: t.id })) },
+      { type: 'link', key: 'provider', label: 'Provider', value: prov?.display_name ?? prov?.name ?? inst.provider_name, route: prov ? ['/settings/providers', prov.id] : [], fallback: '-',
+        options: this.providerService.providers().map(p => ({ label: p.display_name || p.name, value: p.id })) },
+      { type: 'link', key: 'fromAsset', label: 'From Asset', value: fAsset?.display_name ?? fAsset?.name ?? inst.from_asset_name, route: fAsset ? ['/settings/assets', fAsset.id] : [], fallback: '-',
+        options: this.assetService.assets().map(a => ({ label: a.display_name || a.name, value: a.id })) },
+      { type: 'link', key: 'toAsset', label: 'To Asset', value: tAsset?.display_name ?? tAsset?.name ?? inst.to_asset_name, route: tAsset ? ['/settings/assets', tAsset.id] : [], fallback: '-',
+        options: this.assetService.assets().map(a => ({ label: a.display_name || a.name, value: a.id })) },
+      { type: 'active', key: 'isActive', label: 'Active', value: inst.is_active },
+      { type: 'date', key: 'createdAt', label: 'Created', value: inst.created_at },
+      { type: 'text', key: 'description', label: 'Description', value: inst.description },
+    ];
+  });
+  generalEditValues = signal<Record<string, any>>({});
+
+  // Metadata panel fields
+  metadataFields = computed<PanelField[]>(() => {
+    const fields = this.typeFields();
+    const entries = this.metadataEntries();
+    return fields.map(field => {
+      const entry = entries.find(e => e.metadata_id === field.metadata_id);
+      const base = {
+        key: field.metadata_id,
+        label: field.metadata_display_name || field.metadata_name,
+        required: field.is_required,
+        inherited: field.is_inherited,
+        subtitle: entry?.timestamp ? `as of ${new Date(entry.timestamp).toLocaleDateString()}` : undefined,
+      };
+      const val = entry?.value ?? null;
+      switch (field.value_type) {
+        case 'boolean': return { ...base, type: 'boolean' as const, value: val, fallback: 'Not set' };
+        case 'integer': return { ...base, type: 'number' as const, value: val, step: 1, fallback: 'Not set' };
+        case 'float': return { ...base, type: 'number' as const, value: val, step: 0.01, fallback: 'Not set' };
+        case 'date': return { ...base, type: 'text' as const, value: val != null ? String(val) : null, fallback: 'Not set' };
+        case 'time': return { ...base, type: 'time' as const, value: val != null ? String(val) : null, fallback: 'Not set' };
+        case 'datetime': return { ...base, type: 'datetime' as const, value: val != null ? String(val) : null, fallback: 'Not set' };
+        default: return { ...base, type: 'text' as const, value: val != null ? String(val) : null, fallback: 'Not set' };
+      }
+    });
+  });
+  metadataEditValues = signal<Record<string, any>>({});
+
   // Edit state
   editing = signal(false);
+  editInstrumentTypeId = '';
+  editProviderId = '';
+  editFromAssetId = '';
+  editToAssetId = '';
   editIsActive = true;
   editTimestamp: Date = new Date();
   editFieldValues: Record<string, string> = {};
@@ -177,6 +245,10 @@ export class InstrumentDetailComponent implements OnInit {
   startEdit(): void {
     const inst = this.instrument();
     if (!inst) return;
+    this.editInstrumentTypeId = inst.instrument_type_id;
+    this.editProviderId = inst.provider_id;
+    this.editFromAssetId = inst.from_asset_id;
+    this.editToAssetId = inst.to_asset_id;
     this.editIsActive = inst.is_active;
     this.editTimestamp = new Date();
 
@@ -192,7 +264,30 @@ export class InstrumentDetailComponent implements OnInit {
       }
     }
 
+    this.generalEditValues.set({
+      type: this.editInstrumentTypeId,
+      provider: this.editProviderId,
+      fromAsset: this.editFromAssetId,
+      toAsset: this.editToAssetId,
+      isActive: this.editIsActive,
+    });
+    this.metadataEditValues.set({ ...this.editFieldValues });
+
     this.editing.set(true);
+  }
+
+  onGeneralEditChange(e: { key: string; value: any }): void {
+    this.generalEditValues.update(v => ({ ...v, [e.key]: e.value }));
+    if (e.key === 'type') this.editInstrumentTypeId = e.value;
+    else if (e.key === 'provider') this.editProviderId = e.value;
+    else if (e.key === 'fromAsset') this.editFromAssetId = e.value;
+    else if (e.key === 'toAsset') this.editToAssetId = e.value;
+    else if (e.key === 'isActive') this.editIsActive = e.value;
+  }
+
+  onMetadataEditChange(e: { key: string; value: any }): void {
+    this.editFieldValues[e.key] = String(e.value);
+    this.metadataEditValues.update(v => ({ ...v, [e.key]: String(e.value) }));
   }
 
   cancelEdit(): void {
@@ -207,6 +302,10 @@ export class InstrumentDetailComponent implements OnInit {
 
     calls.push(this.assetService.updateInstrument(this.instrumentId, {
       is_active: this.editIsActive,
+      instrument_type_id: this.editInstrumentTypeId,
+      provider_id: this.editProviderId,
+      from_asset_id: this.editFromAssetId,
+      to_asset_id: this.editToAssetId,
     }));
 
     const changedEntries: { metadata_id: string; value: any }[] = [];

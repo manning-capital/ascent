@@ -1,22 +1,21 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { FieldService } from '../../../services/field.service';
 import { ToastService } from '../../../services/toast.service';
 import { MetadataTypeItem, EntityUsage } from '../../../models/field.model';
 import { Button } from 'primeng/button';
-import { InputText } from 'primeng/inputtext';
-import { Select } from 'primeng/select';
 import { Tag } from 'primeng/tag';
 import { Skeleton } from 'primeng/skeleton';
 import { Tabs, TabList, Tab } from 'primeng/tabs';
 import { Panel } from 'primeng/panel';
 import { SafeDeleteDialogComponent } from '../../shared/safe-delete-dialog.component';
+import { FieldPanelComponent, PanelField } from '../../shared/field-panel.component';
 
 @Component({
   selector: 'app-metadata-type-detail',
   standalone: true,
-  imports: [RouterLink, FormsModule, Button, InputText, Select, Tag, Skeleton, Tabs, TabList, Tab, Panel, SafeDeleteDialogComponent],
+  imports: [RouterLink, FormsModule, Button, Tag, Skeleton, Tabs, TabList, Tab, Panel, SafeDeleteDialogComponent, FieldPanelComponent],
   templateUrl: './metadata-type-detail.component.html',
 })
 export class MetadataTypeDetailComponent implements OnInit {
@@ -29,6 +28,30 @@ export class MetadataTypeDetailComponent implements OnInit {
   metadataType = signal<MetadataTypeItem | null>(null);
   editing = signal(false);
   activeTab = signal('0');
+
+  valueTypeOptions = [
+    { label: 'String', value: 'string' },
+    { label: 'Integer', value: 'integer' },
+    { label: 'Float', value: 'float' },
+    { label: 'Boolean', value: 'boolean' },
+    { label: 'Date', value: 'date' },
+    { label: 'Time', value: 'time' },
+    { label: 'Datetime', value: 'datetime' },
+  ];
+
+  generalFields = computed<PanelField[]>(() => {
+    const type = this.metadataType();
+    if (!type) return [];
+    return [
+      { type: 'mono', key: 'name', label: 'Name', value: type.name },
+      { type: 'text', key: 'displayName', label: 'Display Name', value: type.display_name },
+      { type: 'tag', key: 'valueType', label: 'Value Type', value: this.valueTypeLabel(type.value_type), severity: 'secondary', options: this.valueTypeOptions },
+      { type: 'active', key: 'isActive', label: 'Active', value: type.is_active },
+      { type: 'text', key: 'description', label: 'Description', value: type.description },
+    ];
+  });
+
+  generalEditValues = signal<Record<string, any>>({});
 
   editName = '';
   editDisplayName = '';
@@ -68,8 +91,25 @@ export class MetadataTypeDetailComponent implements OnInit {
 
   startEdit(): void {
     const item = this.metadataType();
-    if (item) this.resetEditForm(item);
+    if (!item) return;
+    this.resetEditForm(item);
+    this.generalEditValues.set({
+      name: this.editName,
+      displayName: this.editDisplayName,
+      valueType: this.editValueType,
+      isActive: this.editIsActive,
+      description: this.editDescription,
+    });
     this.editing.set(true);
+  }
+
+  onGeneralEditChange(e: { key: string; value: any }): void {
+    this.generalEditValues.update(v => ({ ...v, [e.key]: e.value }));
+    if (e.key === 'name') this.editName = e.value;
+    else if (e.key === 'displayName') this.editDisplayName = e.value;
+    else if (e.key === 'valueType') this.editValueType = e.value;
+    else if (e.key === 'isActive') this.editIsActive = e.value;
+    else if (e.key === 'description') this.editDescription = e.value;
   }
 
   cancelEdit(): void {

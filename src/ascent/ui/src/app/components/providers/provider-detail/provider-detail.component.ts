@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -9,18 +9,15 @@ import { ToastService } from '../../../services/toast.service';
 import { MetadataEntry, ProviderTypeMetadataField, MetadataHistoryGrid, BulkHistoryUpdate } from '../../../models/asset.model';
 import { EntityUsage } from '../../../models/field.model';
 import { Skeleton } from 'primeng/skeleton';
-import { Select } from 'primeng/select';
-import { Checkbox } from 'primeng/checkbox';
 import { DatePicker } from 'primeng/datepicker';
 import { TableModule } from 'primeng/table';
 import { Tag } from 'primeng/tag';
 import { Panel } from 'primeng/panel';
 import { Button } from 'primeng/button';
-import { InputText } from 'primeng/inputtext';
-import { Textarea } from 'primeng/textarea';
 import { Tabs, TabList, Tab } from 'primeng/tabs';
 import { MetadataHistoryTableComponent } from '../../shared/metadata-history-table.component';
 import { SafeDeleteDialogComponent } from '../../shared/safe-delete-dialog.component';
+import { FieldPanelComponent, PanelField } from '../../shared/field-panel.component';
 
 @Component({
   selector: 'app-provider-detail',
@@ -29,19 +26,16 @@ import { SafeDeleteDialogComponent } from '../../shared/safe-delete-dialog.compo
     RouterLink,
     DatePipe,
     FormsModule,
-    Select,
-    Checkbox,
     DatePicker,
     TableModule,
     Tag,
     Panel,
     Button,
-    InputText,
-    Textarea,
     Skeleton,
     Tabs, TabList, Tab,
     MetadataHistoryTableComponent,
     SafeDeleteDialogComponent,
+    FieldPanelComponent,
   ],
   templateUrl: './provider-detail.component.html',
 })
@@ -53,6 +47,59 @@ export class ProviderDetailComponent implements OnInit {
   private fieldService = inject(FieldService);
 
   providerId = '';
+
+  // Type lookup
+  providerType = computed(() => {
+    const provider = this.providerService.selectedProvider();
+    if (!provider) return null;
+    return this.providerService.providerTypes().find(t => t.id === provider.provider_type_id) ?? null;
+  });
+
+  // General panel fields
+  generalFields = computed<PanelField[]>(() => {
+    const provider = this.providerService.selectedProvider();
+    const pType = this.providerType();
+    if (!provider) return [];
+    return [
+      { type: 'mono', key: 'name', label: 'Name', value: provider.name },
+      { type: 'text', key: 'displayName', label: 'Display Name', value: provider.display_name },
+      { type: 'link', key: 'type', label: 'Type', value: pType?.display_name ?? pType?.name ?? null, route: pType ? ['/settings/provider-types', pType.id] : [], fallback: '-',
+        options: this.providerService.providerTypes().map(t => ({ label: t.display_name || t.name, value: t.id })) },
+      { type: 'mono', key: 'externalCode', label: 'External Code', value: provider.provider_external_code, fallback: '-' },
+      { type: 'external-link', key: 'url', label: 'URL', value: provider.url, href: provider.url, fallback: '-' },
+      { type: 'active', key: 'isActive', label: 'Active', value: provider.is_active },
+      { type: 'date', key: 'createdAt', label: 'Created', value: provider.created_at },
+      { type: 'text', key: 'description', label: 'Description', value: provider.description },
+    ];
+  });
+  generalEditValues = signal<Record<string, any>>({});
+
+  // Metadata panel fields
+  metadataFields = computed<PanelField[]>(() => {
+    const fields = this.providerTypeFields();
+    const entries = this.metadataEntries();
+    return fields.map(field => {
+      const entry = entries.find(e => e.metadata_id === field.metadata_id);
+      const base = {
+        key: field.metadata_id,
+        label: field.metadata_display_name || field.metadata_name,
+        required: field.is_required,
+        inherited: field.is_inherited,
+        subtitle: entry?.timestamp ? `as of ${new Date(entry.timestamp).toLocaleDateString()}` : undefined,
+      };
+      const val = entry?.value ?? null;
+      switch (field.value_type) {
+        case 'boolean': return { ...base, type: 'boolean' as const, value: val, fallback: 'Not set' };
+        case 'integer': return { ...base, type: 'number' as const, value: val, step: 1, fallback: 'Not set' };
+        case 'float': return { ...base, type: 'number' as const, value: val, step: 0.01, fallback: 'Not set' };
+        case 'date': return { ...base, type: 'text' as const, value: val != null ? String(val) : null, fallback: 'Not set' };
+        case 'time': return { ...base, type: 'time' as const, value: val != null ? String(val) : null, fallback: 'Not set' };
+        case 'datetime': return { ...base, type: 'datetime' as const, value: val != null ? String(val) : null, fallback: 'Not set' };
+        default: return { ...base, type: 'text' as const, value: val != null ? String(val) : null, fallback: 'Not set' };
+      }
+    });
+  });
+  metadataEditValues = signal<Record<string, any>>({});
 
   // Tabs
   tabs = ['Details', 'History', 'Settings'];
@@ -66,7 +113,9 @@ export class ProviderDetailComponent implements OnInit {
   // Edit state
   editing = signal(false);
   editName = '';
+  editDisplayName = '';
   editDescription = '';
+  editProviderTypeId = '';
   editExternalCode = '';
   editUrl = '';
   editIsActive = true;
@@ -102,6 +151,7 @@ export class ProviderDetailComponent implements OnInit {
       }
 
       this.providerService.loadProviderDetail(this.providerId);
+      this.providerService.loadProviderTypes();
       this.loadMetadata();
       this.loadProviderTypeFields();
     });
@@ -145,11 +195,23 @@ export class ProviderDetailComponent implements OnInit {
     const provider = this.providerService.selectedProvider();
     if (!provider) return;
     this.editName = provider.name;
+    this.editDisplayName = provider.display_name;
     this.editDescription = provider.description ?? '';
+    this.editProviderTypeId = provider.provider_type_id;
     this.editExternalCode = provider.provider_external_code ?? '';
     this.editUrl = provider.url ?? '';
     this.editIsActive = provider.is_active;
     this.editTimestamp = new Date();
+
+    this.generalEditValues.set({
+      name: this.editName,
+      displayName: this.editDisplayName,
+      type: this.editProviderTypeId,
+      externalCode: this.editExternalCode,
+      url: this.editUrl,
+      isActive: this.editIsActive,
+      description: this.editDescription,
+    });
 
     this.editFieldValues = {};
     for (const field of this.providerTypeFields()) {
@@ -162,7 +224,25 @@ export class ProviderDetailComponent implements OnInit {
         this.editFieldValues[field.metadata_id] = '';
       }
     }
+    this.metadataEditValues.set({ ...this.editFieldValues });
+
     this.editing.set(true);
+  }
+
+  onGeneralEditChange(e: { key: string; value: any }): void {
+    this.generalEditValues.update(v => ({ ...v, [e.key]: e.value }));
+    if (e.key === 'name') this.editName = e.value;
+    else if (e.key === 'displayName') this.editDisplayName = e.value;
+    else if (e.key === 'type') this.editProviderTypeId = e.value;
+    else if (e.key === 'externalCode') this.editExternalCode = e.value;
+    else if (e.key === 'url') this.editUrl = e.value;
+    else if (e.key === 'isActive') this.editIsActive = e.value;
+    else if (e.key === 'description') this.editDescription = e.value;
+  }
+
+  onMetadataEditChange(e: { key: string; value: any }): void {
+    this.editFieldValues[e.key] = String(e.value);
+    this.metadataEditValues.update(v => ({ ...v, [e.key]: String(e.value) }));
   }
 
   cancelEdit(): void {
@@ -174,7 +254,9 @@ export class ProviderDetailComponent implements OnInit {
 
     const baseUpdate = this.providerService.updateProvider(this.providerId, {
       name: this.editName.trim(),
+      display_name: this.editDisplayName.trim(),
       description: this.editDescription.trim() || null,
+      provider_type_id: this.editProviderTypeId,
       provider_external_code: this.editExternalCode.trim() || null,
       url: this.editUrl.trim() || null,
       is_active: this.editIsActive,

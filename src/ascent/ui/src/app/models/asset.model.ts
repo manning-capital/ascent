@@ -24,6 +24,7 @@ export interface AssetUpdate {
   display_name?: string;
   description?: string | null;
   is_active?: boolean;
+  asset_type_id?: string;
 }
 
 export interface ProviderAssetLink {
