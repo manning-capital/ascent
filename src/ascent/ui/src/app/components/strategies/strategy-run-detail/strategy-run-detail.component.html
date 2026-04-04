@@ -1,0 +1,62 @@
+<div class="flex flex-col h-[calc(100vh-3.5rem)]">
+  <!-- Header -->
+  <div class="flex items-center gap-3 px-4 py-2 border-b border-surface shrink-0 bg-emphasis">
+    <a [routerLink]="['/strategies', strategyId]" [queryParams]="{tab: 'Runs'}" class="text-sm text-primary hover:underline">&larr; Runs</a>
+    <span class="text-surface-300">|</span>
+    @if (loading()) {
+      <p-skeleton width="8rem" height="1.5rem"/>
+    } @else {
+      <h1 class="text-lg font-bold truncate">Run #{{ run()?.id }}</h1>
+      @if (run(); as r) {
+        <p-tag [value]="r.status" [severity]="statusSeverity(r.status)" [rounded]="true"/>
+      }
+    }
+  </div>
+
+  <!-- Tabs -->
+  <p-tabs [value]="activeTab()" (valueChange)="activeTab.set($any($event))">
+    <p-tablist>
+      <p-tab value="Overview">Overview</p-tab>
+      <p-tab value="DAG">DAG</p-tab>
+    </p-tablist>
+  </p-tabs>
+
+  <!-- Content -->
+  <div class="flex-1 min-h-0 overflow-y-auto">
+    @if (activeTab() === 'Overview') {
+      <div class="p-6 space-y-5 max-w-4xl mx-auto">
+        @if (loading()) {
+          <p-skeleton width="100%" height="10rem"/>
+          <p-skeleton width="100%" height="12rem"/>
+        } @else if (run(); as r) {
+          <app-run-detail-card [run]="runDetailItem()!" [extraFields]="extraFields"/>
+
+          <!-- Feed Runs Table -->
+          <p-panel header="Feed Runs">
+            <p-table [value]="r.feed_runs" [tableStyle]="{'min-width': '30rem'}">
+              <ng-template #header>
+                <tr>
+                  <th>Feed</th>
+                  <th>Status</th>
+                  <th>Trigger</th>
+                </tr>
+              </ng-template>
+              <ng-template #body let-fr>
+                <tr>
+                  <td class="font-mono text-xs">{{ fr.feed_id }}</td>
+                  <td><p-tag [value]="fr.status" [severity]="statusSeverity(fr.status)" [rounded]="true"/></td>
+                  <td>{{ fr.is_trigger ? 'Yes' : '-' }}</td>
+                </tr>
+              </ng-template>
+            </p-table>
+          </p-panel>
+        }
+      </div>
+    }
+    @if (activeTab() === 'DAG') {
+      <div class="flex-1 min-h-0 overflow-hidden h-full">
+        <app-feed-dag [dag]="feedDag()" [strategyName]="strategyName()" [feedRunStatuses]="feedRunStatuses()"/>
+      </div>
+    }
+  </div>
+</div>

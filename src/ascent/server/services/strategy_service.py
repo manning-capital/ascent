@@ -613,3 +613,49 @@ def get_strategy_runs(
             )
         )
     return items, total
+
+
+def get_strategy_run(db: Session, strategy_id: uuid.UUID, run_id: uuid.UUID) -> StrategyRunListItem:
+    run = (
+        db.execute(
+            select(StrategyRun)
+            .where(StrategyRun.id == run_id, StrategyRun.strategy_id == strategy_id)
+            .options(joinedload(StrategyRun.feed_run_links))
+        )
+        .unique()
+        .scalars()
+        .first()
+    )
+    if not run:
+        raise NotFoundError("Strategy run not found")
+
+    feed_run_ids = {link.feed_run_id for link in run.feed_run_links}
+    feed_run_status_map: dict[int, str] = {}
+    if feed_run_ids:
+        feed_runs = db.execute(select(FeedRun).where(FeedRun.id.in_(feed_run_ids))).scalars().all()
+        feed_run_status_map = {fr.id: fr.status for fr in feed_runs}
+
+    feed_run_items = []
+    trigger_feed_id = None
+    for link in run.feed_run_links:
+        feed_run_items.append(
+            StrategyRunFeedRunItem(
+                feed_id=link.feed_id,
+                feed_run_id=link.feed_run_id,
+                is_trigger=link.is_trigger,
+                status=feed_run_status_map.get(link.feed_run_id, "UNKNOWN"),
+            )
+        )
+        if link.is_trigger:
+            trigger_feed_id = link.feed_id
+
+    return StrategyRunListItem(
+        id=run.id,
+        strategy_id=run.strategy_id,
+        status=run.status,
+        started_at=run.started_at,
+        completed_at=run.completed_at,
+        error_message=run.error_message,
+        feed_runs=feed_run_items,
+        trigger_feed_id=trigger_feed_id,
+    )

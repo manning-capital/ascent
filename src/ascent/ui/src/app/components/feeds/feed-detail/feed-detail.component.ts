@@ -8,14 +8,11 @@ import { UniverseItem } from '../../../models/asset.model';
 import { UniversePanelComponent } from '../../shared/universe-panel.component';
 import { Tabs, TabList, Tab } from 'primeng/tabs';
 import { SchemaFormComponent } from '../../shared/schema-form.component';
-import { Splitter } from 'primeng/splitter';
-import { PartitionDataTableComponent } from '../../shared/partition-data-table.component';
 import { TableModule } from 'primeng/table';
 import { Tag } from 'primeng/tag';
 import { Paginator } from 'primeng/paginator';
 import { Card } from 'primeng/card';
 import { Skeleton } from 'primeng/skeleton';
-import { EmptyStateComponent } from '../../shared/empty-state.component';
 
 @Component({
   selector: 'app-feed-detail',
@@ -26,14 +23,11 @@ import { EmptyStateComponent } from '../../shared/empty-state.component';
     JsonPipe,
     Tabs, TabList, Tab,
     SchemaFormComponent,
-    Splitter,
-    PartitionDataTableComponent,
     TableModule,
     Tag,
     Paginator,
     Card,
     Skeleton,
-    EmptyStateComponent,
     UniversePanelComponent,
   ],
   templateUrl: './feed-detail.component.html',
@@ -52,19 +46,9 @@ export class FeedDetailComponent implements OnInit {
   totalRuns = signal(0);
   totalRunPages = signal(0);
   runPage = signal(1);
-  selectedRun = signal<FeedRunListItem | null>(null);
   runsLoading = signal(false);
   skeletonRows = Array.from({ length: 8 }, (_, i) => i);
 
-  // Partition data state
-  partitionData = signal<Record<string, any>[]>([]);
-  partitionDataTotal = signal(0);
-  partitionDataPage = signal(1);
-  partitionDataPageSize = signal(25);
-  partitionDataTotalPages = signal(0);
-  partitionDataLoading = signal(false);
-
-  initialRunId: string | null = null;
   feedId = '';
 
   // Universe state
@@ -88,13 +72,6 @@ export class FeedDetailComponent implements OnInit {
       this.totalRuns.set(0);
       this.totalRunPages.set(0);
       this.runPage.set(1);
-      this.selectedRun.set(null);
-      this.partitionData.set([]);
-      this.partitionDataTotal.set(0);
-      this.partitionDataPage.set(1);
-      this.partitionDataTotalPages.set(0);
-      this.partitionDataLoading.set(false);
-      this.initialRunId = this.route.snapshot.queryParamMap.get('run');
 
       this.feedService.loadFeedDetail(this.feedId);
       this.loadRuns();
@@ -124,61 +101,9 @@ export class FeedDetailComponent implements OnInit {
         this.totalRuns.set(res.total);
         this.totalRunPages.set(res.total_pages);
         this.runsLoading.set(false);
-        if (this.initialRunId && !this.selectedRun()) {
-          const match = res.items.find(r => r.id === this.initialRunId);
-          if (match) this.selectRun(match);
-        }
       },
       error: () => this.runsLoading.set(false),
     });
-  }
-
-  selectRun(run: FeedRunListItem): void {
-    this.selectedRun.set(run);
-    this.updateQueryParams({ run: run.id });
-    // Load partition data if run has a partition
-    if (run.partition_id) {
-      this.partitionDataPage.set(1);
-      this.loadPartitionData(run.partition_id);
-    } else {
-      this.partitionData.set([]);
-      this.partitionDataTotal.set(0);
-      this.partitionDataTotalPages.set(0);
-    }
-  }
-
-  loadPartitionData(partitionId: string): void {
-    this.partitionDataLoading.set(true);
-    this.feedService.loadPartitionData(this.feedId, partitionId, this.partitionDataPage(), this.partitionDataPageSize()).subscribe({
-      next: (res) => {
-        this.partitionData.set(res.items);
-        this.partitionDataTotal.set(res.total);
-        this.partitionDataTotalPages.set(res.total_pages);
-        this.partitionDataLoading.set(false);
-        // Update records_fetched to match the pivoted row count the user sees
-        const run = this.selectedRun();
-        if (run) {
-          this.selectedRun.set({ ...run, records_fetched: res.total });
-        }
-      },
-      error: () => {
-        this.partitionData.set([]);
-        this.partitionDataLoading.set(false);
-      },
-    });
-  }
-
-  onPartitionDataPageChange(page: number): void {
-    this.partitionDataPage.set(page);
-    const run = this.selectedRun();
-    if (run?.partition_id) {
-      this.loadPartitionData(run.partition_id);
-    }
-  }
-
-  onPartitionDataPageSizeChange(size: number): void {
-    this.partitionDataPageSize.set(size);
-    this.partitionDataPage.set(1);
   }
 
   onRunPageChange(page: number): void {

@@ -173,6 +173,11 @@ def remove_strategy_composite_universe_item(
     universe_service.remove_strategy_composite_universe_item(db, strategy_id, composite_id)
 
 
+@router.get("/{strategy_id}/runs/{run_id}", response_model=StrategyRunListItem)
+def get_strategy_run(strategy_id: uuid.UUID, run_id: uuid.UUID, db: Session = Depends(get_db)):
+    return strategy_service.get_strategy_run(db, strategy_id, run_id)
+
+
 @router.get("/{strategy_id}/runs", response_model=PaginatedResponse[StrategyRunListItem])
 def list_strategy_runs(
     strategy_id: uuid.UUID,

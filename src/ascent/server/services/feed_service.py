@@ -180,6 +180,20 @@ def get_feed_runs(
     return items, total
 
 
+def get_feed_run(db: Session, feed_id: uuid.UUID, run_id: uuid.UUID) -> FeedRunListItem:
+    run = (
+        db.execute(select(FeedRun).where(FeedRun.id == run_id, FeedRun.feed_id == feed_id))
+        .scalars()
+        .first()
+    )
+    if not run:
+        raise NotFoundError("Feed run not found")
+    item = FeedRunListItem.model_validate(run)
+    if run.partition_id is not None and run.partition is not None:
+        item.partition_key = run.partition.partition_key
+    return item
+
+
 def get_feed_strategy_feeds(db: Session, feed_id: uuid.UUID) -> list[StrategyFeedItem]:
     sfs = db.execute(select(StrategyFeed).where(StrategyFeed.feed_id == feed_id)).scalars().all()
     return [StrategyFeedItem.model_validate(sf) for sf in sfs]

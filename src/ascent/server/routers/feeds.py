@@ -64,6 +64,11 @@ def get_feed_parameter_schema(feed_id: uuid.UUID, db: Session = Depends(get_db))
     return feed.parameter_schema or {}
 
 
+@router.get("/{feed_id}/runs/{run_id}", response_model=FeedRunListItem)
+def get_feed_run(feed_id: uuid.UUID, run_id: uuid.UUID, db: Session = Depends(get_db)):
+    return feed_service.get_feed_run(db, feed_id, run_id)
+
+
 @router.get("/{feed_id}/runs", response_model=PaginatedResponse[FeedRunListItem])
 def list_feed_runs(
     feed_id: uuid.UUID,

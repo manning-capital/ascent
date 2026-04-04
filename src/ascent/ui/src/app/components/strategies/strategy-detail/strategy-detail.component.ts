@@ -12,9 +12,6 @@ import { UniversePanelComponent } from '../../shared/universe-panel.component';
 import { Tabs, TabList, Tab } from 'primeng/tabs';
 import { SchemaFormComponent } from '../../shared/schema-form.component';
 import { TradeTableComponent } from '../../trade-table/trade-table.component';
-import { FeedDagComponent, FeedRunStatusOverride } from './feed-dag.component';
-import { Splitter } from 'primeng/splitter';
-import { RunDetailCardComponent, RunDetailField, RunDetailItem } from '../../shared/run-detail-card.component';
 import { RunFilter } from '../../shared/run-viewer.component';
 import { CumulativePnlChartComponent, CumulativePnlPoint } from './charts/cumulative-pnl-chart.component';
 import { PnlDistributionChartComponent } from './charts/pnl-distribution-chart.component';
@@ -39,9 +36,6 @@ import { EmptyStateComponent } from '../../shared/empty-state.component';
     Tabs, TabList, Tab,
     SchemaFormComponent,
     TradeTableComponent,
-    FeedDagComponent,
-    Splitter,
-    RunDetailCardComponent,
     CumulativePnlChartComponent,
     PnlDistributionChartComponent,
     DatePicker,
@@ -80,7 +74,6 @@ export class StrategyDetailComponent implements OnInit {
   runsTotal = signal(0);
   runsTotalPages = signal(0);
   runsPage = signal(1);
-  selectedStrategyRun = signal<StrategyRunListItem | null>(null);
   runsFilterMode = signal<'none' | 'range' | 'around'>('none');
   runsRangeFrom = signal<Date | null>(null);
   runsRangeTo = signal<Date | null>(null);
@@ -99,31 +92,6 @@ export class StrategyDetailComponent implements OnInit {
     { label: '10m', value: 10 },
     { label: '30m', value: 30 },
     { label: '1h', value: 60 },
-  ];
-
-  selectedRunFeedStatuses = computed<Map<string, FeedRunStatusOverride> | null>(() => {
-    const run = this.selectedStrategyRun();
-    if (!run || run.feed_runs.length === 0) return null;
-    const map = new Map<string, FeedRunStatusOverride>();
-    for (const fr of run.feed_runs) {
-      map.set(fr.feed_id, { status: fr.status, is_trigger: fr.is_trigger, feed_run_id: fr.feed_run_id });
-    }
-    return map;
-  });
-
-  strategyRunDetailItem = computed<RunDetailItem | null>(() => {
-    const run = this.selectedStrategyRun();
-    if (!run) return null;
-    return {
-      ...run,
-      trigger: run.trigger_feed_id !== null ? `Feed #${run.trigger_feed_id}` : null,
-      feed_count: run.feed_runs.length,
-    };
-  });
-
-  strategyRunExtraFields: RunDetailField[] = [
-    { label: 'Trigger', key: 'trigger' },
-    { label: 'Feeds', key: 'feed_count' },
   ];
 
   // Stats from API
@@ -158,7 +126,6 @@ export class StrategyDetailComponent implements OnInit {
   universeItems = signal<UniverseItem[]>([]);
 
   strategyId = '';
-  private initialRunId: string | null = null;
 
   constructor() {}
 
@@ -176,8 +143,6 @@ export class StrategyDetailComponent implements OnInit {
       } else {
         this.activeTab.set('Performance');
       }
-      this.initialRunId = qp.get('run');
-
       // Reset state for the new strategy
       this.page.set(1);
       this.ordersPage.set(1);
@@ -188,7 +153,6 @@ export class StrategyDetailComponent implements OnInit {
       this.runsTotal.set(0);
       this.runsTotalPages.set(0);
       this.runsPage.set(1);
-      this.selectedStrategyRun.set(null);
       this.runsFilterMode.set('none');
 
       this.strategyService.loadStrategyDetail(this.strategyId);
@@ -306,17 +270,8 @@ export class StrategyDetailComponent implements OnInit {
         this.strategyRuns.set(res.items);
         this.runsTotal.set(res.total);
         this.runsTotalPages.set(res.total_pages);
-        if (this.initialRunId && !this.selectedStrategyRun()) {
-          const match = res.items.find(r => r.id === this.initialRunId);
-          if (match) this.selectStrategyRun(match);
-        }
       },
     });
-  }
-
-  selectStrategyRun(run: StrategyRunListItem): void {
-    this.selectedStrategyRun.set(run);
-    this.updateQueryParams({ run: run.id });
   }
 
   onRunsPageChange(newPage: number): void {
@@ -337,7 +292,6 @@ export class StrategyDetailComponent implements OnInit {
 
   applyRunsFilter(): void {
     this.runsPage.set(1);
-    this.selectedStrategyRun.set(null);
     this.loadStrategyRuns();
   }
 

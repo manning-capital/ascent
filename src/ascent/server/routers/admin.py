@@ -3,17 +3,17 @@ from sqlalchemy import insert, text
 from sqlalchemy.orm import Session
 
 from ascent.database.models import StrategyRun
-from ascent.database.models.feeds import FeedPartition, FeedRun
 from ascent.database.models.composites import CompositeAttribute
+from ascent.database.models.feeds import FeedPartition, FeedRun
 from ascent.database.models.instruments import InstrumentAttribute
 from ascent.database.models.strategy_run_feeds import StrategyRunFeedRun
 from ascent.server.dependencies import engine, get_db
 from ascent.server.schemas.admin import (
+    CompositeAttributeBatchCreate,
     FeedPartitionCreate,
     FeedPartitionSchema,
     FeedRunCreate,
     FeedRunSchema,
-    CompositeAttributeBatchCreate,
     InstrumentAttributeBatchCreate,
     StrategyRunCreate,
     StrategyRunFeedRunCreate,

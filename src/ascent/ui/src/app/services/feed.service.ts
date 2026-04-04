@@ -76,6 +76,14 @@ export class FeedService {
     return this.api.get<StrategyFeedDAG>(`/strategies/${strategyId}/feeds`);
   }
 
+  getStrategyRun(strategyId: string, runId: string): Observable<StrategyRunListItem> {
+    return this.api.get<StrategyRunListItem>(`/strategies/${strategyId}/runs/${runId}`);
+  }
+
+  getFeedRun(feedId: string, runId: string): Observable<FeedRunListItem> {
+    return this.api.get<FeedRunListItem>(`/feeds/${feedId}/runs/${runId}`);
+  }
+
   loadStrategyRuns(strategyId: string, page: number = 1, pageSize: number = 20, filter?: RunFilter): Observable<PaginatedResponse<StrategyRunListItem>> {
     const params: Record<string, string | number> = { page, page_size: pageSize };
     if (filter?.started_after) params['started_after'] = filter.started_after;
