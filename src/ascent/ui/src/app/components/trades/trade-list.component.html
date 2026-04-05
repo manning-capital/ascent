@@ -33,7 +33,7 @@
         [ngModel]="selectedStrategyId()"
         (ngModelChange)="onStrategyChange($event)"
         [options]="strategyService.strategies()"
-        optionLabel="name"
+        optionLabel="display_name"
         optionValue="id"
         placeholder="All Strategies"
         [showClear]="true"

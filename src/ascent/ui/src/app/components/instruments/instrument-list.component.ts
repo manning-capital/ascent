@@ -1,5 +1,5 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { AssetService } from '../../services/asset.service';
 import { ProviderService } from '../../services/provider.service';
@@ -11,12 +11,13 @@ import { Card } from 'primeng/card';
 import { Button } from 'primeng/button';
 import { Tag } from 'primeng/tag';
 import { Skeleton } from 'primeng/skeleton';
+import { MultiSelect } from 'primeng/multiselect';
 import { InstrumentCreate } from '../../models/asset.model';
 
 @Component({
   selector: 'app-instrument-list',
   standalone: true,
-  imports: [FormsModule, Select, TableModule, InputText, Card, Button, Tag, Skeleton],
+  imports: [FormsModule, RouterLink, Select, TableModule, InputText, Card, Button, Tag, Skeleton, MultiSelect],
   templateUrl: './instrument-list.component.html',
 })
 export class InstrumentListComponent implements OnInit {
@@ -25,7 +26,17 @@ export class InstrumentListComponent implements OnInit {
   providerService = inject(ProviderService);
   private toast = inject(ToastService);
 
-  typeNames = computed(() => this.assetService.instrumentTypes().map(t => t.name));
+  typeNames = computed(() => this.assetService.instrumentTypes().map(t => t.display_name));
+
+  /** Instruments enriched with type_display_name for filtering/sorting. */
+  enrichedInstruments = computed(() => {
+    const types = this.assetService.instrumentTypes();
+    const typeMap = new Map(types.map(t => [t.id, t.display_name]));
+    return this.assetService.instruments().map(inst => ({
+      ...inst,
+      type_display_name: typeMap.get(inst.instrument_type_id) ?? 'Unknown',
+    }));
+  });
 
   statusOptions = [
     { label: 'Active', value: true },
@@ -94,7 +105,7 @@ export class InstrumentListComponent implements OnInit {
     });
   }
 
-  getTypeName(typeId: string): string {
-    return this.assetService.instrumentTypes().find(t => t.id === typeId)?.name ?? 'Unknown';
+  typeRoute(typeId: string): string {
+    return `/settings/instrument-types/${typeId}`;
   }
 }

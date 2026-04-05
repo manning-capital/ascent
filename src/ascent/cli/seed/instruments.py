@@ -110,6 +110,43 @@ def seed_instruments(client: Any, ctx: dict) -> None:
         )
         ib_bond_instruments[sym] = inst
 
+    # --- Option instruments (IB) ---
+    # Demonstrates the reference metadata type (UNDERLYING_INSTRUMENT).
+    # DB enforces unique (provider_id, from_asset_id, to_asset_id), so we can only
+    # create one option per underlying asset per provider.  We use assets that
+    # don't already have IB spot instruments (crypto assets).
+    option_instruments: dict[str, dict] = {}
+    option_defs_raw = [
+        ("BTC", "Call", 70000.0, 90),
+        ("ETH", "Put", 3000.0, 60),
+        ("SOL", "Call", 200.0, 30),
+        ("ADA", "Put", 0.30, 90),
+        ("XRP", "Call", 0.80, 60),
+        ("AVAX", "Put", 25.0, 30),
+    ]
+    option_defs = []
+    for underlying_sym, opt_type, strike, expiry_days in option_defs_raw:
+        expiry_dt = now + datetime.timedelta(days=expiry_days)
+        date_str = expiry_dt.strftime("%y%m%d")
+        strike_label = f"{int(strike / 1000)}K" if strike >= 1000 else str(int(strike))
+        opt_name = f"{underlying_sym}_{date_str}_{strike_label}_{opt_type[0]}"
+        opt_display = (
+            f"IB {underlying_sym} {expiry_dt.strftime('%d%b%y').upper()} ${strike_label} {opt_type}"
+        )
+        option_defs.append((opt_name, opt_display, underlying_sym, opt_type, strike, expiry_days))
+
+    for opt_name, opt_display, underlying_sym, _opt_type, _strike, _expiry_days in option_defs:
+        underlying_asset = asset_by_symbol[underlying_sym]
+        inst = client.create_instrument(
+            name=f"IB_{opt_name}",
+            display_name=opt_display,
+            instrument_type_id=uuid.UUID(ctx["option_itype"]["id"]),
+            provider_id=ib_id,
+            from_asset_id=uuid.UUID(underlying_asset["id"]),
+            to_asset_id=uuid.UUID(usd["id"]),
+        )
+        option_instruments[opt_name] = inst
+
     all_instruments = (
         list(kraken_instruments.values())
         + list(coinbase_instruments.values())
@@ -117,6 +154,7 @@ def seed_instruments(client: Any, ctx: dict) -> None:
         + list(ib_etf_instruments.values())
         + list(ib_commodity_instruments.values())
         + list(ib_bond_instruments.values())
+        + list(option_instruments.values())
     )
 
     pair_to_instrument: dict[tuple, str] = {}
@@ -250,6 +288,33 @@ def seed_instruments(client: Any, ctx: dict) -> None:
             ],
         )
 
+    # Option instruments (IB) — demonstrate enum + reference metadata
+    for opt_name, _opt_display, underlying_sym, opt_type, strike, expiry_days in option_defs:
+        inst = option_instruments[opt_name]
+        inst_id = uuid.UUID(inst["id"])
+        underlying_spot = kraken_instruments.get(underlying_sym)
+        expiry_date = (now + datetime.timedelta(days=expiry_days)).strftime("%Y-%m-%d")
+
+        entries = [
+            {"metadata_id": uuid.UUID(meta["TICK_SIZE"]["id"]), "value": 0.01},
+            {"metadata_id": uuid.UUID(meta["LOT_SIZE"]["id"]), "value": 0.1},
+            {"metadata_id": uuid.UUID(meta["CONTRACT_SIZE"]["id"]), "value": 1.0},
+            {"metadata_id": uuid.UUID(meta["TRADING_HOURS"]["id"]), "value": "24/7"},
+            # Option-specific fields (enum + date + float + reference)
+            {"metadata_id": uuid.UUID(meta["OPTION_TYPE"]["id"]), "value": opt_type},
+            {"metadata_id": uuid.UUID(meta["STRIKE_PRICE"]["id"]), "value": strike},
+            {"metadata_id": uuid.UUID(meta["EXPIRY_DATE"]["id"]), "value": expiry_date},
+        ]
+        # UNDERLYING_INSTRUMENT: reference to the spot instrument UUID
+        if underlying_spot:
+            entries.append(
+                {
+                    "metadata_id": uuid.UUID(meta["UNDERLYING_INSTRUMENT"]["id"]),
+                    "value": underlying_spot["id"],
+                }
+            )
+        client.batch_create_instrument_metadata(inst_id, _ts(now, 0).isoformat(), entries)
+
     # Store in context
     ctx["kraken_instruments"] = kraken_instruments
     ctx["coinbase_instruments"] = coinbase_instruments
@@ -257,5 +322,6 @@ def seed_instruments(client: Any, ctx: dict) -> None:
     ctx["ib_etf_instruments"] = ib_etf_instruments
     ctx["ib_commodity_instruments"] = ib_commodity_instruments
     ctx["ib_bond_instruments"] = ib_bond_instruments
+    ctx["option_instruments"] = option_instruments
     ctx["all_instruments"] = all_instruments
     ctx["pair_to_instrument"] = pair_to_instrument

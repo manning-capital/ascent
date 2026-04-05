@@ -95,6 +95,7 @@ def seed_feeds(client: Any, ctx: dict) -> None:
         description="Ornstein-Uhlenbeck parameters computed externally.",
         parameters={"lookback_days": 60},
         parameter_schema=ou_schema,
+        schedule={"interval": 3600, "start_date": "2024-01-01T00:00:00+00:00"},
     )
     feed_funding = client.create_feed(
         name="FUNDING_RATES",
@@ -105,6 +106,7 @@ def seed_feeds(client: Any, ctx: dict) -> None:
         channel="ascent.feed.funding_rates",
         description="Perpetual swap funding rates computed externally.",
         parameters={"exchanges": ["kraken", "binance"]},
+        schedule={"interval": 28800, "start_date": "2024-01-01T00:00:00+00:00"},
     )
     feed_spread = client.create_feed(
         name="SPREAD_ANALYTICS",
@@ -115,6 +117,7 @@ def seed_feeds(client: Any, ctx: dict) -> None:
         channel="ascent.feed.spread",
         description="Computes bid-ask spread metrics from order book and market data.",
         parameters={"window": 20},
+        schedule={"interval": 60, "start_date": "2024-01-01T00:00:00+00:00"},
     )
     feed_sent_score = client.create_feed(
         name="SENTIMENT_SCORE",
@@ -125,6 +128,7 @@ def seed_feeds(client: Any, ctx: dict) -> None:
         channel="ascent.feed.sentiment_score",
         description="Normalised sentiment z-score derived from raw sentiment feed.",
         parameters={"lookback_hours": 24},
+        schedule={"interval": 300, "start_date": "2024-01-01T00:00:00+00:00"},
     )
     feed_half_life = client.create_feed(
         name="HALF_LIFE",
@@ -135,6 +139,7 @@ def seed_feeds(client: Any, ctx: dict) -> None:
         channel="ascent.feed.half_life",
         description="Mean-reversion half-life estimate derived from OU parameters.",
         parameters={"min_samples": 30},
+        schedule={"interval": 3600, "start_date": "2024-01-01T00:00:00+00:00"},
     )
 
     # --- Coinbase feeds ---
@@ -190,6 +195,7 @@ def seed_feeds(client: Any, ctx: dict) -> None:
         channel="ascent.feed.vol_surface",
         description="Implied volatility surface computed from options and historical data.",
         parameters={"lookback_days": 30, "strike_range": 0.2},
+        schedule={"interval": 3600, "start_date": "2024-01-01T00:00:00+00:00"},
     )
     feed_volume_profile = client.create_feed(
         name="VOLUME_PROFILE",
@@ -200,6 +206,7 @@ def seed_feeds(client: Any, ctx: dict) -> None:
         channel="ascent.feed.volume_profile",
         description="Volume distribution across price levels over a session.",
         parameters={"num_bins": 50, "session_hours": 24},
+        schedule={"interval": 3600, "start_date": "2024-01-01T00:00:00+00:00"},
     )
     feed_correlation = client.create_feed(
         name="CORRELATION_MATRIX",
@@ -221,6 +228,7 @@ def seed_feeds(client: Any, ctx: dict) -> None:
         channel="ascent.feed.macro",
         description="Macroeconomic indicators (interest rates, CPI, PMI) from external source.",
         parameters={"indicators": ["FED_RATE", "CPI_YOY", "PMI"]},
+        schedule={"interval": 86400, "start_date": "2024-01-01T00:00:00+00:00"},
     )
     feed_tech_indicators = client.create_feed(
         name="TECHNICAL_INDICATORS",

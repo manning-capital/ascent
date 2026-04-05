@@ -27,6 +27,7 @@ export class AttributeDetailComponent implements OnInit {
   attributeId = '';
   attribute = signal<AttributeItem | null>(null);
   editing = signal(false);
+  tabs = ['0', '1'];
   activeTab = signal('0');
 
   generalFields = computed<PanelField[]>(() => {
@@ -55,8 +56,15 @@ export class AttributeDetailComponent implements OnInit {
   ngOnInit(): void {
     this.route.paramMap.subscribe(params => {
       this.attributeId = params.get('id')!;
+      const tab = this.route.snapshot.queryParamMap.get('tab');
+      if (tab && this.tabs.includes(tab)) this.activeTab.set(tab);
       this.loadDetail();
     });
+  }
+
+  onTabChange(tab: string): void {
+    this.activeTab.set(tab);
+    this.router.navigate([], { relativeTo: this.route, queryParams: { tab }, queryParamsHandling: 'merge', replaceUrl: true });
   }
 
   private loadDetail(): void {

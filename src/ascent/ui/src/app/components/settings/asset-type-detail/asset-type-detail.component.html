@@ -50,7 +50,7 @@
     </div>
 
     <!-- Tab Bar -->
-    <p-tabs [value]="activeTab()" (valueChange)="activeTab.set($event + '')">
+    <p-tabs [value]="activeTab()" (valueChange)="onTabChange($event + '')">
       <p-tablist>
         <p-tab value="Details">Details</p-tab>
         <p-tab value="Fields">Fields</p-tab>
@@ -88,7 +88,7 @@
                   <span class="p-panel-title">Metadata Fields</span>
                   <p class="text-xs text-surface-400 mt-1 font-normal">Fields for this asset type, including inherited from parent types.</p>
                 </div>
-                <p-button (onClick)="openAddField()" severity="info" [outlined]="true" size="small" label="+ Add Field"/>
+                <p-button (onClick)="openAddField()" severity="primary" [outlined]="true" size="small" label="+ Add Field"/>
               </div>
             </ng-template>
 
@@ -98,7 +98,7 @@
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                   <div>
                     <label class="block text-xs text-surface-500 mb-1">Metadata Type *</label>
-                    <p-select [(ngModel)]="newFieldMetadataId" [options]="availableMetadataTypes()" optionLabel="name" optionValue="id" placeholder="Select metadata type"/>
+                    <p-select [(ngModel)]="newFieldMetadataId" [options]="availableMetadataTypes()" optionLabel="display_name" optionValue="id" placeholder="Select metadata type"/>
                   </div>
                   <div class="flex items-center gap-2">
                     <p-checkbox [(ngModel)]="newFieldRequired" [binary]="true" inputId="fieldRequired"/>
@@ -199,7 +199,7 @@
                   <span class="p-panel-title">Provider-Asset Fields</span>
                   <p class="text-xs text-surface-400 mt-1 font-normal">Provider-asset fields for this asset type, including inherited from parent types.</p>
                 </div>
-                <p-button (onClick)="openAddPaField()" severity="info" [outlined]="true" size="small" label="+ Add Field"/>
+                <p-button (onClick)="openAddPaField()" severity="primary" [outlined]="true" size="small" label="+ Add Field"/>
               </div>
             </ng-template>
 
@@ -209,7 +209,7 @@
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                   <div>
                     <label class="block text-xs text-surface-500 mb-1">Metadata Type *</label>
-                    <p-select [(ngModel)]="newPaFieldMetadataId" [options]="availablePaMetadataTypes()" optionLabel="name" optionValue="id" placeholder="Select metadata type"/>
+                    <p-select [(ngModel)]="newPaFieldMetadataId" [options]="availablePaMetadataTypes()" optionLabel="display_name" optionValue="id" placeholder="Select metadata type"/>
                   </div>
                   <div class="flex items-center gap-2">
                     <p-checkbox [(ngModel)]="newPaFieldRequired" [binary]="true" inputId="paFieldRequired"/>

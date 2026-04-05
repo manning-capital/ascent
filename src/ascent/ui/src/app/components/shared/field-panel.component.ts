@@ -37,9 +37,9 @@ const BOOL_OPTIONS = [{ label: 'true', value: 'true' }, { label: 'false', value:
   host: { class: 'block' },
   template: `
     <p-panel [header]="header()">
-      <div class="flex flex-wrap gap-x-6 gap-y-4">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-4">
         @for (field of fields(); track field.key) {
-          <div class="min-w-0 flex-1 basis-[calc(25%-1.125rem)]">
+          <div class="min-w-0">
             <label class="block text-xs text-surface-500 mb-1">
               {{ field.label }}
               @if (field.required) { <span class="text-red-500">*</span> }

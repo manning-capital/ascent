@@ -169,6 +169,10 @@ def get_instrument(db: Session, instrument_id: uuid.UUID) -> InstrumentSchema:
 
 
 def create_instrument(db: Session, data: InstrumentCreate) -> InstrumentSchema:
+    # Duplicate check: name
+    name_dup = db.scalar(select(Instrument).where(Instrument.name == data.name))
+    if name_dup:
+        raise ConflictError(f"An instrument with the name '{data.name}' already exists")
     # Duplicate check: same (provider_id, from_asset_id, to_asset_id) already exists
     existing = db.scalar(
         select(Instrument).where(
@@ -178,7 +182,9 @@ def create_instrument(db: Session, data: InstrumentCreate) -> InstrumentSchema:
         )
     )
     if existing:
-        raise ConflictError("An instrument with the same provider and asset pair already exists")
+        raise ConflictError(
+            f"An instrument with the same provider and asset pair already exists: '{existing.name}'"
+        )
 
     instrument = Instrument(
         name=data.name,

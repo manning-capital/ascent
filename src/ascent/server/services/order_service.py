@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 
 from ascent.database.models import Order, OrderStatus, OrderStatusType
 from ascent.server.exceptions import BadRequestError, NotFoundError
+from ascent.server.schemas.orders import OrderCreate, OrderSchema, OrderStatusCreate, OrderUpdate
 
 ORDER_STATUS_TRANSITIONS: dict[str, set[str]] = {
     "SUBMITTED": {"ACCEPTED", "REJECTED", "CANCELLED"},
@@ -15,7 +16,6 @@ ORDER_STATUS_TRANSITIONS: dict[str, set[str]] = {
     "REJECTED": set(),
     "CANCELLED": set(),
 }
-from ascent.server.schemas.orders import OrderCreate, OrderSchema, OrderStatusCreate, OrderUpdate
 
 
 def _build_order_schemas(orders: list[Order]) -> list[OrderSchema]:

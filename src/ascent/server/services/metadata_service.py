@@ -342,6 +342,7 @@ def _build_history_grid(rows: list, metadata_model) -> MetadataHistoryGrid:
                 metadata_name=r.metadata_type.name,
                 metadata_display_name=r.metadata_type.display_name,
                 value_type=r.metadata_type.value_type,
+                config=r.metadata_type.config,
             )
 
         ts = r.timestamp
@@ -419,27 +420,30 @@ def bulk_update_asset_metadata_history(
         if new_ts != u.old_timestamp:
             db.delete(row)
             db.flush()
-            new_row = AssetMetadata(
-                timestamp=new_ts,
-                asset_id=asset_id,
-                metadata_id=u.metadata_id,
-                value=u.value,
+            db.execute(
+                insert(AssetMetadata).values(
+                    timestamp=new_ts,
+                    asset_id=asset_id,
+                    metadata_id=u.metadata_id,
+                    value=u.value,
+                )
             )
-            db.add(new_row)
         else:
             row.value = u.value
 
     db.flush()
 
-    # Process inserts
+    # Process inserts — use raw insert to avoid sentinel mismatch with
+    # composite PK (timestamp precision differences between Python and PG)
     for i in data.inserts:
-        record = AssetMetadata(
-            timestamp=i.timestamp,
-            asset_id=asset_id,
-            metadata_id=i.metadata_id,
-            value=i.value,
+        db.execute(
+            insert(AssetMetadata).values(
+                timestamp=i.timestamp,
+                asset_id=asset_id,
+                metadata_id=i.metadata_id,
+                value=i.value,
+            )
         )
-        db.add(record)
 
     db.commit()
 
@@ -476,26 +480,28 @@ def bulk_update_provider_metadata_history(
         if new_ts != u.old_timestamp:
             db.delete(row)
             db.flush()
-            new_row = ProviderMetadata(
-                timestamp=new_ts,
-                provider_id=provider_id,
-                metadata_id=u.metadata_id,
-                value=u.value,
+            db.execute(
+                insert(ProviderMetadata).values(
+                    timestamp=new_ts,
+                    provider_id=provider_id,
+                    metadata_id=u.metadata_id,
+                    value=u.value,
+                )
             )
-            db.add(new_row)
         else:
             row.value = u.value
 
     db.flush()
 
     for i in data.inserts:
-        record = ProviderMetadata(
-            timestamp=i.timestamp,
-            provider_id=provider_id,
-            metadata_id=i.metadata_id,
-            value=i.value,
+        db.execute(
+            insert(ProviderMetadata).values(
+                timestamp=i.timestamp,
+                provider_id=provider_id,
+                metadata_id=i.metadata_id,
+                value=i.value,
+            )
         )
-        db.add(record)
 
     db.commit()
 
@@ -635,28 +641,30 @@ def bulk_update_provider_asset_metadata_history(
         if new_ts != u.old_timestamp:
             db.delete(row)
             db.flush()
-            new_row = ProviderAssetMetadata(
-                timestamp=new_ts,
-                provider_id=provider_id,
-                asset_id=asset_id,
-                metadata_id=u.metadata_id,
-                value=u.value,
+            db.execute(
+                insert(ProviderAssetMetadata).values(
+                    timestamp=new_ts,
+                    provider_id=provider_id,
+                    asset_id=asset_id,
+                    metadata_id=u.metadata_id,
+                    value=u.value,
+                )
             )
-            db.add(new_row)
         else:
             row.value = u.value
 
     db.flush()
 
     for i in data.inserts:
-        record = ProviderAssetMetadata(
-            timestamp=i.timestamp,
-            provider_id=provider_id,
-            asset_id=asset_id,
-            metadata_id=i.metadata_id,
-            value=i.value,
+        db.execute(
+            insert(ProviderAssetMetadata).values(
+                timestamp=i.timestamp,
+                provider_id=provider_id,
+                asset_id=asset_id,
+                metadata_id=i.metadata_id,
+                value=i.value,
+            )
         )
-        db.add(record)
 
     db.commit()
 
@@ -775,26 +783,28 @@ def bulk_update_instrument_metadata_history(
         if new_ts != u.old_timestamp:
             db.delete(row)
             db.flush()
-            new_row = InstrumentMetadata(
-                timestamp=new_ts,
-                instrument_id=instrument_id,
-                metadata_id=u.metadata_id,
-                value=u.value,
+            db.execute(
+                insert(InstrumentMetadata).values(
+                    timestamp=new_ts,
+                    instrument_id=instrument_id,
+                    metadata_id=u.metadata_id,
+                    value=u.value,
+                )
             )
-            db.add(new_row)
         else:
             row.value = u.value
 
     db.flush()
 
     for i in data.inserts:
-        record = InstrumentMetadata(
-            timestamp=i.timestamp,
-            instrument_id=instrument_id,
-            metadata_id=i.metadata_id,
-            value=i.value,
+        db.execute(
+            insert(InstrumentMetadata).values(
+                timestamp=i.timestamp,
+                instrument_id=instrument_id,
+                metadata_id=i.metadata_id,
+                value=i.value,
+            )
         )
-        db.add(record)
 
     db.commit()
 
@@ -913,26 +923,28 @@ def bulk_update_composite_metadata_history(
         if new_ts != u.old_timestamp:
             db.delete(row)
             db.flush()
-            new_row = CompositeMetadata(
-                timestamp=new_ts,
-                composite_id=composite_id,
-                metadata_id=u.metadata_id,
-                value=u.value,
+            db.execute(
+                insert(CompositeMetadata).values(
+                    timestamp=new_ts,
+                    composite_id=composite_id,
+                    metadata_id=u.metadata_id,
+                    value=u.value,
+                )
             )
-            db.add(new_row)
         else:
             row.value = u.value
 
     db.flush()
 
     for i in data.inserts:
-        record = CompositeMetadata(
-            timestamp=i.timestamp,
-            composite_id=composite_id,
-            metadata_id=i.metadata_id,
-            value=i.value,
+        db.execute(
+            insert(CompositeMetadata).values(
+                timestamp=i.timestamp,
+                composite_id=composite_id,
+                metadata_id=i.metadata_id,
+                value=i.value,
+            )
         )
-        db.add(record)
 
     db.commit()
 

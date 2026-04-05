@@ -121,7 +121,7 @@ import { UniverseTableComponent } from './universe-table.component';
                   @if (stagedIds().has(inst.id)) {
                     <p-button label="Staged" severity="success" [text]="true" size="small" (onClick)="unstage(inst.id)"/>
                   } @else {
-                    <p-button label="Add" severity="info" [text]="true" size="small" (onClick)="stage(inst.id)"/>
+                    <p-button label="Add" severity="primary" [text]="true" size="small" (onClick)="stage(inst.id)"/>
                   }
                 </td>
               </tr>

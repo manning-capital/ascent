@@ -1,7 +1,7 @@
 <div class="p-6">
   <div class="flex items-center justify-between mb-6">
     <h1 class="text-2xl font-bold">Composites</h1>
-    <p-button (onClick)="openCreate()" severity="info" [outlined]="true" label="+ New Composite"/>
+    <p-button (onClick)="openCreate()" severity="primary" [outlined]="true" label="+ New Composite"/>
   </div>
 
   <!-- Create Form -->
@@ -22,7 +22,7 @@
         </div>
         <div>
           <label class="block text-xs text-surface-500 mb-1">Type *</label>
-          <p-select [(ngModel)]="newTypeId" [options]="compositeService.compositeTypes()" optionLabel="name" optionValue="id" placeholder="Select type"/>
+          <p-select [(ngModel)]="newTypeId" [options]="compositeService.compositeTypes()" optionLabel="display_name" optionValue="id" placeholder="Select type"/>
         </div>
         <div>
           <label class="block text-xs text-surface-500 mb-1">Description</label>
@@ -67,14 +67,14 @@
     </p-card>
   } @else {
     <p-card styleClass="overflow-hidden">
-      <p-table [value]="compositeService.composites()" [paginator]="true" [rows]="10" [rowsPerPageOptions]="[10, 25, 50, 100]"
+      <p-table [value]="enrichedComposites()" [paginator]="true" [rows]="10" [rowsPerPageOptions]="[10, 25, 50, 100]"
                [showCurrentPageReport]="true" currentPageReportTemplate="Showing {first} to {last} of {totalRecords} composites"
                [tableStyle]="{'width': '100%'}">
         <ng-template #header>
           <tr>
             <th pSortableColumn="display_name">Display Name <p-sortIcon field="display_name"/></th>
             <th pSortableColumn="name">Name <p-sortIcon field="name"/></th>
-            <th>Type</th>
+            <th pSortableColumn="type_display_name">Type <p-sortIcon field="type_display_name"/></th>
             <th>Members</th>
             <th pSortableColumn="is_active" class="w-28">Status <p-sortIcon field="is_active"/></th>
           </tr>
@@ -93,7 +93,14 @@
                 </ng-template>
               </p-columnFilter>
             </th>
-            <th></th>
+            <th>
+              <p-columnFilter field="type_display_name" matchMode="in" [showMenu]="false">
+                <ng-template #filter let-filter="filterCallback">
+                  <p-multiselect [options]="typeNames()" (onChange)="filter($event.value)" placeholder="All Types"
+                                 [maxSelectedLabels]="1" selectedItemsLabel="{0} types"/>
+                </ng-template>
+              </p-columnFilter>
+            </th>
             <th></th>
             <th>
               <p-columnFilter field="is_active" matchMode="equals" [showMenu]="false">
@@ -109,7 +116,9 @@
           <tr class="cursor-pointer hover:bg-emphasis transition-colors" (click)="navigateToComposite(composite.id)">
             <td class="font-medium">{{ composite.display_name }}</td>
             <td class="font-mono text-surface-500">{{ composite.name }}</td>
-            <td>{{ getTypeName(composite.composite_type_id) }}</td>
+            <td>
+              <a [routerLink]="typeRoute(composite.composite_type_id)" (click)="$event.stopPropagation()" class="text-primary hover:underline">{{ composite.type_display_name }}</a>
+            </td>
             <td class="font-mono text-surface-500">{{ composite.members?.length ?? 0 }}</td>
             <td>
               <p-tag [value]="composite.is_active ? 'Active' : 'Inactive'" [severity]="composite.is_active ? 'success' : 'secondary'" [rounded]="true"/>

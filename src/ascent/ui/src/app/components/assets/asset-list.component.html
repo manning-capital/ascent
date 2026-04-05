@@ -1,7 +1,7 @@
 <div class="p-6">
   <div class="flex items-center justify-between mb-6">
     <h1 class="text-2xl font-bold">Assets</h1>
-    <p-button (onClick)="openCreate()" severity="info" [outlined]="true" label="+ New Asset"/>
+    <p-button (onClick)="openCreate()" severity="primary" [outlined]="true" label="+ New Asset"/>
   </div>
 
   <!-- Create Form -->
@@ -22,7 +22,7 @@
         </div>
         <div>
           <label class="block text-xs text-surface-500 mb-1">Type *</label>
-          <p-select [(ngModel)]="newAssetTypeId" [options]="assetService.assetTypes()" optionLabel="name" optionValue="id" placeholder="Select type"/>
+          <p-select [(ngModel)]="newAssetTypeId" [options]="assetService.assetTypes()" optionLabel="display_name" optionValue="id" placeholder="Select type"/>
         </div>
         <div>
           <label class="block text-xs text-surface-500 mb-1">Description</label>
@@ -108,7 +108,13 @@
           <tr class="cursor-pointer hover:bg-emphasis transition-colors" (click)="navigateToAsset(asset.id)">
             <td class="font-medium">{{ asset.display_name }}</td>
             <td class="font-mono text-surface-500">{{ asset.name }}</td>
-            <td>{{ asset.asset_type_name ?? 'Unknown' }}</td>
+            <td>
+              @if (asset.asset_type_id) {
+                <a [routerLink]="typeRoute(asset.asset_type_id)" (click)="$event.stopPropagation()" class="text-primary hover:underline">{{ asset.asset_type_name ?? 'Unknown' }}</a>
+              } @else {
+                {{ asset.asset_type_name ?? 'Unknown' }}
+              }
+            </td>
             <td>
               <p-tag [value]="asset.is_active ? 'Active' : 'Inactive'" [severity]="asset.is_active ? 'success' : 'secondary'" [rounded]="true"/>
             </td>

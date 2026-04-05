@@ -1,4 +1,5 @@
 from sqlalchemy import String
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from ascent.database.models.base import Base, NamedEntityMixin
@@ -30,4 +31,10 @@ class Metadata(NamedEntityMixin, Base):
         String(20),
         nullable=False,
         server_default="string",
+    )
+    config: Mapped[dict | None] = mapped_column(
+        JSONB,
+        nullable=True,
+        default=None,
+        comment="Type-specific configuration (e.g. enum options, reference target table).",
     )

@@ -1,7 +1,7 @@
 <div class="p-6">
   <div class="flex items-center justify-between mb-6">
     <h1 class="text-2xl font-bold">Providers</h1>
-    <p-button (onClick)="openCreate()" severity="info" [outlined]="true" label="+ New Provider"/>
+    <p-button (onClick)="openCreate()" severity="primary" [outlined]="true" label="+ New Provider"/>
   </div>
 
   <!-- Create Form -->
@@ -19,7 +19,7 @@
         </div>
         <div>
           <label class="block text-xs text-surface-500 mb-1">Type *</label>
-          <p-select [(ngModel)]="newTypeId" [options]="providerService.providerTypes()" optionLabel="name" optionValue="id" placeholder="Select type"/>
+          <p-select [(ngModel)]="newTypeId" [options]="providerService.providerTypes()" optionLabel="display_name" optionValue="id" placeholder="Select type"/>
         </div>
         <div>
           <label class="block text-xs text-surface-500 mb-1">External Code</label>
@@ -122,7 +122,13 @@
           <tr class="cursor-pointer hover:bg-emphasis transition-colors" (click)="navigateToProvider(provider.id)">
             <td class="font-medium">{{ provider.display_name }}</td>
             <td class="font-mono text-surface-500">{{ provider.name }}</td>
-            <td>{{ provider.provider_type_name ?? 'Unknown' }}</td>
+            <td>
+              @if (provider.provider_type_id) {
+                <a [routerLink]="typeRoute(provider.provider_type_id)" (click)="$event.stopPropagation()" class="text-primary hover:underline">{{ provider.provider_type_name ?? 'Unknown' }}</a>
+              } @else {
+                {{ provider.provider_type_name ?? 'Unknown' }}
+              }
+            </td>
             <td class="font-mono text-surface-500">{{ provider.provider_external_code ?? '—' }}</td>
             <td>
               <p-tag [value]="provider.is_active ? 'Active' : 'Inactive'" [severity]="provider.is_active ? 'success' : 'secondary'" [rounded]="true"/>

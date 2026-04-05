@@ -8,12 +8,23 @@
       <p-skeleton width="3rem" height="0.75rem"/>
     </div>
     <div class="flex gap-2 px-4 py-3 border-b border-surface">
-      @for (_ of [1,2,3]; track $index) {
+      @for (_ of [1,2,3,4]; track $index) {
         <p-skeleton width="5rem" height="1rem"/>
       }
     </div>
-    <div class="flex-1 p-6">
-      <p-skeleton width="100%" height="16rem"/>
+    <div class="flex-1 p-6 space-y-4">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        @for (_ of [1,2,3,4]; track $index) {
+          <div class="border border-surface rounded-lg p-4">
+            <p-skeleton width="60%" height="0.75rem" class="mb-2"/>
+            <p-skeleton width="40%" height="1.5rem"/>
+          </div>
+        }
+      </div>
+      <p-card>
+        <p-skeleton width="8rem" height="1rem" class="mb-4"/>
+        <p-skeleton width="100%" height="3rem"/>
+      </p-card>
     </div>
   </div>
 } @else {
@@ -41,6 +52,131 @@
     <!-- Tab Content -->
     <div class="flex-1 overflow-hidden">
 
+      <!-- Overview Tab -->
+      @if (activeTab() === 'Overview') {
+        @let f = feedService.selectedFeed();
+        <div class="overflow-y-auto h-full p-6 space-y-6">
+
+          <!-- Top row: status stats + run stats -->
+          <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
+            <div class="border border-surface rounded-lg p-4">
+              <div class="text-xs text-muted-color uppercase tracking-wider mb-1">Total Runs</div>
+              <div class="text-2xl font-bold">{{ f?.total_runs ?? 0 }}</div>
+            </div>
+            <div class="border border-surface rounded-lg p-4">
+              <div class="text-xs text-muted-color uppercase tracking-wider mb-1">Materialized</div>
+              <div class="text-2xl font-bold text-green-500">{{ overviewStats().materialized }}</div>
+            </div>
+            <div class="border border-surface rounded-lg p-4">
+              <div class="text-xs text-muted-color uppercase tracking-wider mb-1">Failed</div>
+              <div class="text-2xl font-bold text-red-500">{{ overviewStats().failed }}</div>
+            </div>
+            <div class="border border-surface rounded-lg p-4">
+              <div class="text-xs text-muted-color uppercase tracking-wider mb-1">Success Rate</div>
+              <div class="text-2xl font-bold">{{ successRate() }}</div>
+            </div>
+            <div class="border border-surface rounded-lg p-4">
+              <div class="text-xs text-muted-color uppercase tracking-wider mb-1">Avg Duration</div>
+              <div class="text-2xl font-bold">{{ runStats().avgDuration }}</div>
+            </div>
+            <div class="border border-surface rounded-lg p-4">
+              <div class="text-xs text-muted-color uppercase tracking-wider mb-1">Avg Records</div>
+              <div class="text-2xl font-bold">{{ runStats().avgRecords }}</div>
+            </div>
+            <div class="border border-surface rounded-lg p-4">
+              <div class="text-xs text-muted-color uppercase tracking-wider mb-1">Last Run</div>
+              <div class="text-sm font-semibold mt-1">{{ f?.last_run_at ? (f!.last_run_at! | date:'MMM d, h:mm a') : 'Never' }}</div>
+            </div>
+            <div class="border border-surface rounded-lg p-4">
+              <div class="text-xs text-muted-color uppercase tracking-wider mb-1">Last Status</div>
+              <div class="mt-1">
+                @if (f?.last_run_status) {
+                  <p-tag [value]="f!.last_run_status!" [severity]="statusSeverity(f!.last_run_status!)" [rounded]="true"/>
+                } @else {
+                  <span class="text-sm text-muted-color">-</span>
+                }
+              </div>
+            </div>
+          </div>
+
+          <!-- Partition Timeline -->
+          <p-card>
+            <div class="flex items-center justify-between mb-4">
+              <span class="font-semibold">Run History</span>
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-muted-color">{{ timelineRangeLabel() }}</span>
+                <p-button icon="pi pi-chevron-left" [text]="true" [rounded]="true" size="small"
+                  [disabled]="timelinePage() >= timelineTotalPages()"
+                  (onClick)="timelineOlder()"
+                  pTooltip="Older" tooltipPosition="top"/>
+                <span class="text-xs text-muted-color">{{ timelinePage() }}/{{ timelineTotalPages() }}</span>
+                <p-button icon="pi pi-chevron-right" [text]="true" [rounded]="true" size="small"
+                  [disabled]="timelinePage() <= 1"
+                  (onClick)="timelineNewer()"
+                  pTooltip="Newer" tooltipPosition="top"/>
+              </div>
+            </div>
+            @if (partitionsLoading()) {
+              <div class="space-y-3">
+                <p-skeleton width="12rem" height="0.75rem"/>
+                <p-skeleton width="100%" height="3rem"/>
+              </div>
+            } @else if (partitionCells().length > 0) {
+              <app-partition-timeline [partitions]="partitionCells()" (cellClick)="onPartitionClick($event)"/>
+            } @else {
+              <div class="text-sm text-muted-color py-4 text-center">
+                No runs yet. This feed may be triggered externally or has not run.
+              </div>
+            }
+          </p-card>
+
+          <!-- Bottom section: Feed Details + Recent Errors side by side -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Feed Details -->
+            @if (f) {
+              <p-card header="Feed Details">
+                <div class="space-y-2 text-sm">
+                  <div class="flex justify-between"><span class="text-muted-color">Feed Ref</span><span class="font-mono text-xs">{{ f.feed_ref }}</span></div>
+                  <div class="flex justify-between"><span class="text-muted-color">Output Table</span><span>{{ f.output_table }}</span></div>
+                  <div class="flex justify-between"><span class="text-muted-color">Channel</span><span class="font-mono text-xs">{{ f.channel }}</span></div>
+                  <div class="flex justify-between"><span class="text-muted-color">Schedule</span><span>{{ scheduleLabel(f.schedule) }}</span></div>
+                  <div class="flex justify-between"><span class="text-muted-color">Active</span><span>{{ f.is_active ? 'Yes' : 'No' }}</span></div>
+                  @if (f.created_at) {
+                    <div class="flex justify-between"><span class="text-muted-color">Created</span><span>{{ f.created_at | date:'mediumDate' }}</span></div>
+                  }
+                  @if (f.updated_at) {
+                    <div class="flex justify-between"><span class="text-muted-color">Updated</span><span>{{ f.updated_at | date:'mediumDate' }}</span></div>
+                  }
+                </div>
+                @if (f.description) {
+                  <div class="mt-4 pt-3 border-t border-surface">
+                    <p class="text-sm text-muted-color">{{ f.description }}</p>
+                  </div>
+                }
+              </p-card>
+            }
+
+            <!-- Recent Errors -->
+            <p-card header="Recent Errors">
+              @if (runStats().recentErrors.length > 0) {
+                <div class="rounded-lg border border-surface overflow-hidden">
+                <p-table [value]="runStats().recentErrors" [tableStyle]="{'width': '100%'}">
+                  <ng-template #body let-err>
+                    <tr class="cursor-pointer hover:bg-emphasis" [routerLink]="['/feeds', feedId, 'runs', err.id]">
+                      <td class="text-xs text-muted-color" style="width: 8rem">{{ err.started_at | date:'MMM d, h:mm a' }}</td>
+                      <td class="text-xs text-red-400 text-right">{{ err.error_message ?? 'Unknown error' }}</td>
+                    </tr>
+                  </ng-template>
+                </p-table>
+                </div>
+              } @else {
+                <div class="text-sm text-muted-color py-4 text-center">No recent errors</div>
+              }
+            </p-card>
+          </div>
+        </div>
+      }
+
       <!-- Runs Tab -->
       @if (activeTab() === 'Runs') {
         <div class="p-6 space-y-4 overflow-y-auto h-full">
@@ -49,6 +185,7 @@
           </div>
 
           <!-- Runs Table -->
+          <div class="rounded-lg border border-surface overflow-hidden">
           <p-table [value]="runs()" [tableStyle]="{'min-width': '50rem'}">
             <ng-template #header>
               <tr>
@@ -80,6 +217,7 @@
               <tr><td colspan="7" class="text-center text-surface-400 py-8">No runs yet.</td></tr>
             </ng-template>
           </p-table>
+          </div>
 
           <!-- Pagination -->
           <p-paginator

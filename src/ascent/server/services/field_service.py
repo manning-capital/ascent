@@ -163,8 +163,8 @@ def _delete_assets_cascade(db: Session, asset_ids: list) -> None:
         db.execute(tbl.__table__.delete().where(col.in_(asset_ids)))
     for tbl, cols in [
         (
-            InstrumentMember,
-            [InstrumentMember.from_asset_id, InstrumentMember.to_asset_id],
+            Instrument,
+            [Instrument.from_asset_id, Instrument.to_asset_id],
         ),
         (Transaction, [Transaction.from_asset_id, Transaction.to_asset_id]),
     ]:
@@ -185,7 +185,7 @@ def _delete_providers_cascade(db: Session, provider_ids: list) -> None:
     for tbl, col in [
         (ProviderMetadata, ProviderMetadata.provider_id),
         (ProviderAssetMetadata, ProviderAssetMetadata.provider_id),
-        (InstrumentMember, InstrumentMember.provider_id),
+        (Instrument, Instrument.provider_id),
         (ProviderContent, ProviderContent.provider_id),
     ]:
         db.execute(tbl.__table__.delete().where(col.in_(provider_ids)))

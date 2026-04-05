@@ -16,6 +16,8 @@ class MetadataValueType(str, enum.Enum):
     DATE = "date"
     TIME = "time"
     DATETIME = "datetime"
+    ENUM = "enum"
+    REFERENCE = "reference"
 
 
 # Allowed types for metadata values (primitives + date/time types, no dicts/lists)
@@ -79,6 +81,7 @@ class MetadataTypeSchema(BaseModel):
     display_name: str = ""
     description: str | None = None
     value_type: str = "string"
+    config: dict | None = None
     is_active: bool = True
 
 
@@ -87,6 +90,7 @@ class MetadataTypeCreate(BaseModel):
     display_name: str
     description: str | None = None
     value_type: MetadataValueType = MetadataValueType.STRING
+    config: dict | None = None
 
 
 class MetadataTypeUpdate(BaseModel):
@@ -94,6 +98,7 @@ class MetadataTypeUpdate(BaseModel):
     display_name: str | None = None
     description: str | None = None
     value_type: MetadataValueType | None = None
+    config: dict | None = None
     is_active: bool | None = None
 
 
@@ -121,6 +126,7 @@ class AssetTypeMetadataSchema(BaseModel):
     metadata_display_name: str = ""
     metadata_description: str | None = None
     value_type: str
+    config: dict | None = None
     is_required: bool
     display_order: int
     is_inherited: bool = False
@@ -142,6 +148,7 @@ class AssetTypeProviderAssetMetadataSchema(BaseModel):
     metadata_display_name: str = ""
     metadata_description: str | None = None
     value_type: str
+    config: dict | None = None
     is_required: bool
     display_order: int
     is_inherited: bool = False
@@ -163,6 +170,7 @@ class ProviderTypeMetadataSchema(BaseModel):
     metadata_display_name: str = ""
     metadata_description: str | None = None
     value_type: str
+    config: dict | None = None
     is_required: bool
     display_order: int
     is_inherited: bool = False
@@ -184,6 +192,7 @@ class InstrumentTypeMetadataSchema(BaseModel):
     metadata_display_name: str = ""
     metadata_description: str | None = None
     value_type: str
+    config: dict | None = None
     is_required: bool
     display_order: int
     is_inherited: bool = False
@@ -205,6 +214,7 @@ class CompositeTypeMetadataSchema(BaseModel):
     metadata_display_name: str = ""
     metadata_description: str | None = None
     value_type: str
+    config: dict | None = None
     is_required: bool
     display_order: int
     is_inherited: bool = False
@@ -248,6 +258,7 @@ class MetadataFieldInfo(BaseModel):
     metadata_name: str
     metadata_display_name: str = ""
     value_type: str
+    config: dict | None = None
 
 
 class MetadataSnapshotRow(BaseModel):

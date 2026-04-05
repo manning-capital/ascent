@@ -33,6 +33,7 @@ export class AssetTypeDetailComponent implements OnInit {
 
   typeId = '';
   assetType = signal<TypeItem | null>(null);
+  tabs = ['Details', 'Fields', 'Settings'];
   activeTab = signal('Details');
 
   generalFields = computed<PanelField[]>(() => {
@@ -87,9 +88,16 @@ export class AssetTypeDetailComponent implements OnInit {
     this.assetService.loadMetadataTypes();
     this.route.paramMap.subscribe(params => {
       this.typeId = params.get('id')!;
+      const tab = this.route.snapshot.queryParamMap.get('tab');
+      if (tab && this.tabs.includes(tab)) this.activeTab.set(tab);
       this.loadType();
       this.loadFields();
     });
+  }
+
+  onTabChange(tab: string): void {
+    this.activeTab.set(tab);
+    this.router.navigate([], { relativeTo: this.route, queryParams: { tab }, queryParamsHandling: 'merge', replaceUrl: true });
   }
 
   private loadType(): void {
@@ -302,7 +310,7 @@ export class AssetTypeDetailComponent implements OnInit {
   }
 
   valueTypeLabel(vt: string): string {
-    const labels: Record<string, string> = { string: 'Text', integer: 'Integer', float: 'Float', boolean: 'Boolean', date: 'Date', time: 'Time', datetime: 'DateTime' };
+    const labels: Record<string, string> = { string: 'Text', integer: 'Integer', float: 'Float', boolean: 'Boolean', date: 'Date', time: 'Time', datetime: 'DateTime', enum: 'Enum', reference: 'Reference' };
     return labels[vt] ?? vt;
   }
 

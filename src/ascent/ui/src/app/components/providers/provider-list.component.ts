@@ -1,5 +1,5 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ProviderService } from '../../services/provider.service';
 import { ToastService } from '../../services/toast.service';
@@ -17,7 +17,7 @@ import { ProviderCreate } from '../../models/provider.model';
 @Component({
   selector: 'app-provider-list',
   standalone: true,
-  imports: [FormsModule, Select, TableModule, InputText, Textarea, Card, Button, Tag, MultiSelect, Skeleton],
+  imports: [FormsModule, RouterLink, Select, TableModule, InputText, Textarea, Card, Button, Tag, MultiSelect, Skeleton],
   templateUrl: './provider-list.component.html',
 })
 export class ProviderListComponent implements OnInit {
@@ -25,7 +25,11 @@ export class ProviderListComponent implements OnInit {
   providerService = inject(ProviderService);
   private toast = inject(ToastService);
 
-  typeNames = computed(() => this.providerService.providerTypes().map(t => t.name));
+  typeNames = computed(() => this.providerService.providerTypes().map(t => t.display_name));
+
+  typeRoute(typeId: string): string {
+    return `/settings/provider-types/${typeId}`;
+  }
 
   statusOptions = [
     { label: 'Active', value: true },

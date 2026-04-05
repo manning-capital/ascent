@@ -41,7 +41,7 @@
     </div>
 
     <!-- Tab Bar -->
-    <p-tabs [value]="activeTab()" (valueChange)="activeTab.set($event + '')">
+    <p-tabs [value]="activeTab()" (valueChange)="onTabChange($event + '')">
       <p-tablist>
         <p-tab value="0">Details</p-tab>
         <p-tab value="1">Settings</p-tab>
@@ -62,7 +62,7 @@
             (editChange)="onGeneralEditChange($event)"/>
           @if (editing()) {
             <div class="flex gap-2">
-              <p-button label="Save" severity="info" (onClick)="saveEdit()"/>
+              <p-button label="Save" severity="primary" (onClick)="saveEdit()"/>
               <p-button label="Cancel" severity="secondary" [text]="true" (onClick)="cancelEdit()"/>
             </div>
           }

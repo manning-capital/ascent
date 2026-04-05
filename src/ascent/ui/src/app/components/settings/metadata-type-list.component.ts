@@ -70,7 +70,7 @@ export class MetadataTypeListComponent implements OnInit {
   }
 
   valueTypeLabel(vt: string): string {
-    const labels: Record<string, string> = { string: 'Text', integer: 'Integer', float: 'Float', boolean: 'Boolean', date: 'Date', time: 'Time', datetime: 'DateTime' };
+    const labels: Record<string, string> = { string: 'Text', integer: 'Integer', float: 'Float', boolean: 'Boolean', date: 'Date', time: 'Time', datetime: 'DateTime', enum: 'Enum', reference: 'Reference' };
     return labels[vt] ?? vt;
   }
 }

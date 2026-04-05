@@ -83,7 +83,7 @@ export interface ReparentConfirmEvent {
               <span class="font-mono">{{ totalConflicts }}</span>
             </div>
           } @else {
-            <p-message severity="info">
+            <p-message severity="secondary">
               No metadata conflicts detected. <strong>{{ preview.child_name }}</strong> will be moved
               under <strong>{{ preview.new_parent_name }}</strong>.
             </p-message>
@@ -91,7 +91,7 @@ export interface ReparentConfirmEvent {
 
           <div class="flex justify-end gap-2">
             <p-button (onClick)="close()" severity="secondary" [outlined]="true" size="small" label="Cancel"/>
-            <p-button (onClick)="onConfirm()" severity="info" size="small" [label]="hasConflicts ? 'Confirm Reparent (' + totalConflicts + ' removed)' : 'Confirm Reparent'" [loading]="reparenting"/>
+            <p-button (onClick)="onConfirm()" severity="primary" size="small" [label]="hasConflicts ? 'Confirm Reparent (' + totalConflicts + ' removed)' : 'Confirm Reparent'" [loading]="reparenting"/>
           </div>
         }
       </div>

@@ -57,6 +57,17 @@
       </svg>
     </a>
 
+    <!-- Data Explorer -->
+    <a routerLink="/data" routerLinkActive="bg-highlight text-primary"
+       class="flex items-center justify-center w-10 h-10 rounded-xl text-fg-muted hover:bg-emphasis hover:text-fg transition-all"
+       pTooltip="Data Explorer" tooltipPosition="right">
+      <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <ellipse cx="12" cy="5" rx="9" ry="3"/>
+        <path d="M3 5V19A9 3 0 0 0 21 19V5"/>
+        <path d="M3 12A9 3 0 0 0 21 12"/>
+      </svg>
+    </a>
+
     <!-- Trades -->
     <a routerLink="/trades" routerLinkActive="bg-highlight text-primary"
        class="relative flex items-center justify-center w-10 h-10 rounded-xl text-fg-muted hover:bg-emphasis hover:text-fg transition-all"
@@ -141,6 +152,16 @@
       <path d="M21 13v1a4 4 0 0 1-4 4H3"/>
     </svg>
     <span class="text-[10px] font-medium">Exchanges</span>
+  </a>
+
+  <a routerLink="/data" routerLinkActive="!text-primary"
+     class="flex flex-col items-center justify-center gap-0.5 px-2 text-fg-muted transition-colors">
+    <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <ellipse cx="12" cy="5" rx="9" ry="3"/>
+      <path d="M3 5V19A9 3 0 0 0 21 19V5"/>
+      <path d="M3 12A9 3 0 0 0 21 12"/>
+    </svg>
+    <span class="text-[10px] font-medium">Data</span>
   </a>
 
   <a routerLink="/trades" routerLinkActive="!text-primary"

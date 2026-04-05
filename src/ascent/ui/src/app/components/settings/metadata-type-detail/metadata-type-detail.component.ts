@@ -27,6 +27,7 @@ export class MetadataTypeDetailComponent implements OnInit {
   typeId = '';
   metadataType = signal<MetadataTypeItem | null>(null);
   editing = signal(false);
+  tabs = ['0', '1'];
   activeTab = signal('0');
 
   valueTypeOptions = [
@@ -37,18 +38,38 @@ export class MetadataTypeDetailComponent implements OnInit {
     { label: 'Date', value: 'date' },
     { label: 'Time', value: 'time' },
     { label: 'Datetime', value: 'datetime' },
+    { label: 'Enum', value: 'enum' },
+    { label: 'Reference', value: 'reference' },
+  ];
+
+  refTableOptions = [
+    { label: 'Asset', value: 'asset' },
+    { label: 'Instrument', value: 'instrument' },
+    { label: 'Composite', value: 'composite' },
+    { label: 'Provider', value: 'provider' },
   ];
 
   generalFields = computed<PanelField[]>(() => {
     const type = this.metadataType();
     if (!type) return [];
-    return [
+    const fields: PanelField[] = [
       { type: 'mono', key: 'name', label: 'Name', value: type.name },
       { type: 'text', key: 'displayName', label: 'Display Name', value: type.display_name },
       { type: 'tag', key: 'valueType', label: 'Value Type', value: this.valueTypeLabel(type.value_type), severity: 'secondary', options: this.valueTypeOptions },
+    ];
+    if (type.value_type === 'reference') {
+      const refTable = type.config?.['ref_table'] ?? null;
+      fields.push({ type: 'tag', key: 'refTable', label: 'Reference Table', value: this.refTableLabel(refTable), severity: 'secondary', options: this.refTableOptions });
+    }
+    if (type.value_type === 'enum') {
+      const options = (type.config?.['options'] as string[] ?? []).join(', ');
+      fields.push({ type: 'text', key: 'enumOptions', label: 'Enum Options', value: options || null, fallback: 'None' });
+    }
+    fields.push(
       { type: 'active', key: 'isActive', label: 'Active', value: type.is_active },
       { type: 'text', key: 'description', label: 'Description', value: type.description },
-    ];
+    );
+    return fields;
   });
 
   generalEditValues = signal<Record<string, any>>({});
@@ -58,6 +79,8 @@ export class MetadataTypeDetailComponent implements OnInit {
   editDescription = '';
   editValueType = '';
   editIsActive = true;
+  editRefTable = '';
+  editEnumOptions = '';
 
   // Delete
   showDeleteDialog = signal(false);
@@ -67,8 +90,15 @@ export class MetadataTypeDetailComponent implements OnInit {
   ngOnInit(): void {
     this.route.paramMap.subscribe(params => {
       this.typeId = params.get('id')!;
+      const tab = this.route.snapshot.queryParamMap.get('tab');
+      if (tab && this.tabs.includes(tab)) this.activeTab.set(tab);
       this.loadDetail();
     });
+  }
+
+  onTabChange(tab: string): void {
+    this.activeTab.set(tab);
+    this.router.navigate([], { relativeTo: this.route, queryParams: { tab }, queryParamsHandling: 'merge', replaceUrl: true });
   }
 
   private loadDetail(): void {
@@ -87,6 +117,8 @@ export class MetadataTypeDetailComponent implements OnInit {
     this.editDescription = item.description ?? '';
     this.editValueType = item.value_type;
     this.editIsActive = item.is_active;
+    this.editRefTable = item.config?.['ref_table'] ?? '';
+    this.editEnumOptions = (item.config?.['options'] as string[] ?? []).join(', ');
   }
 
   startEdit(): void {
@@ -97,6 +129,8 @@ export class MetadataTypeDetailComponent implements OnInit {
       name: this.editName,
       displayName: this.editDisplayName,
       valueType: this.editValueType,
+      refTable: this.editRefTable,
+      enumOptions: this.editEnumOptions,
       isActive: this.editIsActive,
       description: this.editDescription,
     });
@@ -110,6 +144,8 @@ export class MetadataTypeDetailComponent implements OnInit {
     else if (e.key === 'valueType') this.editValueType = e.value;
     else if (e.key === 'isActive') this.editIsActive = e.value;
     else if (e.key === 'description') this.editDescription = e.value;
+    else if (e.key === 'refTable') this.editRefTable = e.value;
+    else if (e.key === 'enumOptions') this.editEnumOptions = e.value;
   }
 
   cancelEdit(): void {
@@ -120,11 +156,19 @@ export class MetadataTypeDetailComponent implements OnInit {
     const name = this.editName.trim();
     const displayName = this.editDisplayName.trim();
     if (!name || !displayName) return;
+    let config: Record<string, any> | null = null;
+    if (this.editValueType === 'reference' && this.editRefTable) {
+      config = { type: 'reference', ref_table: this.editRefTable };
+    } else if (this.editValueType === 'enum' && this.editEnumOptions.trim()) {
+      config = { type: 'enum', options: this.editEnumOptions.split(',').map(s => s.trim()).filter(Boolean) };
+    }
+
     this.fieldService.updateMetadataType(this.typeId, {
       name,
       display_name: displayName,
       description: this.editDescription.trim() || null,
       value_type: this.editValueType,
+      config,
       is_active: this.editIsActive,
     }).subscribe({
       next: updated => {
@@ -161,7 +205,12 @@ export class MetadataTypeDetailComponent implements OnInit {
   }
 
   valueTypeLabel(vt: string): string {
-    const labels: Record<string, string> = { string: 'Text', integer: 'Integer', float: 'Float', boolean: 'Boolean', date: 'Date', time: 'Time', datetime: 'DateTime' };
+    const labels: Record<string, string> = { string: 'Text', integer: 'Integer', float: 'Float', boolean: 'Boolean', date: 'Date', time: 'Time', datetime: 'DateTime', enum: 'Enum', reference: 'Reference' };
     return labels[vt] ?? vt;
+  }
+
+  refTableLabel(rt: string | null): string {
+    const labels: Record<string, string> = { asset: 'Asset', instrument: 'Instrument', composite: 'Composite', provider: 'Provider' };
+    return rt ? (labels[rt] ?? rt) : '';
   }
 }

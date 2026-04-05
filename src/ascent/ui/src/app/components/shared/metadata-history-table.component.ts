@@ -14,6 +14,8 @@ import { Button } from 'primeng/button';
 import { InputText } from 'primeng/inputtext';
 import { DatePicker } from 'primeng/datepicker';
 import { Tag } from 'primeng/tag';
+import { Checkbox } from 'primeng/checkbox';
+import { Select } from 'primeng/select';
 
 interface EditableRow {
   originalTimestamp: string;
@@ -28,20 +30,20 @@ interface EditableRow {
 @Component({
   selector: 'app-metadata-history-table',
   standalone: true,
-  imports: [FormsModule, TableModule, Card, Button, InputText, DatePicker, Tag],
+  imports: [FormsModule, TableModule, Card, Button, InputText, DatePicker, Tag, Checkbox, Select],
   template: `
     <p-card>
       <!-- Toolbar -->
       <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-2">
-          <p-button label="+ Insert Row" severity="info" [outlined]="true" size="small" (onClick)="addRow()"/>
+          <p-button label="+ Insert Row" severity="primary" [outlined]="true" size="small" (onClick)="addRow()"/>
           @if (changeCount() > 0) {
             <p-tag [value]="changeCount() + ' pending change' + (changeCount() > 1 ? 's' : '')" severity="warn"/>
           }
         </div>
         <div class="flex items-center gap-2">
           @if (changeCount() > 0) {
-            <p-button label="Save Changes" severity="info" size="small" (onClick)="emitSave()"/>
+            <p-button label="Save Changes" severity="primary" size="small" (onClick)="emitSave()"/>
             <p-button label="Discard" severity="secondary" [text]="true" size="small" (onClick)="discard()"/>
           }
         </div>
@@ -64,14 +66,66 @@ interface EditableRow {
             <td class="py-3" [class.bg-blue-500/10]="row.timestampModified || row.isNew">
               <p-datepicker [(ngModel)]="row.timestamp" [showTime]="true" dateFormat="yy-mm-dd" hourFormat="24"
                             [style]="{'width': '100%'}" [disabled]="row.isDeleted"
+                            [appendTo]="'body'"
                             (ngModelChange)="onTimestampChange(i)"/>
             </td>
             <!-- Value cells -->
             @for (f of fields(); track f.metadata_id) {
               <td class="py-3" [class.bg-blue-500/10]="row.modifiedCells.has(f.metadata_id)">
-                <input type="text" pInputText [(ngModel)]="row.values[f.metadata_id]"
-                       class="w-full font-mono text-xs" [disabled]="row.isDeleted"
-                       (ngModelChange)="onCellChange(i, f.metadata_id)"/>
+                @switch (f.value_type) {
+                  @case ('boolean') {
+                    <p-select [(ngModel)]="row.values[f.metadata_id]"
+                              [options]="boolOptions" optionLabel="label" optionValue="value"
+                              [disabled]="row.isDeleted" [appendTo]="'body'" styleClass="w-full text-xs"
+                              (ngModelChange)="onCellChange(i, f.metadata_id)"/>
+                  }
+                  @case ('integer') {
+                    <input type="number" pInputText [(ngModel)]="row.values[f.metadata_id]"
+                           class="w-full font-mono text-xs" step="1" [disabled]="row.isDeleted"
+                           (ngModelChange)="onCellChange(i, f.metadata_id)"/>
+                  }
+                  @case ('float') {
+                    <input type="number" pInputText [(ngModel)]="row.values[f.metadata_id]"
+                           class="w-full font-mono text-xs" step="any" [disabled]="row.isDeleted"
+                           (ngModelChange)="onCellChange(i, f.metadata_id)"/>
+                  }
+                  @case ('date') {
+                    <p-datepicker [(ngModel)]="row.values[f.metadata_id]"
+                                  dateFormat="yy-mm-dd" [disabled]="row.isDeleted"
+                                  [appendTo]="'body'" [style]="{'width': '100%'}"
+                                  (ngModelChange)="onCellChange(i, f.metadata_id)"/>
+                  }
+                  @case ('time') {
+                    <input type="time" pInputText [(ngModel)]="row.values[f.metadata_id]"
+                           class="w-full font-mono text-xs" step="1" [disabled]="row.isDeleted"
+                           (ngModelChange)="onCellChange(i, f.metadata_id)"/>
+                  }
+                  @case ('datetime') {
+                    <p-datepicker [(ngModel)]="row.values[f.metadata_id]"
+                                  [showTime]="true" dateFormat="yy-mm-dd" hourFormat="24"
+                                  [disabled]="row.isDeleted" [appendTo]="'body'" [style]="{'width': '100%'}"
+                                  (ngModelChange)="onCellChange(i, f.metadata_id)"/>
+                  }
+                  @case ('enum') {
+                    <p-select [(ngModel)]="row.values[f.metadata_id]"
+                              [options]="getEnumOptions(f)"
+                              [disabled]="row.isDeleted" [appendTo]="'body'" styleClass="w-full text-xs"
+                              (ngModelChange)="onCellChange(i, f.metadata_id)"/>
+                  }
+                  @case ('reference') {
+                    <p-select [(ngModel)]="row.values[f.metadata_id]"
+                              [options]="referenceOptions()[f.metadata_id] || []"
+                              optionLabel="label" optionValue="value"
+                              [disabled]="row.isDeleted" [appendTo]="'body'" styleClass="w-full text-xs"
+                              [filter]="true" filterPlaceholder="Search..."
+                              (ngModelChange)="onCellChange(i, f.metadata_id)"/>
+                  }
+                  @default {
+                    <input type="text" pInputText [(ngModel)]="row.values[f.metadata_id]"
+                           class="w-full font-mono text-xs" [disabled]="row.isDeleted"
+                           (ngModelChange)="onCellChange(i, f.metadata_id)"/>
+                  }
+                }
               </td>
             }
             <!-- Actions -->
@@ -98,7 +152,10 @@ interface EditableRow {
 export class MetadataHistoryTableComponent {
   fields = input.required<MetadataFieldInfo[]>();
   snapshots = input.required<MetadataSnapshotRow[]>();
+  referenceOptions = input<Record<string, { label: string; value: string }[]>>({});
   save = output<BulkHistoryUpdate>();
+
+  readonly boolOptions = [{ label: 'true', value: 'true' }, { label: 'false', value: 'false' }];
 
   rows = signal<EditableRow[]>([]);
   private initialized = false;
@@ -276,6 +333,11 @@ export class MetadataHistoryTableComponent {
     this.save.emit({ updates, inserts, deletes });
   }
 
+  /** Get enum options from a field's config. */
+  getEnumOptions(field: MetadataFieldInfo): string[] {
+    return (field.config?.['options'] as string[]) ?? [];
+  }
+
   private parseValue(raw: string, valueType: string): any {
     if (valueType === 'integer') {
       const n = parseInt(raw, 10);
@@ -288,6 +350,7 @@ export class MetadataHistoryTableComponent {
     if (valueType === 'boolean') {
       return raw === 'true';
     }
+    // enum and reference: string pass-through
     return raw;
   }
 

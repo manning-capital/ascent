@@ -1,5 +1,5 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { AssetService } from '../../services/asset.service';
 import { ToastService } from '../../services/toast.service';
@@ -16,7 +16,7 @@ import { AssetCreate } from '../../models/asset.model';
 @Component({
   selector: 'app-asset-list',
   standalone: true,
-  imports: [FormsModule, Select, TableModule, InputText, Card, Button, Tag, MultiSelect, Skeleton],
+  imports: [FormsModule, RouterLink, Select, TableModule, InputText, Card, Button, Tag, MultiSelect, Skeleton],
   templateUrl: './asset-list.component.html',
 })
 export class AssetListComponent implements OnInit {
@@ -24,7 +24,11 @@ export class AssetListComponent implements OnInit {
   assetService = inject(AssetService);
   private toast = inject(ToastService);
 
-  typeNames = computed(() => this.assetService.assetTypes().map(t => t.name));
+  typeNames = computed(() => this.assetService.assetTypes().map(t => t.display_name));
+
+  typeRoute(typeId: string): string {
+    return `/settings/asset-types/${typeId}`;
+  }
 
   statusOptions = [
     { label: 'Active', value: true },

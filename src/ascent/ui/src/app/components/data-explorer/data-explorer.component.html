@@ -1,0 +1,137 @@
+<div class="flex flex-col h-[calc(100vh-3.5rem)] md:h-screen">
+  <div class="p-6 space-y-4 overflow-y-auto flex-1">
+    <!-- Header -->
+    <h1 class="text-2xl font-bold">Data Explorer</h1>
+
+    <!-- Filters -->
+    <p-card>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <!-- Data Source -->
+        <div>
+          <label class="block text-xs text-muted-color mb-1">Data Source</label>
+          <p-select
+            [ngModel]="selectedTable()"
+            (ngModelChange)="onTableChange($event)"
+            [options]="dataService.dataSources()"
+            optionLabel="label"
+            optionValue="table"
+            placeholder="Select a data source"
+            styleClass="w-full"/>
+        </div>
+
+        <!-- Entity Filter -->
+        <div>
+          <label class="block text-xs text-muted-color mb-1">{{ entityLabel() }}</label>
+          <p-multiselect
+            [ngModel]="selectedEntityIds()"
+            (ngModelChange)="selectedEntityIds.set($event); onFilterChange()"
+            [options]="dataService.filterOptions().entities"
+            optionLabel="display_name"
+            optionValue="id"
+            [placeholder]="'All ' + entityLabel()"
+            [maxSelectedLabels]="2"
+            [selectedItemsLabel]="'{0} selected'"
+            [filter]="true"
+            [disabled]="!selectedTable()"
+            [loading]="dataService.filtersLoading()"
+            styleClass="w-full"/>
+        </div>
+
+        <!-- Descriptor Filter -->
+        <div>
+          <label class="block text-xs text-muted-color mb-1">{{ descriptorLabel() }}</label>
+          <p-multiselect
+            [ngModel]="selectedDescriptorIds()"
+            (ngModelChange)="selectedDescriptorIds.set($event); onFilterChange()"
+            [options]="dataService.filterOptions().descriptors"
+            optionLabel="display_name"
+            optionValue="id"
+            [placeholder]="'All ' + descriptorLabel()"
+            [maxSelectedLabels]="2"
+            [selectedItemsLabel]="'{0} selected'"
+            [filter]="true"
+            [disabled]="!selectedTable()"
+            [loading]="dataService.filtersLoading()"
+            styleClass="w-full"/>
+        </div>
+
+        <!-- Period Filter (conditional) -->
+        @if (hasPeriod()) {
+          <div>
+            <label class="block text-xs text-muted-color mb-1">Periods</label>
+            <p-multiselect
+              [ngModel]="selectedPeriodIds()"
+              (ngModelChange)="selectedPeriodIds.set($event); onFilterChange()"
+              [options]="dataService.filterOptions().periods ?? []"
+              optionLabel="display_name"
+              optionValue="id"
+              placeholder="All Periods"
+              [maxSelectedLabels]="2"
+              [selectedItemsLabel]="'{0} selected'"
+              [filter]="true"
+              [loading]="dataService.filtersLoading()"
+              styleClass="w-full"/>
+          </div>
+        }
+      </div>
+
+      <!-- Date range + clear -->
+      <div class="flex flex-wrap items-end gap-3 mt-3">
+        <div>
+          <label class="block text-xs text-muted-color mb-1">Start</label>
+          <p-datepicker
+            [ngModel]="startDate()"
+            (ngModelChange)="startDate.set($event); onFilterChange()"
+            [showTime]="true"
+            [showIcon]="true"
+            placeholder="Start date"
+            dateFormat="M dd, yy"
+            [disabled]="!selectedTable()"/>
+        </div>
+        <div>
+          <label class="block text-xs text-muted-color mb-1">End</label>
+          <p-datepicker
+            [ngModel]="endDate()"
+            (ngModelChange)="endDate.set($event); onFilterChange()"
+            [showTime]="true"
+            [showIcon]="true"
+            placeholder="End date"
+            dateFormat="M dd, yy"
+            [disabled]="!selectedTable()"/>
+        </div>
+        <p-button
+          label="Clear Filters"
+          severity="secondary"
+          [text]="true"
+          size="small"
+          [disabled]="!selectedTable()"
+          (onClick)="clearFilters()"/>
+        <div class="ml-auto text-xs text-muted-color">
+          @if (dataService.totalRows() > 0) {
+            {{ dataService.totalRows() | number }} rows
+          }
+        </div>
+      </div>
+    </p-card>
+
+    <!-- Results Table -->
+    @if (!selectedTable()) {
+      <div class="flex items-center justify-center py-16 text-muted-color text-sm">
+        Select a data source to begin exploring.
+      </div>
+    } @else {
+      <app-partition-data-table
+        [data]="dataService.rows()"
+        [total]="dataService.totalRows()"
+        [page]="page()"
+        [pageSize]="pageSize()"
+        [totalPages]="dataService.totalPages()"
+        [loading]="dataService.loading()"
+        [sortField]="sortField()"
+        [sortOrder]="sortOrder()"
+        (pageChange)="onPageChange($event)"
+        (pageSizeChange)="onPageSizeChange($event)"
+        (sortChange)="onSortChange($event)"/>
+    }
+  </div>
+</div>

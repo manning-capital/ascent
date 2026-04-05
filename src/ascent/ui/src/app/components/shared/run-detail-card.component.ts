@@ -70,7 +70,7 @@ export class RunDetailCardComponent {
       case 'FAILED': return 'danger';
       case 'RUNNING': return 'warn';
       case 'PENDING': return 'secondary';
-      default: return 'info';
+      default: return 'secondary';
     }
   }
 

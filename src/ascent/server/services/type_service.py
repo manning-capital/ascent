@@ -108,11 +108,12 @@ def get_effective_asset_type_metadata(
                 metadata_display_name=r.metadata_type.display_name if r.metadata_type else None,
                 metadata_description=r.metadata_type.description if r.metadata_type else None,
                 value_type=r.metadata_type.value_type if r.metadata_type else "string",
+                config=r.metadata_type.config if r.metadata_type else None,
                 is_required=r.is_required,
                 display_order=r.display_order,
                 is_inherited=True,
                 source_type_id=ancestor.id,
-                source_type_name=ancestor.name,
+                source_type_name=ancestor.display_name,
             )
 
     # Own fields (override inherited if same metadata_id)
@@ -125,8 +126,10 @@ def get_effective_asset_type_metadata(
         fields_by_metadata_id[r.metadata_id] = AssetTypeMetadataSchema(
             metadata_id=r.metadata_id,
             metadata_name=r.metadata_type.name if r.metadata_type else "",
+            metadata_display_name=r.metadata_type.display_name if r.metadata_type else "",
             metadata_description=r.metadata_type.description if r.metadata_type else None,
             value_type=r.metadata_type.value_type if r.metadata_type else "string",
+            config=r.metadata_type.config if r.metadata_type else None,
             is_required=r.is_required,
             display_order=r.display_order,
             is_inherited=False,
@@ -169,11 +172,12 @@ def get_effective_provider_type_metadata(
                 metadata_display_name=r.metadata_type.display_name if r.metadata_type else None,
                 metadata_description=r.metadata_type.description if r.metadata_type else None,
                 value_type=r.metadata_type.value_type if r.metadata_type else "string",
+                config=r.metadata_type.config if r.metadata_type else None,
                 is_required=r.is_required,
                 display_order=r.display_order,
                 is_inherited=True,
                 source_type_id=ancestor.id,
-                source_type_name=ancestor.name,
+                source_type_name=ancestor.display_name,
             )
 
     own_rows = (
@@ -187,8 +191,10 @@ def get_effective_provider_type_metadata(
         fields_by_metadata_id[r.metadata_id] = ProviderTypeMetadataSchema(
             metadata_id=r.metadata_id,
             metadata_name=r.metadata_type.name if r.metadata_type else "",
+            metadata_display_name=r.metadata_type.display_name if r.metadata_type else "",
             metadata_description=r.metadata_type.description if r.metadata_type else None,
             value_type=r.metadata_type.value_type if r.metadata_type else "string",
+            config=r.metadata_type.config if r.metadata_type else None,
             is_required=r.is_required,
             display_order=r.display_order,
             is_inherited=False,
@@ -231,11 +237,12 @@ def get_effective_asset_type_provider_asset_metadata(
                 metadata_display_name=r.metadata_type.display_name if r.metadata_type else None,
                 metadata_description=r.metadata_type.description if r.metadata_type else None,
                 value_type=r.metadata_type.value_type if r.metadata_type else "string",
+                config=r.metadata_type.config if r.metadata_type else None,
                 is_required=r.is_required,
                 display_order=r.display_order,
                 is_inherited=True,
                 source_type_id=ancestor.id,
-                source_type_name=ancestor.name,
+                source_type_name=ancestor.display_name,
             )
 
     own_rows = (
@@ -251,8 +258,10 @@ def get_effective_asset_type_provider_asset_metadata(
         fields_by_metadata_id[r.metadata_id] = AssetTypeProviderAssetMetadataSchema(
             metadata_id=r.metadata_id,
             metadata_name=r.metadata_type.name if r.metadata_type else "",
+            metadata_display_name=r.metadata_type.display_name if r.metadata_type else "",
             metadata_description=r.metadata_type.description if r.metadata_type else None,
             value_type=r.metadata_type.value_type if r.metadata_type else "string",
+            config=r.metadata_type.config if r.metadata_type else None,
             is_required=r.is_required,
             display_order=r.display_order,
             is_inherited=False,
@@ -306,6 +315,7 @@ def _get_own_asset_type_metadata(db: Session, type_id: uuid.UUID) -> list[AssetT
             metadata_display_name=r.metadata_type.display_name if r.metadata_type else "",
             metadata_description=r.metadata_type.description if r.metadata_type else None,
             value_type=r.metadata_type.value_type if r.metadata_type else "string",
+            config=r.metadata_type.config if r.metadata_type else None,
             is_required=r.is_required,
             display_order=r.display_order,
             is_inherited=False,
@@ -333,6 +343,7 @@ def _get_own_asset_type_provider_asset_metadata(
             metadata_display_name=r.metadata_type.display_name if r.metadata_type else "",
             metadata_description=r.metadata_type.description if r.metadata_type else None,
             value_type=r.metadata_type.value_type if r.metadata_type else "string",
+            config=r.metadata_type.config if r.metadata_type else None,
             is_required=r.is_required,
             display_order=r.display_order,
             is_inherited=False,
@@ -358,6 +369,7 @@ def _get_own_provider_type_metadata(
             metadata_display_name=r.metadata_type.display_name if r.metadata_type else "",
             metadata_description=r.metadata_type.description if r.metadata_type else None,
             value_type=r.metadata_type.value_type if r.metadata_type else "string",
+            config=r.metadata_type.config if r.metadata_type else None,
             is_required=r.is_required,
             display_order=r.display_order,
             is_inherited=False,
@@ -407,9 +419,9 @@ def preview_asset_type_reparent(
 
     return ReparentPreview(
         child_id=child.id,
-        child_name=child.name,
+        child_name=child.display_name,
         new_parent_id=parent.id,
-        new_parent_name=parent.name,
+        new_parent_name=parent.display_name,
         child_own_fields=[f.model_dump() for f in child_own],
         parent_effective_fields=[f.model_dump() for f in parent_effective],
         conflicts=conflicts,
@@ -436,9 +448,9 @@ def preview_provider_type_reparent(
 
     return ReparentPreview(
         child_id=child.id,
-        child_name=child.name,
+        child_name=child.display_name,
         new_parent_id=parent.id,
-        new_parent_name=parent.name,
+        new_parent_name=parent.display_name,
         child_own_fields=[f.model_dump() for f in child_own],
         parent_effective_fields=[f.model_dump() for f in parent_effective],
         conflicts=conflicts,
@@ -509,11 +521,12 @@ def get_effective_instrument_type_metadata(
                 metadata_display_name=r.metadata_type.display_name if r.metadata_type else None,
                 metadata_description=r.metadata_type.description if r.metadata_type else None,
                 value_type=r.metadata_type.value_type if r.metadata_type else "string",
+                config=r.metadata_type.config if r.metadata_type else None,
                 is_required=r.is_required,
                 display_order=r.display_order,
                 is_inherited=True,
                 source_type_id=ancestor.id,
-                source_type_name=ancestor.name,
+                source_type_name=ancestor.display_name,
             )
 
     own_rows = (
@@ -529,8 +542,10 @@ def get_effective_instrument_type_metadata(
         fields_by_metadata_id[r.metadata_id] = InstrumentTypeMetadataSchema(
             metadata_id=r.metadata_id,
             metadata_name=r.metadata_type.name if r.metadata_type else "",
+            metadata_display_name=r.metadata_type.display_name if r.metadata_type else "",
             metadata_description=r.metadata_type.description if r.metadata_type else None,
             value_type=r.metadata_type.value_type if r.metadata_type else "string",
+            config=r.metadata_type.config if r.metadata_type else None,
             is_required=r.is_required,
             display_order=r.display_order,
             is_inherited=False,
@@ -562,6 +577,7 @@ def _get_own_instrument_type_metadata(
             metadata_display_name=r.metadata_type.display_name if r.metadata_type else "",
             metadata_description=r.metadata_type.description if r.metadata_type else None,
             value_type=r.metadata_type.value_type if r.metadata_type else "string",
+            config=r.metadata_type.config if r.metadata_type else None,
             is_required=r.is_required,
             display_order=r.display_order,
             is_inherited=False,
@@ -587,9 +603,9 @@ def preview_instrument_type_reparent(
 
     return ReparentPreview(
         child_id=child.id,
-        child_name=child.name,
+        child_name=child.display_name,
         new_parent_id=parent.id,
-        new_parent_name=parent.name,
+        new_parent_name=parent.display_name,
         child_own_fields=[f.model_dump() for f in child_own],
         parent_effective_fields=[f.model_dump() for f in parent_effective],
         conflicts=conflicts,

@@ -134,7 +134,9 @@ export class TypeHierarchyGraphComponent implements AfterViewInit, OnChanges, On
   @ViewChild('draftFormContainer') draftFormRef?: { nativeElement: HTMLElement };
 
   readonly nodeWidth = 180;
-  readonly nodeHeight = 50;
+  readonly nodeHeight = 44;
+  readonly hGap = 80;   // horizontal gap between depth levels
+  readonly vGap = 16;   // vertical gap between sibling nodes
   readonly draftWidth = 200;
   readonly draftHeight = 110;
 
@@ -179,10 +181,15 @@ export class TypeHierarchyGraphComponent implements AfterViewInit, OnChanges, On
     const parent = this.layoutNodes().find(n => n.id === d.parentId);
     if (!parent) return null;
 
-    const midY = (parent.y + this.nodeHeight / 2 + d.y - this.draftHeight / 2) / 2;
+    // Horizontal bezier: right side of parent → left side of draft
+    const sx = parent.x + this.nodeWidth / 2;
+    const sy = parent.y;
+    const tx = d.x - this.draftWidth / 2;
+    const ty = d.y;
+    const midX = (sx + tx) / 2;
     return {
       key: `draft-edge`,
-      path: `M${parent.x},${parent.y + this.nodeHeight / 2} C${parent.x},${midY} ${d.x},${midY} ${d.x},${d.y - this.draftHeight / 2}`,
+      path: `M${sx},${sy} C${midX},${sy} ${midX},${ty} ${tx},${ty}`,
     };
   });
 
@@ -479,8 +486,10 @@ export class TypeHierarchyGraphComponent implements AfterViewInit, OnChanges, On
   }
 
   private makeDraftEdgePath(parentX: number, parentY: number, draftX: number, draftY: number): string {
-    const midY = (parentY + this.nodeHeight / 2 + draftY - this.draftHeight / 2) / 2;
-    return `M${parentX},${parentY + this.nodeHeight / 2} C${parentX},${midY} ${draftX},${midY} ${draftX},${draftY - this.draftHeight / 2}`;
+    const sx = parentX + this.nodeWidth / 2;
+    const tx = draftX - this.draftWidth / 2;
+    const midX = (sx + tx) / 2;
+    return `M${sx},${parentY} C${midX},${parentY} ${midX},${draftY} ${tx},${draftY}`;
   }
 
   // --- D3 rendering (nodes + edges in sync) ---
@@ -586,21 +595,21 @@ export class TypeHierarchyGraphComponent implements AfterViewInit, OnChanges, On
       .attr('x', 0)
       .attr('text-anchor', 'middle')
       .attr('fill', 'var(--fg)')
-      .attr('font-size', 12)
+      .attr('font-size', 11)
       .attr('font-weight', 600)
-      .attr('y', d => d.description ? -2 : 4)
+      .attr('y', d => d.description ? -3 : 4)
       .text(d => d.name);
 
     enter.append('text')
       .attr('class', 'node-desc')
       .attr('x', 0)
-      .attr('y', 14)
+      .attr('y', 11)
       .attr('text-anchor', 'middle')
       .attr('fill', 'var(--fg-muted)')
-      .attr('font-size', 10)
+      .attr('font-size', 9)
       .text(d => {
         if (!d.description) return '';
-        return d.description.length > 24 ? d.description.slice(0, 22) + '…' : d.description;
+        return d.description.length > 28 ? d.description.slice(0, 26) + '…' : d.description;
       });
 
     const addBtn = enter.append('g')
@@ -613,16 +622,16 @@ export class TypeHierarchyGraphComponent implements AfterViewInit, OnChanges, On
       });
 
     addBtn.append('circle')
-      .attr('cx', 0)
-      .attr('cy', nh / 2)
+      .attr('cx', nw / 2)
+      .attr('cy', 0)
       .attr('r', 10)
       .attr('fill', 'var(--elevated)')
       .attr('stroke', 'var(--edge)')
       .attr('stroke-width', 1.5);
 
     addBtn.append('text')
-      .attr('x', 0)
-      .attr('y', nh / 2 + 4)
+      .attr('x', nw / 2)
+      .attr('y', 4)
       .attr('text-anchor', 'middle')
       .attr('fill', 'var(--fg-muted)')
       .attr('font-size', 13)
@@ -640,7 +649,7 @@ export class TypeHierarchyGraphComponent implements AfterViewInit, OnChanges, On
       });
 
     moveBtn.append('circle')
-      .attr('cx', nw / 2)
+      .attr('cx', -nw / 2)
       .attr('cy', -nh / 2)
       .attr('r', 10)
       .attr('fill', 'var(--elevated)')
@@ -648,7 +657,7 @@ export class TypeHierarchyGraphComponent implements AfterViewInit, OnChanges, On
       .attr('stroke-width', 1.5);
 
     moveBtn.append('text')
-      .attr('x', nw / 2)
+      .attr('x', -nw / 2)
       .attr('y', -nh / 2 + 4)
       .attr('text-anchor', 'middle')
       .attr('fill', 'var(--fg-muted)')
@@ -664,12 +673,12 @@ export class TypeHierarchyGraphComponent implements AfterViewInit, OnChanges, On
     }
 
     groups.select('text.node-name')
-      .attr('y', d => d.description ? -2 : 4)
+      .attr('y', d => d.description ? -3 : 4)
       .text(d => d.name);
     groups.select('text.node-desc')
       .text(d => {
         if (!d.description) return '';
-        return d.description.length > 24 ? d.description.slice(0, 22) + '…' : d.description;
+        return d.description.length > 28 ? d.description.slice(0, 26) + '…' : d.description;
       });
 
     if (this.draft()) {
@@ -732,24 +741,36 @@ export class TypeHierarchyGraphComponent implements AfterViewInit, OnChanges, On
 
     const root = d3.hierarchy(virtualRoot, d => d.children);
 
+    // Horizontal tree: breadth (dx) controls vertical spacing,
+    // depth (dy) controls horizontal spacing.
+    const baseSpacing = this.nodeHeight + this.vGap;
+    const draftRatio = Math.ceil(this.draftHeight / baseSpacing) + 1;
     const treeLayout = d3.tree<TypeHierarchyNode>()
-      .nodeSize([this.nodeWidth + 40, this.nodeHeight + 60]);
+      .nodeSize([baseSpacing, this.nodeWidth + this.hGap])
+      .separation((a, b) => {
+        // Give draft nodes extra vertical room so they don't overlap siblings
+        if (a.data.id === DRAFT_ID || b.data.id === DRAFT_ID) return draftRatio;
+        return a.parent === b.parent ? 1 : 1.2;
+      });
 
     treeLayout(root);
 
     const nodes: TreeNodeLayout[] = [];
     const edges: TreeEdgeLayout[] = [];
+    const nw = this.nodeWidth;
+    const nh = this.nodeHeight;
 
     root.each(d => {
       if (d.data.id === '__root__' && useVirtualRoot) return;
 
+      // Swap x/y for horizontal layout: d.y → horizontal, d.x → vertical
       nodes.push({
         id: d.data.id,
         name: d.data.display_name,
         description: d.data.description,
         parentTypeId: d.data.parent_type_id,
-        x: d.x!,
-        y: d.y!,
+        x: d.y!,
+        y: d.x!,
         depth: d.depth,
         childCount: d.children?.length ?? 0,
       });
@@ -761,10 +782,15 @@ export class TypeHierarchyGraphComponent implements AfterViewInit, OnChanges, On
 
       const s = link.source;
       const t = link.target;
-      const midY = (s.y! + t.y!) / 2;
+      // Horizontal bezier: exits right side of parent, enters left side of child
+      const sx = s.y! + nw / 2;
+      const sy = s.x!;
+      const tx = t.y! - nw / 2;
+      const ty = t.x!;
+      const midX = (sx + tx) / 2;
       edges.push({
         key: `${s.data.id}-${t.data.id}`,
-        path: `M${s.x},${s.y! + this.nodeHeight / 2} C${s.x},${midY} ${t.x},${midY} ${t.x},${t.y! - this.nodeHeight / 2}`,
+        path: `M${sx},${sy} C${midX},${sy} ${midX},${ty} ${tx},${ty}`,
       });
     });
 

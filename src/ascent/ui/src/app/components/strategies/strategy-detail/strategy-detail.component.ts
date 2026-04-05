@@ -59,8 +59,8 @@ export class StrategyDetailComponent implements OnInit {
   feedService = inject(FeedService);
   tradeService = inject(TradeService);
 
-  tabs = ['Performance', 'Trades', 'Universe', 'Runs', 'Configuration'];
-  activeTab = signal('Performance');
+  tabs = ['Overview', 'Trades', 'Universe', 'Runs', 'Configuration'];
+  activeTab = signal('Overview');
   page = signal(1);
   tradesPageSize = signal(10);
   ordersPage = signal(1);
@@ -141,7 +141,7 @@ export class StrategyDetailComponent implements OnInit {
       if (tab && this.tabs.includes(tab)) {
         this.activeTab.set(tab);
       } else {
-        this.activeTab.set('Performance');
+        this.activeTab.set('Overview');
       }
       // Reset state for the new strategy
       this.page.set(1);
@@ -305,7 +305,7 @@ export class StrategyDetailComponent implements OnInit {
       case 'FAILED': return 'danger';
       case 'RUNNING': return 'warn';
       case 'PENDING': return 'secondary';
-      default: return 'info';
+      default: return 'secondary';
     }
   }
 

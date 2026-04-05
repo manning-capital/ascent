@@ -12,6 +12,7 @@ export const routes: Routes = [
   { path: 'exchanges', loadComponent: () => import('./components/exchanges/exchange-list.component').then(m => m.ExchangeListComponent) },
   { path: 'exchanges/:id', loadComponent: () => import('./components/exchanges/exchange-detail/exchange-detail.component').then(m => m.ExchangeDetailComponent) },
   { path: 'trades', loadComponent: () => import('./components/trades/trade-list.component').then(m => m.TradeListComponent) },
+  { path: 'data', loadComponent: () => import('./components/data-explorer/data-explorer.component').then(m => m.DataExplorerComponent) },
   { path: 'trades/:tradeId', loadComponent: () => import('./components/trade-detail/trade-detail.component').then(m => m.TradeDetailComponent) },
   {
     path: 'settings',

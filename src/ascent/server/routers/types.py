@@ -209,6 +209,7 @@ def list_asset_type_metadata(
             metadata_display_name=r.metadata_type.display_name,
             metadata_description=r.metadata_type.description,
             value_type=r.metadata_type.value_type,
+            config=r.metadata_type.config,
             is_required=r.is_required,
             display_order=r.display_order,
         )
@@ -258,6 +259,7 @@ def add_asset_type_metadata(
         metadata_display_name=obj.metadata_type.display_name,
         metadata_description=obj.metadata_type.description,
         value_type=obj.metadata_type.value_type,
+        config=obj.metadata_type.config,
         is_required=obj.is_required,
         display_order=obj.display_order,
     )
@@ -308,6 +310,7 @@ def list_asset_type_provider_asset_metadata(
             metadata_display_name=r.metadata_type.display_name,
             metadata_description=r.metadata_type.description,
             value_type=r.metadata_type.value_type,
+            config=r.metadata_type.config,
             is_required=r.is_required,
             display_order=r.display_order,
         )
@@ -363,6 +366,7 @@ def add_asset_type_provider_asset_metadata(
         metadata_display_name=obj.metadata_type.display_name,
         metadata_description=obj.metadata_type.description,
         value_type=obj.metadata_type.value_type,
+        config=obj.metadata_type.config,
         is_required=obj.is_required,
         display_order=obj.display_order,
     )
@@ -483,6 +487,7 @@ def list_provider_type_metadata(
             metadata_display_name=r.metadata_type.display_name,
             metadata_description=r.metadata_type.description,
             value_type=r.metadata_type.value_type,
+            config=r.metadata_type.config,
             is_required=r.is_required,
             display_order=r.display_order,
         )
@@ -534,6 +539,7 @@ def add_provider_type_metadata(
         metadata_display_name=obj.metadata_type.display_name,
         metadata_description=obj.metadata_type.description,
         value_type=obj.metadata_type.value_type,
+        config=obj.metadata_type.config,
         is_required=obj.is_required,
         display_order=obj.display_order,
     )
@@ -661,6 +667,7 @@ def list_instrument_type_metadata(
             metadata_display_name=r.metadata_type.display_name,
             metadata_description=r.metadata_type.description,
             value_type=r.metadata_type.value_type,
+            config=r.metadata_type.config,
             is_required=r.is_required,
             display_order=r.display_order,
         )
@@ -712,6 +719,7 @@ def add_instrument_type_metadata(
         metadata_display_name=obj.metadata_type.display_name,
         metadata_description=obj.metadata_type.description,
         value_type=obj.metadata_type.value_type,
+        config=obj.metadata_type.config,
         is_required=obj.is_required,
         display_order=obj.display_order,
     )
@@ -918,6 +926,7 @@ def list_composite_type_metadata(
             metadata_display_name=r.metadata_type.display_name,
             metadata_description=r.metadata_type.description,
             value_type=r.metadata_type.value_type,
+            config=r.metadata_type.config,
             is_required=r.is_required,
             display_order=r.display_order,
         )
@@ -961,6 +970,7 @@ def add_composite_type_metadata(
         metadata_display_name=obj.metadata_type.display_name,
         metadata_description=obj.metadata_type.description,
         value_type=obj.metadata_type.value_type,
+        config=obj.metadata_type.config,
         is_required=obj.is_required,
         display_order=obj.display_order,
     )

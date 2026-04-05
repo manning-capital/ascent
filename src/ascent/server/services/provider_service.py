@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from ascent.database.models import Provider
-from ascent.server.exceptions import NotFoundError
+from ascent.server.exceptions import ConflictError, NotFoundError
 from ascent.server.schemas.providers import (
     ProviderCreate,
     ProviderDetailSchema,
@@ -92,6 +92,9 @@ def get_provider_detail(db: Session, provider_id: uuid.UUID) -> ProviderDetailSc
 
 
 def create_provider(db: Session, data: ProviderCreate) -> Provider:
+    existing = db.scalar(select(Provider).where(Provider.name == data.name))
+    if existing:
+        raise ConflictError(f"A provider with the name '{data.name}' already exists")
     provider = Provider(**data.model_dump())
     db.add(provider)
     db.commit()

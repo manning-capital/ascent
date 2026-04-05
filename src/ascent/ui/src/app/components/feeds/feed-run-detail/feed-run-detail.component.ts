@@ -1,5 +1,5 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FeedService } from '../../../services/feed.service';
 import { FeedRunListItem } from '../../../models/feed.model';
 import { RunDetailCardComponent, RunDetailField } from '../../shared/run-detail-card.component';
@@ -25,7 +25,10 @@ import { Skeleton } from 'primeng/skeleton';
 })
 export class FeedRunDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
+  private router = inject(Router);
   private feedService = inject(FeedService);
+
+  tabs = ['Overview', 'Partition'];
 
   feedId = '';
   runId = '';
@@ -52,6 +55,14 @@ export class FeedRunDetailComponent implements OnInit {
       this.feedId = params.get('id')!;
       this.runId = params.get('runId')!;
 
+      const qp = this.route.snapshot.queryParamMap;
+      const tab = qp.get('tab');
+      if (tab && this.tabs.includes(tab)) {
+        this.activeTab.set(tab);
+      } else {
+        this.activeTab.set('Overview');
+      }
+
       this.loading.set(true);
       this.run.set(null);
 
@@ -61,6 +72,10 @@ export class FeedRunDetailComponent implements OnInit {
         next: run => {
           this.run.set(run);
           this.loading.set(false);
+          // If restored to Partition tab, load the data now that the run is available
+          if (this.activeTab() === 'Partition') {
+            this.loadPartitionData();
+          }
         },
         error: () => this.loading.set(false),
       });
@@ -69,6 +84,12 @@ export class FeedRunDetailComponent implements OnInit {
 
   onTabChange(tab: string): void {
     this.activeTab.set(tab);
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { tab },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
     if (tab === 'Partition' && this.partitionData().length === 0) {
       this.loadPartitionData();
     }
@@ -106,7 +127,7 @@ export class FeedRunDetailComponent implements OnInit {
       case 'FAILED': return 'danger';
       case 'RUNNING': return 'warn';
       case 'PENDING': return 'secondary';
-      default: return 'info';
+      default: return 'secondary';
     }
   }
 }

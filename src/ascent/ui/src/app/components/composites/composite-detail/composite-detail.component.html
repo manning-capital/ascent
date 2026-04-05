@@ -47,7 +47,7 @@
       <span class="text-sm text-surface-500 font-mono">({{ comp.name }})</span>
       <span class="w-2 h-2 rounded-full shrink-0" [class]="comp.is_active ? 'bg-green-500' : 'bg-surface-400'"></span>
       @if (compositeType(); as cType) {
-        <p-tag [value]="cType.display_name || cType.name" severity="info"/>
+        <p-tag [value]="cType.display_name || cType.name" severity="secondary"/>
       }
       <div class="ml-auto flex items-center gap-2">
         @if (!editing()) {
@@ -98,7 +98,7 @@
 
           @if (editing()) {
             <div class="flex gap-2">
-              <p-button label="Save" severity="info" (onClick)="submitEdit()"/>
+              <p-button label="Save" severity="primary" (onClick)="submitEdit()"/>
               <p-button label="Cancel" severity="secondary" [text]="true" (onClick)="cancelEdit()"/>
             </div>
           }
@@ -108,7 +108,7 @@
               <ng-template #header>
                 <div class="flex items-center justify-between w-full">
                   <span class="p-panel-title">Members</span>
-                  <p-button (onClick)="openMemberForm()" severity="info" [outlined]="true" size="small" label="+ Add Member"/>
+                  <p-button (onClick)="openMemberForm()" severity="primary" [outlined]="true" size="small" label="+ Add Member"/>
                 </div>
               </ng-template>
 
@@ -182,7 +182,8 @@
               <app-metadata-history-table
                 [fields]="historyGrid()!.fields"
                 [snapshots]="historyGrid()!.snapshots"
-                (save)="onHistorySave($event)"/>
+                (save)="onHistorySave($event)"
+                [referenceOptions]="historyRefOptions()"/>
             } @else {
               <div class="text-sm text-surface-400 italic py-2">No metadata history.</div>
             }

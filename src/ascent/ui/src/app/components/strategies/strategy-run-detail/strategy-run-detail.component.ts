@@ -1,5 +1,5 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
-import { ActivatedRoute, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FeedService } from '../../../services/feed.service';
 import { StrategyService } from '../../../services/strategy.service';
 import { StrategyRunListItem, StrategyFeedDAG } from '../../../models/feed.model';
@@ -28,9 +28,11 @@ import { Skeleton } from 'primeng/skeleton';
 })
 export class StrategyRunDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
+  private router = inject(Router);
   private feedService = inject(FeedService);
   private strategyService = inject(StrategyService);
 
+  tabs = ['Overview', 'DAG'];
   strategyId = '';
   activeTab = signal('Overview');
   loading = signal(true);
@@ -66,7 +68,7 @@ export class StrategyRunDetailComponent implements OnInit {
       case 'FAILED': return 'danger';
       case 'RUNNING': return 'warn';
       case 'PENDING': return 'secondary';
-      default: return 'info';
+      default: return 'secondary';
     }
   }
 
@@ -74,10 +76,21 @@ export class StrategyRunDetailComponent implements OnInit {
     return Array.from({ length: count }, (_, i) => i);
   }
 
+  onTabChange(tab: string): void {
+    this.activeTab.set(tab);
+    this.router.navigate([], { relativeTo: this.route, queryParams: { tab }, queryParamsHandling: 'merge', replaceUrl: true });
+  }
+
   ngOnInit(): void {
     this.route.paramMap.subscribe(params => {
       const id = params.get('id')!;
       const runId = params.get('runId')!;
+
+      const qp = this.route.snapshot.queryParamMap;
+      const tab = qp.get('tab');
+      if (tab && this.tabs.includes(tab)) {
+        this.activeTab.set(tab);
+      }
 
       if (id !== this.strategyId) {
         this.strategyId = id;

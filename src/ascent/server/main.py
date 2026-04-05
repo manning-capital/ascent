@@ -20,6 +20,7 @@ from ascent.server.routers import (
     attributes,
     composites,
     dashboard,
+    data_explorer,
     exchanges,
     feeds,
     instruments,
@@ -90,6 +91,7 @@ def _create_tables() -> None:
         # Migrate old value_type values to new ones
         conn.execute(text("UPDATE metadata SET value_type = 'float' WHERE value_type = 'number'"))
         conn.execute(text("UPDATE metadata SET value_type = 'string' WHERE value_type = 'json'"))
+        conn.execute(text("ALTER TABLE metadata ADD COLUMN IF NOT EXISTS config JSONB"))
         # Convert any non-primitive (dict/list) metadata values to JSON strings
         for tbl in ["asset_metadata", "provider_metadata", "provider_asset_metadata"]:
             conn.execute(
@@ -165,6 +167,7 @@ def create_app() -> FastAPI:
     app.include_router(composites.router, prefix="/api")
     app.include_router(exchanges.router, prefix="/api")
     app.include_router(attributes.router, prefix="/api")
+    app.include_router(data_explorer.router, prefix="/api")
 
     # Serve the UI if the static files exist
     if UI_STATIC_DIR.is_dir():

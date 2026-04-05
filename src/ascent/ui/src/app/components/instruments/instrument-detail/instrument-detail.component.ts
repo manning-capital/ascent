@@ -126,11 +126,38 @@ export class InstrumentDetailComponent implements OnInit {
         case 'date': return { ...base, type: 'text' as const, value: val != null ? String(val) : null, fallback: 'Not set' };
         case 'time': return { ...base, type: 'time' as const, value: val != null ? String(val) : null, fallback: 'Not set' };
         case 'datetime': return { ...base, type: 'datetime' as const, value: val != null ? String(val) : null, fallback: 'Not set' };
+        case 'enum': return { ...base, type: 'tag' as const, value: val != null ? String(val) : '', severity: 'secondary', options: (field.config?.['options'] as string[] ?? []).map((o: string) => ({ label: o, value: o })) };
+        case 'reference': {
+          const refOpts = this.getReferenceOptions(field.config?.['ref_table'] ?? null);
+          const refItem = refOpts.find(o => o.value === val);
+          const refRoute = val ? this.getReferenceRoute(field.config?.['ref_table'] ?? null, String(val)) : [];
+          return { ...base, type: 'link' as const, value: refItem?.label ?? (val ? String(val) : null), route: refRoute, fallback: 'Not set', options: refOpts };
+        }
         default: return { ...base, type: 'text' as const, value: val != null ? String(val) : null, fallback: 'Not set' };
       }
     });
   });
   metadataEditValues = signal<Record<string, any>>({});
+  private getReferenceOptions(refTable: string | null): { label: string; value: string }[] {
+    if (!refTable) return [];
+    switch (refTable) {
+      case 'asset': return (this as any).assetService?.assets()?.map((a: any) => ({ label: a.display_name || a.name, value: a.id })) ?? [];
+      case 'instrument': return (this as any).assetService?.instruments()?.map((i: any) => ({ label: i.display_name || i.name, value: i.id })) ?? [];
+      case 'composite': return (this as any).compositeService?.composites()?.map((c: any) => ({ label: c.display_name || c.name, value: c.id })) ?? [];
+      case 'provider': return (this as any).providerService?.providers()?.map((p: any) => ({ label: p.display_name || p.name, value: p.id })) ?? [];
+      default: return [];
+    }
+  }
+
+  private getReferenceRoute(refTable: string | null, id: string): string[] {
+    switch (refTable) {
+      case 'asset': return ['/settings/assets', id];
+      case 'instrument': return ['/settings/instruments', id];
+      case 'composite': return ['/settings/composites', id];
+      case 'provider': return ['/settings/providers', id];
+      default: return [];
+    }
+  }
 
   // Edit state
   editing = signal(false);
@@ -149,6 +176,17 @@ export class InstrumentDetailComponent implements OnInit {
 
   // History grid
   historyGrid = signal<MetadataHistoryGrid | null>(null);
+  historyRefOptions = computed(() => {
+    const grid = this.historyGrid();
+    if (!grid) return {};
+    const opts: Record<string, { label: string; value: string }[]> = {};
+    for (const f of grid.fields) {
+      if (f.value_type === 'reference' && f.config?.['ref_table']) {
+        opts[f.metadata_id] = this.getReferenceOptions(f.config['ref_table']);
+      }
+    }
+    return opts;
+  });
   historyLoading = signal(false);
 
   ngOnInit(): void {

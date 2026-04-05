@@ -14,7 +14,7 @@
   </div>
 
   <!-- Tabs -->
-  <p-tabs [value]="activeTab()" (valueChange)="activeTab.set($any($event))">
+  <p-tabs [value]="activeTab()" (valueChange)="onTabChange($any($event))">
     <p-tablist>
       <p-tab value="Overview">Overview</p-tab>
       <p-tab value="DAG">DAG</p-tab>

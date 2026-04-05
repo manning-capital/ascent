@@ -17,6 +17,7 @@ export interface MetadataTypeItem {
   display_name: string;
   description: string | null;
   value_type: string;
+  config: Record<string, any> | null;
   is_active: boolean;
 }
 
@@ -25,6 +26,7 @@ export interface MetadataTypeCreate {
   display_name: string;
   description?: string | null;
   value_type?: string;
+  config?: Record<string, any> | null;
 }
 
 export interface MetadataTypeUpdate {
@@ -32,6 +34,7 @@ export interface MetadataTypeUpdate {
   display_name?: string;
   description?: string | null;
   value_type?: string;
+  config?: Record<string, any> | null;
   is_active?: boolean;
 }
 

@@ -107,6 +107,10 @@ def get_composite(db: Session, composite_id: uuid.UUID) -> CompositeSchema:
 
 
 def create_composite(db: Session, data: CompositeCreate) -> CompositeSchema:
+    # Duplicate check: name
+    name_dup = db.scalar(select(Composite).where(Composite.name == data.name))
+    if name_dup:
+        raise ConflictError(f"A composite with the name '{data.name}' already exists")
     # Validate member count against composite type
     _validate_member_count(db, data.composite_type_id, len(data.members))
 
@@ -138,7 +142,11 @@ def create_composite(db: Session, data: CompositeCreate) -> CompositeSchema:
             ).all()
             existing_set = frozenset(row.instrument_id for row in existing_members)
             if existing_set == new_member_set:
-                raise ConflictError("A composite with the same set of instruments already exists")
+                existing_composite = db.get(Composite, cid)
+                name = existing_composite.name if existing_composite else str(cid)
+                raise ConflictError(
+                    f"A composite with the same set of instruments already exists: '{name}'"
+                )
 
     composite = Composite(
         name=data.name,

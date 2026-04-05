@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
 from ascent.database.models import Asset
-from ascent.server.exceptions import NotFoundError
+from ascent.server.exceptions import ConflictError, NotFoundError
 from ascent.server.schemas.assets import AssetCreate, AssetDetailSchema, AssetSchema, AssetUpdate
 from ascent.server.services.instrument_service import get_provider_asset_links
 from ascent.server.services.metadata_service import get_latest_asset_metadata
@@ -39,7 +39,7 @@ def get_asset(db: Session, asset_id: uuid.UUID) -> AssetDetailSchema:
     return AssetDetailSchema(
         id=a.id,
         asset_type_id=a.asset_type_id,
-        asset_type_name=a.asset_type.name if a.asset_type else None,
+        asset_type_name=a.asset_type.display_name if a.asset_type else None,
         name=a.name,
         display_name=a.display_name,
         description=a.description,
@@ -52,6 +52,9 @@ def get_asset(db: Session, asset_id: uuid.UUID) -> AssetDetailSchema:
 
 
 def create_asset(db: Session, data: AssetCreate) -> Asset:
+    existing = db.scalar(select(Asset).where(Asset.name == data.name))
+    if existing:
+        raise ConflictError(f"An asset with the name '{data.name}' already exists")
     asset = Asset(**data.model_dump())
     db.add(asset)
     db.commit()

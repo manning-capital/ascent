@@ -403,14 +403,14 @@ def publish_feed_data(
 _PARTITION_DATA_CONFIGS: dict[str, dict] = {
     "provider_asset_metadata": {
         "select": (
-            "t.provider_id, t.asset_id, p.name AS provider, a.name AS asset, m.name AS metadata, t.value"
+            "t.provider_id, t.asset_id, p.display_name AS provider, a.display_name AS asset, m.display_name AS metadata, t.value"
         ),
         "joins": (
             "LEFT JOIN provider p ON p.id = t.provider_id "
             "LEFT JOIN asset a ON a.id = t.asset_id "
             "LEFT JOIN metadata m ON m.id = t.metadata_id"
         ),
-        "order": "p.name, a.name, m.name",
+        "order": "p.display_name, a.display_name, m.display_name",
         "pivot": {
             "group_columns": ["provider", "asset"],
             "eav_group_columns": ["provider_id", "asset_id"],
@@ -428,21 +428,23 @@ _PARTITION_DATA_CONFIGS: dict[str, dict] = {
     },
     "provider_content": {
         "select": (
-            "t.provider_id, p.name AS provider, ct.name AS content_type, t.content_external_code"
+            "t.provider_id, p.display_name AS provider, ct.display_name AS content_type, t.content_external_code"
         ),
         "joins": (
             "LEFT JOIN provider p ON p.id = t.provider_id "
             "LEFT JOIN content_type ct ON ct.id = t.content_type_id"
         ),
-        "order": "p.name, ct.name",
+        "order": "p.display_name, ct.display_name",
     },
     "instrument_attribute": {
-        "select": ("t.instrument_id, i.name AS instrument, a.name AS attribute, t.attribute_value"),
+        "select": (
+            "t.instrument_id, i.display_name AS instrument, a.display_name AS attribute, t.attribute_value"
+        ),
         "joins": (
             "LEFT JOIN instrument i ON i.id = t.instrument_id "
             "LEFT JOIN attribute a ON a.id = t.attribute_id"
         ),
-        "order": "i.name, a.name",
+        "order": "i.display_name, a.display_name",
         "pivot": {
             "group_columns": ["instrument"],
             "eav_group_columns": ["instrument_id"],
@@ -452,14 +454,14 @@ _PARTITION_DATA_CONFIGS: dict[str, dict] = {
     },
     "instrument_period_attribute": {
         "select": (
-            "t.instrument_id, i.name AS instrument, pd.name AS period, a.name AS attribute, t.attribute_value"
+            "t.instrument_id, i.display_name AS instrument, pd.display_name AS period, a.display_name AS attribute, t.attribute_value"
         ),
         "joins": (
             "LEFT JOIN instrument i ON i.id = t.instrument_id "
             "LEFT JOIN period pd ON pd.id = t.period_id "
             "LEFT JOIN attribute a ON a.id = t.attribute_id"
         ),
-        "order": "i.name, pd.name, a.name",
+        "order": "i.display_name, pd.display_name, a.display_name",
         "pivot": {
             "group_columns": ["instrument", "period"],
             "eav_group_columns": ["instrument_id", "period_id"],
@@ -468,12 +470,14 @@ _PARTITION_DATA_CONFIGS: dict[str, dict] = {
         },
     },
     "composite_attribute": {
-        "select": ("t.composite_id, c.name AS composite, a.name AS attribute, t.attribute_value"),
+        "select": (
+            "t.composite_id, c.display_name AS composite, a.display_name AS attribute, t.attribute_value"
+        ),
         "joins": (
             "LEFT JOIN composite c ON c.id = t.composite_id "
             "LEFT JOIN attribute a ON a.id = t.attribute_id"
         ),
-        "order": "c.name, a.name",
+        "order": "c.display_name, a.display_name",
         "pivot": {
             "group_columns": ["composite"],
             "eav_group_columns": ["composite_id"],
@@ -483,14 +487,14 @@ _PARTITION_DATA_CONFIGS: dict[str, dict] = {
     },
     "composite_period_attribute": {
         "select": (
-            "t.composite_id, c.name AS composite, pd.name AS period, a.name AS attribute, t.attribute_value"
+            "t.composite_id, c.display_name AS composite, pd.display_name AS period, a.display_name AS attribute, t.attribute_value"
         ),
         "joins": (
             "LEFT JOIN composite c ON c.id = t.composite_id "
             "LEFT JOIN period pd ON pd.id = t.period_id "
             "LEFT JOIN attribute a ON a.id = t.attribute_id"
         ),
-        "order": "c.name, pd.name, a.name",
+        "order": "c.display_name, pd.display_name, a.display_name",
         "pivot": {
             "group_columns": ["composite", "period"],
             "eav_group_columns": ["composite_id", "period_id"],

@@ -1,5 +1,5 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { CompositeService } from '../../services/composite.service';
 import { AssetService } from '../../services/asset.service';
@@ -18,7 +18,7 @@ import { Instrument } from '../../models/asset.model';
 @Component({
   selector: 'app-composite-list',
   standalone: true,
-  imports: [FormsModule, Select, MultiSelect, TableModule, InputText, Card, Button, Tag, Skeleton],
+  imports: [FormsModule, RouterLink, Select, MultiSelect, TableModule, InputText, Card, Button, Tag, Skeleton],
   templateUrl: './composite-list.component.html',
 })
 export class CompositeListComponent implements OnInit {
@@ -27,7 +27,17 @@ export class CompositeListComponent implements OnInit {
   assetService = inject(AssetService);
   private toast = inject(ToastService);
 
-  typeNames = computed(() => this.compositeService.compositeTypes().map(t => t.name));
+  typeNames = computed(() => this.compositeService.compositeTypes().map(t => t.display_name));
+
+  /** Composites enriched with type_display_name for filtering/sorting. */
+  enrichedComposites = computed(() => {
+    const types = this.compositeService.compositeTypes();
+    const typeMap = new Map(types.map(t => [t.id, t.display_name]));
+    return this.compositeService.composites().map(c => ({
+      ...c,
+      type_display_name: typeMap.get(c.composite_type_id) ?? 'Unknown',
+    }));
+  });
 
   statusOptions = [
     { label: 'Active', value: true },
@@ -95,7 +105,7 @@ export class CompositeListComponent implements OnInit {
     });
   }
 
-  getTypeName(typeId: string): string {
-    return this.compositeService.compositeTypes().find(t => t.id === typeId)?.name ?? 'Unknown';
+  typeRoute(typeId: string): string {
+    return `/settings/composite-types/${typeId}`;
   }
 }

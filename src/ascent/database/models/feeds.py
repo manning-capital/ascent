@@ -1,7 +1,10 @@
 """Feed-related database models."""
 
+from __future__ import annotations
+
 import datetime
 import uuid
+from typing import TYPE_CHECKING
 
 from sqlalchemy import ForeignKey, String, Text, UniqueConstraint, Uuid, func
 from sqlalchemy.dialects.postgresql import JSONB
@@ -10,6 +13,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from ascent.database.models.base import Base, NamedEntityMixin
 from ascent.database.models.instruments import Instrument
 from ascent.database.models.types import FeedType
+
+if TYPE_CHECKING:
+    from ascent.database.models.composites import Composite
 
 
 class Feed(NamedEntityMixin, Base):
@@ -27,7 +33,7 @@ class Feed(NamedEntityMixin, Base):
         ForeignKey("feed_type.id"),
         nullable=False,
     )
-    feed_type: Mapped["FeedType"] = relationship("FeedType")
+    feed_type: Mapped[FeedType] = relationship("FeedType")
     feed_ref: Mapped[str] = mapped_column(String(500), nullable=False)
     parameters: Mapped[dict | list | str | int | float | bool | None] = mapped_column(
         JSONB,
@@ -40,24 +46,24 @@ class Feed(NamedEntityMixin, Base):
     channel: Mapped[str] = mapped_column(String(200), nullable=False)
 
     # Relationships
-    runs: Mapped[list["FeedRun"]] = relationship(
+    runs: Mapped[list[FeedRun]] = relationship(
         "FeedRun", back_populates="feed", order_by="FeedRun.started_at.desc()"
     )
-    partitions: Mapped[list["FeedPartition"]] = relationship(
+    partitions: Mapped[list[FeedPartition]] = relationship(
         "FeedPartition", back_populates="feed", order_by="FeedPartition.partition_key.desc()"
     )
-    dependencies: Mapped[list["FeedDependency"]] = relationship(
+    dependencies: Mapped[list[FeedDependency]] = relationship(
         "FeedDependency",
         back_populates="feed",
         foreign_keys="FeedDependency.feed_id",
     )
-    instrument_scopes: Mapped[list["FeedInstrumentScope"]] = relationship(
+    instrument_scopes: Mapped[list[FeedInstrumentScope]] = relationship(
         "FeedInstrumentScope",
         back_populates="feed",
         cascade="all, delete-orphan",
         order_by="FeedInstrumentScope.order.asc()",
     )
-    composite_scopes: Mapped[list["FeedCompositeScope"]] = relationship(
+    composite_scopes: Mapped[list[FeedCompositeScope]] = relationship(
         "FeedCompositeScope",
         back_populates="feed",
         cascade="all, delete-orphan",
@@ -75,16 +81,14 @@ class FeedDependency(Base):
         primary_key=True,
         nullable=False,
     )
-    feed: Mapped["Feed"] = relationship(
-        "Feed", back_populates="dependencies", foreign_keys=[feed_id]
-    )
+    feed: Mapped[Feed] = relationship("Feed", back_populates="dependencies", foreign_keys=[feed_id])
     depends_on_feed_id: Mapped[uuid.UUID] = mapped_column(
         Uuid,
         ForeignKey("feed.id"),
         primary_key=True,
         nullable=False,
     )
-    depends_on_feed: Mapped["Feed"] = relationship("Feed", foreign_keys=[depends_on_feed_id])
+    depends_on_feed: Mapped[Feed] = relationship("Feed", foreign_keys=[depends_on_feed_id])
 
 
 class StrategyFeed(Base):
@@ -103,7 +107,7 @@ class StrategyFeed(Base):
         primary_key=True,
         nullable=False,
     )
-    feed: Mapped["Feed"] = relationship("Feed")
+    feed: Mapped[Feed] = relationship("Feed")
     is_required: Mapped[bool] = mapped_column(default=True)
     order: Mapped[int] = mapped_column(nullable=False, default=0)
     created_at: Mapped[datetime.datetime] = mapped_column(
@@ -125,7 +129,7 @@ class FeedPartition(Base):
         ForeignKey("feed.id"),
         nullable=False,
     )
-    feed: Mapped["Feed"] = relationship("Feed", back_populates="partitions")
+    feed: Mapped[Feed] = relationship("Feed", back_populates="partitions")
     partition_key: Mapped[datetime.datetime] = mapped_column(nullable=False)
     window_start: Mapped[datetime.datetime] = mapped_column(nullable=False)
     window_end: Mapped[datetime.datetime] = mapped_column(nullable=False)
@@ -139,7 +143,7 @@ class FeedPartition(Base):
         server_onupdate=func.now(),
         server_default=func.now(),
     )
-    runs: Mapped[list["FeedRun"]] = relationship(
+    runs: Mapped[list[FeedRun]] = relationship(
         "FeedRun", back_populates="partition", order_by="FeedRun.started_at.desc()"
     )
 
@@ -154,13 +158,13 @@ class FeedRun(Base):
         ForeignKey("feed.id"),
         nullable=False,
     )
-    feed: Mapped["Feed"] = relationship("Feed", back_populates="runs")
+    feed: Mapped[Feed] = relationship("Feed", back_populates="runs")
     partition_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid,
         ForeignKey("feed_partition.id"),
         nullable=True,
     )
-    partition: Mapped["FeedPartition | None"] = relationship("FeedPartition", back_populates="runs")
+    partition: Mapped[FeedPartition | None] = relationship("FeedPartition", back_populates="runs")
     status: Mapped[str] = mapped_column(String(50), nullable=False)
     records_fetched: Mapped[int | None] = mapped_column(nullable=True)
     started_at: Mapped[datetime.datetime] = mapped_column(nullable=False)
@@ -182,7 +186,7 @@ class FeedInstrumentScope(Base):
         primary_key=True,
         nullable=False,
     )
-    feed: Mapped["Feed"] = relationship(
+    feed: Mapped[Feed] = relationship(
         "Feed", back_populates="instrument_scopes", overlaps="instrument_scopes"
     )
     instrument_id: Mapped[uuid.UUID] = mapped_column(
@@ -191,7 +195,7 @@ class FeedInstrumentScope(Base):
         primary_key=True,
         nullable=False,
     )
-    instrument: Mapped["Instrument"] = relationship("Instrument")
+    instrument: Mapped[Instrument] = relationship("Instrument")
     order: Mapped[int] = mapped_column(nullable=False)
     created_at: Mapped[datetime.datetime] = mapped_column(
         nullable=False,
@@ -209,7 +213,7 @@ class FeedCompositeScope(Base):
         primary_key=True,
         nullable=False,
     )
-    feed: Mapped["Feed"] = relationship(
+    feed: Mapped[Feed] = relationship(
         "Feed", back_populates="composite_scopes", overlaps="composite_scopes"
     )
     composite_id: Mapped[uuid.UUID] = mapped_column(
@@ -218,7 +222,7 @@ class FeedCompositeScope(Base):
         primary_key=True,
         nullable=False,
     )
-    composite: Mapped["Composite"] = relationship("Composite")
+    composite: Mapped[Composite] = relationship("Composite")
     order: Mapped[int] = mapped_column(nullable=False)
     created_at: Mapped[datetime.datetime] = mapped_column(
         nullable=False,

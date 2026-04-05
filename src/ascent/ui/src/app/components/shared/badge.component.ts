@@ -18,7 +18,7 @@ export class BadgeComponent {
 
     if (this.variant() === 'status') {
       if (label === 'OPEN' || label === 'FILLED') return 'success';
-      if (label === 'OPENING' || label === 'CLOSING' || label === 'PARTIALLY_FILLED') return 'info';
+      if (label === 'OPENING' || label === 'CLOSING' || label === 'PARTIALLY_FILLED') return 'contrast';
       if (label === 'PENDING' || label === 'SUBMITTED' || label === 'ACCEPTED') return 'warn';
       if (label === 'ERROR' || label === 'REJECTED') return 'danger';
       if (label === 'CLOSED' || label === 'CANCELLED') return 'secondary';
@@ -42,7 +42,7 @@ export class BadgeComponent {
         return 'warn';
       case 'PAPER':
       case 'EXIT':
-        return 'info';
+        return 'contrast';
       case 'PENDING':
       case 'CLOSED':
         return 'secondary';

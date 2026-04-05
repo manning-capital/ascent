@@ -19,13 +19,7 @@ Example
             entry_z: float = Field(2.0, description="Z-score threshold to enter")
             exit_z: float = Field(0.5, description="Z-score threshold to exit")
 
-        def start(self) -> None:
-            ...
-
         def evaluate(self) -> None:
-            ...
-
-        def stop(self) -> None:
             ...
 """
 
@@ -75,18 +69,12 @@ class Strategy(ABC):
         self.parameters = parameters
 
     # ------------------------------------------------------------------
-    # Lifecycle hooks — called by the execution engine
+    # Core — called by the execution engine on each tick
     # ------------------------------------------------------------------
-
-    def start(self) -> None:
-        """Called once when the strategy is initialised (before first evaluate)."""
 
     @abstractmethod
     def evaluate(self) -> None:
         """Called on each execution tick.  Must be implemented by subclasses."""
-
-    def stop(self) -> None:
-        """Called once when the strategy is shut down (after last evaluate)."""
 
     # ------------------------------------------------------------------
     # Schema helpers

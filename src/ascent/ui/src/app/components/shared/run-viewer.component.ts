@@ -81,7 +81,7 @@ type Radius = 5 | 10 | 30 | 60;
                   [fluid]="true"/>
               </div>
               <div class="flex gap-2">
-                <p-button label="Apply" severity="info" size="small" (onClick)="applyFilter()" [fluid]="true"/>
+                <p-button label="Apply" severity="primary" size="small" (onClick)="applyFilter()" [fluid]="true"/>
                 <p-button label="Clear" severity="secondary" size="small" [text]="true" (onClick)="clearFilter()"/>
               </div>
             </div>
@@ -105,7 +105,7 @@ type Radius = 5 | 10 | 30 | 60;
                 optionValue="value"
                 size="small"/>
               <div class="flex gap-2">
-                <p-button label="Apply" severity="info" size="small" (onClick)="applyFilter()" [fluid]="true"/>
+                <p-button label="Apply" severity="primary" size="small" (onClick)="applyFilter()" [fluid]="true"/>
                 <p-button label="Clear" severity="secondary" size="small" [text]="true" (onClick)="clearFilter()"/>
               </div>
             </div>
@@ -226,7 +226,7 @@ export class RunViewerComponent implements OnInit {
       case 'FAILED': return 'danger';
       case 'RUNNING': return 'warn';
       case 'PENDING': return 'secondary';
-      default: return 'info';
+      default: return 'secondary';
     }
   }
 

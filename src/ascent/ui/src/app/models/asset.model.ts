@@ -106,6 +106,7 @@ export interface MetadataType {
   display_name: string;
   description: string | null;
   value_type: string;
+  config: Record<string, any> | null;
   is_active: boolean;
 }
 
@@ -115,6 +116,7 @@ export interface AssetTypeMetadataField {
   metadata_display_name: string;
   metadata_description: string | null;
   value_type: string;
+  config: Record<string, any> | null;
   is_required: boolean;
   display_order: number;
   is_inherited: boolean;
@@ -138,6 +140,7 @@ export interface ProviderTypeMetadataField {
   metadata_display_name: string;
   metadata_description: string | null;
   value_type: string;
+  config: Record<string, any> | null;
   is_required: boolean;
   display_order: number;
   is_inherited: boolean;
@@ -178,6 +181,7 @@ export interface InstrumentTypeMetadataField {
   metadata_display_name: string | null;
   metadata_description: string | null;
   value_type: string;
+  config: Record<string, any> | null;
   is_required: boolean;
   display_order: number;
   is_inherited: boolean;
@@ -192,6 +196,7 @@ export interface MetadataConflict {
   metadata_name: string;
   metadata_display_name: string;
   value_type: string;
+  config: Record<string, any> | null;
   child_is_required: boolean;
   parent_is_required: boolean;
   parent_source_type_name: string;
@@ -225,6 +230,7 @@ export interface MetadataFieldInfo {
   metadata_name: string;
   metadata_display_name: string;
   value_type: string;
+  config: Record<string, any> | null;
 }
 
 export interface MetadataSnapshotRow {

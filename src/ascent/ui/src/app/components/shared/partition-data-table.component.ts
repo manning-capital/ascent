@@ -13,12 +13,17 @@ const LINK_COLUMNS: Record<string, { idCol: string; route: string }> = {
   asset: { idCol: 'asset_id', route: '/settings/assets' },
   instrument: { idCol: 'instrument_id', route: '/settings/instruments' },
   composite: { idCol: 'composite_id', route: '/settings/composites' },
+  attribute: { idCol: 'attribute_id', route: '/settings/attributes' },
+  metadata: { idCol: 'metadata_id', route: '/settings/metadata-types' },
 };
+
+/** Columns that should be visually highlighted as key/identifier columns. */
+const KEY_COLUMNS = new Set(['timestamp']);
 
 /** Columns that are raw IDs and should be hidden from the table. */
 const HIDDEN_COLUMNS = new Set([
   'provider_id', 'from_asset_id', 'to_asset_id', 'asset_id', 'period_id',
-  'instrument_id', 'composite_id',
+  'instrument_id', 'composite_id', 'attribute_id', 'metadata_id',
 ]);
 
 @Component({
@@ -63,19 +68,19 @@ const HIDDEN_COLUMNS = new Set([
         </div>
       </div>
     } @else {
-      <div class="flex-1 overflow-y-auto min-h-0 text-[11px] transition-opacity duration-200" [class.opacity-40]="isLoading" [class.pointer-events-none]="isLoading">
-        <p-table [value]="data">
+      <div class="flex-1 overflow-y-auto min-h-0 text-[11px] transition-opacity duration-200 rounded-lg border border-surface overflow-hidden" [class.opacity-40]="isLoading" [class.pointer-events-none]="isLoading">
+        <p-table [value]="data" [lazy]="true" (onLazyLoad)="onSort($event)" [sortField]="sortField" [sortOrder]="sortOrder">
           <ng-template #header>
             <tr>
               @for (col of columns; track col) {
-                <th class="whitespace-nowrap" [class.key-col]="isLinkColumn(col)">{{ col }}</th>
+                <th class="whitespace-nowrap" [class.key-col]="isKeyColumn(col)" [pSortableColumn]="col">{{ formatHeader(col) }} <p-sortIcon [field]="col"/></th>
               }
             </tr>
           </ng-template>
           <ng-template #body let-row>
             <tr>
               @for (col of columns; track col) {
-                <td class="whitespace-nowrap font-mono" [class.key-col]="isLinkColumn(col)">
+                <td class="whitespace-nowrap font-mono" [class.key-col]="isKeyColumn(col)">
                   @if (isLinkColumn(col)) {
                     <a (click)="$event.stopPropagation(); navigateToEntity(col, row)" class="text-primary hover:underline cursor-pointer relative z-10">{{ row[col] ?? '-' }}</a>
                   } @else {
@@ -105,9 +110,12 @@ export class PartitionDataTableComponent {
   @Input() pageSize = 25;
   @Input() totalPages = 0;
   @Input() loading = false;
+  @Input() sortField: string = 'timestamp';
+  @Input() sortOrder: number = -1;  // -1 = desc, 1 = asc
   skeletonRows = Array.from({ length: 20 });
   @Output() pageChange = new EventEmitter<number>();
   @Output() pageSizeChange = new EventEmitter<number>();
+  @Output() sortChange = new EventEmitter<{ field: string; order: number }>();
 
   private router = inject(Router);
 
@@ -122,6 +130,19 @@ export class PartitionDataTableComponent {
     return Object.keys(this.data[0]).filter(col => !HIDDEN_COLUMNS.has(col));
   }
 
+  /** Format a column key into a capitalized header label. */
+  formatHeader(col: string): string {
+    return col
+      .split('_')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ');
+  }
+
+  /** Whether this column should be visually highlighted as a key column. */
+  isKeyColumn(col: string): boolean {
+    return KEY_COLUMNS.has(col) || this.isLinkColumn(col);
+  }
+
   /** Whether this column should render as a link. */
   isLinkColumn(col: string): boolean {
     const cfg = LINK_COLUMNS[col];
@@ -134,6 +155,12 @@ export class PartitionDataTableComponent {
     const cfg = LINK_COLUMNS[col];
     if (cfg) {
       this.router.navigate([cfg.route, row[cfg.idCol]]);
+    }
+  }
+
+  onSort(event: any): void {
+    if (event.sortField && event.sortField !== this.sortField || event.sortOrder !== this.sortOrder) {
+      this.sortChange.emit({ field: event.sortField, order: event.sortOrder });
     }
   }
 

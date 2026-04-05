@@ -53,6 +53,7 @@ export type CompositeTypeMetadataField = {
   metadata_display_name: string | null;
   metadata_description: string | null;
   value_type: string;
+  config: Record<string, any> | null;
   is_required: boolean;
   display_order: number;
   is_inherited: boolean;
