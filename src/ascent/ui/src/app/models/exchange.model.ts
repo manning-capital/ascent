@@ -2,6 +2,8 @@ export interface ExchangeListItem {
   id: string;
   exchange_type_id: string;
   exchange_type_name: string | null;
+  instrument_type_id: string | null;
+  instrument_type_name: string | null;
   name: string;
   display_name: string;
   description: string | null;

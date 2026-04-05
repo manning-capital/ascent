@@ -2,7 +2,7 @@ import datetime
 import uuid
 from typing import Any
 
-from sqlalchemy import insert, select
+from sqlalchemy import insert, select, update
 from sqlalchemy.orm import Session, joinedload
 
 from ascent.database.models import (
@@ -413,13 +413,15 @@ def bulk_update_asset_metadata_history(
 
     # Process updates (value changes and timestamp moves)
     for u in data.updates:
-        row = db.get(AssetMetadata, (u.old_timestamp, asset_id, u.metadata_id))
-        if not row:
-            continue
         new_ts = u.new_timestamp if u.new_timestamp is not None else u.old_timestamp
         if new_ts != u.old_timestamp:
-            db.delete(row)
-            db.flush()
+            db.execute(
+                AssetMetadata.__table__.delete().where(
+                    (AssetMetadata.timestamp == u.old_timestamp)
+                    & (AssetMetadata.asset_id == asset_id)
+                    & (AssetMetadata.metadata_id == u.metadata_id)
+                )
+            )
             db.execute(
                 insert(AssetMetadata).values(
                     timestamp=new_ts,
@@ -429,7 +431,15 @@ def bulk_update_asset_metadata_history(
                 )
             )
         else:
-            row.value = u.value
+            db.execute(
+                update(AssetMetadata)
+                .where(
+                    (AssetMetadata.timestamp == u.old_timestamp)
+                    & (AssetMetadata.asset_id == asset_id)
+                    & (AssetMetadata.metadata_id == u.metadata_id)
+                )
+                .values(value=u.value)
+            )
 
     db.flush()
 
@@ -473,13 +483,15 @@ def bulk_update_provider_metadata_history(
     db.flush()
 
     for u in data.updates:
-        row = db.get(ProviderMetadata, (u.old_timestamp, provider_id, u.metadata_id))
-        if not row:
-            continue
         new_ts = u.new_timestamp if u.new_timestamp is not None else u.old_timestamp
         if new_ts != u.old_timestamp:
-            db.delete(row)
-            db.flush()
+            db.execute(
+                ProviderMetadata.__table__.delete().where(
+                    (ProviderMetadata.timestamp == u.old_timestamp)
+                    & (ProviderMetadata.provider_id == provider_id)
+                    & (ProviderMetadata.metadata_id == u.metadata_id)
+                )
+            )
             db.execute(
                 insert(ProviderMetadata).values(
                     timestamp=new_ts,
@@ -489,7 +501,15 @@ def bulk_update_provider_metadata_history(
                 )
             )
         else:
-            row.value = u.value
+            db.execute(
+                update(ProviderMetadata)
+                .where(
+                    (ProviderMetadata.timestamp == u.old_timestamp)
+                    & (ProviderMetadata.provider_id == provider_id)
+                    & (ProviderMetadata.metadata_id == u.metadata_id)
+                )
+                .values(value=u.value)
+            )
 
     db.flush()
 
@@ -634,13 +654,16 @@ def bulk_update_provider_asset_metadata_history(
     db.flush()
 
     for u in data.updates:
-        row = db.get(ProviderAssetMetadata, (u.old_timestamp, provider_id, asset_id, u.metadata_id))
-        if not row:
-            continue
         new_ts = u.new_timestamp if u.new_timestamp is not None else u.old_timestamp
         if new_ts != u.old_timestamp:
-            db.delete(row)
-            db.flush()
+            db.execute(
+                ProviderAssetMetadata.__table__.delete().where(
+                    (ProviderAssetMetadata.timestamp == u.old_timestamp)
+                    & (ProviderAssetMetadata.provider_id == provider_id)
+                    & (ProviderAssetMetadata.asset_id == asset_id)
+                    & (ProviderAssetMetadata.metadata_id == u.metadata_id)
+                )
+            )
             db.execute(
                 insert(ProviderAssetMetadata).values(
                     timestamp=new_ts,
@@ -651,7 +674,16 @@ def bulk_update_provider_asset_metadata_history(
                 )
             )
         else:
-            row.value = u.value
+            db.execute(
+                update(ProviderAssetMetadata)
+                .where(
+                    (ProviderAssetMetadata.timestamp == u.old_timestamp)
+                    & (ProviderAssetMetadata.provider_id == provider_id)
+                    & (ProviderAssetMetadata.asset_id == asset_id)
+                    & (ProviderAssetMetadata.metadata_id == u.metadata_id)
+                )
+                .values(value=u.value)
+            )
 
     db.flush()
 
@@ -776,13 +808,15 @@ def bulk_update_instrument_metadata_history(
     db.flush()
 
     for u in data.updates:
-        row = db.get(InstrumentMetadata, (u.old_timestamp, instrument_id, u.metadata_id))
-        if not row:
-            continue
         new_ts = u.new_timestamp if u.new_timestamp is not None else u.old_timestamp
         if new_ts != u.old_timestamp:
-            db.delete(row)
-            db.flush()
+            db.execute(
+                InstrumentMetadata.__table__.delete().where(
+                    (InstrumentMetadata.timestamp == u.old_timestamp)
+                    & (InstrumentMetadata.instrument_id == instrument_id)
+                    & (InstrumentMetadata.metadata_id == u.metadata_id)
+                )
+            )
             db.execute(
                 insert(InstrumentMetadata).values(
                     timestamp=new_ts,
@@ -792,7 +826,15 @@ def bulk_update_instrument_metadata_history(
                 )
             )
         else:
-            row.value = u.value
+            db.execute(
+                update(InstrumentMetadata)
+                .where(
+                    (InstrumentMetadata.timestamp == u.old_timestamp)
+                    & (InstrumentMetadata.instrument_id == instrument_id)
+                    & (InstrumentMetadata.metadata_id == u.metadata_id)
+                )
+                .values(value=u.value)
+            )
 
     db.flush()
 
@@ -916,13 +958,15 @@ def bulk_update_composite_metadata_history(
     db.flush()
 
     for u in data.updates:
-        row = db.get(CompositeMetadata, (u.old_timestamp, composite_id, u.metadata_id))
-        if not row:
-            continue
         new_ts = u.new_timestamp if u.new_timestamp is not None else u.old_timestamp
         if new_ts != u.old_timestamp:
-            db.delete(row)
-            db.flush()
+            db.execute(
+                CompositeMetadata.__table__.delete().where(
+                    (CompositeMetadata.timestamp == u.old_timestamp)
+                    & (CompositeMetadata.composite_id == composite_id)
+                    & (CompositeMetadata.metadata_id == u.metadata_id)
+                )
+            )
             db.execute(
                 insert(CompositeMetadata).values(
                     timestamp=new_ts,
@@ -932,7 +976,15 @@ def bulk_update_composite_metadata_history(
                 )
             )
         else:
-            row.value = u.value
+            db.execute(
+                update(CompositeMetadata)
+                .where(
+                    (CompositeMetadata.timestamp == u.old_timestamp)
+                    & (CompositeMetadata.composite_id == composite_id)
+                    & (CompositeMetadata.metadata_id == u.metadata_id)
+                )
+                .values(value=u.value)
+            )
 
     db.flush()
 

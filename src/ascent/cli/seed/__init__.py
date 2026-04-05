@@ -19,6 +19,20 @@ def run(
         If True, instructs the user to restart the server with --drop first.
     """
     import datetime
+    import os
+    import sys
+    import time
+
+    from rich.console import Console
+    from rich.progress import (
+        BarColumn,
+        MofNCompleteColumn,
+        Progress,
+        SpinnerColumn,
+        TextColumn,
+        TimeElapsedColumn,
+    )
+    from rich.table import Table
 
     from ascent.cli.seed.assets import seed_assets
     from ascent.cli.seed.composites import seed_composites
@@ -34,51 +48,107 @@ def run(
     from ascent.cli.seed.types import seed_types
     from ascent.client import AscentClient
 
+    # All rich output goes to stderr; stdout is silenced to suppress
+    # print() calls from individual seed functions.
+    console = Console(stderr=True)
+
     client = AscentClient(server_url)
 
-    print("Waiting for server...")
-    client.wait_until_ready()
-    print("Server is ready.")
+    with console.status("[bold cyan]Waiting for server...[/]"):
+        client.wait_until_ready()
+    console.print("[green]✓[/] Server is ready")
 
     if drop:
-        print("Dropping and recreating all tables...")
-        client.reset_database()
-        print("Database reset complete.")
+        with console.status("[bold yellow]Dropping and recreating all tables...[/]"):
+            client.reset_database()
+        console.print("[green]✓[/] Database reset complete")
 
     existing = client.get_asset_types()
     if existing:
-        print("Database already has data. Use --drop to reset first.")
+        console.print("[red]✗[/] Database already has data. Use --drop to reset first.")
         return
 
     now = datetime.datetime.now(datetime.UTC)
     ctx: dict = {"now": now}
 
-    seed_types(client, ctx)
-    seed_assets(client, ctx)
-    seed_descriptors(client, ctx)
-    seed_type_metadata(client, ctx)
-    seed_asset_metadata(client, ctx)
-    seed_providers(client, ctx)
-    seed_portfolios(client, ctx)
-    seed_instruments(client, ctx)
-    seed_composites(client, ctx)
-    seed_feeds(client, ctx)
-    seed_strategies(client, ctx)
-    seed_trades(client, ctx)
+    steps = [
+        ("Type hierarchies", seed_types),
+        ("Assets", seed_assets),
+        ("Attributes & metadata types", seed_descriptors),
+        ("Type-metadata fields", seed_type_metadata),
+        ("Asset metadata", seed_asset_metadata),
+        ("Providers & exchanges", seed_providers),
+        ("Portfolios", seed_portfolios),
+        ("Instruments", seed_instruments),
+        ("Composites", seed_composites),
+        ("Feeds, runs & partitions", seed_feeds),
+        ("Strategies & runs", seed_strategies),
+        ("Trades, orders & snapshots", seed_trades),
+    ]
 
+    progress = Progress(
+        SpinnerColumn(),
+        TextColumn("{task.description}"),
+        BarColumn(bar_width=30),
+        MofNCompleteColumn(),
+        TimeElapsedColumn(),
+        console=console,
+    )
+    ctx["progress"] = progress
+
+    console.print()
+    total_start = time.time()
+
+    # Redirect stdout to /dev/null so print() calls from seed functions
+    # are silenced. Rich writes to stderr via console so it's unaffected.
+    _saved_stdout = sys.stdout
+    sys.stdout = open(os.devnull, "w")
+
+    try:
+        with progress:
+            for i, (label, fn) in enumerate(steps, 1):
+                step_start = time.time()
+                tag = f"[dim]({i}/{len(steps)})[/]"
+                step_task = progress.add_task(
+                    f"  {tag} [bold blue]{label}[/]",
+                    total=None,
+                )
+                fn(client, ctx)
+                elapsed = time.time() - step_start
+                progress.update(step_task, completed=1, total=1)
+                progress.update(
+                    step_task,
+                    description=f"  [green]✓[/] {tag} {label} [dim]({elapsed:.1f}s)[/]",
+                )
+    finally:
+        sys.stdout.close()
+        sys.stdout = _saved_stdout
+
+    total_elapsed = time.time() - total_start
     client.close()
 
-    print("\nSeeded successfully:")
-    print("  16 asset types (4 top-level with hierarchical subtypes)")
-    print(f"  {len(ctx['asset_by_symbol'])} assets across all asset classes")
-    print(f"  {len(ctx['meta'])} metadata types")
-    print(f"  {len(ctx['all_feeds'])} feeds")
-    print(f"  5 instrument types (hierarchical), {len(ctx['all_instruments'])} instruments")
-    print(f"  8 composite types (hierarchical), {len(ctx['all_composites'])} composites")
-    print(
-        f"  {ctx['paga_count']} instrument_attribute rows, {ctx['comp_count']} composite_attribute rows"
-    )
-    print(f"  {len(ctx['strategy_objs'])} strategies (10 strategy types)")
-    print(f"  {ctx['link_count']} strategy-run <-> feed-run links")
-    print(f"  {len(ctx['all_trades'])} trades")
-    print("  5 portfolios, 4 providers, 5 exchanges")
+    # Summary table
+    console.print()
+    table = Table(title="Seed Summary", show_lines=False, title_style="bold")
+    table.add_column("Category", style="cyan")
+    table.add_column("Count", justify="right", style="green")
+
+    table.add_row("Asset types", "16 (4 top-level + subtypes)")
+    table.add_row("Assets", str(len(ctx["asset_by_symbol"])))
+    table.add_row("Metadata types", str(len(ctx["meta"])))
+    table.add_row("Providers", "4")
+    table.add_row("Exchanges", "5")
+    table.add_row("Portfolios", "5")
+    table.add_row("Instrument types", "5 (hierarchical)")
+    table.add_row("Instruments", str(len(ctx["all_instruments"])))
+    table.add_row("Composite types", "8 (hierarchical)")
+    table.add_row("Composites", str(len(ctx["all_composites"])))
+    table.add_row("Feeds", str(len(ctx["all_feeds"])))
+    table.add_row("Instrument attributes", f"{ctx['paga_count']:,}")
+    table.add_row("Composite attributes", f"{ctx['comp_count']:,}")
+    table.add_row("Strategies", str(len(ctx["strategy_objs"])))
+    table.add_row("Strategy-run / feed-run links", str(ctx["link_count"]))
+    table.add_row("Trades", str(len(ctx["all_trades"])))
+
+    console.print(table)
+    console.print(f"\n[bold green]✓ Seeded successfully in {total_elapsed:.1f}s[/]")

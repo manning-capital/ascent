@@ -380,6 +380,11 @@ def seed_strategies(client: Any, ctx: dict) -> None:
     # -----------------------------------------------------------------
     print("Creating strategy runs...")
 
+    progress = ctx.get("progress")
+    runs_task = None
+    if progress:
+        runs_task = progress.add_task("  Strategy runs", total=len(strategies) * 100)
+
     strat_runs_by_strategy: dict[str, list] = {}
     for s, _ in strategies:
         strat_runs_by_strategy[s["id"]] = []
@@ -419,6 +424,11 @@ def seed_strategies(client: Any, ctx: dict) -> None:
                 error_message=error_msg,
             )
             strat_runs_by_strategy[s["id"]].append(sr)
+            if progress and runs_task is not None:
+                progress.advance(runs_task)
+
+    if progress and runs_task is not None:
+        progress.update(runs_task, visible=False)
 
     # --- Strategy Run <-> Feed Run links ---
     link_count = 0

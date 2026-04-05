@@ -7,9 +7,104 @@ import random
 import uuid
 from typing import Any
 
+from ascent.cli.seed.trades import _VOLATILITIES, _compute_rsi, _gbm_daily_prices
+
+# Reference prices for all tradeable assets
+_REF_PRICES: dict[str, float] = {
+    "BTC": 67500.0,
+    "ETH": 3400.0,
+    "SOL": 145.0,
+    "ADA": 0.45,
+    "XRP": 0.52,
+    "DOGE": 0.12,
+    "AVAX": 35.0,
+    "LINK": 14.0,
+    "DOT": 7.20,
+    "MATIC": 0.58,
+    "ATOM": 9.50,
+    "UNI": 7.80,
+    "APT": 8.90,
+    "ARB": 1.15,
+    "OP": 1.85,
+    "NEAR": 5.20,
+    "FTM": 0.42,
+    "AAVE": 95.0,
+    "MKR": 1450.0,
+    "SNX": 2.80,
+    "CRV": 0.55,
+    "LDO": 2.10,
+    "INJ": 22.0,
+    "SUI": 1.35,
+    "SEI": 0.38,
+    "TIA": 8.50,
+    "JUP": 0.85,
+    "PENDLE": 4.60,
+    "USDT": 1.00,
+    "USDC": 1.00,
+    "DAI": 1.00,
+    "AAPL": 182.0,
+    "GOOGL": 155.0,
+    "MSFT": 390.0,
+    "AMZN": 175.0,
+    "TSLA": 245.0,
+    "NVDA": 880.0,
+    "META": 470.0,
+    "JPM": 192.0,
+    "V": 265.0,
+    "JNJ": 152.0,
+    "SPY": 510.0,
+    "QQQ": 430.0,
+    "GLD": 215.0,
+    "TLT": 92.0,
+    "IWM": 198.0,
+    "XAU": 2350.0,
+    "XAG": 28.50,
+    "XPT": 1020.0,
+    "XPD": 1050.0,
+    "WTI": 78.50,
+    "BRENT": 82.30,
+    "NATGAS": 2.15,
+    "US_2Y": 99.85,
+    "US_10Y": 97.50,
+    "US_30Y": 95.20,
+    "DE_10Y": 98.10,
+    "UK_10Y": 96.80,
+    "HEATING_OIL": 2.55,
+    "WHEAT": 6.50,
+    "CORN": 4.80,
+    "SOYBEANS": 12.50,
+    "COFFEE": 1.95,
+    "SUGAR": 0.22,
+    "COTTON": 0.82,
+    "CORP_AAA": 100.50,
+    "CORP_BBB": 99.20,
+    "CORP_HY": 95.80,
+}
+
+
+def _ensure_price_paths(ctx: dict) -> None:
+    """Generate GBM price paths once and store in ctx for reuse by trades seed."""
+    if "price_paths" in ctx:
+        return
+    num_days = 91
+    price_paths: dict[str, list[float]] = {}
+    rsi_paths: dict[str, list[float]] = {}
+    for sym, s0 in _REF_PRICES.items():
+        mu, sigma = _VOLATILITIES.get(sym, (0.0, 0.50))
+        seed = hash(sym) & 0xFFFFFFFF
+        prices = _gbm_daily_prices(s0, num_days, mu=mu, sigma=sigma, seed=seed)
+        price_paths[sym] = prices
+        rsi_paths[sym] = _compute_rsi(prices)
+    ctx["price_paths"] = price_paths
+    ctx["rsi_paths"] = rsi_paths
+    ctx["ref_prices"] = _REF_PRICES
+
 
 def seed_feeds(client: Any, ctx: dict) -> None:
     print("Creating feeds...")
+
+    # Generate shared GBM price paths (used here and by trades seed)
+    _ensure_price_paths(ctx)
 
     now = ctx["now"]
     asset_by_symbol = ctx["asset_by_symbol"]
@@ -258,12 +353,15 @@ def seed_feeds(client: Any, ctx: dict) -> None:
         client.create_feed_dependency(uuid.UUID(child_id), depends_on_feed_id=uuid.UUID(parent_id))
 
     # -----------------------------------------------------------------
-    # Feed runs & partitions
+    # Feed runs & partitions — runs spaced at each feed's actual
+    # schedule interval, capped at 200 runs per feed.
     # -----------------------------------------------------------------
     print("Creating feed runs and partitions...")
 
     from ascent.feeds.partition import partition_key_for, partition_window
     from ascent.feeds.schedule import Schedule
+
+    MAX_RUNS_PER_FEED = 100
 
     all_feeds = [
         feed_market,
@@ -293,16 +391,26 @@ def seed_feeds(client: Any, ctx: dict) -> None:
     partition_cache: dict = {}
     feed_runs_by_feed: dict[str, list] = {f["id"]: [] for f in all_feeds}
 
+    progress = ctx.get("progress")
+    runs_task = None
+    if progress:
+        runs_task = progress.add_task("  Feed runs", total=len(all_feeds) * MAX_RUNS_PER_FEED)
+
     for feed_obj in all_feeds:
         schedule_obj = feed_schedules[feed_obj["id"]]
-        for i in range(100):
-            hours_ago = i * 4
-            started = now - datetime.timedelta(hours=hours_ago)
-            status = random.choice(
-                ["COMPLETED"] * 8 + ["FAILED"] + ["RUNNING"]
-                if i == 0
-                else ["COMPLETED"] * 9 + ["FAILED"]
-            )
+        interval_secs = schedule_obj.interval if schedule_obj and schedule_obj.interval else 3600
+
+        for i in range(MAX_RUNS_PER_FEED):
+            secs_ago = i * interval_secs
+            started = now - datetime.timedelta(seconds=secs_ago)
+
+            # Most recent run may be RUNNING; the rest mostly COMPLETED
+            # with ~5% failure rate
+            if i == 0:
+                status = random.choice(["COMPLETED"] * 8 + ["RUNNING"] * 2)
+            else:
+                status = "COMPLETED" if random.random() < 0.95 else "FAILED"
+
             completed = (
                 started + datetime.timedelta(seconds=random.uniform(0.5, 5.0))
                 if status == "COMPLETED"
@@ -342,149 +450,163 @@ def seed_feeds(client: Any, ctx: dict) -> None:
                 error_message="Connection timeout" if status == "FAILED" else None,
             )
             feed_runs_by_feed[feed_obj["id"]].append(run)
+            if progress and runs_task is not None:
+                progress.advance(runs_task)
+
+    if progress and runs_task is not None:
+        progress.update(runs_task, visible=False)
 
     # -----------------------------------------------------------------
-    # Instrument & composite attribute data
+    # Instrument & composite attribute data — prices from GBM paths
+    # generated in the trades seed, with intraday interpolation.
     # -----------------------------------------------------------------
     print("Creating instrument attribute data...")
 
-    ref_prices_seed = {
-        "BTC": 67500.0,
-        "ETH": 3400.0,
-        "SOL": 145.0,
-        "ADA": 0.45,
-        "XRP": 0.52,
-        "DOGE": 0.12,
-        "AVAX": 35.0,
-        "LINK": 14.0,
-        "DOT": 7.20,
-        "MATIC": 0.58,
-        "ATOM": 9.50,
-        "UNI": 7.80,
-        "APT": 8.90,
-        "ARB": 1.15,
-        "OP": 1.85,
-        "NEAR": 5.20,
-        "FTM": 0.42,
-        "AAVE": 95.0,
-        "MKR": 1450.0,
-        "SNX": 2.80,
-        "CRV": 0.55,
-        "LDO": 2.10,
-        "INJ": 22.0,
-        "SUI": 1.35,
-        "SEI": 0.38,
-        "TIA": 8.50,
-        "JUP": 0.85,
-        "PENDLE": 4.60,
-        "USDT": 1.00,
-        "USDC": 1.00,
-        "DAI": 1.00,
-        "AAPL": 182.0,
-        "GOOGL": 155.0,
-        "MSFT": 390.0,
-        "AMZN": 175.0,
-        "TSLA": 245.0,
-        "NVDA": 880.0,
-        "META": 470.0,
-        "JPM": 192.0,
-        "V": 265.0,
-        "JNJ": 152.0,
-        "SPY": 510.0,
-        "QQQ": 430.0,
-        "GLD": 215.0,
-        "TLT": 92.0,
-        "IWM": 198.0,
-        "XAU": 2350.0,
-        "XAG": 28.50,
-        "XPT": 1020.0,
-        "XPD": 1050.0,
-        "WTI": 78.50,
-        "BRENT": 82.30,
-        "NATGAS": 2.15,
-        "US_2Y": 99.85,
-        "US_10Y": 97.50,
-        "US_30Y": 95.20,
-        "DE_10Y": 98.10,
-        "UK_10Y": 96.80,
-    }
+    price_paths = ctx.get("price_paths", {})
+    rsi_paths = ctx.get("rsi_paths", {})
 
     inst_attr_attrs = [a for a in all_attributes if a["name"] in ("CLOSE", "RSI")]
     comp_attr_attrs = [a for a in all_attributes if a["name"] in ("SPREAD", "Z_SCORE")]
+
+    def _sym_for_instrument(inst: dict) -> str | None:
+        return next(
+            (s for s, a in asset_by_symbol.items() if a["id"] == inst.get("from_asset_id")),
+            None,
+        )
+
+    def _make_aware(ts: datetime.datetime) -> datetime.datetime:
+        """Ensure a datetime is timezone-aware (UTC)."""
+        if ts.tzinfo is None:
+            return ts.replace(tzinfo=datetime.UTC)
+        return ts
+
+    def _price_for_ts(sym: str, ts: datetime.datetime) -> float:
+        """Look up GBM daily price for a timestamp, adding intraday noise."""
+        path = price_paths.get(sym)
+        if not path:
+            return 100.0
+        days_ago = max(0, (now - _make_aware(ts)).days)
+        idx = min(days_ago, len(path) - 1)
+        base = path[idx]
+        return round(base * (1 + random.uniform(-0.003, 0.003)), 6)
+
+    def _rsi_for_ts(sym: str, ts: datetime.datetime) -> float:
+        """Look up RSI for the day corresponding to *ts*."""
+        path = rsi_paths.get(sym)
+        if not path:
+            return round(random.uniform(30.0, 70.0), 2)
+        days_ago = max(0, (now - _make_aware(ts)).days)
+        idx = min(days_ago, len(path) - 1)
+        return path[idx]
 
     paga_batch: list[dict] = []
     paga_count = 0
     comp_batch: list[dict] = []
     comp_count = 0
+    seen_inst_keys: set[tuple] = set()
+    seen_comp_keys: set[tuple] = set()
+
+    # Only generate attribute data for the primary market data feeds (one per
+    # provider) to avoid PK collisions from feeds with overlapping intervals.
+    attr_feed_ids = {
+        feed_market["id"],  # Kraken instrument_attribute
+        feed_cb_market["id"],  # Coinbase instrument_attribute
+        feed_ib_market["id"],  # IB instrument_attribute
+        feed_correlation["id"],  # composite_attribute
+    }
+
+    materialized = [
+        k
+        for k, v in partition_cache.items()
+        if v["status"] == "MATERIALIZED" and k[0] in attr_feed_ids
+    ]
+    attr_task = None
+    if progress:
+        attr_task = progress.add_task("  Attribute data", total=len(materialized))
+
     for cache_key, partition_obj in partition_cache.items():
         if partition_obj["status"] != "MATERIALIZED":
             continue
         feed_id_key = cache_key[0]
-        feed_for_partition = next((f for f in all_feeds if f["id"] == feed_id_key), None)
-        if (
-            feed_for_partition is None
-            or feed_for_partition.get("output_table") != "instrument_attribute"
-        ):
+        if feed_id_key not in attr_feed_ids:
             continue
+        feed_for_partition = next((f for f in all_feeds if f["id"] == feed_id_key), None)
+        if feed_for_partition is None:
+            continue
+
         w_start = datetime.datetime.fromisoformat(partition_obj["window_start"])
         w_end = datetime.datetime.fromisoformat(partition_obj["window_end"])
         window_secs = (w_end - w_start).total_seconds()
-        ts = w_start + datetime.timedelta(seconds=window_secs * 0.5 + random.uniform(-0.5, 0.5))
+        ts = w_start + datetime.timedelta(seconds=window_secs * 0.5)
 
-        for inst in all_instruments:
-            for attr in inst_attr_attrs:
-                if attr["name"] == "CLOSE":
-                    base = 100.0
-                    sym_for_price = next(
-                        (
-                            s
-                            for s, a in asset_by_symbol.items()
-                            if a["id"] == inst.get("from_asset_id")
-                        ),
-                        None,
+        output_table = feed_for_partition.get("output_table", "")
+
+        if output_table == "instrument_attribute":
+            for inst in all_instruments:
+                sym = _sym_for_instrument(inst)
+                for attr in inst_attr_attrs:
+                    key = (ts.isoformat(), inst["id"], attr["id"])
+                    if key in seen_inst_keys:
+                        continue
+                    seen_inst_keys.add(key)
+                    if attr["name"] == "CLOSE":
+                        value = (
+                            _price_for_ts(sym, ts)
+                            if sym
+                            else round(100 * (1 + random.uniform(-0.02, 0.02)), 4)
+                        )
+                    else:  # RSI
+                        value = (
+                            _rsi_for_ts(sym, ts) if sym else round(random.uniform(30.0, 70.0), 2)
+                        )
+                    paga_batch.append(
+                        {
+                            "timestamp": ts,
+                            "instrument_id": uuid.UUID(inst["id"]),
+                            "attribute_id": uuid.UUID(attr["id"]),
+                            "attribute_value": value,
+                        }
                     )
-                    if sym_for_price:
-                        base = ref_prices_seed.get(sym_for_price, 100.0)
-                    value = round(base * (1 + random.uniform(-0.02, 0.02)), 4)
-                else:
-                    value = round(random.uniform(20.0, 80.0), 4)
-                paga_batch.append(
-                    {
-                        "timestamp": ts,
-                        "instrument_id": uuid.UUID(inst["id"]),
-                        "attribute_id": uuid.UUID(attr["id"]),
-                        "attribute_value": value,
-                    }
-                )
-                paga_count += 1
-                if len(paga_batch) >= 1000:
-                    client.batch_create_instrument_attributes(paga_batch)
-                    paga_batch = []
+                    paga_count += 1
+                    if len(paga_batch) >= 250:
+                        client.batch_create_instrument_attributes(paga_batch)
+                        paga_batch = []
 
-        for comp in all_composites:
-            for attr in comp_attr_attrs:
-                value = (
-                    round(random.uniform(-500, 500), 4)
-                    if attr["name"] == "SPREAD"
-                    else round(random.uniform(-3.0, 3.0), 4)
-                )
-                comp_batch.append(
-                    {
-                        "timestamp": ts,
-                        "composite_id": uuid.UUID(comp["id"]),
-                        "attribute_id": uuid.UUID(attr["id"]),
-                        "attribute_value": value,
-                    }
-                )
-                comp_count += 1
-                if len(comp_batch) >= 1000:
-                    client.batch_create_composite_attributes(comp_batch)
-                    comp_batch = []
+        if output_table == "composite_attribute":
+            for comp in all_composites:
+                for attr in comp_attr_attrs:
+                    key = (ts.isoformat(), comp["id"], attr["id"])
+                    if key in seen_comp_keys:
+                        continue
+                    seen_comp_keys.add(key)
+                    value = (
+                        round(random.uniform(-500, 500), 4)
+                        if attr["name"] == "SPREAD"
+                        else round(random.uniform(-3.0, 3.0), 4)
+                    )
+                    comp_batch.append(
+                        {
+                            "timestamp": ts,
+                            "composite_id": uuid.UUID(comp["id"]),
+                            "attribute_id": uuid.UUID(attr["id"]),
+                            "attribute_value": value,
+                        }
+                    )
+                    comp_count += 1
+                    if len(comp_batch) >= 250:
+                        client.batch_create_composite_attributes(comp_batch)
+                        comp_batch = []
+
+        if progress and attr_task is not None:
+            progress.advance(attr_task)
 
     if paga_batch:
         client.batch_create_instrument_attributes(paga_batch)
     if comp_batch:
         client.batch_create_composite_attributes(comp_batch)
+
+    if progress and attr_task is not None:
+        progress.update(attr_task, visible=False)
 
     # Store in context
     ctx["all_feeds"] = all_feeds

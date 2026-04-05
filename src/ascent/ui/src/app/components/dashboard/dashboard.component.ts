@@ -1,10 +1,12 @@
-import { Component, inject, OnInit } from '@angular/core';
+import { Component, computed, inject, OnInit } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { DashboardService } from '../../services/dashboard.service';
 import { StrategyService } from '../../services/strategy.service';
 import { TradeService } from '../../services/trade.service';
 import { StatCardComponent } from '../shared/stat-card.component';
 import { TradeTableComponent } from '../trade-table/trade-table.component';
+import { CumulativePnlChartComponent } from '../strategies/strategy-detail/charts/cumulative-pnl-chart.component';
+import { WinLossChartComponent } from '../strategies/strategy-detail/charts/win-loss-chart.component';
 import { Card } from 'primeng/card';
 import { Skeleton } from 'primeng/skeleton';
 import { EmptyStateComponent } from '../shared/empty-state.component';
@@ -12,13 +14,15 @@ import { EmptyStateComponent } from '../shared/empty-state.component';
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [RouterLink, StatCardComponent, TradeTableComponent, Card, Skeleton, EmptyStateComponent],
+  imports: [RouterLink, StatCardComponent, TradeTableComponent, CumulativePnlChartComponent, WinLossChartComponent, Card, Skeleton, EmptyStateComponent],
   templateUrl: './dashboard.component.html',
 })
 export class DashboardComponent implements OnInit {
   dashboardService = inject(DashboardService);
   strategyService = inject(StrategyService);
   tradeService = inject(TradeService);
+
+  cumulativePnlData = computed(() => this.dashboardService.stats()?.cumulative_pnl ?? []);
 
   ngOnInit(): void {
     this.dashboardService.loadStats();
@@ -33,6 +37,26 @@ export class DashboardComponent implements OnInit {
   pnlClass(value: number): string {
     if (value === 0) return '';
     return value > 0 ? 'text-green-500' : 'text-red-500';
+  }
+
+  formatDuration(seconds: number | null): string {
+    if (seconds == null) return '-';
+    if (seconds < 60) return `${Math.round(seconds)}s`;
+    if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
+    if (seconds < 86400) return `${(seconds / 3600).toFixed(1)}h`;
+    return `${(seconds / 86400).toFixed(1)}d`;
+  }
+
+  relativeTime(dateStr: string | null): string {
+    if (!dateStr) return '';
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    return `${days}d ago`;
   }
 
   String = String;

@@ -96,7 +96,7 @@ export class AssetDetailComponent implements OnInit {
         case 'boolean': return { ...base, type: 'boolean' as const, value: val, fallback: 'Not set' };
         case 'integer': return { ...base, type: 'number' as const, value: val, step: 1, fallback: 'Not set' };
         case 'float': return { ...base, type: 'number' as const, value: val, step: 0.01, fallback: 'Not set' };
-        case 'date': return { ...base, type: 'text' as const, value: val != null ? String(val) : null, fallback: 'Not set' };
+        case 'date': return { ...base, type: 'date' as const, value: val != null ? String(val) : null };
         case 'time': return { ...base, type: 'time' as const, value: val != null ? String(val) : null, fallback: 'Not set' };
         case 'datetime': return { ...base, type: 'datetime' as const, value: val != null ? String(val) : null, fallback: 'Not set' };
         case 'enum': return { ...base, type: 'tag' as const, value: val != null ? String(val) : '', severity: 'secondary', options: (field.config?.['options'] as string[] ?? []).map((o: string) => ({ label: o, value: o })) };
@@ -134,7 +134,8 @@ export class AssetDetailComponent implements OnInit {
 
   // Tabs
   tabs = ['Details', 'History', 'Settings'];
-  activeTab = signal('Details');
+  private _initTab = this.route.snapshot.queryParamMap.get('tab');
+  activeTab = signal(this._initTab && this.tabs.includes(this._initTab) ? this._initTab : 'Details');
 
   // Delete
   showDeleteDialog = signal(false);
@@ -219,8 +220,16 @@ export class AssetDetailComponent implements OnInit {
       this.metadataLoading.set(true);
       this.assetService.loadAssetDetail(this.assetId);
       this.assetService.loadAssetTypes();
+      this.assetService.loadAssets();
+      this.assetService.loadInstruments();
+      this.providerService.loadProviders();
       this.loadMetadata();
       this.loadAssetTypeFields();
+
+      if (this.activeTab() === 'History') {
+        this.loadHistoryGrid();
+        this.loadPAHistoryGrids();
+      }
     });
   }
 

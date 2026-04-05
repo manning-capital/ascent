@@ -80,6 +80,9 @@ const BOOL_OPTIONS = [{ label: 'true', value: 'true' }, { label: 'false', value:
                 @case ('datetime') {
                   <input type="datetime-local" pInputText [ngModel]="ev(field.key)" (ngModelChange)="onEdit(field.key, $event)" step="1" class="w-full text-sm"/>
                 }
+                @case ('date') {
+                  <input type="date" pInputText [ngModel]="ev(field.key)" (ngModelChange)="onEdit(field.key, $event)" class="w-full text-sm"/>
+                }
               }
             } @else {
               @switch (field.type) {
@@ -164,7 +167,6 @@ export class FieldPanelComponent {
   }
 
   isEditable(field: PanelField): boolean {
-    if (field.type === 'date') return false;
     return field.key in this.editValues();
   }
 }

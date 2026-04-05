@@ -17,6 +17,8 @@ def _build_exchange_schema(e: Exchange) -> ExchangeSchema:
         id=e.id,
         exchange_type_id=e.exchange_type_id,
         exchange_type_name=e.exchange_type.display_name if e.exchange_type else None,
+        instrument_type_id=e.instrument_type_id,
+        instrument_type_name=e.instrument_type.display_name if e.instrument_type else None,
         name=e.name,
         display_name=e.display_name,
         description=e.description,
@@ -34,6 +36,7 @@ def get_exchanges(db: Session) -> list[ExchangeSchema]:
         select(Exchange)
         .options(
             joinedload(Exchange.exchange_type),
+            joinedload(Exchange.instrument_type),
             joinedload(Exchange.provider),
         )
         .order_by(Exchange.name)
@@ -47,6 +50,7 @@ def get_exchange(db: Session, exchange_id: uuid.UUID) -> ExchangeSchema:
         select(Exchange)
         .options(
             joinedload(Exchange.exchange_type),
+            joinedload(Exchange.instrument_type),
             joinedload(Exchange.provider),
         )
         .where(Exchange.id == exchange_id)

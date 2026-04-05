@@ -93,32 +93,40 @@ def seed_providers(client: Any, ctx: dict) -> None:
     polygon_id = uuid.UUID(polygon_provider["id"])
 
     # --- Exchanges ---
+    # Each exchange is tied to a specific provider + instrument type combination.
+    # This means we implement a separate exchange class per provider per instrument type.
     kraken_exchange = client.create_exchange(
         exchange_type_id=uuid.UUID(ctx["spot_etype"]["id"]),
-        name="KRAKEN",
-        display_name="Kraken",
-        description="Kraken Spot Exchange",
+        instrument_type_id=uuid.UUID(ctx["spot_itype"]["id"]),
+        name="KRAKEN_SPOT",
+        display_name="Kraken Spot",
+        description="Kraken spot exchange for crypto instruments",
         provider_id=kraken_id,
+        implementation_class="ascent.exchanges.kraken.KrakenSpotExchange",
     )
     coinbase_exchange = client.create_exchange(
         exchange_type_id=uuid.UUID(ctx["spot_etype"]["id"]),
-        name="COINBASE",
-        display_name="Coinbase",
-        description="Coinbase Spot Exchange",
+        instrument_type_id=uuid.UUID(ctx["spot_itype"]["id"]),
+        name="COINBASE_SPOT",
+        display_name="Coinbase Spot",
+        description="Coinbase spot exchange for crypto instruments",
         provider_id=coinbase_id,
+        implementation_class="ascent.exchanges.coinbase.CoinbaseSpotExchange",
     )
     ib_equity_exchange = client.create_exchange(
         exchange_type_id=uuid.UUID(ctx["spot_etype"]["id"]),
+        instrument_type_id=uuid.UUID(ctx["spot_itype"]["id"]),
         name="IB_US_EQUITY",
         display_name="IB US Equity",
-        description="Interactive Brokers US Equity routing",
+        description="Interactive Brokers US Equity routing for spot instruments",
         provider_id=ib_id,
     )
     ib_futures_exchange = client.create_exchange(
         exchange_type_id=uuid.UUID(ctx["futures_etype"]["id"]),
+        instrument_type_id=uuid.UUID(ctx["future_itype"]["id"]),
         name="IB_US_FUTURES",
         display_name="IB US Futures",
-        description="Interactive Brokers US Futures routing",
+        description="Interactive Brokers US Futures routing for future instruments",
         provider_id=ib_id,
     )
     client.create_exchange(

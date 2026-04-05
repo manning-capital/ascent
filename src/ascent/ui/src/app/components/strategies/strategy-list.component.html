@@ -1,65 +1,96 @@
-<div class="p-6 ">
-  <h1 class="text-2xl font-bold mb-6">Strategies</h1>
+<div class="p-6">
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-bold">Strategies</h1>
+  </div>
 
-  @if (strategyService.loading()) {
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      @for (_ of [1,2,3,4,5,6]; track $index) {
-        <p-card>
-          <div class="flex items-center justify-between mb-2">
-            <p-skeleton width="55%" height="1rem"/>
-            <p-skeleton shape="circle" size="0.625rem"/>
-          </div>
-          <p-skeleton width="30%" height="0.75rem" class="mb-1"/>
-          <p-skeleton width="80%" height="0.75rem" class="mb-4"/>
-          <div class="grid grid-cols-3 gap-3 mb-4">
-            @for (_ of [1,2,3]; track $index) {
-              <div class="text-center">
-                <p-skeleton width="60%" height="0.625rem" class="mb-1 mx-auto"/>
-                <p-skeleton width="40%" height="1.125rem" class="mx-auto"/>
-              </div>
-            }
-          </div>
-          <div class="grid grid-cols-3 gap-3">
-            @for (_ of [1,2,3]; track $index) {
-              <div class="text-center">
-                <p-skeleton width="60%" height="0.625rem" class="mb-1 mx-auto"/>
-                <p-skeleton width="50%" height="0.875rem" class="mx-auto"/>
-              </div>
-            }
-          </div>
-        </p-card>
-      }
-    </div>
+  @if (strategyService.loading() && strategyService.strategies().length === 0) {
+    <p-card styleClass="overflow-hidden">
+      <table class="w-full">
+        <thead>
+          <tr>
+            <th class="text-left p-4 font-semibold">Display Name</th>
+            <th class="text-left p-4 font-semibold">Type</th>
+            <th class="text-left p-4 font-semibold">Trades</th>
+            <th class="text-left p-4 font-semibold">Win Rate</th>
+            <th class="text-left p-4 font-semibold">Open</th>
+            <th class="text-left p-4 font-semibold">Total P&L</th>
+            <th class="text-left p-4 font-semibold w-28">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (_ of [1,2,3,4,5]; track $index) {
+            <tr>
+              @for (_ of [1,2,3,4,5,6,7]; track $index) {
+                <td class="p-4"><p-skeleton width="75%" height="1rem"/></td>
+              }
+            </tr>
+          }
+        </tbody>
+      </table>
+    </p-card>
   } @else {
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      @for (strategy of strategyService.strategies(); track strategy.id) {
-        <a [routerLink]="['/strategies', strategy.id]" class="block no-underline">
-          <p-card styleClass="hover:bg-emphasis transition-colors cursor-pointer">
-            <div class="flex items-center justify-between mb-2">
-              <h3 class="font-semibold">{{ strategy.display_name }}</h3>
-              <span class="w-2.5 h-2.5 rounded-full" [class]="strategy.is_active ? 'bg-green-500' : 'bg-surface-400'"></span>
-            </div>
-            <p class="text-xs text-surface-500 mb-1">{{ strategy.strategy_type }}</p>
-            @if (strategy.description) {
-              <p class="text-xs text-surface-400 mb-4 line-clamp-2">{{ strategy.description }}</p>
-            }
-            <div class="grid grid-cols-3 gap-3 mb-4">
-              <app-stat-card label="Trades" [value]="'' + strategy.total_trades" variant="flat" size="md" align="center"/>
-              <app-stat-card label="Win Rate" [value]="strategy.win_rate + '%'" variant="flat" size="md" align="center"/>
-              <app-stat-card label="Open" [value]="'' + strategy.open_trades" variant="flat" size="md" align="center"/>
-            </div>
-            <div class="grid grid-cols-3 gap-3">
-              <app-stat-card label="Total P&L" [value]="formatCurrency(strategy.total_pnl)" [valueClass]="pnlClass(strategy.total_pnl)" variant="flat" size="sm" align="center"/>
-              <app-stat-card label="Avg Win" [value]="formatCurrency(strategy.avg_win)" valueClass="text-green-500" variant="flat" size="sm" align="center"/>
-              <app-stat-card label="Avg Loss" [value]="formatCurrency(strategy.avg_loss)" valueClass="text-red-500" variant="flat" size="sm" align="center"/>
-            </div>
-          </p-card>
-        </a>
-      } @empty {
-        <div class="col-span-full">
-          <app-empty-state title="No strategies" message="Create a strategy to get started." icon="inbox"/>
-        </div>
-      }
-    </div>
+    <p-card styleClass="overflow-hidden">
+      <p-table [value]="strategyService.strategies()" [paginator]="true" [rows]="10" [rowsPerPageOptions]="[10, 25, 50, 100]"
+               [showCurrentPageReport]="true" currentPageReportTemplate="Showing {first} to {last} of {totalRecords} strategies"
+               [tableStyle]="{'width': '100%'}">
+        <ng-template #header>
+          <tr>
+            <th pSortableColumn="display_name">Display Name <p-sortIcon field="display_name"/></th>
+            <th pSortableColumn="strategy_type">Type <p-sortIcon field="strategy_type"/></th>
+            <th pSortableColumn="total_trades">Trades <p-sortIcon field="total_trades"/></th>
+            <th pSortableColumn="win_rate">Win Rate <p-sortIcon field="win_rate"/></th>
+            <th pSortableColumn="open_trades">Open <p-sortIcon field="open_trades"/></th>
+            <th pSortableColumn="total_pnl">Total P&L <p-sortIcon field="total_pnl"/></th>
+            <th pSortableColumn="is_active" class="w-28">Status <p-sortIcon field="is_active"/></th>
+          </tr>
+          <tr>
+            <th>
+              <p-columnFilter field="display_name" matchMode="contains" [showMenu]="false">
+                <ng-template #filter let-filter="filterCallback">
+                  <input type="text" pInputText (input)="filter($any($event.target).value)" placeholder="Filter name" class="w-full"/>
+                </ng-template>
+              </p-columnFilter>
+            </th>
+            <th>
+              <p-columnFilter field="strategy_type" matchMode="contains" [showMenu]="false">
+                <ng-template #filter let-filter="filterCallback">
+                  <input type="text" pInputText (input)="filter($any($event.target).value)" placeholder="Filter type" class="w-full"/>
+                </ng-template>
+              </p-columnFilter>
+            </th>
+            <th></th>
+            <th></th>
+            <th></th>
+            <th></th>
+            <th>
+              <p-columnFilter field="is_active" matchMode="equals" [showMenu]="false">
+                <ng-template #filter let-filter="filterCallback">
+                  <p-select [options]="statusOptions" (onChange)="filter($event.value)" placeholder="All"
+                             optionLabel="label" optionValue="value" [showClear]="true"/>
+                </ng-template>
+              </p-columnFilter>
+            </th>
+          </tr>
+        </ng-template>
+        <ng-template #body let-strategy>
+          <tr class="cursor-pointer hover:bg-emphasis transition-colors" (click)="navigateToStrategy(strategy.id)">
+            <td class="font-medium">{{ strategy.display_name }}</td>
+            <td class="text-surface-500">{{ strategy.strategy_type }}</td>
+            <td>{{ strategy.total_trades }}</td>
+            <td>{{ strategy.win_rate }}%</td>
+            <td>{{ strategy.open_trades }}</td>
+            <td [class]="pnlClass(strategy.total_pnl)">{{ formatCurrency(strategy.total_pnl) }}</td>
+            <td>
+              <p-tag [value]="strategy.is_active ? 'Active' : 'Inactive'" [severity]="strategy.is_active ? 'success' : 'secondary'" [rounded]="true"/>
+            </td>
+          </tr>
+        </ng-template>
+        <ng-template #emptymessage>
+          <tr>
+            <td colspan="7" class="text-center text-surface-400 py-8">No strategies found.</td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </p-card>
   }
 </div>

@@ -1,10 +1,10 @@
 <div class="p-6">
   <h1 class="text-2xl font-bold mb-6">Dashboard</h1>
 
-  <!-- Stats Cards -->
-  <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+  <!-- Section A: Key Metrics -->
+  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
     @if (dashboardService.loading()) {
-      @for (_ of [1,2,3,4]; track $index) {
+      @for (_ of [1,2,3,4,5,6]; track $index) {
         <p-card>
           <p-skeleton width="40%" height="0.75rem" class="mb-2"/>
           <p-skeleton width="60%" height="1.75rem" class="mb-2"/>
@@ -12,17 +12,235 @@
         </p-card>
       }
     } @else {
-      @let stats = dashboardService.stats();
-      @if (stats) {
-        <app-stat-card label="Total Strategies" [value]="'' + stats.total_strategies" [subtitle]="stats.active_strategies + ' active'"/>
-        <app-stat-card label="Open Trades" [value]="'' + stats.open_trades" [subtitle]="stats.total_trades + ' total'"/>
-        <app-stat-card label="Total P&L" [value]="formatCurrency(stats.total_pnl)" [valueClass]="pnlClass(stats.total_pnl)" [subtitle]="'Today: ' + formatCurrency(stats.today_pnl)"/>
-        <app-stat-card label="Win Rate" [value]="stats.win_rate + '%'" [subtitle]="stats.total_trades + ' closed trades'"/>
+      @let s = dashboardService.stats();
+      @if (s) {
+        <app-stat-card label="Net P&L" [value]="formatCurrency(s.net_pnl)" [valueClass]="pnlClass(s.net_pnl)" [subtitle]="'Today: ' + formatCurrency(s.today_pnl)"/>
+        <app-stat-card label="Unrealized P&L" [value]="formatCurrency(s.total_unrealized_pnl)" [valueClass]="pnlClass(s.total_unrealized_pnl)" [subtitle]="s.open_trades + ' open trades'"/>
+        <app-stat-card label="Win Rate" [value]="s.win_rate + '%'" [subtitle]="s.wins + 'W / ' + s.losses + 'L'"/>
+        <app-stat-card label="Profit Factor" [value]="s.profit_factor.toFixed(2)" [subtitle]="'Expectancy: ' + formatCurrency(s.expectancy)"/>
+        <app-stat-card label="Total Trades" [value]="'' + s.total_trades" [subtitle]="s.open_trades + ' open / ' + s.closed_trades + ' closed'"/>
+        <app-stat-card label="Max Drawdown" [value]="formatCurrency(s.max_drawdown)" valueClass="text-red-500" [subtitle]="s.max_drawdown_duration + ' trades duration'"/>
       }
     }
   </div>
 
-  <!-- Strategies Section -->
+  <!-- Section B: Performance Charts -->
+  @if (dashboardService.loading()) {
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
+      <p-card styleClass="lg:col-span-2">
+        <p-skeleton width="30%" height="1rem" class="mb-4"/>
+        <p-skeleton width="100%" height="16rem"/>
+      </p-card>
+      <p-card>
+        <p-skeleton width="30%" height="1rem" class="mb-4"/>
+        <p-skeleton width="100%" height="16rem"/>
+      </p-card>
+    </div>
+  } @else {
+    @let s = dashboardService.stats();
+    @if (s) {
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
+        <p-card header="Cumulative P&L" styleClass="lg:col-span-2">
+          @if (cumulativePnlData().length > 0) {
+            <div class="h-72">
+              <app-cumulative-pnl-chart [data]="cumulativePnlData()"/>
+            </div>
+          } @else {
+            <div class="h-72 flex items-center justify-center text-surface-400">No trade data available</div>
+          }
+        </p-card>
+        <p-card header="Win / Loss">
+          @if (s.wins + s.losses + s.breakeven > 0) {
+            <div class="h-72">
+              <app-win-loss-chart [wins]="s.wins" [losses]="s.losses" [breakeven]="s.breakeven"/>
+            </div>
+          } @else {
+            <div class="h-72 flex items-center justify-center text-surface-400">No trade data available</div>
+          }
+        </p-card>
+      </div>
+    }
+  }
+
+  <!-- Section C: Risk & Performance Metrics -->
+  @if (dashboardService.loading()) {
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-0 mb-8 border border-surface rounded-lg overflow-hidden">
+      @for (_ of [1,2,3,4]; track $index) {
+        <div class="p-5 border-b border-surface">
+          <p-skeleton width="30%" height="0.75rem" class="mb-4"/>
+          @for (_ of [1,2,3,4,5,6]; track $index) {
+            <div class="flex justify-between mb-2">
+              <p-skeleton width="35%" height="0.75rem"/>
+              <p-skeleton width="25%" height="0.75rem"/>
+            </div>
+          }
+        </div>
+      }
+    </div>
+  } @else {
+    @let s = dashboardService.stats();
+    @if (s) {
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-0 mb-8 border border-surface rounded-lg overflow-hidden">
+        <!-- Performance -->
+        <div class="p-5 border-b md:border-r border-surface">
+          <div class="text-xs font-bold uppercase tracking-widest text-primary mb-3 pb-2 border-b border-surface">Performance</div>
+          <div class="space-y-2">
+            <div class="flex justify-between text-sm">
+              <span class="text-muted-color">Total PnL</span>
+              <span [class]="'font-semibold ' + pnlClass(s.total_pnl)">{{ formatCurrency(s.total_pnl) }}</span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-muted-color">Total Fees</span>
+              <span class="font-semibold">{{ formatCurrency(s.total_fees) }}</span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-muted-color">Net PnL</span>
+              <span [class]="'font-semibold ' + pnlClass(s.net_pnl)">{{ formatCurrency(s.net_pnl) }}</span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-muted-color">Avg Trade PnL</span>
+              <span [class]="'font-semibold ' + pnlClass(s.avg_trade_pnl)">{{ formatCurrency(s.avg_trade_pnl) }}</span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-muted-color">Median PnL</span>
+              <span [class]="'font-semibold ' + pnlClass(s.median_pnl)">{{ formatCurrency(s.median_pnl) }}</span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-muted-color">Avg Win</span>
+              <span class="font-semibold text-green-500">{{ formatCurrency(s.avg_win) }}</span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-muted-color">Avg Loss</span>
+              <span class="font-semibold text-red-500">{{ formatCurrency(s.avg_loss) }}</span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-muted-color">Max Win</span>
+              <span class="font-semibold text-green-500">{{ formatCurrency(s.max_win) }}</span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-muted-color">Max Loss</span>
+              <span class="font-semibold text-red-500">{{ formatCurrency(s.max_loss) }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Risk Metrics -->
+        <div class="p-5 border-b border-surface">
+          <div class="text-xs font-bold uppercase tracking-widest text-primary mb-3 pb-2 border-b border-surface">Risk Metrics</div>
+          <div class="space-y-2">
+            <div class="flex justify-between text-sm">
+              <span class="text-muted-color">Sharpe Ratio</span>
+              <span [class]="'font-semibold ' + pnlClass(s.sharpe_ratio)">{{ s.sharpe_ratio.toFixed(3) }}</span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-muted-color">Sortino Ratio</span>
+              <span [class]="'font-semibold ' + pnlClass(s.sortino_ratio)">{{ s.sortino_ratio.toFixed(3) }}</span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-muted-color">Max Drawdown</span>
+              <span class="font-semibold text-red-500">{{ formatCurrency(s.max_drawdown) }}</span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-muted-color">Max DD Duration</span>
+              <span class="font-semibold">{{ s.max_drawdown_duration }} trades</span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-muted-color">Profit Factor</span>
+              <span class="font-semibold">{{ s.profit_factor.toFixed(2) }}</span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-muted-color">Payoff Ratio</span>
+              <span class="font-semibold">{{ s.payoff_ratio.toFixed(2) }}</span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-muted-color">Expectancy</span>
+              <span [class]="'font-semibold ' + pnlClass(s.expectancy)">{{ formatCurrency(s.expectancy) }}</span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-muted-color">Std Dev PnL</span>
+              <span class="font-semibold">{{ formatCurrency(s.std_dev_pnl) }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Trade Analysis -->
+        <div class="p-5 border-b md:border-b-0 md:border-r border-surface">
+          <div class="text-xs font-bold uppercase tracking-widest text-primary mb-3 pb-2 border-b border-surface">Trade Analysis</div>
+          <div class="space-y-2">
+            <div class="flex justify-between text-sm">
+              <span class="text-muted-color">Total Trades</span>
+              <span class="font-semibold">{{ s.total_trades }}</span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-muted-color">Open</span>
+              <span class="font-semibold">{{ s.open_trades }}</span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-muted-color">Closed</span>
+              <span class="font-semibold">{{ s.closed_trades }}</span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-muted-color">Winning</span>
+              <span class="font-semibold text-green-500">{{ s.wins }}</span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-muted-color">Losing</span>
+              <span class="font-semibold text-red-500">{{ s.losses }}</span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-muted-color">Win Rate</span>
+              <span class="font-semibold">{{ s.win_rate }}%</span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-muted-color">Best Streak</span>
+              <span class="font-semibold text-green-500">{{ s.max_win_streak }} trades</span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-muted-color">Worst Streak</span>
+              <span class="font-semibold text-red-500">{{ s.max_loss_streak }} trades</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Time & Distribution -->
+        <div class="p-5">
+          <div class="text-xs font-bold uppercase tracking-widest text-primary mb-3 pb-2 border-b border-surface">Time & Distribution</div>
+          <div class="space-y-2">
+            <div class="flex justify-between text-sm">
+              <span class="text-muted-color">Avg Holding</span>
+              <span class="font-semibold">{{ formatDuration(s.avg_holding_seconds) }}</span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-muted-color">Avg Hold (Wins)</span>
+              <span class="font-semibold">{{ formatDuration(s.avg_holding_wins_seconds) }}</span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-muted-color">Avg Hold (Losses)</span>
+              <span class="font-semibold">{{ formatDuration(s.avg_holding_losses_seconds) }}</span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-muted-color">Std Dev PnL</span>
+              <span class="font-semibold">{{ formatCurrency(s.std_dev_pnl) }}</span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-muted-color">Skewness</span>
+              <span class="font-semibold">{{ s.skewness.toFixed(3) }}</span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-muted-color">Kurtosis</span>
+              <span class="font-semibold">{{ s.kurtosis.toFixed(3) }}</span>
+            </div>
+            <div class="flex justify-between text-sm">
+              <span class="text-muted-color">Strategies</span>
+              <span class="font-semibold">{{ s.total_strategies }} <span class="text-muted-color font-normal">({{ s.active_strategies }} active)</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    }
+  }
+
+  <!-- Section D: Strategies -->
   <div class="mb-8">
     <div class="flex items-center justify-between mb-4">
       <h2 class="text-lg font-semibold">Strategies</h2>
@@ -52,7 +270,7 @@
       </div>
     } @else {
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        @for (strategy of strategyService.strategies(); track strategy.id) {
+        @for (strategy of strategyService.strategies().slice(0, 4); track strategy.id) {
           <a [routerLink]="['/strategies', strategy.id]" class="block no-underline">
             <p-card class="hover:bg-emphasis transition-colors cursor-pointer">
               <ng-template #header>
@@ -61,7 +279,12 @@
                   <span class="w-2 h-2 rounded-full" [class]="strategy.is_active ? 'bg-green-500' : 'bg-surface-400'"></span>
                 </div>
               </ng-template>
-              <p class="text-xs text-surface-500 mb-3">{{ strategy.strategy_type }}</p>
+              <div class="flex items-center gap-2 mb-3">
+                <span class="text-xs text-surface-500">{{ strategy.strategy_type }}</span>
+                @if (strategy.last_trade_at) {
+                  <span class="text-xs text-surface-400">&middot; {{ relativeTime(strategy.last_trade_at) }}</span>
+                }
+              </div>
               <div class="grid grid-cols-3 gap-2">
                 <app-stat-card label="Trades" [value]="'' + strategy.total_trades" variant="flat" size="sm" align="center"/>
                 <app-stat-card label="Win Rate" [value]="strategy.win_rate + '%'" variant="flat" size="sm" align="center"/>
@@ -78,7 +301,7 @@
     }
   </div>
 
-  <!-- Recent Trades Section -->
+  <!-- Section E: Recent Trades -->
   <div>
     <div class="flex items-center justify-between mb-4">
       <h2 class="text-lg font-semibold">Recent Trades</h2>

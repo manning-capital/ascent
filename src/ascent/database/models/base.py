@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import MetaData, String, func
+from sqlalchemy import DateTime, MetaData, String, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -12,6 +12,11 @@ class Base(DeclarativeBase):
     It inherits from DeclarativeBase, which is a SQLAlchemy class that provides
     a declarative interface for defining models.
     """
+
+    # Map all datetime columns to TIMESTAMPTZ (timezone-aware) in PostgreSQL.
+    type_annotation_map = {
+        datetime: DateTime(timezone=True),
+    }
 
     # Define the metadata for the models. This is used to define the primary key constraint name.
     metadata = MetaData(

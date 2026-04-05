@@ -55,7 +55,8 @@ export class CompositeDetailComponent implements OnInit {
   private fieldService = inject(FieldService);
 
   tabs = ['Details', 'History', 'Settings'];
-  activeTab = signal('Details');
+  private _initTab = this.route.snapshot.queryParamMap.get('tab');
+  activeTab = signal(this._initTab && this.tabs.includes(this._initTab) ? this._initTab : 'Details');
 
   compositeId = '';
   composite = signal<Composite | null>(null);
@@ -103,7 +104,7 @@ export class CompositeDetailComponent implements OnInit {
         case 'boolean': return { ...base, type: 'boolean' as const, value: val, fallback: 'Not set' };
         case 'integer': return { ...base, type: 'number' as const, value: val, step: 1, fallback: 'Not set' };
         case 'float': return { ...base, type: 'number' as const, value: val, step: 0.01, fallback: 'Not set' };
-        case 'date': return { ...base, type: 'text' as const, value: val != null ? String(val) : null, fallback: 'Not set' };
+        case 'date': return { ...base, type: 'date' as const, value: val != null ? String(val) : null };
         case 'time': return { ...base, type: 'time' as const, value: val != null ? String(val) : null, fallback: 'Not set' };
         case 'datetime': return { ...base, type: 'datetime' as const, value: val != null ? String(val) : null, fallback: 'Not set' };
         case 'enum': return { ...base, type: 'tag' as const, value: val != null ? String(val) : '', severity: 'secondary', options: (field.config?.['options'] as string[] ?? []).map((o: string) => ({ label: o, value: o })) };
@@ -187,8 +188,14 @@ export class CompositeDetailComponent implements OnInit {
       this.metadataLoading.set(true);
       this.loadComposite();
       this.loadMetadata();
+      this.assetService.loadAssets();
       this.assetService.loadInstruments();
+      this.compositeService.loadComposites();
       this.compositeService.loadCompositeTypes();
+
+      if (this.activeTab() === 'History') {
+        this.loadHistoryGrid();
+      }
     });
   }
 

@@ -1,65 +1,132 @@
-<div class="p-6 ">
-  <h1 class="text-2xl font-bold mb-6">Exchanges</h1>
+<div class="p-6">
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-bold">Exchanges</h1>
+  </div>
 
-  @if (exchangeService.loading()) {
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      @for (_ of [1,2,3,4,5,6]; track $index) {
-        <p-card>
-          <div class="flex items-center justify-between mb-2">
-            <p-skeleton width="55%" height="1rem"/>
-            <p-skeleton shape="circle" size="0.625rem"/>
-          </div>
-          <p-skeleton width="80%" height="0.75rem" class="mb-4"/>
-          <div class="grid grid-cols-2 gap-3 mb-4">
-            @for (_ of [1,2]; track $index) {
-              <div class="text-center">
-                <p-skeleton width="60%" height="0.625rem" class="mb-1 mx-auto"/>
-                <p-skeleton width="40%" height="1.125rem" class="mx-auto"/>
-              </div>
-            }
-          </div>
-          <div class="flex items-center justify-between">
-            <p-skeleton width="40%" height="0.75rem"/>
-            <p-skeleton width="25%" height="0.75rem"/>
-          </div>
-        </p-card>
-      }
-    </div>
+  @if (exchangeService.loading() && exchangeService.exchanges().length === 0) {
+    <p-card styleClass="overflow-hidden">
+      <table class="w-full">
+        <thead>
+          <tr>
+            <th class="text-left p-4 font-semibold">Display Name</th>
+            <th class="text-left p-4 font-semibold">Name</th>
+            <th class="text-left p-4 font-semibold">Type</th>
+            <th class="text-left p-4 font-semibold">Instrument Type</th>
+            <th class="text-left p-4 font-semibold">Provider</th>
+            <th class="text-left p-4 font-semibold">Created</th>
+            <th class="text-left p-4 font-semibold w-28">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (_ of [1,2,3,4,5]; track $index) {
+            <tr>
+              @for (_ of [1,2,3,4,5,6,7]; track $index) {
+                <td class="p-4"><p-skeleton width="75%" height="1rem"/></td>
+              }
+            </tr>
+          }
+        </tbody>
+      </table>
+    </p-card>
   } @else {
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      @for (exchange of exchangeService.exchanges(); track exchange.id) {
-        <a [routerLink]="['/exchanges', exchange.id]" class="block no-underline">
-          <p-card styleClass="hover:bg-emphasis transition-colors cursor-pointer">
-            <div class="flex items-center justify-between mb-2">
-              <h3 class="font-semibold truncate">{{ exchange.display_name }}</h3>
-              <span class="w-2.5 h-2.5 rounded-full shrink-0" [class]="exchange.is_active ? 'bg-green-500' : 'bg-surface-400'"></span>
-            </div>
-            @if (exchange.description) {
-              <p class="text-xs text-surface-400 mb-4 line-clamp-2">{{ exchange.description }}</p>
-            }
-
-            <div class="grid grid-cols-2 gap-3 mb-4">
-              <app-stat-card label="Type" [value]="exchange.exchange_type_name ?? '--'" variant="flat" size="sm" align="center"/>
-              <app-stat-card label="Provider" [value]="exchange.provider_name ?? 'None'" variant="flat" size="sm" align="center"/>
-            </div>
-
-            <div class="flex items-center justify-between text-xs text-surface-400">
-              @if (exchange.implementation_class) {
-                <span class="truncate font-mono" [title]="exchange.implementation_class">{{ exchange.implementation_class }}</span>
+    <p-card styleClass="overflow-hidden">
+      <p-table [value]="exchangeService.exchanges()" [paginator]="true" [rows]="10" [rowsPerPageOptions]="[10, 25, 50, 100]"
+               [showCurrentPageReport]="true" currentPageReportTemplate="Showing {first} to {last} of {totalRecords} exchanges"
+               [tableStyle]="{'width': '100%'}">
+        <ng-template #header>
+          <tr>
+            <th pSortableColumn="display_name">Display Name <p-sortIcon field="display_name"/></th>
+            <th pSortableColumn="name">Name <p-sortIcon field="name"/></th>
+            <th pSortableColumn="exchange_type_name">Type <p-sortIcon field="exchange_type_name"/></th>
+            <th pSortableColumn="instrument_type_name">Instrument Type <p-sortIcon field="instrument_type_name"/></th>
+            <th pSortableColumn="provider_name">Provider <p-sortIcon field="provider_name"/></th>
+            <th pSortableColumn="created_at">Created <p-sortIcon field="created_at"/></th>
+            <th pSortableColumn="is_active" class="w-28">Status <p-sortIcon field="is_active"/></th>
+          </tr>
+          <tr>
+            <th>
+              <p-columnFilter field="display_name" matchMode="contains" [showMenu]="false">
+                <ng-template #filter let-filter="filterCallback">
+                  <input type="text" pInputText (input)="filter($any($event.target).value)" placeholder="Filter display name" class="w-full"/>
+                </ng-template>
+              </p-columnFilter>
+            </th>
+            <th>
+              <p-columnFilter field="name" matchMode="contains" [showMenu]="false">
+                <ng-template #filter let-filter="filterCallback">
+                  <input type="text" pInputText (input)="filter($any($event.target).value)" placeholder="Filter name" class="w-full"/>
+                </ng-template>
+              </p-columnFilter>
+            </th>
+            <th>
+              <p-columnFilter field="exchange_type_name" matchMode="contains" [showMenu]="false">
+                <ng-template #filter let-filter="filterCallback">
+                  <input type="text" pInputText (input)="filter($any($event.target).value)" placeholder="Filter type" class="w-full"/>
+                </ng-template>
+              </p-columnFilter>
+            </th>
+            <th>
+              <p-columnFilter field="instrument_type_name" matchMode="contains" [showMenu]="false">
+                <ng-template #filter let-filter="filterCallback">
+                  <input type="text" pInputText (input)="filter($any($event.target).value)" placeholder="Filter instrument type" class="w-full"/>
+                </ng-template>
+              </p-columnFilter>
+            </th>
+            <th>
+              <p-columnFilter field="provider_name" matchMode="contains" [showMenu]="false">
+                <ng-template #filter let-filter="filterCallback">
+                  <input type="text" pInputText (input)="filter($any($event.target).value)" placeholder="Filter provider" class="w-full"/>
+                </ng-template>
+              </p-columnFilter>
+            </th>
+            <th></th>
+            <th>
+              <p-columnFilter field="is_active" matchMode="equals" [showMenu]="false">
+                <ng-template #filter let-filter="filterCallback">
+                  <p-select [options]="statusOptions" (onChange)="filter($event.value)" placeholder="All"
+                             optionLabel="label" optionValue="value" [showClear]="true"/>
+                </ng-template>
+              </p-columnFilter>
+            </th>
+          </tr>
+        </ng-template>
+        <ng-template #body let-exchange>
+          <tr class="cursor-pointer hover:bg-emphasis transition-colors" (click)="navigateToExchange(exchange.id)">
+            <td class="font-medium">{{ exchange.display_name }}</td>
+            <td class="font-mono text-surface-500">{{ exchange.name }}</td>
+            <td>{{ exchange.exchange_type_name ?? 'Unknown' }}</td>
+            <td>
+              @if (exchange.instrument_type_id) {
+                <a [routerLink]="['/settings/instrument-types', exchange.instrument_type_id]" (click)="$event.stopPropagation()" class="text-primary hover:underline">{{ exchange.instrument_type_name }}</a>
               } @else {
-                <span class="text-surface-400">No implementation</span>
+                <span class="text-surface-400">Any</span>
               }
+            </td>
+            <td>
+              @if (exchange.provider_id) {
+                <a [routerLink]="['/settings/providers', exchange.provider_id]" (click)="$event.stopPropagation()" class="text-primary hover:underline">{{ exchange.provider_name }}</a>
+              } @else {
+                <span class="text-surface-400">None</span>
+              }
+            </td>
+            <td class="text-surface-500">
               @if (exchange.created_at) {
-                <span class="shrink-0 ml-2">{{ exchange.created_at | date:'short' }}</span>
+                {{ exchange.created_at | date:'short' }}
+              } @else {
+                <span class="text-surface-400">-</span>
               }
-            </div>
-          </p-card>
-        </a>
-      } @empty {
-        <div class="col-span-full">
-          <app-empty-state title="No exchanges" message="Configure an exchange to start trading." icon="inbox"/>
-        </div>
-      }
-    </div>
+            </td>
+            <td>
+              <p-tag [value]="exchange.is_active ? 'Active' : 'Inactive'" [severity]="exchange.is_active ? 'success' : 'secondary'" [rounded]="true"/>
+            </td>
+          </tr>
+        </ng-template>
+        <ng-template #emptymessage>
+          <tr>
+            <td colspan="7" class="text-center text-surface-400 py-8">No exchanges found.</td>
+          </tr>
+        </ng-template>
+      </p-table>
+    </p-card>
   }
 </div>
