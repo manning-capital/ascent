@@ -80,84 +80,13 @@
         </div>
 
         <!-- Trade Legs Table -->
-        <p-card header="Trade Legs">
-          <p-table [value]="trade.legs">
-            <ng-template #header>
-              <tr>
-                <th>Instrument</th>
-                <th>Direction</th>
-                <th>Quantity</th>
-                <th>Entry</th>
-                <th>Exit</th>
-                <th class="text-right">P&L</th>
-              </tr>
-            </ng-template>
-            <ng-template #body let-leg>
-              <tr>
-                <td class="text-sm font-medium">{{ leg.instrument_name }}</td>
-                <td><app-badge [label]="leg.direction"/></td>
-                <td class="text-sm">{{ leg.quantity }}</td>
-                <td class="text-sm">
-                  {{ tradeService.formatCurrency(leg.entry_price) }}
-                  @if (leg.expected_entry_price) {
-                    <span class="text-xs text-surface-400 ml-1">(exp: {{ tradeService.formatCurrency(leg.expected_entry_price) }})</span>
-                  }
-                </td>
-                <td class="text-sm">
-                  {{ tradeService.formatCurrency(leg.exit_price) }}
-                </td>
-                <td class="text-sm text-right">
-                  <span [class]="tradeService.getPnlClass(leg.realized_pnl)">
-                    {{ tradeService.formatCurrency(leg.realized_pnl) }}
-                  </span>
-                </td>
-              </tr>
-            </ng-template>
-          </p-table>
-        </p-card>
+        <app-data-table [columns]="legColumns" [rowData]="trade.legs" [pagination]="false"/>
 
         <!-- Orders per Leg -->
         @for (leg of trade.legs; track leg.id) {
           @if (leg.orders && leg.orders.length > 0) {
             <p-card [header]="'Orders \u2014 ' + leg.instrument_name">
-              <p-table [value]="leg.orders" [tableStyle]="{'width': '100%'}">
-                <ng-template #header>
-                  <tr>
-                    <th>Time</th>
-                    <th>Side</th>
-                    <th>Type</th>
-                    <th>Qty</th>
-                    <th>Price</th>
-                    <th>Filled</th>
-                    <th>Avg Fill</th>
-                    <th>Exchange</th>
-                    <th class="text-right">Status</th>
-                  </tr>
-                </ng-template>
-                <ng-template #body let-order>
-                  <tr>
-                    <td class="text-sm text-surface-500">{{ order.timestamp | date:'medium' }}</td>
-                    <td><app-badge [label]="order.side"/></td>
-                    <td class="text-sm text-muted-color">{{ order.order_type }}</td>
-                    <td class="text-sm">{{ order.quantity }}</td>
-                    <td class="text-sm">{{ tradeService.formatCurrency(order.price) }}</td>
-                    <td class="text-sm">
-                      @if (order.filled_quantity !== null) {
-                        {{ order.filled_quantity }} / {{ order.quantity }}
-                      } @else {
-                        <span class="text-muted-color">--</span>
-                      }
-                    </td>
-                    <td class="text-sm">{{ tradeService.formatCurrency(order.average_fill_price) }}</td>
-                    <td class="text-sm text-muted-color">{{ order.exchange_name || '--' }}</td>
-                    <td class="text-right">
-                      @if (order.current_status) {
-                        <app-badge [label]="order.current_status" variant="status"/>
-                      }
-                    </td>
-                  </tr>
-                </ng-template>
-              </p-table>
+              <app-data-table [columns]="orderColumns" [rowData]="leg.orders" [pagination]="false"/>
             </p-card>
           }
         }
@@ -189,26 +118,7 @@
 
         <!-- Snapshots -->
         @if (trade.snapshots.length > 0) {
-          <p-card header="Signal Snapshots">
-            <p-table [value]="trade.snapshots">
-              <ng-template #header>
-                <tr>
-                  <th>Type</th>
-                  <th>Attribute</th>
-                  <th>Value</th>
-                  <th>Timestamp</th>
-                </tr>
-              </ng-template>
-              <ng-template #body let-snap>
-                <tr>
-                  <td><app-badge [label]="snap.snapshot_type"/></td>
-                  <td class="text-sm">{{ snap.attribute_name }}</td>
-                  <td class="text-sm font-mono">{{ snap.attribute_value }}</td>
-                  <td class="text-sm text-surface-500">{{ snap.timestamp | date:'medium' }}</td>
-                </tr>
-              </ng-template>
-            </p-table>
-          </p-card>
+          <app-data-table [columns]="snapshotColumns" [rowData]="trade.snapshots" [pagination]="false"/>
         }
       </div>
 

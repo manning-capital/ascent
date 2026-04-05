@@ -159,16 +159,12 @@
             <!-- Recent Errors -->
             <p-card header="Recent Errors">
               @if (runStats().recentErrors.length > 0) {
-                <div class="rounded-lg border border-surface overflow-hidden">
-                <p-table [value]="runStats().recentErrors" [tableStyle]="{'width': '100%'}">
-                  <ng-template #body let-err>
-                    <tr class="cursor-pointer hover:bg-emphasis" [routerLink]="['/feeds', feedId, 'runs', err.id]">
-                      <td class="text-xs text-muted-color" style="width: 8rem">{{ err.started_at | date:'MMM d, h:mm a' }}</td>
-                      <td class="text-xs text-red-400 text-right">{{ err.error_message ?? 'Unknown error' }}</td>
-                    </tr>
-                  </ng-template>
-                </p-table>
-                </div>
+                <app-data-table
+                  [columns]="errorColumns"
+                  [rowData]="runStats().recentErrors"
+                  [pagination]="false"
+                  [rowClickRoute]="navigateToError"
+                  emptyMessage="No recent errors"/>
               } @else {
                 <div class="text-sm text-muted-color py-4 text-center">No recent errors</div>
               }
@@ -180,51 +176,27 @@
       <!-- Runs Tab -->
       @if (activeTab() === 'Runs') {
         <div class="p-6 space-y-4 overflow-y-auto h-full">
-          <div class="flex items-center">
-            <span class="text-xs text-surface-500">{{ totalRuns() }} runs</span>
-          </div>
+          <app-run-filter-panel [totalRuns]="totalRuns()" (filterChange)="onRunsFilterChange($event)"/>
 
           <!-- Runs Table -->
-          <div class="rounded-lg border border-surface overflow-hidden">
-          <p-table [value]="runs()" [tableStyle]="{'min-width': '50rem'}">
-            <ng-template #header>
-              <tr>
-                <th style="width: 6rem">Status</th>
-                <th>Run ID</th>
-                <th>Started</th>
-                <th style="width: 6rem">Duration</th>
-                <th>Partition Key</th>
-                <th style="width: 6rem">Records</th>
-                <th>Error</th>
-              </tr>
-            </ng-template>
-            <ng-template #body let-run>
-              <tr class="cursor-pointer hover:bg-emphasis" [routerLink]="['/feeds', feed.id, 'runs', run.id]">
-                <td><p-tag [value]="run.status" [severity]="statusSeverity(run.status)" [rounded]="true"/></td>
-                <td class="font-mono text-xs">{{ run.id }}</td>
-                <td>{{ run.started_at | date:'MMM d, h:mm:ss a' }}</td>
-                <td>{{ durationLabel(run) }}</td>
-                <td>{{ run.partition_key ? (run.partition_key | date:'shortDate') : '-' }}</td>
-                <td>{{ run.records_fetched ?? '-' }}</td>
-                <td>
-                  @if (run.error_message) {
-                    <span class="text-xs text-red-500 line-clamp-1">{{ run.error_message }}</span>
-                  } @else { - }
-                </td>
-              </tr>
-            </ng-template>
-            <ng-template #emptymessage>
-              <tr><td colspan="7" class="text-center text-surface-400 py-8">No runs yet.</td></tr>
-            </ng-template>
-          </p-table>
-          </div>
+          <app-data-table
+            [columns]="runColumns"
+            [rowData]="runs()"
+            [loading]="runsLoading()"
+            [rowClickRoute]="navigateToRun"
+            [pageSize]="20"
+            emptyMessage="No runs yet."/>
 
-          <!-- Pagination -->
-          <p-paginator
-            [rows]="20"
-            [totalRecords]="totalRuns()"
-            [first]="(runPage() - 1) * 20"
-            (onPageChange)="onRunPageChange(($event.page ?? 0) + 1)"/>
+          <!-- Server-side pagination -->
+          @if (totalRunPages() > 1) {
+            <div class="flex items-center justify-between mt-4 text-xs text-fg-muted">
+              <span>Page {{ runPage() }} of {{ totalRunPages() }}</span>
+              <div class="flex gap-1">
+                <button (click)="onRunPageChange(runPage() - 1)" [disabled]="runPage() <= 1" class="px-3 py-1.5 rounded border border-edge text-fg hover:bg-elevated disabled:opacity-30 disabled:cursor-not-allowed">Prev</button>
+                <button (click)="onRunPageChange(runPage() + 1)" [disabled]="runPage() >= totalRunPages()" class="px-3 py-1.5 rounded border border-edge text-fg hover:bg-elevated disabled:opacity-30 disabled:cursor-not-allowed">Next</button>
+              </div>
+            </div>
+          }
         </div>
       }
 

@@ -7,7 +7,6 @@ import { Splitter } from 'primeng/splitter';
 import { SelectButton } from 'primeng/selectbutton';
 import { Button } from 'primeng/button';
 import { Tag } from 'primeng/tag';
-import { Paginator } from 'primeng/paginator';
 import { Message } from 'primeng/message';
 import { RunDetailCardComponent, RunDetailItem, RunDetailField } from './run-detail-card.component';
 import { PaginatedResponse } from '../../models/trade.model';
@@ -18,6 +17,7 @@ export type RunItem = RunDetailItem;
 export interface RunFilter {
   started_after?: string;
   started_before?: string;
+  status?: string;
 }
 
 type FilterMode = 'none' | 'range' | 'around';
@@ -26,7 +26,7 @@ type Radius = 5 | 10 | 30 | 60;
 @Component({
   selector: 'app-run-viewer',
   standalone: true,
-  imports: [DatePipe, FormsModule, DatePicker, Splitter, SelectButton, Button, Tag, Paginator, Message, RunDetailCardComponent],
+  imports: [DatePipe, FormsModule, DatePicker, Splitter, SelectButton, Button, Tag, Message, RunDetailCardComponent],
   template: `
     <p-splitter [panelSizes]="[60, 40]" [minSizes]="[25, 15]" [gutterSize]="6" class="h-full">
       <ng-template #panel>
@@ -143,12 +143,15 @@ type Radius = 5 | 10 | 30 | 60;
         </div>
 
         <!-- Pagination -->
-        <p-paginator
-          [rows]="pageSize"
-          [totalRecords]="total()"
-          [first]="(page() - 1) * pageSize"
-          (onPageChange)="onPageChange(($event.page ?? 0) + 1)"
-          class="shrink-0"/>
+        @if (totalPages() > 1) {
+          <div class="shrink-0 flex items-center justify-between px-3 py-2 border-t border-edge text-xs text-fg-muted">
+            <span>Page {{ page() }} of {{ totalPages() }}</span>
+            <div class="flex gap-1">
+              <button (click)="onPageChange(page() - 1)" [disabled]="page() <= 1" class="px-2 py-1 rounded border border-edge hover:bg-elevated disabled:opacity-30 disabled:cursor-not-allowed">&lsaquo;</button>
+              <button (click)="onPageChange(page() + 1)" [disabled]="page() >= totalPages()" class="px-2 py-1 rounded border border-edge hover:bg-elevated disabled:opacity-30 disabled:cursor-not-allowed">&rsaquo;</button>
+            </div>
+          </div>
+        }
       </div>
       </ng-template>
     </p-splitter>

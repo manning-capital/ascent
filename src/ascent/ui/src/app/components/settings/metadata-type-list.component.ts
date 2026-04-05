@@ -4,18 +4,17 @@ import { FormsModule } from '@angular/forms';
 import { FieldService } from '../../services/field.service';
 import { ToastService } from '../../services/toast.service';
 import { MetadataTypeItem } from '../../models/field.model';
-import { TableModule } from 'primeng/table';
 import { Card } from 'primeng/card';
 import { Button } from 'primeng/button';
 import { InputText } from 'primeng/inputtext';
 import { Select } from 'primeng/select';
-import { Tag } from 'primeng/tag';
-import { Skeleton } from 'primeng/skeleton';
+import { DataTableComponent } from '../shared/data-table/data-table.component';
+import type { DataTableColumn } from '../shared/data-table/data-table.model';
 
 @Component({
   selector: 'app-metadata-type-list',
   standalone: true,
-  imports: [FormsModule, TableModule, Card, Button, InputText, Select, Tag, Skeleton],
+  imports: [FormsModule, Card, Button, InputText, Select, DataTableComponent],
   templateUrl: './metadata-type-list.component.html',
 })
 export class MetadataTypeListComponent implements OnInit {
@@ -29,13 +28,23 @@ export class MetadataTypeListComponent implements OnInit {
   newDescription = '';
   newValueType = 'string';
 
+  private valueTypeLabels: Record<string, string> = {
+    string: 'Text', integer: 'Integer', float: 'Float', boolean: 'Boolean',
+    date: 'Date', time: 'Time', datetime: 'DateTime', enum: 'Enum', reference: 'Reference',
+  };
+
+  columns: DataTableColumn<MetadataTypeItem>[] = [
+    { field: 'name', header: 'Name', cellType: 'monospace' },
+    { field: 'display_name', header: 'Display Name' },
+    { field: 'value_type', header: 'Value Type', cellType: 'tag', tagMapper: (v) => ({ label: this.valueTypeLabels[v] ?? v, severity: 'secondary' }) },
+    { field: 'is_active', header: 'Status', cellType: 'status' },
+    { field: 'description', header: 'Description', valueFormatter: (p) => p.value || '-', cellClass: 'text-surface-400' },
+  ];
+
+  navigateToMetadataType = (row: MetadataTypeItem) => ['/settings/metadata-types', row.id];
+
   ngOnInit(): void {
     this.fieldService.loadMetadataTypes();
-  }
-
-  navigateTo(event: any): void {
-    const item = event.data as MetadataTypeItem;
-    if (item?.id) this.router.navigate(['/settings/metadata-types', item.id]);
   }
 
   openCreate(): void {

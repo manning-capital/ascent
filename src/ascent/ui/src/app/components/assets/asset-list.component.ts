@@ -1,22 +1,20 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
-import { Router, RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { AssetService } from '../../services/asset.service';
 import { ToastService } from '../../services/toast.service';
 import { Select } from 'primeng/select';
-import { TableModule } from 'primeng/table';
 import { InputText } from 'primeng/inputtext';
 import { Card } from 'primeng/card';
 import { Button } from 'primeng/button';
-import { Tag } from 'primeng/tag';
-import { MultiSelect } from 'primeng/multiselect';
-import { Skeleton } from 'primeng/skeleton';
 import { AssetCreate } from '../../models/asset.model';
+import { DataTableComponent } from '../shared/data-table/data-table.component';
+import type { DataTableColumn } from '../shared/data-table/data-table.model';
 
 @Component({
   selector: 'app-asset-list',
   standalone: true,
-  imports: [FormsModule, RouterLink, Select, TableModule, InputText, Card, Button, Tag, MultiSelect, Skeleton],
+  imports: [FormsModule, Select, InputText, Card, Button, DataTableComponent],
   templateUrl: './asset-list.component.html',
 })
 export class AssetListComponent implements OnInit {
@@ -26,14 +24,14 @@ export class AssetListComponent implements OnInit {
 
   typeNames = computed(() => this.assetService.assetTypes().map(t => t.display_name));
 
-  typeRoute(typeId: string): string {
-    return `/settings/asset-types/${typeId}`;
-  }
-
-  statusOptions = [
-    { label: 'Active', value: true },
-    { label: 'Inactive', value: false },
+  columns: DataTableColumn[] = [
+    { field: 'display_name', header: 'Display Name', filterType: 'text' },
+    { field: 'name', header: 'Name', cellType: 'monospace', filterType: 'text' },
+    { field: 'asset_type_name', header: 'Type', cellType: 'link', linkRoute: (row: any) => `/settings/asset-types/${row.asset_type_id}`, filterType: 'select', filterOptions: this.typeNames },
+    { field: 'is_active', header: 'Status', cellType: 'status', width: 112, filterType: 'select', filterOptions: [{ label: 'Active', value: true }, { label: 'Inactive', value: false }] },
   ];
+
+  navigateToAsset = (row: any) => ['/settings/assets', row.id];
 
   showCreateForm = signal(false);
   newAssetDisplayName = '';
@@ -50,10 +48,6 @@ export class AssetListComponent implements OnInit {
   ngOnInit(): void {
     this.assetService.loadAssets();
     this.assetService.loadAssetTypes();
-  }
-
-  navigateToAsset(id: string): void {
-    this.router.navigate(['/settings/assets', id]);
   }
 
   openCreate(): void {

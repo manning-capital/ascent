@@ -4,17 +4,16 @@ import { FormsModule } from '@angular/forms';
 import { FieldService } from '../../services/field.service';
 import { ToastService } from '../../services/toast.service';
 import { AttributeItem } from '../../models/field.model';
-import { TableModule } from 'primeng/table';
 import { Card } from 'primeng/card';
 import { Button } from 'primeng/button';
 import { InputText } from 'primeng/inputtext';
-import { Tag } from 'primeng/tag';
-import { Skeleton } from 'primeng/skeleton';
+import { DataTableComponent } from '../shared/data-table/data-table.component';
+import type { DataTableColumn } from '../shared/data-table/data-table.model';
 
 @Component({
   selector: 'app-attribute-list',
   standalone: true,
-  imports: [FormsModule, TableModule, Card, Button, InputText, Tag, Skeleton],
+  imports: [FormsModule, Card, Button, InputText, DataTableComponent],
   templateUrl: './attribute-list.component.html',
 })
 export class AttributeListComponent implements OnInit {
@@ -27,13 +26,16 @@ export class AttributeListComponent implements OnInit {
   newDisplayName = '';
   newDescription = '';
 
+  columns: DataTableColumn<AttributeItem>[] = [
+    { field: 'name', header: 'Name', cellType: 'monospace' },
+    { field: 'is_active', header: 'Status', cellType: 'status' },
+    { field: 'description', header: 'Description', valueFormatter: (p) => p.value || '-', cellClass: 'text-surface-400' },
+  ];
+
+  navigateToAttribute = (row: AttributeItem) => ['/settings/attributes', row.id];
+
   ngOnInit(): void {
     this.fieldService.loadAttributes();
-  }
-
-  navigateTo(event: any): void {
-    const item = event.data as AttributeItem;
-    if (item?.id) this.router.navigate(['/settings/attributes', item.id]);
   }
 
   openCreate(): void {

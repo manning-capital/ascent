@@ -1,6 +1,5 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { forkJoin } from 'rxjs';
 import { AssetService } from '../../../services/asset.service';
@@ -11,11 +10,12 @@ import { MetadataEntry, ProviderTypeMetadataField, MetadataHistoryGrid, BulkHist
 import { EntityUsage } from '../../../models/field.model';
 import { Skeleton } from 'primeng/skeleton';
 import { DatePicker } from 'primeng/datepicker';
-import { TableModule } from 'primeng/table';
 import { Tag } from 'primeng/tag';
 import { Panel } from 'primeng/panel';
 import { Button } from 'primeng/button';
 import { Tabs, TabList, Tab } from 'primeng/tabs';
+import { DataTableComponent } from '../../shared/data-table/data-table.component';
+import type { DataTableColumn } from '../../shared/data-table/data-table.model';
 import { MetadataHistoryTableComponent } from '../../shared/metadata-history-table.component';
 import { SafeDeleteDialogComponent } from '../../shared/safe-delete-dialog.component';
 import { FieldPanelComponent, PanelField } from '../../shared/field-panel.component';
@@ -25,15 +25,14 @@ import { FieldPanelComponent, PanelField } from '../../shared/field-panel.compon
   standalone: true,
   imports: [
     RouterLink,
-    DatePipe,
     FormsModule,
     DatePicker,
-    TableModule,
     Tag,
     Panel,
     Button,
     Skeleton,
     Tabs, TabList, Tab,
+    DataTableComponent,
     MetadataHistoryTableComponent,
     SafeDeleteDialogComponent,
     FieldPanelComponent,
@@ -56,6 +55,14 @@ export class ProviderDetailComponent implements OnInit {
     if (!provider) return null;
     return this.providerService.providerTypes().find(t => t.id === provider.provider_type_id) ?? null;
   });
+
+  // Mapped assets table columns
+  mappedAssetsColumns: DataTableColumn[] = [
+    { field: 'asset_name', header: 'Asset', cellType: 'link', linkRoute: (row: any) => ['/settings/assets', row.asset_id] },
+    { field: 'asset_symbol', header: 'Symbol', cellType: 'monospace', valueGetter: (params: any) => params.data?.asset_symbol || '-' },
+    { field: 'identifier', header: 'Identifier', cellType: 'monospace' },
+    { field: 'created_at', header: 'Created', cellType: 'date' },
+  ];
 
   // General panel fields
   generalFields = computed<PanelField[]>(() => {

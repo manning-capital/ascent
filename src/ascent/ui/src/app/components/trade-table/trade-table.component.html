@@ -1,72 +1,16 @@
 <div class="transition-opacity duration-200" [class.opacity-40]="loading()" [class.pointer-events-none]="loading()">
   <!-- Desktop Table -->
-  <div class="hidden md:block">
-    <p-table [value]="trades()" [rowHover]="true" [tableStyle]="{'width': '100%'}">
-      <ng-template #header>
-        <tr>
-          <th>Symbol</th>
-          @if (showStrategy()) {
-            <th>Strategy</th>
-          }
-          <th>Type</th>
-          <th>Qty</th>
-          <th>Entry Price</th>
-          <th>Exit/Current</th>
-          <th class="text-right">P&L</th>
-          <th class="text-right">Status</th>
-        </tr>
-      </ng-template>
-      <ng-template #body let-trade>
-        <tr class="cursor-pointer" (click)="navigateToTrade(trade.id)">
-          <td>
-            <div class="flex items-center gap-2">
-              <span class="font-medium text-sm">{{ trade.display_symbol }}</span>
-              @if (trade.is_paper) {
-                <app-badge label="PAPER"/>
-              }
-            </div>
-          </td>
-          @if (showStrategy()) {
-            <td class="text-sm text-surface-500">{{ trade.strategy_name }}</td>
-          }
-          <td>
-            <div class="flex gap-1">
-              @for (tag of trade.tags; track tag) {
-                @if (tag !== 'PAPER') {
-                  <app-badge [label]="tag"/>
-                }
-              }
-            </div>
-          </td>
-          <td class="text-sm">
-            {{ getMainLeg(trade)?.quantity | number:'1.0-4' }}
-          </td>
-          <td class="text-sm">
-            {{ tradeService.formatCurrency(getMainLeg(trade)?.entry_price ?? null) }}
-          </td>
-          <td class="text-sm">
-            {{ tradeService.formatCurrency(getMainLeg(trade)?.exit_price ?? getMainLeg(trade)?.entry_price ?? null) }}
-          </td>
-          <td class="text-sm text-right">
-            <span [class]="tradeService.getPnlClass(trade.total_realized_pnl)">
-              {{ tradeService.formatCurrency(trade.total_realized_pnl) }}
-            </span>
-          </td>
-          <td class="text-right">
-            @if (trade.current_status) {
-              <app-badge [label]="trade.current_status" variant="status"/>
-            }
-          </td>
-        </tr>
-      </ng-template>
-      <ng-template #emptymessage>
-        <tr>
-          <td [attr.colspan]="showStrategy() ? 8 : 7">
-            <app-empty-state title="No trades" icon="data"/>
-          </td>
-        </tr>
-      </ng-template>
-    </p-table>
+  <div class="hidden md:block rounded-lg overflow-clip border border-edge" [attr.data-ag-theme-mode]="themeMode()">
+    <ag-grid-angular
+      [theme]="theme"
+      [rowData]="trades()"
+      [columnDefs]="colDefs()"
+      [defaultColDef]="defaultColDef"
+      [domLayout]="'autoHeight'"
+      [suppressCellFocus]="true"
+      [rowClass]="'cursor-pointer'"
+      [overlayNoRowsTemplate]="'<span style=&quot;font-size:12px;opacity:0.5&quot;>No trades</span>'"
+      (rowClicked)="onRowClicked($event)"/>
   </div>
 
   <!-- Mobile Cards -->
@@ -96,23 +40,11 @@
 
   <!-- Pagination -->
   @if (totalPages() > 1) {
-    <div class="flex items-center justify-between mt-4 px-2">
-      <span class="text-xs text-surface-400">Page {{ page() }} of {{ totalPages() }}</span>
+    <div class="flex items-center justify-between mt-4 px-2 text-xs text-fg-muted">
+      <span>Page {{ page() }} of {{ totalPages() }}</span>
       <div class="flex gap-1">
-        <p-button
-          [disabled]="page() <= 1"
-          (onClick)="onPageChange(page() - 1)"
-          severity="secondary"
-          [outlined]="true"
-          size="small"
-          label="Prev"/>
-        <p-button
-          [disabled]="page() >= totalPages()"
-          (onClick)="onPageChange(page() + 1)"
-          severity="secondary"
-          [outlined]="true"
-          size="small"
-          label="Next"/>
+        <button (click)="onPageChange(page() - 1)" [disabled]="page() <= 1" class="px-3 py-1.5 rounded border border-edge text-fg hover:bg-elevated disabled:opacity-30 disabled:cursor-not-allowed">Prev</button>
+        <button (click)="onPageChange(page() + 1)" [disabled]="page() >= totalPages()" class="px-3 py-1.5 rounded border border-edge text-fg hover:bg-elevated disabled:opacity-30 disabled:cursor-not-allowed">Next</button>
       </div>
     </div>
   }

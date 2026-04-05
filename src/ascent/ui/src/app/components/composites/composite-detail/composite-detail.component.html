@@ -149,33 +149,11 @@
                 </div>
               }
 
-              <p-table [value]="comp.members">
-                <ng-template #header>
-                  <tr>
-                    <th class="w-12">#</th>
-                    <th>Instrument</th>
-                    <th>Display Name</th>
-                    <th class="w-20"></th>
-                  </tr>
-                </ng-template>
-                <ng-template #body let-m>
-                  <tr>
-                    <td class="text-surface-500 font-mono text-xs">{{ m.order }}</td>
-                    <td>
-                      <a [routerLink]="['/settings/instruments', m.instrument_id]" class="text-primary hover:underline font-mono text-xs">{{ m.instrument_name }}</a>
-                    </td>
-                    <td class="font-medium">{{ m.instrument_display_name }}</td>
-                    <td>
-                      <p-button (onClick)="removeMember(m)" severity="danger" [text]="true" size="small" label="Remove"/>
-                    </td>
-                  </tr>
-                </ng-template>
-                <ng-template #emptymessage>
-                  <tr>
-                    <td colspan="4" class="text-center text-surface-400 py-8">No members in this composite.</td>
-                  </tr>
-                </ng-template>
-              </p-table>
+              <app-data-table
+                [columns]="memberColumns"
+                [rowData]="comp.members"
+                [pagination]="false"
+                emptyMessage="No members in this composite."/>
             </p-panel>
 
         </div>

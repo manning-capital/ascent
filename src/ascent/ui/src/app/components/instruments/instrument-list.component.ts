@@ -1,23 +1,21 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
-import { Router, RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { AssetService } from '../../services/asset.service';
 import { ProviderService } from '../../services/provider.service';
 import { ToastService } from '../../services/toast.service';
 import { Select } from 'primeng/select';
-import { TableModule } from 'primeng/table';
 import { InputText } from 'primeng/inputtext';
 import { Card } from 'primeng/card';
 import { Button } from 'primeng/button';
-import { Tag } from 'primeng/tag';
-import { Skeleton } from 'primeng/skeleton';
-import { MultiSelect } from 'primeng/multiselect';
 import { InstrumentCreate } from '../../models/asset.model';
+import { DataTableComponent } from '../shared/data-table/data-table.component';
+import type { DataTableColumn } from '../shared/data-table/data-table.model';
 
 @Component({
   selector: 'app-instrument-list',
   standalone: true,
-  imports: [FormsModule, RouterLink, Select, TableModule, InputText, Card, Button, Tag, Skeleton, MultiSelect],
+  imports: [FormsModule, Select, InputText, Card, Button, DataTableComponent],
   templateUrl: './instrument-list.component.html',
 })
 export class InstrumentListComponent implements OnInit {
@@ -38,10 +36,15 @@ export class InstrumentListComponent implements OnInit {
     }));
   });
 
-  statusOptions = [
-    { label: 'Active', value: true },
-    { label: 'Inactive', value: false },
+  columns: DataTableColumn[] = [
+    { field: 'display_name', header: 'Display Name', filterType: 'text' },
+    { field: 'name', header: 'Name', cellType: 'monospace', filterType: 'text' },
+    { field: 'type_display_name', header: 'Type', cellType: 'link', linkRoute: (row: any) => `/settings/instrument-types/${row.instrument_type_id}`, filterType: 'select', filterOptions: this.typeNames },
+    { field: 'pair', header: 'Pair', sortable: false, cellClass: 'text-surface-500', valueGetter: (p: any) => `${p.data?.from_asset_name ?? ''}/${p.data?.to_asset_name ?? ''}` },
+    { field: 'is_active', header: 'Status', cellType: 'status', width: 112, filterType: 'select', filterOptions: [{ label: 'Active', value: true }, { label: 'Inactive', value: false }] },
   ];
+
+  navigateToInstrument = (row: any) => ['/settings/instruments', row.id];
 
   showCreateForm = signal(false);
   newDisplayName = '';
@@ -65,9 +68,7 @@ export class InstrumentListComponent implements OnInit {
     this.providerService.loadProviders();
   }
 
-  navigateToInstrument(id: string): void {
-    this.router.navigate(['/settings/instruments', id]);
-  }
+
 
   openCreate(): void {
     this.newDisplayName = '';

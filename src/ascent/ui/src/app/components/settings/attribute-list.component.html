@@ -31,48 +31,11 @@
     </p-card>
   }
 
-  @if (fieldService.loading()) {
-    <p-card>
-      <div class="flex flex-col gap-3">
-        @for (_ of [1,2,3,4,5]; track $index) {
-          <div class="flex items-center gap-4">
-            <p-skeleton width="30%" height="1rem"/>
-            <p-skeleton width="10%" height="1rem"/>
-            <div class="flex-1"></div>
-            <p-skeleton width="20%" height="1rem"/>
-          </div>
-        }
-      </div>
-    </p-card>
-  } @else {
-    <p-card styleClass="overflow-hidden">
-      <p-table [value]="fieldService.attributes()" [rowHover]="true" (onRowSelect)="navigateTo($event)" selectionMode="single" dataKey="id">
-        <ng-template #header>
-          <tr>
-            <th>Name</th>
-            <th>Status</th>
-            <th>Description</th>
-          </tr>
-        </ng-template>
-        <ng-template #body let-item>
-          <tr [pSelectableRow]="item" class="cursor-pointer">
-            <td class="font-mono text-sm">{{ item.name }}</td>
-            <td>
-              @if (item.is_active) {
-                <p-tag value="Active" severity="success"/>
-              } @else {
-                <p-tag value="Inactive" severity="warn"/>
-              }
-            </td>
-            <td class="text-sm text-surface-400">{{ item.description || '-' }}</td>
-          </tr>
-        </ng-template>
-        <ng-template #emptymessage>
-          <tr>
-            <td colspan="3" class="text-center text-surface-400 py-8">No attributes defined. Click + New Attribute to get started.</td>
-          </tr>
-        </ng-template>
-      </p-table>
-    </p-card>
-  }
+  <app-data-table
+    [columns]="columns"
+    [rowData]="fieldService.attributes()"
+    [loading]="fieldService.loading()"
+    [pagination]="false"
+    [rowClickRoute]="navigateToAttribute"
+    emptyMessage="No attributes defined. Click + New Attribute to get started."/>
 </div>

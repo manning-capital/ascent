@@ -1,7 +1,6 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DatePipe, JsonPipe } from '@angular/common';
-import { FormsModule } from '@angular/forms';
 import { StrategyService } from '../../../services/strategy.service';
 import { FeedService } from '../../../services/feed.service';
 import { TradeService } from '../../../services/trade.service';
@@ -15,15 +14,14 @@ import { TradeTableComponent } from '../../trade-table/trade-table.component';
 import { RunFilter } from '../../shared/run-viewer.component';
 import { CumulativePnlChartComponent, CumulativePnlPoint } from './charts/cumulative-pnl-chart.component';
 import { PnlDistributionChartComponent } from './charts/pnl-distribution-chart.component';
-import { DatePicker } from 'primeng/datepicker';
-import { TableModule } from 'primeng/table';
-import { SelectButton } from 'primeng/selectbutton';
 import { Button } from 'primeng/button';
+import { RunFilterPanelComponent } from '../../shared/run-filter-panel.component';
 import { Tag } from 'primeng/tag';
-import { Paginator } from 'primeng/paginator';
 import { Card } from 'primeng/card';
 import { Skeleton } from 'primeng/skeleton';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
+import { DataTableComponent } from '../../shared/data-table/data-table.component';
+import type { DataTableColumn } from '../../shared/data-table/data-table.model';
 
 @Component({
   selector: 'app-strategy-detail',
@@ -32,22 +30,19 @@ import { EmptyStateComponent } from '../../shared/empty-state.component';
     RouterLink,
     DatePipe,
     JsonPipe,
-    FormsModule,
     Tabs, TabList, Tab,
     SchemaFormComponent,
     TradeTableComponent,
     CumulativePnlChartComponent,
     PnlDistributionChartComponent,
-    DatePicker,
-    TableModule,
-    SelectButton,
     Button,
+    RunFilterPanelComponent,
     Tag,
-    Paginator,
     Card,
     Skeleton,
     EmptyStateComponent,
     UniversePanelComponent,
+    DataTableComponent,
   ],
   templateUrl: './strategy-detail.component.html',
 })
@@ -69,30 +64,42 @@ export class StrategyDetailComponent implements OnInit {
   editedParameters = signal<Record<string, any>>({});
   feedDag = signal<StrategyFeedDAG | null>(null);
 
+  // Order columns
+  orderColumns: DataTableColumn[] = [
+    { field: 'instrument_name', header: 'Pair' },
+    { field: 'side', header: 'Side', cellType: 'tag', tagMapper: (v: string) => ({ label: v, severity: v === 'BUY' ? 'success' : v === 'SELL' ? 'danger' : 'secondary' }) },
+    { field: 'order_type', header: 'Type', cellClass: 'text-muted-color' },
+    { field: 'quantity', header: 'Qty' },
+    { field: 'price', header: 'Price', valueFormatter: (p: any) => this.formatCurrency(p.value) },
+    { field: 'filled_quantity', header: 'Filled', valueGetter: (p: any) => p.data?.filled_quantity !== null ? `${p.data.filled_quantity} / ${p.data.quantity}` : '\u2014' },
+    { field: 'current_status', header: 'Status', cellType: 'tag', tagMapper: (v: string) => {
+      if (!v) return { label: '', severity: 'secondary' };
+      const map: Record<string, string> = { FILLED: 'success', PARTIALLY_FILLED: 'warn', SUBMITTED: 'warn', ACCEPTED: 'warn', REJECTED: 'danger', CANCELLED: 'secondary' };
+      return { label: v, severity: map[v] ?? 'secondary' };
+    }},
+  ];
+
+  // Run columns
+  runColumns: DataTableColumn<StrategyRunListItem>[] = [
+    { field: 'status', header: 'Status', cellType: 'tag', width: 96, tagMapper: (v: string) => {
+      const map: Record<string, string> = { COMPLETED: 'success', FAILED: 'danger', RUNNING: 'warn' };
+      return { label: v, severity: map[v] ?? 'secondary' };
+    }},
+    { field: 'id', header: 'Run ID', cellType: 'monospace' },
+    { field: 'started_at', header: 'Started', cellType: 'date' },
+    { field: 'duration', header: 'Duration', valueGetter: (p: any) => this.runDurationLabel(p.data) },
+    { field: 'feed_runs', header: 'Feeds', valueGetter: (p: any) => p.data?.feed_runs?.length ?? 0 },
+    { field: 'error_message', header: 'Error', valueFormatter: (p: any) => p.value ?? '-', cellClass: (p: any) => p.value ? 'text-red-500' : '' },
+  ];
+
+  navigateToRun = (row: StrategyRunListItem) => ['/strategies', this.strategyId, 'runs', row.id];
+
   // Runs tab state
   strategyRuns = signal<StrategyRunListItem[]>([]);
   runsTotal = signal(0);
   runsTotalPages = signal(0);
   runsPage = signal(1);
-  runsFilterMode = signal<'none' | 'range' | 'around'>('none');
-  runsRangeFrom = signal<Date | null>(null);
-  runsRangeTo = signal<Date | null>(null);
-  runsAroundDatetime = signal<Date | null>(null);
-  runsAroundRadius = signal<5 | 10 | 30 | 60>(5);
-  runsRadiusOptions: (5 | 10 | 30 | 60)[] = [5, 10, 30, 60];
-
-  runsFilterOptions = [
-    { label: 'All', value: 'none' },
-    { label: 'Range', value: 'range' },
-    { label: 'Around', value: 'around' },
-  ];
-
-  runsRadiusSelectOptions = [
-    { label: '5m', value: 5 },
-    { label: '10m', value: 10 },
-    { label: '30m', value: 30 },
-    { label: '1h', value: 60 },
-  ];
+  runsFilter = signal<RunFilter>({});
 
   // Stats from API
   stats = computed(() => this.strategyService.strategyStats());
@@ -153,7 +160,7 @@ export class StrategyDetailComponent implements OnInit {
       this.runsTotal.set(0);
       this.runsTotalPages.set(0);
       this.runsPage.set(1);
-      this.runsFilterMode.set('none');
+      this.runsFilter.set({});
 
       this.strategyService.loadStrategyDetail(this.strategyId);
       this.strategyService.loadStrategyTrades(this.strategyId);
@@ -265,7 +272,9 @@ export class StrategyDetailComponent implements OnInit {
   // --- Runs tab methods ---
 
   loadStrategyRuns(): void {
-    this.feedService.loadStrategyRuns(this.strategyId, this.runsPage(), 20, this.buildRunsFilter()).subscribe({
+    const filter = this.runsFilter();
+    const f = Object.keys(filter).length > 0 ? filter : undefined;
+    this.feedService.loadStrategyRuns(this.strategyId, this.runsPage(), 20, f).subscribe({
       next: (res) => {
         this.strategyRuns.set(res.items);
         this.runsTotal.set(res.total);
@@ -274,29 +283,15 @@ export class StrategyDetailComponent implements OnInit {
     });
   }
 
-  onRunsPageChange(newPage: number): void {
-    this.runsPage.set(newPage);
-    this.loadStrategyRuns();
-  }
-
-  setRunsFilterMode(mode: 'none' | 'range' | 'around'): void {
-    this.runsFilterMode.set(mode);
-    if (mode === 'none') {
-      this.runsRangeFrom.set(null);
-      this.runsRangeTo.set(null);
-      this.runsAroundDatetime.set(null);
-      this.runsPage.set(1);
-      this.loadStrategyRuns();
-    }
-  }
-
-  applyRunsFilter(): void {
+  onRunsFilterChange(filter: RunFilter): void {
+    this.runsFilter.set(filter);
     this.runsPage.set(1);
     this.loadStrategyRuns();
   }
 
-  clearRunsFilter(): void {
-    this.setRunsFilterMode('none');
+  onRunsPageChange(newPage: number): void {
+    this.runsPage.set(newPage);
+    this.loadStrategyRuns();
   }
 
   runStatusSeverity(status: string): 'success' | 'danger' | 'warn' | 'secondary' | 'info' {
@@ -344,25 +339,4 @@ export class StrategyDetailComponent implements OnInit {
     });
   }
 
-  private buildRunsFilter(): RunFilter | undefined {
-    const mode = this.runsFilterMode();
-    if (mode === 'range') {
-      const f: RunFilter = {};
-      const from = this.runsRangeFrom();
-      const to = this.runsRangeTo();
-      if (from) f.started_after = from.toISOString();
-      if (to) f.started_before = to.toISOString();
-      if (f.started_after || f.started_before) return f;
-    } else if (mode === 'around') {
-      const center = this.runsAroundDatetime();
-      if (center) {
-        const offsetMs = this.runsAroundRadius() * 60 * 1000;
-        return {
-          started_after: new Date(center.getTime() - offsetMs).toISOString(),
-          started_before: new Date(center.getTime() + offsetMs).toISOString(),
-        };
-      }
-    }
-    return undefined;
-  }
 }

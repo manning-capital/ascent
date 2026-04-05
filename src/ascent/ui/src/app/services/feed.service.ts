@@ -57,6 +57,7 @@ export class FeedService {
     const params: Record<string, string | number> = { page, page_size: pageSize };
     if (filter?.started_after) params['started_after'] = filter.started_after;
     if (filter?.started_before) params['started_before'] = filter.started_before;
+    if (filter?.status) params['status'] = filter.status;
     return this.api.get<PaginatedResponse<FeedRunListItem>>(`/feeds/${feedId}/runs`, params);
   }
 
@@ -88,6 +89,7 @@ export class FeedService {
     const params: Record<string, string | number> = { page, page_size: pageSize };
     if (filter?.started_after) params['started_after'] = filter.started_after;
     if (filter?.started_before) params['started_before'] = filter.started_before;
+    if (filter?.status) params['status'] = filter.status;
     return this.api.get<PaginatedResponse<StrategyRunListItem>>(`/strategies/${strategyId}/runs`, params);
   }
 

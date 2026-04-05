@@ -33,22 +33,11 @@
 
           <!-- Feed Runs Table -->
           <p-panel header="Feed Runs">
-            <p-table [value]="r.feed_runs" [tableStyle]="{'min-width': '30rem'}">
-              <ng-template #header>
-                <tr>
-                  <th>Feed</th>
-                  <th>Status</th>
-                  <th>Trigger</th>
-                </tr>
-              </ng-template>
-              <ng-template #body let-fr>
-                <tr>
-                  <td class="font-mono text-xs">{{ fr.feed_id }}</td>
-                  <td><p-tag [value]="fr.status" [severity]="statusSeverity(fr.status)" [rounded]="true"/></td>
-                  <td>{{ fr.is_trigger ? 'Yes' : '-' }}</td>
-                </tr>
-              </ng-template>
-            </p-table>
+            <app-data-table
+              [columns]="feedRunColumns"
+              [rowData]="r.feed_runs"
+              [pagination]="false"
+              emptyMessage="No feed runs."/>
           </p-panel>
         }
       </div>

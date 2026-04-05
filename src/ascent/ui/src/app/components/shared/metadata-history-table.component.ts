@@ -9,7 +9,6 @@ import {
   BulkHistoryDeleteEntry,
 } from '../../models/asset.model';
 import { ThemeService } from '../../services/theme.service';
-import { Card } from 'primeng/card';
 import { Button } from 'primeng/button';
 import { Tag } from 'primeng/tag';
 import { AgGridAngular } from 'ag-grid-angular';
@@ -25,21 +24,18 @@ import {
   type CellValueChangedEvent,
   type GetRowIdParams,
   type CellStyleFunc,
-  AllCommunityModule,
-  ModuleRegistry,
-  themeQuartz,
 } from 'ag-grid-community';
-
-ModuleRegistry.registerModules([AllCommunityModule]);
+import { AG_GRID_THEME, agThemeMode } from './data-table/ag-grid-theme';
 
 function formatLocalDateTime(d: Date): string {
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const mo = months[d.getMonth()];
+  const day = d.getDate();
   const y = d.getFullYear();
-  const mo = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
   const h = String(d.getHours()).padStart(2, '0');
   const mi = String(d.getMinutes()).padStart(2, '0');
   const s = String(d.getSeconds()).padStart(2, '0');
-  return `${y}-${mo}-${day} ${h}:${mi}:${s}`;
+  return `${mo} ${day}, ${y} ${h}:${mi}:${s}`;
 }
 
 // ─── Row shape ───────────────────────────────────────────
@@ -375,44 +371,46 @@ export class ActionCellRendererComponent implements ICellRendererAngularComp {
 @Component({
   selector: 'app-metadata-history-table',
   standalone: true,
-  imports: [AgGridAngular, Card, Button, Tag],
-  host: { class: 'block overflow-hidden' },
+  imports: [AgGridAngular, Button, Tag],
+  host: { class: 'block' },
   template: `
-    <p-card styleClass="overflow-hidden">
-      <!-- Toolbar -->
-      <div class="flex items-center justify-between mb-4">
-        <div class="flex items-center gap-2">
-          <p-button label="+ Insert Row" severity="primary" [outlined]="true" size="small" (onClick)="addRow()"/>
-          @if (changeCount() > 0) {
-            <p-tag [value]="changeCount() + ' pending change' + (changeCount() > 1 ? 's' : '')" severity="warn"/>
-          }
-        </div>
-        <div class="flex items-center gap-2">
-          @if (changeCount() > 0) {
-            <p-button label="Save Changes" severity="primary" size="small" (onClick)="emitSave()"/>
-            <p-button label="Discard" severity="secondary" [text]="true" size="small" (onClick)="discard()"/>
-          }
-        </div>
+    <!-- Toolbar -->
+    <div class="flex items-center justify-between mb-4">
+      <div class="flex items-center gap-2">
+        <p-button label="+ Insert Row" severity="primary" [outlined]="true" size="small" (onClick)="addRow()"/>
+        @if (changeCount() > 0) {
+          <p-tag [value]="changeCount() + ' pending change' + (changeCount() > 1 ? 's' : '')" severity="warn"/>
+        }
       </div>
+      <div class="flex items-center gap-2">
+        @if (changeCount() > 0) {
+          <p-button label="Save Changes" severity="primary" size="small" (onClick)="emitSave()"/>
+          <p-button label="Discard" severity="secondary" [text]="true" size="small" (onClick)="discard()"/>
+        }
+      </div>
+    </div>
 
-      <!-- AG Grid -->
-      <div [attr.data-ag-theme-mode]="themeMode()" style="width: 100%; max-height: 32rem; overflow: auto;">
-        <ag-grid-angular
-          [theme]="theme"
-          [loading]="loading()"
-          [rowData]="rowData()"
-          [columnDefs]="colDefs()"
-          [defaultColDef]="defaultColDef"
-          [domLayout]="'autoHeight'"
-          [getRowId]="getRowId"
-          [getRowStyle]="getRowStyle"
-          [context]="gridContext"
-          [singleClickEdit]="true"
-          [overlayNoRowsTemplate]="noRowsTemplate"
-          (gridReady)="onGridReady($event)"
-          (cellValueChanged)="onCellValueChanged($event)"/>
-      </div>
-    </p-card>
+    <!-- AG Grid -->
+    <div [attr.data-ag-theme-mode]="themeMode()" class="rounded-lg overflow-clip border border-edge"
+         [style.height.px]="gridHeight()">
+      <ag-grid-angular
+        style="width: 100%; height: 100%"
+        [theme]="theme"
+        [loading]="loading()"
+        [rowData]="rowData()"
+        [columnDefs]="colDefs()"
+        [defaultColDef]="defaultColDef"
+        [rowHeight]="48"
+        [headerHeight]="48"
+        [getRowId]="getRowId"
+        [getRowStyle]="getRowStyle"
+        [context]="gridContext"
+        [singleClickEdit]="true"
+        [suppressCellFocus]="true"
+        [overlayNoRowsTemplate]="noRowsTemplate"
+        (gridReady)="onGridReady($event)"
+        (cellValueChanged)="onCellValueChanged($event)"/>
+    </div>
   `,
 })
 export class MetadataHistoryTableComponent {
@@ -423,43 +421,17 @@ export class MetadataHistoryTableComponent {
   loading = input(false);
   save = output<BulkHistoryUpdate>();
 
-  // ─── Theme (matches PrimeNG Aura + app design tokens) ──
+  // ─── Theme (shared across all AG Grid tables) ──
   private themeSvc = inject(ThemeService);
-  themeMode = computed(() => (this.themeSvc.isDark() ? 'dark' : 'light'));
-
-  theme = themeQuartz
-    .withParams(
-      {
-        backgroundColor: '#ffffff',
-        foregroundColor: '#111827',
-        headerBackgroundColor: '#f9fafb',
-        headerTextColor: '#374151',
-        borderColor: '#e5e7eb',
-        accentColor: '#3b82f6',
-        rowHoverColor: '#f3f4f6',
-        browserColorScheme: 'light',
-      },
-      'light',
-    )
-    .withParams(
-      {
-        backgroundColor: '#0a0a0a',
-        foregroundColor: '#fafafa',
-        headerBackgroundColor: '#18181b',
-        headerTextColor: '#a1a1aa',
-        borderColor: '#27272a',
-        accentColor: '#3b82f6',
-        rowHoverColor: '#27272a',
-        browserColorScheme: 'dark',
-      },
-      'dark',
-    );
+  themeMode = agThemeMode(this.themeSvc);
+  theme = AG_GRID_THEME;
 
   defaultColDef: ColDef = {
     sortable: true,
     filter: false,
-    resizable: true,
+    resizable: false,
     suppressMovable: true,
+    flex: 1,
   };
 
   noRowsTemplate =
@@ -477,6 +449,16 @@ export class MetadataHistoryTableComponent {
   // ─── State ─────────────────────────────────────────────
   rowData = signal<GridRow[]>([]);
   changeCount = signal(0);
+
+  /** Grid height: header (48px) + rows (48px each) + borders (4px buffer), capped at 600px. */
+  gridHeight = computed(() => {
+    const headerHeight = 48;
+    const rowHeight = 48;
+    const rows = this.rowData().length;
+    const natural = headerHeight + Math.max(rows, 1) * rowHeight + 4;
+    return Math.min(natural, 600);
+  });
+
   private gridApi: GridApi | null = null;
   private newRowCounter = 0;
   private initialized = false;

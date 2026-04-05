@@ -1,24 +1,23 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
-import { Router, RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { CompositeService } from '../../services/composite.service';
 import { AssetService } from '../../services/asset.service';
 import { ToastService } from '../../services/toast.service';
 import { Select } from 'primeng/select';
-import { TableModule } from 'primeng/table';
 import { InputText } from 'primeng/inputtext';
 import { Card } from 'primeng/card';
 import { Button } from 'primeng/button';
-import { Tag } from 'primeng/tag';
-import { Skeleton } from 'primeng/skeleton';
 import { MultiSelect } from 'primeng/multiselect';
 import { CompositeCreate, CompositeMemberCreate } from '../../models/composite.model';
 import { Instrument } from '../../models/asset.model';
+import { DataTableComponent } from '../shared/data-table/data-table.component';
+import type { DataTableColumn } from '../shared/data-table/data-table.model';
 
 @Component({
   selector: 'app-composite-list',
   standalone: true,
-  imports: [FormsModule, RouterLink, Select, MultiSelect, TableModule, InputText, Card, Button, Tag, Skeleton],
+  imports: [FormsModule, Select, MultiSelect, InputText, Card, Button, DataTableComponent],
   templateUrl: './composite-list.component.html',
 })
 export class CompositeListComponent implements OnInit {
@@ -39,10 +38,15 @@ export class CompositeListComponent implements OnInit {
     }));
   });
 
-  statusOptions = [
-    { label: 'Active', value: true },
-    { label: 'Inactive', value: false },
+  columns: DataTableColumn[] = [
+    { field: 'display_name', header: 'Display Name', filterType: 'text' },
+    { field: 'name', header: 'Name', cellType: 'monospace', filterType: 'text' },
+    { field: 'type_display_name', header: 'Type', cellType: 'link', linkRoute: (row: any) => `/settings/composite-types/${row.composite_type_id}`, filterType: 'select', filterOptions: this.typeNames },
+    { field: 'members', header: 'Members', sortable: false, cellType: 'monospace', valueGetter: (p: any) => p.data?.members?.length ?? 0 },
+    { field: 'is_active', header: 'Status', cellType: 'status', width: 112, filterType: 'select', filterOptions: [{ label: 'Active', value: true }, { label: 'Inactive', value: false }] },
   ];
+
+  navigateToComposite = (row: any) => ['/settings/composites', row.id];
 
   showCreateForm = signal(false);
   newDisplayName = '';
@@ -62,9 +66,7 @@ export class CompositeListComponent implements OnInit {
     this.compositeService.loadCompositeTypes();
   }
 
-  navigateToComposite(id: string): void {
-    this.router.navigate(['/settings/composites', id]);
-  }
+
 
   openCreate(): void {
     this.newDisplayName = '';

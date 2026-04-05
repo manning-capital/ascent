@@ -8,8 +8,9 @@ import { RunDetailCardComponent, RunDetailField, RunDetailItem } from '../../sha
 import { Tabs, TabList, Tab } from 'primeng/tabs';
 import { Panel } from 'primeng/panel';
 import { Tag } from 'primeng/tag';
-import { TableModule } from 'primeng/table';
 import { Skeleton } from 'primeng/skeleton';
+import { DataTableComponent } from '../../shared/data-table/data-table.component';
+import type { DataTableColumn } from '../../shared/data-table/data-table.model';
 
 @Component({
   selector: 'app-strategy-run-detail',
@@ -19,10 +20,10 @@ import { Skeleton } from 'primeng/skeleton';
     Tabs, TabList, Tab,
     Panel,
     Tag,
-    TableModule,
     Skeleton,
     RunDetailCardComponent,
     FeedDagComponent,
+    DataTableComponent,
   ],
   templateUrl: './strategy-run-detail.component.html',
 })
@@ -40,6 +41,15 @@ export class StrategyRunDetailComponent implements OnInit {
   feedDag = signal<StrategyFeedDAG | null>(null);
 
   strategyName = computed(() => this.strategyService.selectedStrategy()?.name ?? '');
+
+  feedRunColumns: DataTableColumn[] = [
+    { field: 'feed_id', header: 'Feed', cellType: 'monospace' },
+    { field: 'status', header: 'Status', cellType: 'tag', tagMapper: (v: string) => {
+      const map: Record<string, string> = { COMPLETED: 'success', FAILED: 'danger', RUNNING: 'warn' };
+      return { label: v, severity: map[v] ?? 'secondary' };
+    }},
+    { field: 'is_trigger', header: 'Trigger', valueFormatter: (p: any) => p.value ? 'Yes' : '-' },
+  ];
 
   runDetailItem = computed<RunDetailItem | null>(() => {
     const r = this.run();

@@ -14,7 +14,6 @@ import { EntityUsage } from '../../../models/field.model';
 import { Tabs, TabList, Tab } from 'primeng/tabs';
 import { Skeleton } from 'primeng/skeleton';
 import { DatePicker } from 'primeng/datepicker';
-import { TableModule } from 'primeng/table';
 import { Tag } from 'primeng/tag';
 import { Button } from 'primeng/button';
 import { Panel } from 'primeng/panel';
@@ -30,7 +29,6 @@ import { FieldPanelComponent, PanelField } from '../../shared/field-panel.compon
     FormsModule,
     Tabs, TabList, Tab,
     DatePicker,
-    TableModule,
     Tag,
     Button,
     Skeleton,

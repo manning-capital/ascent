@@ -126,31 +126,11 @@
           @if (!editing()) {
             <!-- Mapped Assets -->
             <p-panel header="Mapped Assets">
-              <p-table [value]="provider.asset_links">
-                <ng-template #header>
-                  <tr>
-                    <th>Asset</th>
-                    <th>Name</th>
-                    <th>Identifier</th>
-                    <th>Created</th>
-                  </tr>
-                </ng-template>
-                <ng-template #body let-link>
-                  <tr>
-                    <td>
-                      <a [routerLink]="['/settings/assets', link.asset_id]" class="text-primary hover:underline font-medium">{{ link.asset_name }}</a>
-                    </td>
-                    <td class="font-mono text-xs">{{ link.asset_symbol || '-' }}</td>
-                    <td class="font-mono text-xs">{{ link.identifier }}</td>
-                    <td class="text-xs text-surface-500">{{ link.created_at | date:'mediumDate' }}</td>
-                  </tr>
-                </ng-template>
-                <ng-template #emptymessage>
-                  <tr>
-                    <td colspan="4">No asset mappings for this provider.</td>
-                  </tr>
-                </ng-template>
-              </p-table>
+              <app-data-table
+                [columns]="mappedAssetsColumns"
+                [rowData]="provider.asset_links"
+                [pagination]="false"
+                emptyMessage="No asset mappings for this provider."/>
             </p-panel>
           }
 

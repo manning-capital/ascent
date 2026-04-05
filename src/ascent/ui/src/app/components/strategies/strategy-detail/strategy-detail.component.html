@@ -449,75 +449,21 @@
                 <span class="text-sm font-normal text-muted-color">{{ strategyService.strategyOrders().length }}</span>
               }
             </h2>
-            <p-card styleClass="overflow-hidden">
-              <div class="transition-opacity duration-200" [class.opacity-40]="strategyService.strategyOrdersLoading()" [class.pointer-events-none]="strategyService.strategyOrdersLoading()">
-                <p-table [value]="strategyService.strategyOrders()" [rowHover]="true" [tableStyle]="{'width': '100%'}">
-                  <ng-template #header>
-                    <tr>
-                      <th>Pair</th>
-                      <th>Side</th>
-                      <th>Type</th>
-                      <th>Qty</th>
-                      <th>Price</th>
-                      <th>Filled</th>
-                      <th class="text-right">Status</th>
-                    </tr>
-                  </ng-template>
-                  <ng-template #body let-order>
-                    <tr>
-                      <td class="font-medium text-sm">{{ order.instrument_name }}</td>
-                      <td>
-                        <p-tag [value]="order.side" [severity]="orderSideSeverity(order.side)" [rounded]="true"/>
-                      </td>
-                      <td class="text-sm text-muted-color">{{ order.order_type }}</td>
-                      <td class="text-sm">{{ order.quantity }}</td>
-                      <td class="text-sm">{{ formatCurrency(order.price) }}</td>
-                      <td class="text-sm">
-                        @if (order.filled_quantity !== null) {
-                          {{ order.filled_quantity }} / {{ order.quantity }}
-                        } @else {
-                          <span class="text-muted-color">—</span>
-                        }
-                      </td>
-                      <td class="text-right">
-                        @if (order.current_status) {
-                          <p-tag [value]="order.current_status" [severity]="orderStatusSeverity(order.current_status)" [rounded]="true"/>
-                        }
-                      </td>
-                    </tr>
-                  </ng-template>
-                  <ng-template #emptymessage>
-                    <tr>
-                      <td colspan="7">
-                        <app-empty-state title="No orders" icon="data"/>
-                      </td>
-                    </tr>
-                  </ng-template>
-                </p-table>
-                <!-- Orders Pagination -->
-                @if (strategyService.strategyOrdersTotalPages() > 1) {
-                  <div class="flex items-center justify-between mt-4 px-2">
-                    <span class="text-xs text-surface-400">Page {{ ordersPage() }} of {{ strategyService.strategyOrdersTotalPages() }}</span>
-                    <div class="flex gap-1">
-                      <p-button
-                        [disabled]="ordersPage() <= 1"
-                        (onClick)="onOrdersPageChange(ordersPage() - 1)"
-                        severity="secondary"
-                        [outlined]="true"
-                        size="small"
-                        label="Prev"/>
-                      <p-button
-                        [disabled]="ordersPage() >= strategyService.strategyOrdersTotalPages()"
-                        (onClick)="onOrdersPageChange(ordersPage() + 1)"
-                        severity="secondary"
-                        [outlined]="true"
-                        size="small"
-                        label="Next"/>
-                    </div>
-                  </div>
-                }
+            <app-data-table
+              [columns]="orderColumns"
+              [rowData]="strategyService.strategyOrders()"
+              [loading]="strategyService.strategyOrdersLoading()"
+              [pagination]="false"
+              emptyMessage="No orders."/>
+            @if (strategyService.strategyOrdersTotalPages() > 1) {
+              <div class="flex items-center justify-between mt-4 text-xs text-fg-muted">
+                <span>Page {{ ordersPage() }} of {{ strategyService.strategyOrdersTotalPages() }}</span>
+                <div class="flex gap-1">
+                  <button (click)="onOrdersPageChange(ordersPage() - 1)" [disabled]="ordersPage() <= 1" class="px-3 py-1.5 rounded border border-edge text-fg hover:bg-elevated disabled:opacity-30 disabled:cursor-not-allowed">Prev</button>
+                  <button (click)="onOrdersPageChange(ordersPage() + 1)" [disabled]="ordersPage() >= strategyService.strategyOrdersTotalPages()" class="px-3 py-1.5 rounded border border-edge text-fg hover:bg-elevated disabled:opacity-30 disabled:cursor-not-allowed">Next</button>
+                </div>
               </div>
-            </p-card>
+            }
           </div>
 
           <!-- Trade History -->
@@ -552,80 +498,25 @@
       <!-- Runs Tab -->
       @if (activeTab() === 'Runs') {
         <div class="p-6 space-y-4 overflow-y-auto h-full">
-          <!-- Filters -->
-          <div class="flex items-center gap-3">
-            <p-selectButton
-              [options]="runsFilterOptions"
-              [ngModel]="runsFilterMode()"
-              (ngModelChange)="setRunsFilterMode($event)"
-              optionLabel="label"
-              optionValue="value"
-              size="small"/>
-
-            @if (runsFilterMode() === 'range') {
-              <div class="flex items-center gap-2">
-                <label class="text-xs text-surface-500">From</label>
-                <p-datepicker [ngModel]="runsRangeFrom()" (ngModelChange)="runsRangeFrom.set($event)" [showTime]="true" dateFormat="yy-mm-dd" hourFormat="24" [style]="{'width': '14rem'}"/>
-                <label class="text-xs text-surface-500">To</label>
-                <p-datepicker [ngModel]="runsRangeTo()" (ngModelChange)="runsRangeTo.set($event)" [showTime]="true" dateFormat="yy-mm-dd" hourFormat="24" [style]="{'width': '14rem'}"/>
-                <p-button label="Apply" severity="primary" size="small" (onClick)="applyRunsFilter()"/>
-                <p-button label="Clear" severity="secondary" size="small" [text]="true" (onClick)="clearRunsFilter()"/>
-              </div>
-            }
-
-            @if (runsFilterMode() === 'around') {
-              <div class="flex items-center gap-2">
-                <p-datepicker [ngModel]="runsAroundDatetime()" (ngModelChange)="runsAroundDatetime.set($event)" [showTime]="true" dateFormat="yy-mm-dd" hourFormat="24" [style]="{'width': '14rem'}"/>
-                <p-selectButton [options]="runsRadiusSelectOptions" [ngModel]="runsAroundRadius()" (ngModelChange)="runsAroundRadius.set($event)" optionLabel="label" optionValue="value" size="small"/>
-                <p-button label="Apply" severity="primary" size="small" (onClick)="applyRunsFilter()"/>
-                <p-button label="Clear" severity="secondary" size="small" [text]="true" (onClick)="clearRunsFilter()"/>
-              </div>
-            }
-
-            <span class="text-xs text-surface-500 ml-auto">{{ runsTotal() }} runs</span>
-          </div>
+          <app-run-filter-panel [totalRuns]="runsTotal()" (filterChange)="onRunsFilterChange($event)"/>
 
           <!-- Runs Table -->
-          <div class="rounded-lg border border-surface overflow-hidden">
-          <p-table [value]="strategyRuns()" [tableStyle]="{'min-width': '50rem'}">
-            <ng-template #header>
-              <tr>
-                <th style="width: 6rem">Status</th>
-                <th>Run ID</th>
-                <th>Started</th>
-                <th style="width: 6rem">Duration</th>
-                <th style="width: 5rem">Feeds</th>
-                <th>Error</th>
-              </tr>
-            </ng-template>
-            <ng-template #body let-run>
-              <tr class="cursor-pointer hover:bg-emphasis" [routerLink]="['/strategies', strategy.id, 'runs', run.id]">
-                <td><p-tag [value]="run.status" [severity]="runStatusSeverity(run.status)" [rounded]="true"/></td>
-                <td class="font-mono text-xs">{{ run.id }}</td>
-                <td>{{ run.started_at | date:'MMM d, h:mm:ss a' }}</td>
-                <td>{{ runDurationLabel(run) }}</td>
-                <td>{{ run.feed_runs.length }}</td>
-                <td>
-                  @if (run.error_message) {
-                    <span class="text-xs text-red-500 line-clamp-1">{{ run.error_message }}</span>
-                  } @else {
-                    -
-                  }
-                </td>
-              </tr>
-            </ng-template>
-            <ng-template #emptymessage>
-              <tr><td colspan="6" class="text-center text-surface-400 py-8">No runs yet.</td></tr>
-            </ng-template>
-          </p-table>
-          </div>
+          <app-data-table
+            [columns]="runColumns"
+            [rowData]="strategyRuns()"
+            [rowClickRoute]="navigateToRun"
+            [pageSize]="25"
+            emptyMessage="No runs yet."/>
 
-          <!-- Pagination -->
-          <p-paginator
-            [rows]="20"
-            [totalRecords]="runsTotal()"
-            [first]="(runsPage() - 1) * 20"
-            (onPageChange)="onRunsPageChange(($event.page ?? 0) + 1)"/>
+          @if (runsTotalPages() > 1) {
+            <div class="flex items-center justify-between mt-4 text-xs text-fg-muted">
+              <span>Page {{ runsPage() }} of {{ runsTotalPages() }}</span>
+              <div class="flex gap-1">
+                <button (click)="onRunsPageChange(runsPage() - 1)" [disabled]="runsPage() <= 1" class="px-3 py-1.5 rounded border border-edge text-fg hover:bg-elevated disabled:opacity-30 disabled:cursor-not-allowed">Prev</button>
+                <button (click)="onRunsPageChange(runsPage() + 1)" [disabled]="runsPage() >= runsTotalPages()" class="px-3 py-1.5 rounded border border-edge text-fg hover:bg-elevated disabled:opacity-30 disabled:cursor-not-allowed">Next</button>
+              </div>
+            </div>
+          }
         </div>
       }
 

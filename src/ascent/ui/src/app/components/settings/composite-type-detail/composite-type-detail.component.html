@@ -145,51 +145,11 @@
               </div>
             }
 
-            <p-table [value]="allFields()">
-              <ng-template #header>
-                <tr>
-                  <th class="w-10">#</th>
-                  <th>Field Name</th>
-                  <th>Value Type</th>
-                  <th>Required</th>
-                  <th>Source</th>
-                  <th>Description</th>
-                  <th class="w-20"></th>
-                </tr>
-              </ng-template>
-              <ng-template #body let-field let-i="rowIndex">
-                <tr [class]="field.is_inherited ? 'text-surface-400' : ''">
-                  <td class="font-mono text-xs">{{ i + 1 }}</td>
-                  <td class="font-medium">{{ field.metadata_name }}</td>
-                  <td><p-tag [value]="valueTypeLabel(field.value_type)" severity="secondary"/></td>
-                  <td>
-                    @if (field.is_required) {
-                      <span class="text-xs font-medium" [class]="field.is_inherited ? 'text-red-400' : 'text-red-500'">Required</span>
-                    } @else {
-                      <span class="text-xs text-surface-400">Optional</span>
-                    }
-                  </td>
-                  <td class="text-xs">
-                    @if (field.is_inherited) {
-                      <a [routerLink]="['/settings/composite-types', field.source_type_id]" class="text-primary hover:underline">{{ field.source_type_name }}</a>
-                    } @else {
-                      <span class="text-surface-400">This type</span>
-                    }
-                  </td>
-                  <td class="text-xs text-surface-400">{{ field.metadata_description || '-' }}</td>
-                  <td>
-                    @if (!field.is_inherited) {
-                      <p-button (onClick)="removeField(field.metadata_id)" severity="danger" [text]="true" size="small" label="Remove"/>
-                    }
-                  </td>
-                </tr>
-              </ng-template>
-              <ng-template #emptymessage>
-                <tr>
-                  <td colspan="7" class="text-center text-surface-400 py-8">No metadata fields defined. Click + Add Field to get started.</td>
-                </tr>
-              </ng-template>
-            </p-table>
+            <app-data-table
+              [columns]="fieldColumns"
+              [rowData]="allFields()"
+              [pagination]="false"
+              emptyMessage="No metadata fields defined. Click + Add Field to get started."/>
           </p-panel>
 
         </div>

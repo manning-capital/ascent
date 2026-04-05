@@ -1,38 +1,20 @@
 import { Component, inject, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
-import { DatePipe } from '@angular/common';
 import { FeedService } from '../../services/feed.service';
-import { TableModule } from 'primeng/table';
-import { Card } from 'primeng/card';
-import { Tag } from 'primeng/tag';
-import { InputText } from 'primeng/inputtext';
-import { Select } from 'primeng/select';
-import { Skeleton } from 'primeng/skeleton';
+import { DataTableComponent } from '../shared/data-table/data-table.component';
+import type { DataTableColumn } from '../shared/data-table/data-table.model';
 
 @Component({
   selector: 'app-feed-list',
   standalone: true,
-  imports: [DatePipe, TableModule, Card, Tag, InputText, Select, Skeleton],
+  imports: [DataTableComponent],
   templateUrl: './feed-list.component.html',
 })
 export class FeedListComponent implements OnInit {
   private router = inject(Router);
   feedService = inject(FeedService);
 
-  statusOptions = [
-    { label: 'Active', value: true },
-    { label: 'Inactive', value: false },
-  ];
-
-  ngOnInit(): void {
-    this.feedService.loadFeeds();
-  }
-
-  navigateToFeed(id: string): void {
-    this.router.navigate(['/feeds', id]);
-  }
-
-  scheduleLabel(schedule: Record<string, any> | null): string {
+  private scheduleLabel(schedule: Record<string, any> | null): string {
     if (!schedule) return 'Triggered';
     const interval = schedule['interval'];
     if (!interval) return 'Triggered';
@@ -42,12 +24,26 @@ export class FeedListComponent implements OnInit {
     return `${Math.round(interval / 86400)}d`;
   }
 
-  statusSeverity(status: string | null): 'success' | 'danger' | 'warn' | 'secondary' {
-    switch (status) {
-      case 'COMPLETED': return 'success';
-      case 'FAILED': return 'danger';
-      case 'RUNNING': return 'warn';
-      default: return 'secondary';
-    }
+  columns: DataTableColumn[] = [
+    { field: 'display_name', header: 'Display Name', filterType: 'text' },
+    { field: 'channel', header: 'Channel', cellType: 'monospace', filterType: 'text' },
+    { field: 'schedule', header: 'Schedule', sortable: false, valueGetter: (p: any) => this.scheduleLabel(p.data?.schedule) },
+    { field: 'total_runs', header: 'Total Runs' },
+    {
+      field: 'last_run_status', header: 'Last Status', cellType: 'tag',
+      tagMapper: (v: any) => {
+        if (!v) return { label: 'N/A', severity: 'secondary' };
+        const map: Record<string, string> = { COMPLETED: 'success', FAILED: 'danger', RUNNING: 'warn' };
+        return { label: v, severity: map[v] ?? 'secondary' };
+      },
+    },
+    { field: 'last_run_at', header: 'Last Run', cellType: 'date' },
+    { field: 'is_active', header: 'Status', cellType: 'status', width: 112, filterType: 'select', filterOptions: [{ label: 'Active', value: true }, { label: 'Inactive', value: false }] },
+  ];
+
+  navigateToFeed = (row: any) => ['/feeds', row.id];
+
+  ngOnInit(): void {
+    this.feedService.loadFeeds();
   }
 }

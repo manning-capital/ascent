@@ -2,24 +2,66 @@ import { Component, computed, EventEmitter, inject, input, OnInit, Output, signa
 import { FormsModule } from '@angular/forms';
 import { AssetService } from '../../services/asset.service';
 import { Instrument, UniverseItem } from '../../models/asset.model';
-import { TableModule } from 'primeng/table';
+import { AgGridAngular } from 'ag-grid-angular';
+import type { ICellRendererAngularComp } from 'ag-grid-angular';
+import type { ColDef, GridApi, GridReadyEvent, ICellRendererParams } from 'ag-grid-community';
 import { InputText } from 'primeng/inputtext';
 import { Select } from 'primeng/select';
 import { Button } from 'primeng/button';
-import { Tag } from 'primeng/tag';
 import { Card } from 'primeng/card';
+import { ThemeService } from '../../services/theme.service';
+import { AG_GRID_THEME, agThemeMode } from './data-table/ag-grid-theme';
+import { badgeStyles } from './data-table/cell-renderers';
 import { UniverseTableComponent } from './universe-table.component';
+
+// ─── Stage/Unstage button cell renderer ─────────────────────
+@Component({
+  selector: 'ag-stage-cell',
+  standalone: true,
+  template: `
+    @if (staged) {
+      <button (click)="onClick($event)" class="text-xs text-green-500 hover:underline">Staged</button>
+    } @else {
+      <button (click)="onClick($event)" class="text-xs text-primary hover:underline">Add</button>
+    }
+  `,
+  host: { style: 'display:flex;align-items:center;height:100%' },
+})
+export class StageCellRenderer implements ICellRendererAngularComp {
+  staged = false;
+  private params!: any;
+
+  agInit(params: ICellRendererParams): void { this.params = params; this.staged = params.context?.isStaged(params.data?.id); }
+  refresh(params: ICellRendererParams): boolean { this.params = params; this.staged = params.context?.isStaged(params.data?.id); return true; }
+
+  onClick(e: Event): void {
+    e.stopPropagation();
+    this.params.context?.toggleStage(this.params.data?.id);
+  }
+}
+
+// ─── Status badge cell renderer ─────────────────────────────
+@Component({
+  selector: 'ag-status-badge',
+  standalone: true,
+  template: `<span [style]="styles">{{ label }}</span>`,
+  host: { style: 'display:flex;align-items:center;height:100%' },
+})
+export class StatusBadgeCellRenderer implements ICellRendererAngularComp {
+  label = ''; styles = '';
+  agInit(p: ICellRendererParams): void { this.label = p.value ? 'Active' : 'Inactive'; this.styles = badgeStyles(p.value ? 'success' : 'secondary'); }
+  refresh(p: ICellRendererParams): boolean { this.agInit(p); return true; }
+}
 
 @Component({
   selector: 'app-universe-panel',
   standalone: true,
   imports: [
     FormsModule,
-    TableModule,
+    AgGridAngular,
     InputText,
     Select,
     Button,
-    Tag,
     Card,
     UniverseTableComponent,
   ],
@@ -55,89 +97,55 @@ import { UniverseTableComponent } from './universe-table.component';
             </div>
           </ng-template>
 
-          <!-- Available instruments table -->
-          <p-table
-            #dt
-            [value]="availableInstruments()"
-            [paginator]="true"
-            [rows]="10"
-            [rowsPerPageOptions]="[10, 25, 50]"
-            [showCurrentPageReport]="true"
-            currentPageReportTemplate="{first}–{last} of {totalRecords}"
-            [tableStyle]="{'width': '100%'}"
-            [globalFilterFields]="['name', 'display_name']"
-            dataKey="id">
-            <ng-template #caption>
-              <div class="flex items-center justify-between gap-4">
-                <div class="flex items-center gap-2 flex-1">
-                  <input type="text" pInputText placeholder="Search instruments..." (input)="dt.filterGlobal($any($event.target).value, 'contains')" class="w-64"/>
-                  <p-select
-                    [(ngModel)]="typeFilter"
-                    [options]="typeFilterOptions()"
-                    optionLabel="label"
-                    optionValue="value"
-                    placeholder="All Types"
-                    [showClear]="true"
-                    (onChange)="onTypeFilter($event.value, dt)"
-                    appendTo="body"/>
-                  <p-select
-                    [(ngModel)]="statusFilter"
-                    [options]="statusFilterOptions"
-                    optionLabel="label"
-                    optionValue="value"
-                    placeholder="All Statuses"
-                    [showClear]="true"
-                    (onChange)="onStatusFilter($event.value, dt)"
-                    appendTo="body"/>
-                </div>
-                <p-button
-                  label="Stage All Filtered"
-                  severity="secondary"
-                  [outlined]="true"
-                  size="small"
-                  (onClick)="stageAllFiltered(dt)"/>
-              </div>
-            </ng-template>
-            <ng-template #header>
-              <tr>
-                <th pSortableColumn="display_name">Display Name <p-sortIcon field="display_name"/></th>
-                <th pSortableColumn="name">Name <p-sortIcon field="name"/></th>
-                <th>Type</th>
-                <th>Pair</th>
-                <th pSortableColumn="is_active" class="w-24">Status <p-sortIcon field="is_active"/></th>
-                <th class="w-20"></th>
-              </tr>
-            </ng-template>
-            <ng-template #body let-inst>
-              <tr [class.bg-green-500/5]="stagedIds().has(inst.id)">
-                <td class="font-medium">{{ inst.display_name }}</td>
-                <td class="font-mono text-surface-500 text-xs">{{ inst.name }}</td>
-                <td class="text-xs">{{ getTypeName(inst.instrument_type_id) }}</td>
-                <td class="font-mono text-surface-500 text-xs text-center">{{ inst.from_asset_name }}/{{ inst.to_asset_name }}</td>
-                <td>
-                  <p-tag [value]="inst.is_active ? 'Active' : 'Inactive'" [severity]="inst.is_active ? 'success' : 'secondary'" [rounded]="true"/>
-                </td>
-                <td>
-                  @if (stagedIds().has(inst.id)) {
-                    <p-button label="Staged" severity="success" [text]="true" size="small" (onClick)="unstage(inst.id)"/>
-                  } @else {
-                    <p-button label="Add" severity="primary" [text]="true" size="small" (onClick)="stage(inst.id)"/>
-                  }
-                </td>
-              </tr>
-            </ng-template>
-            <ng-template #emptymessage>
-              <tr>
-                <td colspan="6" class="text-center text-surface-400 py-6">
-                  @if (assetService.instruments().length === 0) {
-                    No instruments available. Create instruments first.
-                  } @else {
-                    All instruments are already in the universe.
-                  }
-                </td>
-              </tr>
-            </ng-template>
-          </p-table>
+          <!-- Filters -->
+          <div class="flex items-center justify-between gap-4 mb-3">
+            <div class="flex items-center gap-2 flex-1">
+              <input type="text" pInputText placeholder="Search instruments..." (input)="onQuickFilter($any($event.target).value)" class="w-64"/>
+              <p-select
+                [(ngModel)]="typeFilter"
+                [options]="typeFilterOptions()"
+                optionLabel="label"
+                optionValue="value"
+                placeholder="All Types"
+                [showClear]="true"
+                (onChange)="applyExternalFilters()"
+                appendTo="body"/>
+              <p-select
+                [(ngModel)]="statusFilter"
+                [options]="statusFilterOptions"
+                optionLabel="label"
+                optionValue="value"
+                placeholder="All Statuses"
+                [showClear]="true"
+                (onChange)="applyExternalFilters()"
+                appendTo="body"/>
+            </div>
+            <p-button
+              label="Stage All Filtered"
+              severity="secondary"
+              [outlined]="true"
+              size="small"
+              (onClick)="stageAllFiltered()"/>
+          </div>
+
+          <!-- Available instruments AG Grid -->
+          <div [attr.data-ag-theme-mode]="themeMode()" class="rounded-lg overflow-clip border border-edge">
+            <ag-grid-angular
+              [theme]="theme"
+              [rowData]="availableInstruments()"
+              [columnDefs]="availableColDefs"
+              [defaultColDef]="defaultColDef"
+              [domLayout]="'autoHeight'"
+              [pagination]="true"
+              [paginationPageSize]="10"
+              [paginationPageSizeSelector]="[10, 25, 50]"
+              [suppressCellFocus]="true"
+              [isExternalFilterPresent]="isExternalFilterPresent"
+              [doesExternalFilterPass]="doesExternalFilterPass"
+              [getRowStyle]="getRowStyle"
+              [context]="gridContext"
+              (gridReady)="onGridReady($event)"/>
+          </div>
         </p-card>
       }
 
@@ -148,6 +156,9 @@ import { UniverseTableComponent } from './universe-table.component';
 })
 export class UniversePanelComponent implements OnInit {
   assetService = inject(AssetService);
+  private themeSvc = inject(ThemeService);
+  themeMode = agThemeMode(this.themeSvc);
+  theme = AG_GRID_THEME;
 
   ngOnInit(): void {
     this.assetService.loadInstruments();
@@ -161,6 +172,8 @@ export class UniversePanelComponent implements OnInit {
 
   showForm = signal(false);
   stagedIds = signal<Set<string>>(new Set());
+  private gridApi: GridApi | null = null;
+  private quickFilterText = '';
 
   // Filters
   typeFilter = '';
@@ -170,6 +183,53 @@ export class UniversePanelComponent implements OnInit {
     { label: 'Active', value: true },
     { label: 'Inactive', value: false },
   ];
+
+  defaultColDef: ColDef = {
+    sortable: true,
+    resizable: false,
+    suppressMovable: true,
+    flex: 1,
+  };
+
+  gridContext = {
+    isStaged: (id: string) => this.stagedIds().has(id),
+    toggleStage: (id: string) => {
+      this.stagedIds.update(s => {
+        const n = new Set(s);
+        if (n.has(id)) n.delete(id); else n.add(id);
+        return n;
+      });
+      this.gridApi?.refreshCells({ force: true });
+    },
+  };
+
+  availableColDefs: ColDef[] = [
+    { headerName: 'Display Name', field: 'display_name' },
+    { headerName: 'Name', field: 'name', cellClass: 'font-mono text-surface-500' },
+    { headerName: 'Type', field: 'instrument_type_id', valueFormatter: (p) => this.getTypeName(p.value) },
+    { headerName: 'Pair', field: 'pair', cellClass: 'font-mono text-surface-500', valueGetter: (p) => `${p.data?.from_asset_name ?? ''}/${p.data?.to_asset_name ?? ''}` },
+    { headerName: 'Status', field: 'is_active', cellRenderer: StatusBadgeCellRenderer },
+    { headerName: '', field: '', cellRenderer: StageCellRenderer, sortable: false, maxWidth: 80 },
+  ];
+
+  getRowStyle = (params: any) => {
+    if (params.data && this.stagedIds().has(params.data.id)) {
+      return { background: 'rgba(34, 197, 94, 0.05)' };
+    }
+    return undefined;
+  };
+
+  isExternalFilterPresent = (): boolean => {
+    return this.typeFilter !== '' || this.statusFilter !== '';
+  };
+
+  doesExternalFilterPass = (node: any): boolean => {
+    const data = node.data;
+    if (!data) return true;
+    if (this.typeFilter && data.instrument_type_id !== this.typeFilter) return false;
+    if (this.statusFilter !== '' && data.is_active !== this.statusFilter) return false;
+    return true;
+  };
 
   /** Instruments not already in the universe. */
   availableInstruments = computed(() => {
@@ -183,13 +243,27 @@ export class UniversePanelComponent implements OnInit {
   });
 
   getTypeName(typeId: string): string {
-    return this.assetService.instrumentTypes().find(t => t.id === typeId)?.name ?? '';
+    return this.assetService.instrumentTypes().find(t => t.id === typeId)?.display_name ?? '';
+  }
+
+  onGridReady(event: GridReadyEvent): void {
+    this.gridApi = event.api;
+  }
+
+  onQuickFilter(text: string): void {
+    this.quickFilterText = text;
+    this.gridApi?.setGridOption('quickFilterText', text);
+  }
+
+  applyExternalFilters(): void {
+    this.gridApi?.onFilterChanged();
   }
 
   openForm(): void {
     this.stagedIds.set(new Set());
     this.typeFilter = '';
     this.statusFilter = '';
+    this.quickFilterText = '';
     this.showForm.set(true);
   }
 
@@ -198,29 +272,15 @@ export class UniversePanelComponent implements OnInit {
     this.stagedIds.set(new Set());
   }
 
-  stage(id: string): void {
-    this.stagedIds.update(s => { const n = new Set(s); n.add(id); return n; });
-  }
-
-  unstage(id: string): void {
-    this.stagedIds.update(s => { const n = new Set(s); n.delete(id); return n; });
-  }
-
-  stageAllFiltered(dt: any): void {
-    const filtered: Instrument[] = dt.filteredValue ?? this.availableInstruments();
+  stageAllFiltered(): void {
     this.stagedIds.update(s => {
       const n = new Set(s);
-      for (const inst of filtered) n.add(inst.id);
+      this.gridApi?.forEachNodeAfterFilterAndSort(node => {
+        if (node.data?.id) n.add(node.data.id);
+      });
       return n;
     });
-  }
-
-  onTypeFilter(value: string | null, dt: any): void {
-    dt.filter(value, 'instrument_type_id', 'equals');
-  }
-
-  onStatusFilter(value: boolean | null, dt: any): void {
-    dt.filter(value, 'is_active', 'equals');
+    this.gridApi?.refreshCells({ force: true });
   }
 
   submitStaged(): void {

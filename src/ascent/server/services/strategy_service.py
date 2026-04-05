@@ -548,12 +548,16 @@ def get_strategy_runs(
     page_size: int = 20,
     started_after: str | None = None,
     started_before: str | None = None,
+    status: str | None = None,
 ) -> tuple[list[StrategyRunListItem], int]:
     base = select(StrategyRun).where(StrategyRun.strategy_id == strategy_id)
     count_base = (
         select(func.count()).select_from(StrategyRun).where(StrategyRun.strategy_id == strategy_id)
     )
 
+    if status:
+        base = base.where(StrategyRun.status == status)
+        count_base = count_base.where(StrategyRun.status == status)
     if started_after:
         dt = datetime.datetime.fromisoformat(started_after)
         base = base.where(StrategyRun.started_at >= dt)

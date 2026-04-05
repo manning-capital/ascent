@@ -185,6 +185,7 @@ def list_strategy_runs(
     page_size: int = 20,
     started_after: str | None = None,
     started_before: str | None = None,
+    status: str | None = None,
     db: Session = Depends(get_db),
 ):
     items, total = strategy_service.get_strategy_runs(
@@ -194,6 +195,7 @@ def list_strategy_runs(
         page_size=page_size,
         started_after=started_after,
         started_before=started_before,
+        status=status,
     )
     total_pages = (total + page_size - 1) // page_size
     return PaginatedResponse(

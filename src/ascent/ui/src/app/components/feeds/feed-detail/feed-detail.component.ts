@@ -9,10 +9,12 @@ import { UniversePanelComponent } from '../../shared/universe-panel.component';
 import { PartitionTimelineComponent, PartitionCell } from '../../shared/partition-timeline.component';
 import { Tabs, TabList, Tab } from 'primeng/tabs';
 import { SchemaFormComponent } from '../../shared/schema-form.component';
-import { TableModule } from 'primeng/table';
-import { Tag } from 'primeng/tag';
-import { Paginator } from 'primeng/paginator';
 import { Card } from 'primeng/card';
+import { Tag } from 'primeng/tag';
+import { DataTableComponent } from '../../shared/data-table/data-table.component';
+import { DataTableColumn } from '../../shared/data-table/data-table.model';
+import { RunFilterPanelComponent } from '../../shared/run-filter-panel.component';
+import type { RunFilter } from '../../shared/run-viewer.component';
 import { Skeleton } from 'primeng/skeleton';
 import { Button } from 'primeng/button';
 
@@ -25,14 +27,14 @@ import { Button } from 'primeng/button';
     JsonPipe,
     Tabs, TabList, Tab,
     SchemaFormComponent,
-    TableModule,
-    Tag,
-    Paginator,
     Card,
+    Tag,
     Skeleton,
     Button,
     UniversePanelComponent,
     PartitionTimelineComponent,
+    DataTableComponent,
+    RunFilterPanelComponent,
   ],
   templateUrl: './feed-detail.component.html',
 })
@@ -51,9 +53,32 @@ export class FeedDetailComponent implements OnInit {
   totalRunPages = signal(0);
   runPage = signal(1);
   runsLoading = signal(false);
+  runsFilter = signal<RunFilter>({});
   skeletonRows = Array.from({ length: 8 }, (_, i) => i);
 
   feedId = '';
+
+  runColumns: DataTableColumn<FeedRunListItem>[] = [
+    { field: 'status', header: 'Status', cellType: 'tag', width: 96, tagMapper: (v: string) => {
+      const map: Record<string, string> = { COMPLETED: 'success', FAILED: 'danger', RUNNING: 'warn' };
+      return { label: v, severity: map[v] ?? 'secondary' };
+    }},
+    { field: 'id', header: 'Run ID', cellType: 'monospace' },
+    { field: 'started_at', header: 'Started', cellType: 'date' },
+    { field: 'duration', header: 'Duration', valueGetter: (p: any) => this.durationLabel(p.data) },
+    { field: 'partition_key', header: 'Partition Key', cellType: 'date' },
+    { field: 'records_fetched', header: 'Records', valueFormatter: (p: any) => p.value ?? '-' },
+    { field: 'error_message', header: 'Error', valueFormatter: (p: any) => p.value ?? '-', cellClass: (p: any) => p.value ? 'text-red-500' : '' },
+  ];
+
+  navigateToRun = (row: FeedRunListItem) => ['/feeds', this.feedId, 'runs', row.id];
+
+  errorColumns: DataTableColumn<FeedRunListItem>[] = [
+    { field: 'started_at', header: 'Timestamp', cellType: 'date', width: 130 },
+    { field: 'error_message', header: 'Error', valueFormatter: (p: any) => p.value ?? 'Unknown error', cellClass: 'text-red-400' },
+  ];
+
+  navigateToError = (row: FeedRunListItem) => ['/feeds', this.feedId, 'runs', row.id];
 
   // Overview / partition state — derived from feed runs
   partitionCells = signal<PartitionCell[]>([]);
@@ -128,7 +153,9 @@ export class FeedDetailComponent implements OnInit {
 
   loadRuns(): void {
     this.runsLoading.set(true);
-    this.feedService.loadFeedRuns(this.feedId, this.runPage(), 20).subscribe({
+    const filter = this.runsFilter();
+    const f = Object.keys(filter).length > 0 ? filter : undefined;
+    this.feedService.loadFeedRuns(this.feedId, this.runPage(), 20, f).subscribe({
       next: (res) => {
         this.runs.set(res.items);
         this.totalRuns.set(res.total);
@@ -137,6 +164,12 @@ export class FeedDetailComponent implements OnInit {
       },
       error: () => this.runsLoading.set(false),
     });
+  }
+
+  onRunsFilterChange(filter: RunFilter): void {
+    this.runsFilter.set(filter);
+    this.runPage.set(1);
+    this.loadRuns();
   }
 
   onRunPageChange(page: number): void {

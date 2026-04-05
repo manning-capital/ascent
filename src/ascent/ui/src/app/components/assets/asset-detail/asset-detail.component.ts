@@ -12,7 +12,6 @@ import { EntityUsage } from '../../../models/field.model';
 import { Skeleton } from 'primeng/skeleton';
 import { Select } from 'primeng/select';
 import { DatePicker } from 'primeng/datepicker';
-import { TableModule } from 'primeng/table';
 import { Tag } from 'primeng/tag';
 import { Button } from 'primeng/button';
 import { InputText } from 'primeng/inputtext';
@@ -31,7 +30,6 @@ import { FieldPanelComponent, PanelField } from '../../shared/field-panel.compon
     FormsModule,
     Select,
     DatePicker,
-    TableModule,
     Tag,
     Button,
     InputText,

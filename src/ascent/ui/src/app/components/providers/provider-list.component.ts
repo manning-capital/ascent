@@ -1,23 +1,21 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
-import { Router, RouterLink } from '@angular/router';
+import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ProviderService } from '../../services/provider.service';
 import { ToastService } from '../../services/toast.service';
 import { Select } from 'primeng/select';
-import { TableModule } from 'primeng/table';
 import { InputText } from 'primeng/inputtext';
 import { Textarea } from 'primeng/textarea';
 import { Card } from 'primeng/card';
 import { Button } from 'primeng/button';
-import { Tag } from 'primeng/tag';
-import { MultiSelect } from 'primeng/multiselect';
-import { Skeleton } from 'primeng/skeleton';
 import { ProviderCreate } from '../../models/provider.model';
+import { DataTableComponent } from '../shared/data-table/data-table.component';
+import type { DataTableColumn } from '../shared/data-table/data-table.model';
 
 @Component({
   selector: 'app-provider-list',
   standalone: true,
-  imports: [FormsModule, RouterLink, Select, TableModule, InputText, Textarea, Card, Button, Tag, MultiSelect, Skeleton],
+  imports: [FormsModule, Select, InputText, Textarea, Card, Button, DataTableComponent],
   templateUrl: './provider-list.component.html',
 })
 export class ProviderListComponent implements OnInit {
@@ -27,14 +25,15 @@ export class ProviderListComponent implements OnInit {
 
   typeNames = computed(() => this.providerService.providerTypes().map(t => t.display_name));
 
-  typeRoute(typeId: string): string {
-    return `/settings/provider-types/${typeId}`;
-  }
-
-  statusOptions = [
-    { label: 'Active', value: true },
-    { label: 'Inactive', value: false },
+  columns: DataTableColumn[] = [
+    { field: 'display_name', header: 'Display Name', filterType: 'text' },
+    { field: 'name', header: 'Name', cellType: 'monospace', filterType: 'text' },
+    { field: 'provider_type_name', header: 'Type', cellType: 'link', linkRoute: (row: any) => `/settings/provider-types/${row.provider_type_id}`, filterType: 'select', filterOptions: this.typeNames },
+    { field: 'provider_external_code', header: 'Code', cellType: 'monospace', filterType: 'text', valueFormatter: (p) => p.value ?? '\u2014' },
+    { field: 'is_active', header: 'Status', cellType: 'status', width: 112, filterType: 'select', filterOptions: [{ label: 'Active', value: true }, { label: 'Inactive', value: false }] },
   ];
+
+  navigateToProvider = (row: any) => ['/settings/providers', row.id];
 
   showCreateForm = signal(false);
   newDisplayName = '';
@@ -49,9 +48,7 @@ export class ProviderListComponent implements OnInit {
     this.providerService.loadProviderTypes();
   }
 
-  navigateToProvider(id: string): void {
-    this.router.navigate(['/settings/providers', id]);
-  }
+
 
   openCreate(): void {
     this.newDisplayName = '';

@@ -9,19 +9,20 @@ import { EntityUsage } from '../../../models/field.model';
 import { Select } from 'primeng/select';
 import { Skeleton } from 'primeng/skeleton';
 import { Checkbox } from 'primeng/checkbox';
-import { TableModule } from 'primeng/table';
 import { Button } from 'primeng/button';
 import { InputText } from 'primeng/inputtext';
-import { Tag } from 'primeng/tag';
 import { Tabs, TabList, Tab } from 'primeng/tabs';
 import { Panel } from 'primeng/panel';
 import { SafeDeleteDialogComponent } from '../../shared/safe-delete-dialog.component';
 import { FieldPanelComponent, PanelField } from '../../shared/field-panel.component';
+import { DataTableComponent } from '../../shared/data-table/data-table.component';
+import type { DataTableColumn } from '../../shared/data-table/data-table.model';
+import { MetadataRequiredRenderer, MetadataSourceRenderer, MetadataRemoveRenderer } from '../../shared/data-table/metadata-field-renderers';
 
 @Component({
   selector: 'app-instrument-type-detail',
   standalone: true,
-  imports: [RouterLink, FormsModule, Select, Checkbox, TableModule, Button, InputText, Tag, Skeleton, Tabs, TabList, Tab, Panel, SafeDeleteDialogComponent, FieldPanelComponent],
+  imports: [RouterLink, FormsModule, Select, Checkbox, Button, InputText, Skeleton, Tabs, TabList, Tab, Panel, SafeDeleteDialogComponent, FieldPanelComponent, DataTableComponent],
   templateUrl: './instrument-type-detail.component.html',
 })
 export class InstrumentTypeDetailComponent implements OnInit {
@@ -63,6 +64,16 @@ export class InstrumentTypeDetailComponent implements OnInit {
   ownFields = computed(() => this.fields().filter(f => !f.is_inherited));
   inheritedFields = computed(() => this.fields().filter(f => f.is_inherited));
   allFields = computed(() => [...this.inheritedFields(), ...this.ownFields()]);
+
+  fieldColumns: DataTableColumn[] = [
+    { field: '__index', header: '#', sortable: false, width: 50, cellType: 'custom', valueGetter: (params: any) => (params.node?.rowIndex ?? 0) + 1, cellClass: 'font-mono text-xs' },
+    { field: 'metadata_name', header: 'Field Name', cellClass: (params: any) => params.data?.is_inherited ? 'font-medium text-surface-400' : 'font-medium' },
+    { field: 'value_type', header: 'Value Type', cellType: 'tag', tagMapper: (value: any) => ({ label: this.valueTypeLabel(value), severity: 'secondary' }) },
+    { field: 'is_required', header: 'Required', cellType: 'custom', cellRenderer: MetadataRequiredRenderer },
+    { field: 'source_type_name', header: 'Source', cellType: 'custom', cellRenderer: MetadataSourceRenderer, cellRendererParams: { routePrefix: '/settings/instrument-types' } },
+    { field: 'metadata_description', header: 'Description', cellClass: 'text-xs text-surface-400', valueFormatter: (params: any) => params.value || '-' },
+    { field: '__actions', header: '', sortable: false, width: 90, cellType: 'custom', cellRenderer: MetadataRemoveRenderer, cellRendererParams: { onRemove: (field: any) => this.removeField(field.metadata_id) } },
+  ];
 
   showAddField = signal(false);
   newFieldMetadataId = '';

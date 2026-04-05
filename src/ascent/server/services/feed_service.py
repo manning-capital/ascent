@@ -148,10 +148,14 @@ def get_feed_runs(
     page_size: int = 20,
     started_after: str | None = None,
     started_before: str | None = None,
+    status: str | None = None,
 ) -> tuple[list[FeedRunListItem], int]:
     base = select(FeedRun).where(FeedRun.feed_id == feed_id)
     count_base = select(func.count()).select_from(FeedRun).where(FeedRun.feed_id == feed_id)
 
+    if status:
+        base = base.where(FeedRun.status == status)
+        count_base = count_base.where(FeedRun.status == status)
     if started_after:
         dt = datetime.datetime.fromisoformat(started_after)
         base = base.where(FeedRun.started_at >= dt)

@@ -9,9 +9,9 @@
 
 /* ── Semantic layout tokens — switch automatically with light/dark ── */
 :root {
-  --canvas: #ffffff;
-  --surface: #f9fafb;
-  --elevated: #f3f4f6;
+  --canvas: #f1f5f9;
+  --surface: #ffffff;
+  --elevated: #ffffff;
   --fg: #111827;
   --fg-muted: #6b7280;
   --fg-faint: #9ca3af;

@@ -1,42 +1,32 @@
 import { Component, inject, OnInit } from '@angular/core';
 import { Router } from '@angular/router';
 import { StrategyService } from '../../services/strategy.service';
-import { TableModule } from 'primeng/table';
-import { Card } from 'primeng/card';
-import { Tag } from 'primeng/tag';
-import { InputText } from 'primeng/inputtext';
-import { Select } from 'primeng/select';
-import { Skeleton } from 'primeng/skeleton';
+import { DataTableComponent } from '../shared/data-table/data-table.component';
+import type { DataTableColumn } from '../shared/data-table/data-table.model';
 
 @Component({
   selector: 'app-strategy-list',
   standalone: true,
-  imports: [TableModule, Card, Tag, InputText, Select, Skeleton],
+  imports: [DataTableComponent],
   templateUrl: './strategy-list.component.html',
 })
 export class StrategyListComponent implements OnInit {
   private router = inject(Router);
   strategyService = inject(StrategyService);
 
-  statusOptions = [
-    { label: 'Active', value: true },
-    { label: 'Inactive', value: false },
+  columns: DataTableColumn[] = [
+    { field: 'display_name', header: 'Display Name', filterType: 'text' },
+    { field: 'strategy_type', header: 'Type', filterType: 'text' },
+    { field: 'total_trades', header: 'Trades' },
+    { field: 'win_rate', header: 'Win Rate', valueFormatter: (p) => p.value != null ? `${p.value}%` : '' },
+    { field: 'open_trades', header: 'Open' },
+    { field: 'total_pnl', header: 'Total P&L', cellType: 'currency' },
+    { field: 'is_active', header: 'Status', cellType: 'status', width: 112, filterType: 'select', filterOptions: [{ label: 'Active', value: true }, { label: 'Inactive', value: false }] },
   ];
+
+  navigateToStrategy = (row: any) => ['/strategies', row.id];
 
   ngOnInit(): void {
     this.strategyService.loadStrategies();
-  }
-
-  navigateToStrategy(id: string): void {
-    this.router.navigate(['/strategies', id]);
-  }
-
-  formatCurrency(value: number): string {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', signDisplay: 'always' }).format(value);
-  }
-
-  pnlClass(value: number): string {
-    if (value === 0) return '';
-    return value > 0 ? 'text-green-500' : 'text-red-500';
   }
 }
