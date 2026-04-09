@@ -1,9 +1,11 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { map } from 'rxjs/operators';
 import { FeedService } from '../../../services/feed.service';
 import { FeedRunListItem } from '../../../models/feed.model';
+import type { ServerFetchFn } from '../../shared/data-table/data-table.model';
 import { RunDetailCardComponent, RunDetailField } from '../../shared/run-detail-card.component';
-import { PartitionDataTableComponent } from '../../shared/partition-data-table.component';
+import { ServerTableComponent } from '../../shared/data-table/server-table.component';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
 import { Tabs, TabList, Tab } from 'primeng/tabs';
 import { Tag } from 'primeng/tag';
@@ -18,7 +20,7 @@ import { Skeleton } from 'primeng/skeleton';
     Tag,
     Skeleton,
     RunDetailCardComponent,
-    PartitionDataTableComponent,
+    ServerTableComponent,
     EmptyStateComponent,
   ],
   templateUrl: './feed-run-detail.component.html',
@@ -37,13 +39,17 @@ export class FeedRunDetailComponent implements OnInit {
   loading = signal(true);
   activeTab = signal('Overview');
 
-  // Partition data state
-  partitionData = signal<Record<string, any>[]>([]);
-  partitionTotal = signal(0);
-  partitionPage = signal(1);
-  partitionPageSize = signal(25);
-  partitionTotalPages = signal(0);
-  partitionLoading = signal(false);
+  // Partition data via infinite row model
+  partitionFetchPage = computed<ServerFetchFn<Record<string, any>> | null>(() => {
+    const r = this.run();
+    if (!r?.partition_id) return null;
+    const feedId = this.feedId;
+    const partitionId = r.partition_id;
+    return (page: number, pageSize: number) =>
+      this.feedService.loadPartitionData(feedId, partitionId, page, pageSize).pipe(
+        map(res => ({ items: res.items, total: res.total })),
+      );
+  });
 
   extraFields: RunDetailField[] = [
     { label: 'Records Fetched', key: 'records_fetched' },
@@ -72,10 +78,6 @@ export class FeedRunDetailComponent implements OnInit {
         next: run => {
           this.run.set(run);
           this.loading.set(false);
-          // If restored to Partition tab, load the data now that the run is available
-          if (this.activeTab() === 'Partition') {
-            this.loadPartitionData();
-          }
         },
         error: () => this.loading.set(false),
       });
@@ -90,35 +92,7 @@ export class FeedRunDetailComponent implements OnInit {
       queryParamsHandling: 'merge',
       replaceUrl: true,
     });
-    if (tab === 'Partition' && this.partitionData().length === 0) {
-      this.loadPartitionData();
-    }
-  }
-
-  loadPartitionData(): void {
-    const r = this.run();
-    if (!r?.partition_id) return;
-    this.partitionLoading.set(true);
-    this.feedService.loadPartitionData(this.feedId, r.partition_id, this.partitionPage(), this.partitionPageSize()).subscribe({
-      next: res => {
-        this.partitionData.set(res.items);
-        this.partitionTotal.set(res.total);
-        this.partitionTotalPages.set(res.total_pages);
-        this.partitionLoading.set(false);
-      },
-      error: () => this.partitionLoading.set(false),
-    });
-  }
-
-  onPartitionPageChange(page: number): void {
-    this.partitionPage.set(page);
-    this.loadPartitionData();
-  }
-
-  onPartitionPageSizeChange(size: number): void {
-    this.partitionPageSize.set(size);
-    this.partitionPage.set(1);
-    this.loadPartitionData();
+    // Partition tab data loads automatically via infinite row model
   }
 
   statusSeverity(status: string): 'success' | 'danger' | 'warn' | 'secondary' | 'info' {

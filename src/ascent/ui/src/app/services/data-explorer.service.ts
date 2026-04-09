@@ -68,4 +68,8 @@ export class DataExplorerService {
   loadData(params: Record<string, any>): void {
     this.loadData$.next(params);
   }
+
+  queryData(params: Record<string, any>): Observable<PaginatedResponse<Record<string, any>>> {
+    return this.api.get<PaginatedResponse<Record<string, any>>>('/data/query', params);
+  }
 }

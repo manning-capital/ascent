@@ -18,7 +18,7 @@ const PRESET_MS: Record<string, number> = {
   standalone: true,
   imports: [FormsModule, Select, DatePicker, SelectButton, Button],
   template: `
-    <div class="rounded-lg border border-edge bg-surface p-4 mb-4 space-y-3">
+    <div class="rounded-lg border border-edge bg-surface p-4 space-y-3">
       <!-- Top row: Status + Date Range -->
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div>

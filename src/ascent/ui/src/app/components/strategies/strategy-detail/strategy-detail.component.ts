@@ -1,27 +1,31 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DatePipe, JsonPipe } from '@angular/common';
+import { map } from 'rxjs/operators';
 import { StrategyService } from '../../../services/strategy.service';
 import { FeedService } from '../../../services/feed.service';
 import { TradeService } from '../../../services/trade.service';
 import { ToastService } from '../../../services/toast.service';
-import { StrategyFeedDAG, StrategyRunListItem } from '../../../models/feed.model';
+import { ApiService } from '../../../services/api.service';
+import { StrategyFeedDAG } from '../../../models/feed.model';
+import { OrderListItem } from '../../../models/order.model';
+import { TradeListItem, PaginatedResponse } from '../../../models/trade.model';
 import { UniverseItem } from '../../../models/asset.model';
 import { UniversePanelComponent } from '../../shared/universe-panel.component';
 import { Tabs, TabList, Tab } from 'primeng/tabs';
 import { SchemaFormComponent } from '../../shared/schema-form.component';
 import { TradeTableComponent } from '../../trade-table/trade-table.component';
-import { RunFilter } from '../../shared/run-viewer.component';
+import { StrategyRunsTabComponent } from './strategy-runs-tab.component';
 import { CumulativePnlChartComponent, CumulativePnlPoint } from './charts/cumulative-pnl-chart.component';
 import { PnlDistributionChartComponent } from './charts/pnl-distribution-chart.component';
 import { Button } from 'primeng/button';
-import { RunFilterPanelComponent } from '../../shared/run-filter-panel.component';
+
 import { Tag } from 'primeng/tag';
 import { Card } from 'primeng/card';
 import { Skeleton } from 'primeng/skeleton';
 import { EmptyStateComponent } from '../../shared/empty-state.component';
-import { DataTableComponent } from '../../shared/data-table/data-table.component';
-import type { DataTableColumn } from '../../shared/data-table/data-table.model';
+import { ServerTableComponent } from '../../shared/data-table/server-table.component';
+import type { DataTableColumn, ServerFetchFn } from '../../shared/data-table/data-table.model';
 
 @Component({
   selector: 'app-strategy-detail',
@@ -36,13 +40,13 @@ import type { DataTableColumn } from '../../shared/data-table/data-table.model';
     CumulativePnlChartComponent,
     PnlDistributionChartComponent,
     Button,
-    RunFilterPanelComponent,
     Tag,
     Card,
     Skeleton,
     EmptyStateComponent,
     UniversePanelComponent,
-    DataTableComponent,
+    ServerTableComponent,
+    StrategyRunsTabComponent,
   ],
   templateUrl: './strategy-detail.component.html',
 })
@@ -50,16 +54,13 @@ export class StrategyDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private toast = inject(ToastService);
+  private api = inject(ApiService);
   strategyService = inject(StrategyService);
   feedService = inject(FeedService);
   tradeService = inject(TradeService);
 
   tabs = ['Overview', 'Trades', 'Universe', 'Runs', 'Configuration'];
   activeTab = signal('Overview');
-  page = signal(1);
-  tradesPageSize = signal(10);
-  ordersPage = signal(1);
-  ordersPageSize = signal(10);
   editing = signal(false);
   editedParameters = signal<Record<string, any>>({});
   feedDag = signal<StrategyFeedDAG | null>(null);
@@ -79,27 +80,27 @@ export class StrategyDetailComponent implements OnInit {
     }},
   ];
 
-  // Run columns
-  runColumns: DataTableColumn<StrategyRunListItem>[] = [
-    { field: 'status', header: 'Status', cellType: 'tag', width: 96, tagMapper: (v: string) => {
-      const map: Record<string, string> = { COMPLETED: 'success', FAILED: 'danger', RUNNING: 'warn' };
-      return { label: v, severity: map[v] ?? 'secondary' };
-    }},
-    { field: 'id', header: 'Run ID', cellType: 'monospace' },
-    { field: 'started_at', header: 'Started', cellType: 'date' },
-    { field: 'duration', header: 'Duration', valueGetter: (p: any) => this.runDurationLabel(p.data) },
-    { field: 'feed_runs', header: 'Feeds', valueGetter: (p: any) => p.data?.feed_runs?.length ?? 0 },
-    { field: 'error_message', header: 'Error', valueFormatter: (p: any) => p.value ?? '-', cellClass: (p: any) => p.value ? 'text-red-500' : '' },
-  ];
 
-  navigateToRun = (row: StrategyRunListItem) => ['/strategies', this.strategyId, 'runs', row.id];
+  // Server-side fetch functions for child table components
+  ordersFetchPage = computed<ServerFetchFn<OrderListItem> | null>(() => {
+    this.strategyService.selectedStrategy(); // track strategy changes
+    const id = this.strategyId;
+    if (!id) return null;
+    return (page: number, pageSize: number) =>
+      this.api.get<PaginatedResponse<OrderListItem>>(`/strategies/${id}/orders`, { page, page_size: pageSize }).pipe(
+        map(res => ({ items: res.items, total: res.total }))
+      );
+  });
 
-  // Runs tab state
-  strategyRuns = signal<StrategyRunListItem[]>([]);
-  runsTotal = signal(0);
-  runsTotalPages = signal(0);
-  runsPage = signal(1);
-  runsFilter = signal<RunFilter>({});
+  tradesFetchPage = computed<ServerFetchFn<TradeListItem> | null>(() => {
+    this.strategyService.selectedStrategy(); // track strategy changes
+    const id = this.strategyId;
+    if (!id) return null;
+    return (page: number, pageSize: number) =>
+      this.api.get<PaginatedResponse<TradeListItem>>(`/strategies/${id}/trades`, { page, page_size: pageSize }).pipe(
+        map(res => ({ items: res.items, total: res.total }))
+      );
+  });
 
   // Stats from API
   stats = computed(() => this.strategyService.strategyStats());
@@ -151,25 +152,15 @@ export class StrategyDetailComponent implements OnInit {
         this.activeTab.set('Overview');
       }
       // Reset state for the new strategy
-      this.page.set(1);
-      this.ordersPage.set(1);
       this.editing.set(false);
       this.editedParameters.set({});
       this.feedDag.set(null);
-      this.strategyRuns.set([]);
-      this.runsTotal.set(0);
-      this.runsTotalPages.set(0);
-      this.runsPage.set(1);
-      this.runsFilter.set({});
 
       this.strategyService.loadStrategyDetail(this.strategyId);
-      this.strategyService.loadStrategyTrades(this.strategyId);
       this.strategyService.loadStrategyStats(this.strategyId);
-      this.strategyService.loadStrategyOrders(this.strategyId);
       this.feedService.loadStrategyFeedDAG(this.strategyId).subscribe({
         next: (dag) => this.feedDag.set(dag),
       });
-      this.loadStrategyRuns();
       this.loadUniverse();
     });
   }
@@ -186,16 +177,6 @@ export class StrategyDetailComponent implements OnInit {
       queryParamsHandling: 'merge',
       replaceUrl: true,
     });
-  }
-
-  onPageChange(newPage: number): void {
-    this.page.set(newPage);
-    this.strategyService.loadStrategyTrades(this.strategyId, newPage, this.tradesPageSize());
-  }
-
-  onOrdersPageChange(newPage: number): void {
-    this.ordersPage.set(newPage);
-    this.strategyService.loadStrategyOrders(this.strategyId, newPage, this.ordersPageSize());
   }
 
   skeletonRows(count: number): number[] {
@@ -267,48 +248,6 @@ export class StrategyDetailComponent implements OnInit {
       case 'ACCEPTED': return 'warn';
       default: return 'secondary';
     }
-  }
-
-  // --- Runs tab methods ---
-
-  loadStrategyRuns(): void {
-    const filter = this.runsFilter();
-    const f = Object.keys(filter).length > 0 ? filter : undefined;
-    this.feedService.loadStrategyRuns(this.strategyId, this.runsPage(), 20, f).subscribe({
-      next: (res) => {
-        this.strategyRuns.set(res.items);
-        this.runsTotal.set(res.total);
-        this.runsTotalPages.set(res.total_pages);
-      },
-    });
-  }
-
-  onRunsFilterChange(filter: RunFilter): void {
-    this.runsFilter.set(filter);
-    this.runsPage.set(1);
-    this.loadStrategyRuns();
-  }
-
-  onRunsPageChange(newPage: number): void {
-    this.runsPage.set(newPage);
-    this.loadStrategyRuns();
-  }
-
-  runStatusSeverity(status: string): 'success' | 'danger' | 'warn' | 'secondary' | 'info' {
-    switch (status) {
-      case 'COMPLETED': return 'success';
-      case 'FAILED': return 'danger';
-      case 'RUNNING': return 'warn';
-      case 'PENDING': return 'secondary';
-      default: return 'secondary';
-    }
-  }
-
-  runDurationLabel(run: StrategyRunListItem): string {
-    if (!run.completed_at) return run.status === 'RUNNING' ? 'running...' : '-';
-    const ms = new Date(run.completed_at).getTime() - new Date(run.started_at).getTime();
-    if (ms < 1000) return `${ms}ms`;
-    return `${(ms / 1000).toFixed(1)}s`;
   }
 
   // --- Universe tab methods ---

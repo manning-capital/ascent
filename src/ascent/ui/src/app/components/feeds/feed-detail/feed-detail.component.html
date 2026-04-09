@@ -1,5 +1,5 @@
 @if (feedService.loading()) {
-  <div class="flex flex-col h-[calc(100vh-3.5rem)]">
+  <div class="flex flex-col h-[calc(100vh-3.5rem)] md:h-screen">
     <div class="flex items-center gap-3 px-4 py-2 border-b border-surface shrink-0 bg-emphasis">
       <p-skeleton width="4rem" height="0.875rem"/>
       <span class="text-surface-300">|</span>
@@ -12,25 +12,27 @@
         <p-skeleton width="5rem" height="1rem"/>
       }
     </div>
-    <div class="flex-1 p-6 space-y-4">
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-        @for (_ of [1,2,3,4]; track $index) {
-          <div class="border border-surface rounded-lg p-4">
-            <p-skeleton width="60%" height="0.75rem" class="mb-2"/>
-            <p-skeleton width="40%" height="1.5rem"/>
-          </div>
-        }
+    @if (activeTab() === 'Overview') {
+      <div class="flex-1 p-6 space-y-4">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          @for (_ of [1,2,3,4]; track $index) {
+            <div class="border border-surface rounded-lg p-4">
+              <p-skeleton width="60%" height="0.75rem" class="mb-2"/>
+              <p-skeleton width="40%" height="1.5rem"/>
+            </div>
+          }
+        </div>
+        <p-card>
+          <p-skeleton width="8rem" height="1rem" class="mb-4"/>
+          <p-skeleton width="100%" height="3rem"/>
+        </p-card>
       </div>
-      <p-card>
-        <p-skeleton width="8rem" height="1rem" class="mb-4"/>
-        <p-skeleton width="100%" height="3rem"/>
-      </p-card>
-    </div>
+    }
   </div>
 } @else {
   @let feed = feedService.selectedFeed();
   @if (feed) {
-  <div class="flex flex-col h-[calc(100vh-3.5rem)]">
+  <div class="flex flex-col h-[calc(100vh-3.5rem)] md:h-screen">
     <!-- Header Bar -->
     <div class="flex items-center gap-3 px-4 py-2 border-b border-surface shrink-0 bg-emphasis">
       <a routerLink="/feeds" class="text-sm text-primary hover:underline">&larr; Feeds</a>
@@ -41,7 +43,7 @@
     </div>
 
     <!-- Tab Bar -->
-    <p-tabs [value]="activeTab()" (valueChange)="onTabChange($any($event))">
+    <p-tabs class="shrink-0" [value]="activeTab()" (valueChange)="onTabChange($any($event))">
       <p-tablist>
         @for (tab of tabs; track tab) {
           <p-tab [value]="tab">{{ tab }}</p-tab>
@@ -50,7 +52,7 @@
     </p-tabs>
 
     <!-- Tab Content -->
-    <div class="flex-1 overflow-hidden">
+    <div class="flex-1 flex flex-col min-h-0">
 
       <!-- Overview Tab -->
       @if (activeTab() === 'Overview') {
@@ -175,29 +177,7 @@
 
       <!-- Runs Tab -->
       @if (activeTab() === 'Runs') {
-        <div class="p-6 space-y-4 overflow-y-auto h-full">
-          <app-run-filter-panel [totalRuns]="totalRuns()" (filterChange)="onRunsFilterChange($event)"/>
-
-          <!-- Runs Table -->
-          <app-data-table
-            [columns]="runColumns"
-            [rowData]="runs()"
-            [loading]="runsLoading()"
-            [rowClickRoute]="navigateToRun"
-            [pageSize]="20"
-            emptyMessage="No runs yet."/>
-
-          <!-- Server-side pagination -->
-          @if (totalRunPages() > 1) {
-            <div class="flex items-center justify-between mt-4 text-xs text-fg-muted">
-              <span>Page {{ runPage() }} of {{ totalRunPages() }}</span>
-              <div class="flex gap-1">
-                <button (click)="onRunPageChange(runPage() - 1)" [disabled]="runPage() <= 1" class="px-3 py-1.5 rounded border border-edge text-fg hover:bg-elevated disabled:opacity-30 disabled:cursor-not-allowed">Prev</button>
-                <button (click)="onRunPageChange(runPage() + 1)" [disabled]="runPage() >= totalRunPages()" class="px-3 py-1.5 rounded border border-edge text-fg hover:bg-elevated disabled:opacity-30 disabled:cursor-not-allowed">Next</button>
-              </div>
-            </div>
-          }
-        </div>
+        <app-feed-runs-tab [feedId]="feedId"/>
       }
 
       <!-- Universe Tab -->

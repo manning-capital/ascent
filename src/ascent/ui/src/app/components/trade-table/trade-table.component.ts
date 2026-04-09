@@ -1,17 +1,19 @@
-import { Component, input, output, inject, computed } from '@angular/core';
+import { Component, input, output, inject, computed, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { AgGridAngular } from 'ag-grid-angular';
 import type { ICellRendererAngularComp } from 'ag-grid-angular';
-import type { ColDef, ICellRendererParams, RowClickedEvent } from 'ag-grid-community';
+import type { ColDef, GridApi, ICellRendererParams, RowClickedEvent } from 'ag-grid-community';
 import { Card } from 'primeng/card';
 import { TradeListItem, TradeLegSummary } from '../../models/trade.model';
 import { TradeService } from '../../services/trade.service';
+import type { ServerFetchFn } from '../shared/data-table/data-table.model';
 import { BadgeComponent } from '../shared/badge.component';
 import { StatCardComponent } from '../shared/stat-card.component';
 import { EmptyStateComponent } from '../shared/empty-state.component';
 import { ThemeService } from '../../services/theme.service';
 import { AG_GRID_THEME, agThemeMode } from '../shared/data-table/ag-grid-theme';
 import { badgeStyles } from '../shared/data-table/cell-renderers';
+import { ServerTableComponent } from '../shared/data-table/server-table.component';
 
 function tagSeverity(label: string): string {
   switch (label.toUpperCase()) {
@@ -106,7 +108,7 @@ export class TradePnlCellRenderer implements ICellRendererAngularComp {
 @Component({
   selector: 'app-trade-table',
   standalone: true,
-  imports: [BadgeComponent, StatCardComponent, AgGridAngular, Card, EmptyStateComponent],
+  imports: [BadgeComponent, StatCardComponent, AgGridAngular, ServerTableComponent, Card, EmptyStateComponent],
   templateUrl: './trade-table.component.html',
 })
 export class TradeTableComponent {
@@ -116,13 +118,33 @@ export class TradeTableComponent {
   themeMode = agThemeMode(this.themeSvc);
   theme = AG_GRID_THEME;
 
-  trades = input.required<TradeListItem[]>();
+  trades = input<TradeListItem[]>([]);
   showStrategy = input(true);
   loading = input(false);
-  pageSize = input(10);
+  pageSize = input(25);
   page = input(1);
   totalPages = input(1);
   pageChange = output<number>();
+  fetchPage = input<ServerFetchFn<TradeListItem> | null>(null);
+
+  private gridApi: GridApi | null = null;
+
+  // Server-side outputs (delegated to ServerTableComponent)
+  sortChange = output<{ field: string; order: string }>();
+  pageSizeChange = output<number>();
+  serverPageChange = output<number>();
+
+  // Mobile data from ServerTableComponent's dataLoaded output
+  _serverRowData = signal<TradeListItem[]>([]);
+  /** Trades to display in mobile view: from fetchPage or from input. */
+  displayTrades = computed(() => this.fetchPage() ? this._serverRowData() : this.trades());
+
+  /** Route builder for server-table row clicks. */
+  navigateToTradeRoute = (trade: TradeListItem) => ['/trades', trade.id];
+
+  onDataLoaded(items: TradeListItem[]): void {
+    this._serverRowData.set(items);
+  }
 
   colDefs = computed<ColDef[]>(() => {
     const cols: ColDef[] = [
@@ -148,6 +170,10 @@ export class TradeTableComponent {
     suppressMovable: true,
     flex: 1,
   };
+
+  onGridReady(event: { api: GridApi }): void {
+    this.gridApi = event.api;
+  }
 
   onRowClicked(event: RowClickedEvent): void {
     if (event.data?.id) {

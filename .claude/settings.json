@@ -30,7 +30,23 @@
       "Bash(grep -A 5 \"parseValue\\\\|value_type === ''date''\" /Users/glynfinck/Documents/Repositories/ascent/src/ascent/ui/src/app/components/shared/metadata-history-table.component.ts)",
       "Bash(/Users/glynfinck/Documents/Repositories/ascent/.venv/bin/ascent seed:*)",
       "WebFetch(domain:swimlane.github.io)",
-      "Bash(npm ls:*)"
+      "Bash(npm ls:*)",
+      "WebFetch(domain:www.ag-grid.com)",
+      "WebFetch(domain:bundlephobia.com)",
+      "Bash(grep -oE \"ag-icon-\\(first|previous|next|last\\)[^\\\\\"]*\\\\\"\\\\\\\\\\\\\\\\[a-fA-F0-9]+\\\\\"\" node_modules/ag-grid-community/styles/*.css)",
+      "Bash(grep -c \"ag-icon-first\" node_modules/ag-grid-community/styles/*.css)",
+      "Bash(grep -A 20 \":where\\\\\\(\\\\.\\\\${this\\\\._getParamsClassName\" /Users/glynfinck/Documents/Repositories/ascent/src/ascent/ui/node_modules/ag-grid-community/dist/package/main.esm.mjs)",
+      "Read(//Users/ascent/ui/src/app/components/shared/data-table/**)",
+      "Bash(git checkout:*)",
+      "Bash(grep -n \"page_size.*10000\\\\|page_size: 10000\" /Users/glynfinck/Documents/Repositories/ascent/src/ascent/ui/src/app/components/*/\\\\*.ts /Users/glynfinck/Documents/Repositories/ascent/src/ascent/ui/src/app/components/*/*/*.ts)",
+      "Bash(curl -s \"http://localhost:8000/api/trades?tags=LONG&page=1&page_size=10\")",
+      "Bash(curl -s \"http://localhost:8000/api/trades?page=1&page_size=2\")",
+      "Bash(curl -s \"http://localhost:8000/api/trades?tags=LONG&page=1&page_size=5\")",
+      "Bash(curl -s \"http://localhost:8000/api/trades?page=1&page_size=10\")",
+      "Bash(curl -s \"http://localhost:8000/api/trades?page=2&page_size=10\")",
+      "Bash(curl -s -o /tmp/feed_runs_page.html \"http://localhost:4200/feeds/331a3ed1-de9b-4a78-8373-1ec20ddd7ff2?tab=Runs\")",
+      "Read(//private/tmp/**)",
+      "Bash(curl -s \"http://localhost:4200/styles.css\")"
     ]
   },
   "hooks": {

@@ -1,10 +1,10 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
-import { DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { map } from 'rxjs/operators';
 import { DataExplorerService } from '../../services/data-explorer.service';
-import { DataSourceInfo } from '../../models/data-explorer.model';
-import { PartitionDataTableComponent } from '../shared/partition-data-table.component';
+import type { ServerFetchFn } from '../shared/data-table/data-table.model';
+import { ServerTableComponent } from '../shared/data-table/server-table.component';
 import { Select } from 'primeng/select';
 import { MultiSelect } from 'primeng/multiselect';
 import { DatePicker } from 'primeng/datepicker';
@@ -16,7 +16,6 @@ import { Skeleton } from 'primeng/skeleton';
   selector: 'app-data-explorer',
   standalone: true,
   imports: [
-    DecimalPipe,
     FormsModule,
     Select,
     MultiSelect,
@@ -24,7 +23,7 @@ import { Skeleton } from 'primeng/skeleton';
     Button,
     Card,
     Skeleton,
-    PartitionDataTableComponent,
+    ServerTableComponent,
   ],
   templateUrl: './data-explorer.component.html',
 })
@@ -41,10 +40,29 @@ export class DataExplorerComponent implements OnInit {
   selectedPeriodIds = signal<string[]>([]);
   page = signal(1);
   pageSize = signal(25);
-  sortField = signal('timestamp');
-  sortOrder = signal<number>(-1);
 
-  private isSyncingFromUrl = false;
+  fetchPageFn = computed<ServerFetchFn<Record<string, any>> | null>(() => {
+    const table = this.selectedTable();
+    if (!table) return null;
+    const start = this.startDate();
+    const end = this.endDate();
+    const entityIds = this.selectedEntityIds();
+    const descriptorIds = this.selectedDescriptorIds();
+    const periodIds = this.selectedPeriodIds();
+    return (page: number, pageSize: number, sort?: { field: string; order: string }) => {
+      const params: Record<string, any> = { table, page, page_size: pageSize };
+      if (start) params['start'] = start.toISOString();
+      if (end) params['end'] = end.toISOString();
+      if (entityIds.length) params['entity_ids'] = entityIds;
+      if (descriptorIds.length) params['descriptor_ids'] = descriptorIds;
+      if (periodIds.length) params['period_ids'] = periodIds;
+      params['sort_field'] = sort?.field ?? 'timestamp';
+      params['sort_order'] = sort?.order ?? 'desc';
+      return this.dataService.queryData(params).pipe(
+        map(res => ({ items: res.items, total: res.total }))
+      );
+    };
+  });
 
   /** Whether the selected table has a period dimension. */
   hasPeriod(): boolean {
@@ -77,7 +95,6 @@ export class DataExplorerComponent implements OnInit {
 
     // Restore from URL query params
     const qp = this.route.snapshot.queryParamMap;
-    this.isSyncingFromUrl = true;
 
     const table = qp.get('table');
     if (table) {
@@ -102,10 +119,8 @@ export class DataExplorerComponent implements OnInit {
     const ps = qp.get('page_size');
     if (ps) this.pageSize.set(parseInt(ps, 10) || 25);
 
-    this.isSyncingFromUrl = false;
-
     if (table) {
-      this.loadData();
+      this.updateUrl();
     }
   }
 
@@ -116,30 +131,22 @@ export class DataExplorerComponent implements OnInit {
     this.selectedPeriodIds.set([]);
     this.page.set(1);
     this.dataService.loadFilterOptions(table);
-    this.loadData();
+    this.updateUrl();
   }
 
   onFilterChange(): void {
     this.page.set(1);
-    this.loadData();
+    this.updateUrl();
   }
 
-  onPageChange(newPage: number): void {
-    this.page.set(newPage);
-    this.loadData();
-  }
-
-  onSortChange(event: { field: string; order: number }): void {
-    this.sortField.set(event.field);
-    this.sortOrder.set(event.order);
-    this.page.set(1);
-    this.loadData();
+  onPageChange(page: number): void {
+    this.page.set(page);
+    this.updateUrl();
   }
 
   onPageSizeChange(size: number): void {
     this.pageSize.set(size);
-    this.page.set(1);
-    this.loadData();
+    this.updateUrl();
   }
 
   clearFilters(): void {
@@ -149,47 +156,24 @@ export class DataExplorerComponent implements OnInit {
     this.selectedDescriptorIds.set([]);
     this.selectedPeriodIds.set([]);
     this.page.set(1);
-    this.loadData();
+    this.updateUrl();
   }
 
-  loadData(): void {
+  private updateUrl(): void {
     const table = this.selectedTable();
     if (!table) return;
 
-    const params: Record<string, any> = {
-      table,
-      page: this.page(),
-      page_size: this.pageSize(),
-    };
-
+    const queryParams: Record<string, any> = { table, page: this.page(), page_size: this.pageSize() };
     const start = this.startDate();
-    if (start) params['start'] = start.toISOString();
+    if (start) queryParams['start'] = start.toISOString();
     const end = this.endDate();
-    if (end) params['end'] = end.toISOString();
-
+    if (end) queryParams['end'] = end.toISOString();
     const entityIds = this.selectedEntityIds();
-    if (entityIds.length) params['entity_ids'] = entityIds;
+    if (entityIds.length) queryParams['entity_ids'] = entityIds;
     const descriptorIds = this.selectedDescriptorIds();
-    if (descriptorIds.length) params['descriptor_ids'] = descriptorIds;
+    if (descriptorIds.length) queryParams['descriptor_ids'] = descriptorIds;
     const periodIds = this.selectedPeriodIds();
-    if (periodIds.length) params['period_ids'] = periodIds;
-
-    params['sort_field'] = this.sortField();
-    params['sort_order'] = this.sortOrder() === 1 ? 'asc' : 'desc';
-
-    this.dataService.loadData(params);
-    this.updateUrl(params);
-  }
-
-  private updateUrl(params: Record<string, any>): void {
-    const queryParams: Record<string, any> = { table: params['table'] };
-    if (params['start']) queryParams['start'] = params['start'];
-    if (params['end']) queryParams['end'] = params['end'];
-    if (params['entity_ids']) queryParams['entity_ids'] = params['entity_ids'];
-    if (params['descriptor_ids']) queryParams['descriptor_ids'] = params['descriptor_ids'];
-    if (params['period_ids']) queryParams['period_ids'] = params['period_ids'];
-    if (params['page'] > 1) queryParams['page'] = params['page'];
-    if (params['page_size'] !== 25) queryParams['page_size'] = params['page_size'];
+    if (periodIds.length) queryParams['period_ids'] = periodIds;
 
     this.router.navigate([], {
       relativeTo: this.route,

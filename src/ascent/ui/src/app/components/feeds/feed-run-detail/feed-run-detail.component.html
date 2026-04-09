@@ -14,7 +14,7 @@
   </div>
 
   <!-- Tabs -->
-  <p-tabs [value]="activeTab()" (valueChange)="onTabChange($any($event))">
+  <p-tabs class="shrink-0" [value]="activeTab()" (valueChange)="onTabChange($any($event))">
     <p-tablist>
       <p-tab value="Overview">Overview</p-tab>
       <p-tab value="Partition">Partition Data</p-tab>
@@ -41,15 +41,12 @@
     @if (activeTab() === 'Partition') {
       <div class="p-6">
         @if (run()?.partition_id) {
-          <app-partition-data-table
-            [data]="partitionData()"
-            [total]="partitionTotal()"
-            [page]="partitionPage()"
-            [pageSize]="partitionPageSize()"
-            [totalPages]="partitionTotalPages()"
-            [loading]="partitionLoading()"
-            (pageChange)="onPartitionPageChange($event)"
-            (pageSizeChange)="onPartitionPageSizeChange($event)"/>
+          <app-server-table
+            [fetchPage]="partitionFetchPage()"
+            [autoColumns]="true"
+            [autoLinks]="true"
+            [rowHeight]="32"
+            [headerHeight]="32"/>
         } @else {
           <app-empty-state title="No partition" message="This run does not have associated partition data." icon="inbox"/>
         }

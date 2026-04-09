@@ -1,5 +1,5 @@
 @if (strategyService.loading()) {
-  <div class="flex flex-col h-[calc(100vh-3.5rem)]">
+  <div class="flex flex-col h-[calc(100vh-3.5rem)] md:h-screen">
     <!-- Header skeleton -->
     <div class="flex items-center gap-3 px-4 py-2 border-b border-surface shrink-0 bg-emphasis">
       <p-skeleton width="5rem" height="0.875rem"/>
@@ -71,7 +71,7 @@
                 <div class="flex-1"></div>
                 <p-skeleton width="3rem" height="0.75rem"/>
               </div>
-              @for (_ of skeletonRows(ordersPageSize()); track $index) {
+              @for (_ of skeletonRows(10); track $index) {
                 <div class="flex items-center gap-4 px-4 py-3 border-b border-surface last:border-b-0">
                   <p-skeleton width="5rem" height="1rem"/>
                   <p-skeleton width="4rem" height="1.5rem" borderRadius="1rem"/>
@@ -111,7 +111,7 @@
                 <p-skeleton width="2.5rem" height="0.75rem"/>
                 <p-skeleton width="3rem" height="0.75rem"/>
               </div>
-              @for (_ of skeletonRows(tradesPageSize()); track $index) {
+              @for (_ of skeletonRows(10); track $index) {
                 <div class="flex items-center gap-4 px-4 py-3 border-b border-surface last:border-b-0">
                   <p-skeleton width="6rem" height="1rem"/>
                   <p-skeleton width="4rem" height="1.5rem" borderRadius="1rem"/>
@@ -161,31 +161,6 @@
           }
         </p-card>
       </div>
-    } @else if (activeTab() === 'Runs') {
-      <div class="flex-1 overflow-y-auto p-6 space-y-4">
-        <div class="flex items-center gap-3">
-          <p-skeleton width="10rem" height="1.5rem" borderRadius="6px"/>
-          <p-skeleton width="4rem" height="0.75rem" class="ml-auto"/>
-        </div>
-        <div class="flex flex-col">
-          <div class="flex items-center gap-4 px-4 py-3 border-b border-surface">
-            @for (_ of [1,2,3,4,5,6]; track $index) {
-              <p-skeleton width="5rem" height="0.75rem"/>
-            }
-          </div>
-          @for (_ of [1,2,3,4,5,6,7,8]; track $index) {
-            <div class="flex items-center gap-4 px-4 py-3 border-b border-surface">
-              <p-skeleton width="4.5rem" height="1.25rem" borderRadius="1rem"/>
-              <p-skeleton width="5rem" height="0.75rem"/>
-              <p-skeleton width="9rem" height="0.75rem"/>
-              <p-skeleton width="3rem" height="0.75rem"/>
-              <p-skeleton width="2rem" height="0.75rem"/>
-              <p-skeleton width="6rem" height="0.75rem"/>
-            </div>
-          }
-        </div>
-        <p-skeleton width="100%" height="2rem" borderRadius="6px"/>
-      </div>
     } @else if (activeTab() === 'Configuration') {
       <div class="flex-1 overflow-y-auto p-6 max-w-3xl mx-auto">
         @for (_ of [1,2,3]; track $index) {
@@ -207,7 +182,7 @@
 } @else {
   @let strategy = strategyService.selectedStrategy();
   @if (strategy) {
-  <div class="flex flex-col h-[calc(100vh-3.5rem)]">
+  <div class="flex flex-col h-[calc(100vh-3.5rem)] md:h-screen">
     <!-- Header Bar -->
     <div class="flex items-center gap-3 px-4 py-2 border-b border-surface shrink-0 bg-emphasis">
       <a routerLink="/strategies" class="text-sm text-primary hover:underline">&larr; Strategies</a>
@@ -218,7 +193,7 @@
     </div>
 
     <!-- Tab Bar -->
-    <p-tabs [value]="activeTab()" (valueChange)="onTabChange($any($event))">
+    <p-tabs class="shrink-0" [value]="activeTab()" (valueChange)="onTabChange($any($event))">
       <p-tablist>
         @for (tab of tabs; track tab) {
           <p-tab [value]="tab">{{ tab }}</p-tab>
@@ -227,7 +202,7 @@
     </p-tabs>
 
     <!-- Tab Content -->
-    <div class="flex-1 overflow-hidden">
+    <div class="flex-1 flex flex-col min-h-0">
 
       <!-- Performance Tab -->
       @if (activeTab() === 'Overview') {
@@ -440,30 +415,17 @@
 
       <!-- Trades Tab -->
       @if (activeTab() === 'Trades') {
-        <div class="overflow-y-auto h-full p-6">
+        <div class="flex flex-col flex-1 min-h-0 p-6 gap-4">
           <!-- Open Orders -->
-          <div class="mb-6">
+          <div class="shrink-0">
             <h2 class="text-lg font-semibold flex items-center gap-2 mb-3">
               Open Orders
-              @if (!strategyService.strategyOrdersLoading()) {
-                <span class="text-sm font-normal text-muted-color">{{ strategyService.strategyOrders().length }}</span>
-              }
             </h2>
-            <app-data-table
+            <app-server-table
               [columns]="orderColumns"
-              [rowData]="strategyService.strategyOrders()"
-              [loading]="strategyService.strategyOrdersLoading()"
-              [pagination]="false"
+              [fetchPage]="ordersFetchPage()"
+              [pageSize]="25"
               emptyMessage="No orders."/>
-            @if (strategyService.strategyOrdersTotalPages() > 1) {
-              <div class="flex items-center justify-between mt-4 text-xs text-fg-muted">
-                <span>Page {{ ordersPage() }} of {{ strategyService.strategyOrdersTotalPages() }}</span>
-                <div class="flex gap-1">
-                  <button (click)="onOrdersPageChange(ordersPage() - 1)" [disabled]="ordersPage() <= 1" class="px-3 py-1.5 rounded border border-edge text-fg hover:bg-elevated disabled:opacity-30 disabled:cursor-not-allowed">Prev</button>
-                  <button (click)="onOrdersPageChange(ordersPage() + 1)" [disabled]="ordersPage() >= strategyService.strategyOrdersTotalPages()" class="px-3 py-1.5 rounded border border-edge text-fg hover:bg-elevated disabled:opacity-30 disabled:cursor-not-allowed">Next</button>
-                </div>
-              </div>
-            }
           </div>
 
           <!-- Trade History -->
@@ -472,16 +434,9 @@
               Trade History
               <a [routerLink]="['/trades']" [queryParams]="{strategy_id: strategy.id}" class="text-xs font-normal text-primary hover:underline ml-auto">View All</a>
             </h2>
-            <p-card styleClass="overflow-hidden">
-              <div class="transition-opacity duration-200" [class.opacity-40]="strategyService.strategyTradesLoading()" [class.pointer-events-none]="strategyService.strategyTradesLoading()">
-                <app-trade-table
-                  [trades]="strategyService.strategyTrades()"
-                  [showStrategy]="false"
-                  [page]="page()"
-                  [totalPages]="strategyService.strategyTradesTotalPages()"
-                  (pageChange)="onPageChange($event)"/>
-              </div>
-            </p-card>
+            <app-trade-table
+              [showStrategy]="false"
+              [fetchPage]="tradesFetchPage()"/>
           </div>
         </div>
       }
@@ -497,27 +452,7 @@
 
       <!-- Runs Tab -->
       @if (activeTab() === 'Runs') {
-        <div class="p-6 space-y-4 overflow-y-auto h-full">
-          <app-run-filter-panel [totalRuns]="runsTotal()" (filterChange)="onRunsFilterChange($event)"/>
-
-          <!-- Runs Table -->
-          <app-data-table
-            [columns]="runColumns"
-            [rowData]="strategyRuns()"
-            [rowClickRoute]="navigateToRun"
-            [pageSize]="25"
-            emptyMessage="No runs yet."/>
-
-          @if (runsTotalPages() > 1) {
-            <div class="flex items-center justify-between mt-4 text-xs text-fg-muted">
-              <span>Page {{ runsPage() }} of {{ runsTotalPages() }}</span>
-              <div class="flex gap-1">
-                <button (click)="onRunsPageChange(runsPage() - 1)" [disabled]="runsPage() <= 1" class="px-3 py-1.5 rounded border border-edge text-fg hover:bg-elevated disabled:opacity-30 disabled:cursor-not-allowed">Prev</button>
-                <button (click)="onRunsPageChange(runsPage() + 1)" [disabled]="runsPage() >= runsTotalPages()" class="px-3 py-1.5 rounded border border-edge text-fg hover:bg-elevated disabled:opacity-30 disabled:cursor-not-allowed">Next</button>
-              </div>
-            </div>
-          }
-        </div>
+        <app-strategy-runs-tab [strategyId]="strategyId"/>
       }
 
       <!-- Configuration Tab -->

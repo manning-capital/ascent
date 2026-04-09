@@ -1,7 +1,7 @@
 import datetime
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from ascent.database.models import (
@@ -101,6 +101,15 @@ def _build_trade_list_item(trade: Trade) -> TradeListItem:
     )
 
 
+TRADE_SORT_COLUMNS = {
+    "entry_at": Trade.entry_at,
+    "exit_at": Trade.exit_at,
+    "total_realized_pnl": Trade.total_realized_pnl,
+    "total_unrealized_pnl": Trade.total_unrealized_pnl,
+    "total_fees": Trade.total_fees,
+}
+
+
 def get_trades(
     db: Session,
     status: str | None = None,
@@ -109,8 +118,10 @@ def get_trades(
     start_date: datetime.datetime | None = None,
     end_date: datetime.datetime | None = None,
     tags: list[str] | None = None,
+    sort_field: str = "entry_at",
+    sort_order: str = "desc",
     page: int = 1,
-    page_size: int = 10,
+    page_size: int = 25,
 ) -> tuple[list[TradeListItem], int]:
     from ascent.database.models.instruments import Instrument
 
@@ -133,7 +144,26 @@ def get_trades(
             Trade.legs.any(TradeLeg.instrument.has(Instrument.display_name.ilike(f"%{search}%")))
         )
 
-    # Count total
+    # Tag filters — applied at DB level before pagination
+    # Tags: LONG = only LONG legs, SHORT = only SHORT legs,
+    #        COMPOUND = both LONG and SHORT legs, PAPER = is_paper flag
+    if tags:
+        tag_set = set(tags)
+        has_long = Trade.legs.any(TradeLeg.direction == "LONG")
+        has_short = Trade.legs.any(TradeLeg.direction == "SHORT")
+        tag_conditions = []
+        if "PAPER" in tag_set:
+            tag_conditions.append(Trade.is_paper.is_(True))
+        if "LONG" in tag_set:
+            tag_conditions.append(and_(has_long, ~has_short))
+        if "SHORT" in tag_set:
+            tag_conditions.append(and_(has_short, ~has_long))
+        if "COMPOUND" in tag_set:
+            tag_conditions.append(and_(has_long, has_short))
+        if tag_conditions:
+            query = query.where(or_(*tag_conditions))
+
+    # Build count query from the same filters
     count_query = select(func.count()).select_from(Trade)
     if status:
         count_query = count_query.join(Trade.current_status_type).where(
@@ -149,19 +179,30 @@ def get_trades(
         count_query = count_query.where(
             Trade.legs.any(TradeLeg.instrument.has(Instrument.display_name.ilike(f"%{search}%")))
         )
+    if tags:
+        has_long_count = Trade.legs.any(TradeLeg.direction == "LONG")
+        has_short_count = Trade.legs.any(TradeLeg.direction == "SHORT")
+        tag_conditions_count = []
+        if "PAPER" in tag_set:
+            tag_conditions_count.append(Trade.is_paper.is_(True))
+        if "LONG" in tag_set:
+            tag_conditions_count.append(and_(has_long_count, ~has_short_count))
+        if "SHORT" in tag_set:
+            tag_conditions_count.append(and_(has_short_count, ~has_long_count))
+        if "COMPOUND" in tag_set:
+            tag_conditions_count.append(and_(has_long_count, has_short_count))
+        if tag_conditions_count:
+            count_query = count_query.where(or_(*tag_conditions_count))
 
     total = db.execute(count_query).scalar() or 0
 
-    query = query.order_by(Trade.entry_at.desc().nullslast())
+    sort_col = TRADE_SORT_COLUMNS.get(sort_field, Trade.entry_at)
+    sort_expr = sort_col.desc().nullslast() if sort_order == "desc" else sort_col.asc().nullsfirst()
+    query = query.order_by(sort_expr)
     query = query.offset((page - 1) * page_size).limit(page_size)
 
     trades = db.execute(query).unique().scalars().all()
     items = [_build_trade_list_item(t) for t in trades]
-
-    # Filter by tags in-memory (compound logic requires loaded legs)
-    if tags:
-        tag_set = set(tags)
-        items = [item for item in items if tag_set.intersection(item.tags)]
 
     return items, total
 

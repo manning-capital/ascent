@@ -31,8 +31,10 @@ def list_trades(
     start_date: datetime.datetime | None = None,
     end_date: datetime.datetime | None = None,
     tags: list[str] | None = Query(None),
+    sort_field: str = "entry_at",
+    sort_order: str = "desc",
     page: int = 1,
-    page_size: int = 10,
+    page_size: int = 25,
     db: Session = Depends(get_db),
 ):
     items, total = trade_service.get_trades(
@@ -43,6 +45,8 @@ def list_trades(
         start_date=start_date,
         end_date=end_date,
         tags=tags,
+        sort_field=sort_field,
+        sort_order=sort_order,
         page=page,
         page_size=page_size,
     )

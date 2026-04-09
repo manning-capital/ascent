@@ -1,4 +1,12 @@
 import type { Signal } from '@angular/core';
+import type { Observable } from 'rxjs';
+
+/** Callback for server-side pagination: fetches a page of data from the API. */
+export type ServerFetchFn<T = any> = (
+  page: number,
+  pageSize: number,
+  sort?: { field: string; order: string },
+) => Observable<{ items: T[]; total: number }>;
 
 export type CellType =
   | 'text'

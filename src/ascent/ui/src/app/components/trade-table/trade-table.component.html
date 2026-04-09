@@ -1,21 +1,38 @@
-<div class="transition-opacity duration-200" [class.opacity-40]="loading()" [class.pointer-events-none]="loading()">
+<div class="h-full flex flex-col transition-opacity duration-200" [class.opacity-40]="loading()" [class.pointer-events-none]="loading()">
   <!-- Desktop Table -->
-  <div class="hidden md:block rounded-lg overflow-clip border border-edge" [attr.data-ag-theme-mode]="themeMode()">
-    <ag-grid-angular
-      [theme]="theme"
-      [rowData]="trades()"
-      [columnDefs]="colDefs()"
-      [defaultColDef]="defaultColDef"
-      [domLayout]="'autoHeight'"
-      [suppressCellFocus]="true"
-      [rowClass]="'cursor-pointer'"
-      [overlayNoRowsTemplate]="'<span style=&quot;font-size:12px;opacity:0.5&quot;>No trades</span>'"
-      (rowClicked)="onRowClicked($event)"/>
+  <div class="hidden md:flex flex-col flex-1 min-h-0">
+    @if (fetchPage()) {
+      <app-server-table class="flex-1 min-h-0"
+        [columnDefs]="colDefs()"
+        [fetchPage]="fetchPage()!"
+        [pageSize]="pageSize()"
+        [rowHeight]="undefined"
+        [headerHeight]="undefined"
+        [rowClickRoute]="navigateToTradeRoute"
+        emptyMessage="No trades"
+        (sortChange)="sortChange.emit($event)"
+        (pageSizeChange)="pageSizeChange.emit($event)"
+        (pageChange)="serverPageChange.emit($event)"
+        (dataLoaded)="onDataLoaded($event)"/>
+    } @else {
+      <div class="rounded-lg overflow-clip border border-edge" [attr.data-ag-theme-mode]="themeMode()">
+        <ag-grid-angular
+          [theme]="theme"
+          [rowData]="trades()"
+          [columnDefs]="colDefs()"
+          [defaultColDef]="defaultColDef"
+          [domLayout]="'autoHeight'"
+          [suppressCellFocus]="true"
+          [rowClass]="'cursor-pointer'"
+          [overlayNoRowsTemplate]="'<span style=&quot;font-size:12px;opacity:0.5&quot;>No trades</span>'"
+          (rowClicked)="onRowClicked($event)"/>
+      </div>
+    }
   </div>
 
   <!-- Mobile Cards -->
   <div class="md:hidden flex flex-col gap-3">
-    @for (trade of trades(); track trade.id) {
+    @for (trade of displayTrades(); track trade.id) {
       <p-card styleClass="cursor-pointer hover:bg-emphasis transition-colors" (click)="navigateToTrade(trade.id)">
         <div class="flex items-center justify-between mb-2">
           <span class="font-medium">{{ trade.display_symbol }}</span>
@@ -38,8 +55,8 @@
     }
   </div>
 
-  <!-- Pagination -->
-  @if (totalPages() > 1) {
+  <!-- Pagination (only for non-fetchPage mode) -->
+  @if (!fetchPage() && totalPages() > 1) {
     <div class="flex items-center justify-between mt-4 px-2 text-xs text-fg-muted">
       <span>Page {{ page() }} of {{ totalPages() }}</span>
       <div class="flex gap-1">

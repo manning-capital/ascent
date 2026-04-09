@@ -54,18 +54,18 @@ export class TradeService {
     this.loadDetail$.next(tradeId);
   }
 
-  getPnlClass(value: number | null): string {
-    if (value === null || value === 0) return 'text-surface-500';
+  getPnlClass(value: number | null | undefined): string {
+    if (value == null || value === 0) return 'text-surface-500';
     return value > 0 ? 'text-green-500' : 'text-red-500';
   }
 
-  formatCurrency(value: number | null): string {
-    if (value === null) return '—';
+  formatCurrency(value: number | null | undefined): string {
+    if (value == null) return '—';
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', signDisplay: 'always' }).format(value);
   }
 
-  formatPercent(pnl: number | null, entryPrice: number | null, quantity: number | null): string {
-    if (pnl === null || entryPrice === null || quantity === null || entryPrice === 0 || quantity === 0) return '—';
+  formatPercent(pnl: number | null | undefined, entryPrice: number | null | undefined, quantity: number | null | undefined): string {
+    if (pnl == null || entryPrice == null || quantity == null || entryPrice === 0 || quantity === 0) return '—';
     const percent = (pnl / (entryPrice * quantity)) * 100;
     return (percent >= 0 ? '+' : '') + percent.toFixed(2) + '%';
   }

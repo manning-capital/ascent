@@ -13,8 +13,7 @@ import { Card } from 'primeng/card';
 import { Tag } from 'primeng/tag';
 import { DataTableComponent } from '../../shared/data-table/data-table.component';
 import { DataTableColumn } from '../../shared/data-table/data-table.model';
-import { RunFilterPanelComponent } from '../../shared/run-filter-panel.component';
-import type { RunFilter } from '../../shared/run-viewer.component';
+import { FeedRunsTabComponent } from './feed-runs-tab.component';
 import { Skeleton } from 'primeng/skeleton';
 import { Button } from 'primeng/button';
 
@@ -34,7 +33,7 @@ import { Button } from 'primeng/button';
     UniversePanelComponent,
     PartitionTimelineComponent,
     DataTableComponent,
-    RunFilterPanelComponent,
+    FeedRunsTabComponent,
   ],
   templateUrl: './feed-detail.component.html',
 })
@@ -47,31 +46,7 @@ export class FeedDetailComponent implements OnInit {
   tabs = ['Overview', 'Runs', 'Universe', 'Configuration'];
   activeTab = signal('Overview');
 
-  // Run list state
-  runs = signal<FeedRunListItem[]>([]);
-  totalRuns = signal(0);
-  totalRunPages = signal(0);
-  runPage = signal(1);
-  runsLoading = signal(false);
-  runsFilter = signal<RunFilter>({});
-  skeletonRows = Array.from({ length: 8 }, (_, i) => i);
-
   feedId = '';
-
-  runColumns: DataTableColumn<FeedRunListItem>[] = [
-    { field: 'status', header: 'Status', cellType: 'tag', width: 96, tagMapper: (v: string) => {
-      const map: Record<string, string> = { COMPLETED: 'success', FAILED: 'danger', RUNNING: 'warn' };
-      return { label: v, severity: map[v] ?? 'secondary' };
-    }},
-    { field: 'id', header: 'Run ID', cellType: 'monospace' },
-    { field: 'started_at', header: 'Started', cellType: 'date' },
-    { field: 'duration', header: 'Duration', valueGetter: (p: any) => this.durationLabel(p.data) },
-    { field: 'partition_key', header: 'Partition Key', cellType: 'date' },
-    { field: 'records_fetched', header: 'Records', valueFormatter: (p: any) => p.value ?? '-' },
-    { field: 'error_message', header: 'Error', valueFormatter: (p: any) => p.value ?? '-', cellClass: (p: any) => p.value ? 'text-red-500' : '' },
-  ];
-
-  navigateToRun = (row: FeedRunListItem) => ['/feeds', this.feedId, 'runs', row.id];
 
   errorColumns: DataTableColumn<FeedRunListItem>[] = [
     { field: 'started_at', header: 'Timestamp', cellType: 'date', width: 130 },
@@ -123,16 +98,11 @@ export class FeedDetailComponent implements OnInit {
       } else {
         this.activeTab.set('Overview');
       }
-      this.runs.set([]);
-      this.totalRuns.set(0);
-      this.totalRunPages.set(0);
-      this.runPage.set(1);
       this.partitionsLoaded = false;
       this.partitionCells.set([]);
       this.timelinePage.set(1);
 
       this.feedService.loadFeedDetail(this.feedId);
-      this.loadRuns();
       this.loadUniverse();
     });
   }
@@ -149,32 +119,6 @@ export class FeedDetailComponent implements OnInit {
       queryParamsHandling: 'merge',
       replaceUrl: true,
     });
-  }
-
-  loadRuns(): void {
-    this.runsLoading.set(true);
-    const filter = this.runsFilter();
-    const f = Object.keys(filter).length > 0 ? filter : undefined;
-    this.feedService.loadFeedRuns(this.feedId, this.runPage(), 20, f).subscribe({
-      next: (res) => {
-        this.runs.set(res.items);
-        this.totalRuns.set(res.total);
-        this.totalRunPages.set(res.total_pages);
-        this.runsLoading.set(false);
-      },
-      error: () => this.runsLoading.set(false),
-    });
-  }
-
-  onRunsFilterChange(filter: RunFilter): void {
-    this.runsFilter.set(filter);
-    this.runPage.set(1);
-    this.loadRuns();
-  }
-
-  onRunPageChange(page: number): void {
-    this.runPage.set(page);
-    this.loadRuns();
   }
 
   scheduleLabel(schedule: Record<string, any> | null): string {
@@ -195,13 +139,6 @@ export class FeedDetailComponent implements OnInit {
       case 'PENDING': return 'secondary';
       default: return 'secondary';
     }
-  }
-
-  durationLabel(run: FeedRunListItem): string {
-    if (!run.completed_at) return run.status === 'RUNNING' ? 'running...' : '-';
-    const ms = new Date(run.completed_at).getTime() - new Date(run.started_at).getTime();
-    if (ms < 1000) return `${ms}ms`;
-    return `${(ms / 1000).toFixed(1)}s`;
   }
 
   formatPartitionKey(key: string | null): string {
