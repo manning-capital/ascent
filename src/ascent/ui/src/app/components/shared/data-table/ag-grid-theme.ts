@@ -19,6 +19,7 @@ export const AG_GRID_THEME = themeQuartz
       headerColumnBorder: false,
       wrapperBorder: false,              // container div provides the outer border
       accentColor: '#3b82f6',
+      oddRowBackgroundColor: '#f8fafc',    // surface.50  — subtle zebra stripe
       rowHoverColor: '#f1f5f9',          // surface.100 — content.hover.background
       browserColorScheme: 'light',
     },
@@ -35,6 +36,7 @@ export const AG_GRID_THEME = themeQuartz
       headerColumnBorder: false,
       wrapperBorder: false,
       accentColor: '#3b82f6',
+      oddRowBackgroundColor: '#1c1c1f',    // ~surface.850 — subtle zebra stripe
       rowHoverColor: '#27272a',          // surface.800 — content.hover.background
       browserColorScheme: 'dark',
     },

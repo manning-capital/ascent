@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from ascent.server.dependencies import get_db
+from ascent.server.schemas.common import PaginatedResponse
 from ascent.server.schemas.exchanges import (
     ExchangeCreate,
     ExchangeSchema,
@@ -14,9 +15,21 @@ from ascent.server.services import exchange_service
 router = APIRouter(prefix="/exchanges", tags=["exchanges"])
 
 
-@router.get("", response_model=list[ExchangeSchema])
-def list_exchanges(db: Session = Depends(get_db)):
-    return exchange_service.get_exchanges(db)
+@router.get("", response_model=PaginatedResponse[ExchangeSchema])
+def list_exchanges(
+    page: int = 1,
+    page_size: int = 25,
+    search: str | None = None,
+    is_active: bool | None = None,
+    db: Session = Depends(get_db),
+):
+    items, total = exchange_service.get_exchanges(
+        db, page=page, page_size=page_size, search=search, is_active=is_active
+    )
+    total_pages = (total + page_size - 1) // page_size
+    return PaginatedResponse(
+        items=items, total=total, page=page, page_size=page_size, total_pages=total_pages
+    )
 
 
 @router.get("/{exchange_id}", response_model=ExchangeSchema)

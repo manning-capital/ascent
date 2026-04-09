@@ -53,16 +53,23 @@ import {
   template: `
     @if (_initialLoad() && _rowData().length === 0) {
       <div class="flex-1 flex flex-col min-h-0 rounded-lg border border-edge overflow-clip">
-        <div class="flex gap-3 px-4 border-b border-edge" style="height:48px;align-items:center">
-          @for (_ of [1,2,3,4,5]; track $index) { <p-skeleton height="0.75rem" class="flex-1"/> }
+        <div class="flex gap-3 px-4 border-b border-edge shrink-0" style="height:48px;align-items:center">
+          @for (_ of _skeletonCols(); track $index) { <p-skeleton height="0.75rem" class="flex-1"/> }
         </div>
-        <div class="flex-1">
+        <div class="flex-1 overflow-hidden">
           @for (_ of skeletonRows; track $index) {
-            <div class="flex gap-3 px-4" style="height:42px;align-items:center">
-              @for (_ of [1,2,3,4,5]; track $index) { <p-skeleton height="1rem" class="flex-1"/> }
+            <div class="flex gap-3 px-4 border-b border-edge" style="height:42px;align-items:center">
+              @for (_ of _skeletonCols(); track $index) { <p-skeleton height="1rem" class="flex-1"/> }
             </div>
           }
         </div>
+      </div>
+      <div class="mt-4 shrink-0 flex items-center justify-center gap-1 px-4 py-2">
+        <p-skeleton width="10rem" height="0.875rem"/>
+        @for (_ of [1,2]; track $index) { <p-skeleton width="2.5rem" height="2.5rem" borderRadius="50%"/> }
+        @for (_ of [1,2,3]; track $index) { <p-skeleton width="2.5rem" height="2.5rem" borderRadius="50%"/> }
+        @for (_ of [1,2]; track $index) { <p-skeleton width="2.5rem" height="2.5rem" borderRadius="50%"/> }
+        <p-skeleton width="4rem" height="2.5rem" borderRadius="6px"/>
       </div>
     } @else {
       <div class="rounded-lg overflow-clip border border-edge transition-opacity duration-200"
@@ -147,7 +154,14 @@ export class ServerTableComponent<T = any> {
   gridApi: GridApi | null = null;
 
   private datePipe = new DatePipe('en-US');
-  skeletonRows = Array.from({ length: 25 });
+  skeletonRows = Array.from({ length: 50 });
+  _skeletonCols = computed(() => {
+    const cols = this.columns();
+    if (cols.length > 0) return Array.from({ length: cols.length });
+    const defs = this.columnDefs();
+    if (defs.length > 0) return Array.from({ length: defs.length });
+    return Array.from({ length: 5 });
+  });
 
   // ─── Computed: no-rows overlay ────────────────────────────
   noRowsHtml = computed(() =>

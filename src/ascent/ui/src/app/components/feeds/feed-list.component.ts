@@ -1,18 +1,33 @@
-import { Component, inject, OnInit } from '@angular/core';
-import { Router } from '@angular/router';
+import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
+import { FormsModule } from '@angular/forms';
+import { map } from 'rxjs/operators';
+import { InputText } from 'primeng/inputtext';
+import { Select } from 'primeng/select';
+import { Button } from 'primeng/button';
 import { FeedService } from '../../services/feed.service';
-import { DataTableComponent } from '../shared/data-table/data-table.component';
-import type { DataTableColumn } from '../shared/data-table/data-table.model';
+import { FeedListItem } from '../../models/feed.model';
+import { ServerTableComponent } from '../shared/data-table/server-table.component';
+import type { DataTableColumn, ServerFetchFn } from '../shared/data-table/data-table.model';
 
 @Component({
   selector: 'app-feed-list',
   standalone: true,
-  imports: [DataTableComponent],
+  imports: [FormsModule, InputText, Select, Button, ServerTableComponent],
   templateUrl: './feed-list.component.html',
 })
 export class FeedListComponent implements OnInit {
+  private route = inject(ActivatedRoute);
   private router = inject(Router);
-  feedService = inject(FeedService);
+  private feedService = inject(FeedService);
+
+  search = signal('');
+  statusFilter = signal<boolean | null>(null);
+
+  statusOptions = [
+    { label: 'Active', value: true },
+    { label: 'Inactive', value: false },
+  ];
 
   private scheduleLabel(schedule: Record<string, any> | null): string {
     if (!schedule) return 'Triggered';
@@ -24,9 +39,9 @@ export class FeedListComponent implements OnInit {
     return `${Math.round(interval / 86400)}d`;
   }
 
-  columns: DataTableColumn[] = [
-    { field: 'display_name', header: 'Display Name', filterType: 'text' },
-    { field: 'channel', header: 'Channel', cellType: 'monospace', filterType: 'text' },
+  columns: DataTableColumn<FeedListItem>[] = [
+    { field: 'display_name', header: 'Display Name' },
+    { field: 'channel', header: 'Channel', cellType: 'monospace' },
     { field: 'schedule', header: 'Schedule', sortable: false, valueGetter: (p: any) => this.scheduleLabel(p.data?.schedule) },
     { field: 'total_runs', header: 'Total Runs' },
     {
@@ -38,12 +53,52 @@ export class FeedListComponent implements OnInit {
       },
     },
     { field: 'last_run_at', header: 'Last Run', cellType: 'date' },
-    { field: 'is_active', header: 'Status', cellType: 'status', width: 112, filterType: 'select', filterOptions: [{ label: 'Active', value: true }, { label: 'Inactive', value: false }] },
+    { field: 'is_active', header: 'Status', cellType: 'status', width: 112 },
   ];
 
   navigateToFeed = (row: any) => ['/feeds', row.id];
 
+  fetchPage = computed<ServerFetchFn<FeedListItem>>(() => {
+    const search = this.search();
+    const isActive = this.statusFilter();
+    return (page: number, pageSize: number) => {
+      const filters: any = {};
+      if (search) filters.search = search;
+      if (isActive != null) filters.is_active = isActive;
+      return this.feedService.loadFeedsPaginated(page, pageSize, filters).pipe(
+        map(res => ({ items: res.items, total: res.total }))
+      );
+    };
+  });
+
   ngOnInit(): void {
-    this.feedService.loadFeeds();
+    const qp = this.route.snapshot.queryParamMap;
+    if (qp.get('search')) this.search.set(qp.get('search')!);
+    if (qp.get('is_active') != null) this.statusFilter.set(qp.get('is_active') === 'true');
+  }
+
+  onSearch(value: string): void {
+    this.search.set(value);
+    this.updateUrl();
+  }
+
+  onStatusChange(value: boolean | null): void {
+    this.statusFilter.set(value);
+    this.updateUrl();
+  }
+
+  clearFilters(): void {
+    this.search.set('');
+    this.statusFilter.set(null);
+    this.updateUrl();
+  }
+
+  private updateUrl(): void {
+    const queryParams: Record<string, any> = {};
+    const search = this.search();
+    if (search) queryParams['search'] = search;
+    const isActive = this.statusFilter();
+    if (isActive != null) queryParams['is_active'] = isActive;
+    this.router.navigate([], { relativeTo: this.route, queryParams, replaceUrl: true });
   }
 }

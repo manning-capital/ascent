@@ -27,8 +27,36 @@ from ascent.server.schemas.feeds import (
 )
 
 
-def get_feeds(db: Session) -> list[FeedListItem]:
-    feeds = db.execute(select(Feed)).scalars().all()
+def get_feeds(
+    db: Session,
+    page: int = 1,
+    page_size: int = 25,
+    search: str | None = None,
+    is_active: bool | None = None,
+) -> tuple[list[FeedListItem], int]:
+    conditions = []
+    if search:
+        conditions.append(
+            Feed.display_name.ilike(f"%{search}%") | Feed.channel.ilike(f"%{search}%")
+        )
+    if is_active is not None:
+        conditions.append(Feed.is_active == is_active)
+
+    count_q = select(func.count()).select_from(Feed)
+    if conditions:
+        count_q = count_q.where(*conditions)
+    total = db.execute(count_q).scalar() or 0
+
+    query = select(Feed)
+    if conditions:
+        query = query.where(*conditions)
+    feeds = (
+        db.execute(
+            query.order_by(Feed.display_name).offset((page - 1) * page_size).limit(page_size)
+        )
+        .scalars()
+        .all()
+    )
 
     items = []
     for f in feeds:
@@ -67,7 +95,7 @@ def get_feeds(db: Session) -> list[FeedListItem]:
                 last_run_status=last_run.status if last_run else None,
             )
         )
-    return items
+    return items, total
 
 
 def get_feed_detail(db: Session, feed_id: uuid.UUID) -> FeedDetail:

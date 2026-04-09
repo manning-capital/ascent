@@ -1,8 +1,9 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { Subject, EMPTY } from 'rxjs';
+import { Subject, EMPTY, Observable } from 'rxjs';
 import { switchMap, tap, catchError } from 'rxjs/operators';
 import { ApiService } from './api.service';
 import { ExchangeListItem } from '../models/exchange.model';
+import { PaginatedResponse } from '../models/trade.model';
 
 @Injectable({ providedIn: 'root' })
 export class ExchangeService {
@@ -19,12 +20,12 @@ export class ExchangeService {
     this.loadExchanges$.pipe(
       tap(() => this.loading.set(true)),
       switchMap(() =>
-        this.api.get<ExchangeListItem[]>('/exchanges').pipe(
+        this.api.get<PaginatedResponse<ExchangeListItem>>('/exchanges', { page_size: 10000 }).pipe(
           catchError(() => { this.loading.set(false); return EMPTY; })
         )
       ),
-    ).subscribe(exchanges => {
-      this.exchanges.set(exchanges);
+    ).subscribe(res => {
+      this.exchanges.set(res.items);
       this.loading.set(false);
     });
 
@@ -43,6 +44,13 @@ export class ExchangeService {
 
   loadExchanges(): void {
     this.loadExchanges$.next();
+  }
+
+  loadExchangesPaginated(page: number, pageSize: number, filters?: { search?: string; is_active?: boolean | null }): Observable<PaginatedResponse<ExchangeListItem>> {
+    const params: Record<string, any> = { page, page_size: pageSize };
+    if (filters?.search) params['search'] = filters.search;
+    if (filters?.is_active != null) params['is_active'] = filters.is_active;
+    return this.api.get<PaginatedResponse<ExchangeListItem>>('/exchanges', params);
   }
 
   loadExchangeDetail(exchangeId: string, silent = false): void {

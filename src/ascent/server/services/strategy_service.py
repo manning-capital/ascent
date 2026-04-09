@@ -361,8 +361,28 @@ def get_strategy_stats(db: Session, strategy_id: uuid.UUID) -> StrategyStats:
     )
 
 
-def get_strategies(db: Session) -> list[StrategyListItem]:
+def get_strategies(
+    db: Session,
+    page: int = 1,
+    page_size: int = 25,
+    search: str | None = None,
+    is_active: bool | None = None,
+) -> tuple[list[StrategyListItem], int]:
+    conditions = []
+    if search:
+        conditions.append(Strategy.display_name.ilike(f"%{search}%"))
+    if is_active is not None:
+        conditions.append(Strategy.is_active == is_active)
+
+    count_q = select(func.count()).select_from(Strategy)
+    if conditions:
+        count_q = count_q.where(*conditions)
+    total = db.execute(count_q).scalar() or 0
+
     query = select(Strategy).options(joinedload(Strategy.strategy_type))
+    if conditions:
+        query = query.where(*conditions)
+    query = query.order_by(Strategy.display_name).offset((page - 1) * page_size).limit(page_size)
     strategies = db.execute(query).unique().scalars().all()
 
     items = []
@@ -382,7 +402,7 @@ def get_strategies(db: Session) -> list[StrategyListItem]:
                 **stats,
             )
         )
-    return items
+    return items, total
 
 
 def create_strategy(db: Session, data: StrategyCreate) -> Strategy:

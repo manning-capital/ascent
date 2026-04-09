@@ -30,9 +30,21 @@ from ascent.server.services import order_service, strategy_service, trade_servic
 router = APIRouter(prefix="/strategies", tags=["strategies"])
 
 
-@router.get("", response_model=list[StrategyListItem])
-def list_strategies(db: Session = Depends(get_db)):
-    return strategy_service.get_strategies(db)
+@router.get("", response_model=PaginatedResponse[StrategyListItem])
+def list_strategies(
+    page: int = 1,
+    page_size: int = 25,
+    search: str | None = None,
+    is_active: bool | None = None,
+    db: Session = Depends(get_db),
+):
+    items, total = strategy_service.get_strategies(
+        db, page=page, page_size=page_size, search=search, is_active=is_active
+    )
+    total_pages = (total + page_size - 1) // page_size
+    return PaginatedResponse(
+        items=items, total=total, page=page, page_size=page_size, total_pages=total_pages
+    )
 
 
 @router.post("", status_code=201)

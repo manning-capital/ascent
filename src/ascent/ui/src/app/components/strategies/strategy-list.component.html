@@ -1,12 +1,26 @@
-<div class="p-6">
-  <div class="flex items-center justify-between mb-6">
-    <h1 class="text-2xl font-bold">Strategies</h1>
-  </div>
+<div class="flex flex-col h-[calc(100vh-3.5rem)] md:h-screen">
+  <div class="p-6 flex flex-col flex-1 min-h-0 gap-4">
+    <div class="flex items-center justify-between shrink-0">
+      <h1 class="text-2xl font-bold">Strategies</h1>
+    </div>
 
-  <app-data-table
-    [columns]="columns"
-    [rowData]="strategyService.strategies()"
-    [loading]="strategyService.loading() && strategyService.strategies().length === 0"
-    [rowClickRoute]="navigateToStrategy"
-    emptyMessage="No strategies found."/>
+    <!-- Filters -->
+    <div class="rounded-lg border border-edge bg-surface p-4 shrink-0">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <input type="text" pInputText placeholder="Search strategies..."
+          [ngModel]="search()" (ngModelChange)="onSearch($event)">
+        <p-select [ngModel]="statusFilter()" (ngModelChange)="onStatusChange($event)"
+          [options]="statusOptions" optionLabel="label" optionValue="value"
+          placeholder="All Statuses" [showClear]="true"/>
+        <p-button (onClick)="clearFilters()" severity="secondary" [outlined]="true" label="Clear Filters"/>
+      </div>
+    </div>
+
+    <app-server-table class="flex-1 min-h-0"
+      [columns]="columns"
+      [fetchPage]="fetchPage()"
+      [rowClickRoute]="navigateToStrategy"
+      [pageSize]="25"
+      emptyMessage="No strategies found."/>
+  </div>
 </div>

@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from ascent.database.models import Exchange
@@ -31,18 +31,36 @@ def _build_exchange_schema(e: Exchange) -> ExchangeSchema:
     )
 
 
-def get_exchanges(db: Session) -> list[ExchangeSchema]:
-    query = (
-        select(Exchange)
-        .options(
-            joinedload(Exchange.exchange_type),
-            joinedload(Exchange.instrument_type),
-            joinedload(Exchange.provider),
+def get_exchanges(
+    db: Session,
+    page: int = 1,
+    page_size: int = 25,
+    search: str | None = None,
+    is_active: bool | None = None,
+) -> tuple[list[ExchangeSchema], int]:
+    conditions = []
+    if search:
+        conditions.append(
+            Exchange.display_name.ilike(f"%{search}%") | Exchange.name.ilike(f"%{search}%")
         )
-        .order_by(Exchange.name)
+    if is_active is not None:
+        conditions.append(Exchange.is_active == is_active)
+
+    count_q = select(func.count()).select_from(Exchange)
+    if conditions:
+        count_q = count_q.where(*conditions)
+    total = db.execute(count_q).scalar() or 0
+
+    query = select(Exchange).options(
+        joinedload(Exchange.exchange_type),
+        joinedload(Exchange.instrument_type),
+        joinedload(Exchange.provider),
     )
+    if conditions:
+        query = query.where(*conditions)
+    query = query.order_by(Exchange.name).offset((page - 1) * page_size).limit(page_size)
     exchanges = db.execute(query).unique().scalars().all()
-    return [_build_exchange_schema(e) for e in exchanges]
+    return [_build_exchange_schema(e) for e in exchanges], total
 
 
 def get_exchange(db: Session, exchange_id: uuid.UUID) -> ExchangeSchema:

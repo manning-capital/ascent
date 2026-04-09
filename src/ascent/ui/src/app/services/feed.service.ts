@@ -23,12 +23,12 @@ export class FeedService {
     this.loadFeeds$.pipe(
       tap(() => this.loading.set(true)),
       switchMap(() =>
-        this.api.get<FeedListItem[]>('/feeds').pipe(
+        this.api.get<PaginatedResponse<FeedListItem>>('/feeds', { page_size: 10000 }).pipe(
           catchError(() => { this.loading.set(false); return EMPTY; })
         )
       ),
-    ).subscribe(feeds => {
-      this.feeds.set(feeds);
+    ).subscribe(res => {
+      this.feeds.set(res.items);
       this.loading.set(false);
     });
 
@@ -47,6 +47,13 @@ export class FeedService {
 
   loadFeeds(): void {
     this.loadFeeds$.next();
+  }
+
+  loadFeedsPaginated(page: number, pageSize: number, filters?: { search?: string; is_active?: boolean | null }): Observable<PaginatedResponse<FeedListItem>> {
+    const params: Record<string, any> = { page, page_size: pageSize };
+    if (filters?.search) params['search'] = filters.search;
+    if (filters?.is_active != null) params['is_active'] = filters.is_active;
+    return this.api.get<PaginatedResponse<FeedListItem>>('/feeds', params);
   }
 
   loadFeedDetail(feedId: string, silent = false): void {

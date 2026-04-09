@@ -33,9 +33,21 @@ from ascent.server.services import feed_service, universe_service
 router = APIRouter(prefix="/feeds", tags=["feeds"])
 
 
-@router.get("", response_model=list[FeedListItem])
-def list_feeds(db: Session = Depends(get_db)):
-    return feed_service.get_feeds(db)
+@router.get("", response_model=PaginatedResponse[FeedListItem])
+def list_feeds(
+    page: int = 1,
+    page_size: int = 25,
+    search: str | None = None,
+    is_active: bool | None = None,
+    db: Session = Depends(get_db),
+):
+    items, total = feed_service.get_feeds(
+        db, page=page, page_size=page_size, search=search, is_active=is_active
+    )
+    total_pages = (total + page_size - 1) // page_size
+    return PaginatedResponse(
+        items=items, total=total, page=page, page_size=page_size, total_pages=total_pages
+    )
 
 
 @router.post("", status_code=201)
