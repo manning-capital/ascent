@@ -1,8 +1,12 @@
 import { Component, computed, inject, OnInit } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { map } from 'rxjs/operators';
 import { DashboardService } from '../../services/dashboard.service';
 import { StrategyService } from '../../services/strategy.service';
 import { TradeService } from '../../services/trade.service';
+import { ApiService } from '../../services/api.service';
+import { PaginatedResponse, TradeListItem } from '../../models/trade.model';
+import type { ServerFetchFn } from '../shared/data-table/data-table.model';
 import { StatCardComponent } from '../shared/stat-card.component';
 import { TradeTableComponent } from '../trade-table/trade-table.component';
 import { CumulativePnlChartComponent } from '../strategies/strategy-detail/charts/cumulative-pnl-chart.component';
@@ -18,16 +22,23 @@ import { EmptyStateComponent } from '../shared/empty-state.component';
   templateUrl: './dashboard.component.html',
 })
 export class DashboardComponent implements OnInit {
+  private api = inject(ApiService);
   dashboardService = inject(DashboardService);
   strategyService = inject(StrategyService);
   tradeService = inject(TradeService);
 
   cumulativePnlData = computed(() => this.dashboardService.stats()?.cumulative_pnl ?? []);
 
+  recentTradesFetchPage = computed<ServerFetchFn<TradeListItem>>(() => {
+    return (page: number, pageSize: number) =>
+      this.api.get<PaginatedResponse<TradeListItem>>('/trades', { page, page_size: 5, sort_field: 'entry_at', sort_order: 'desc' }).pipe(
+        map(res => ({ items: res.items, total: res.total }))
+      );
+  });
+
   ngOnInit(): void {
     this.dashboardService.loadStats();
     this.strategyService.loadStrategies();
-    this.tradeService.loadTrades({ page: 1, page_size: 5 });
   }
 
   formatCurrency(value: number): string {

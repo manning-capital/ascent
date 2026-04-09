@@ -52,28 +52,31 @@ import {
   `],
   template: `
     @if (_initialLoad() && _rowData().length === 0) {
-      <div class="flex-1 flex flex-col min-h-0 rounded-lg border border-edge overflow-clip">
+      <div [class]="showPaginator() ? 'flex-1 flex flex-col min-h-0 rounded-lg border border-edge overflow-clip' : 'rounded-lg border border-edge overflow-clip'">
         <div class="flex gap-3 px-4 border-b border-edge shrink-0" style="height:48px;align-items:center">
           @for (_ of _skeletonCols(); track $index) { <p-skeleton height="0.75rem" class="flex-1"/> }
         </div>
-        <div class="flex-1 overflow-hidden">
-          @for (_ of skeletonRows; track $index) {
+        <div [class]="showPaginator() ? 'flex-1 overflow-hidden' : ''">
+          @for (_ of showPaginator() ? skeletonRows : skeletonRowsSmall; track $index) {
             <div class="flex gap-3 px-4 border-b border-edge" style="height:42px;align-items:center">
               @for (_ of _skeletonCols(); track $index) { <p-skeleton height="1rem" class="flex-1"/> }
             </div>
           }
         </div>
       </div>
-      <div class="mt-4 shrink-0 flex items-center justify-center gap-1 px-4 py-2">
-        <p-skeleton width="10rem" height="0.875rem"/>
-        @for (_ of [1,2]; track $index) { <p-skeleton width="2.5rem" height="2.5rem" borderRadius="50%"/> }
-        @for (_ of [1,2,3]; track $index) { <p-skeleton width="2.5rem" height="2.5rem" borderRadius="50%"/> }
-        @for (_ of [1,2]; track $index) { <p-skeleton width="2.5rem" height="2.5rem" borderRadius="50%"/> }
-        <p-skeleton width="4rem" height="2.5rem" borderRadius="6px"/>
-      </div>
+      @if (showPaginator()) {
+        <div class="mt-4 shrink-0 flex items-center justify-center gap-1 px-4 py-2">
+          <p-skeleton width="10rem" height="0.875rem"/>
+          @for (_ of [1,2]; track $index) { <p-skeleton width="2.5rem" height="2.5rem" borderRadius="50%"/> }
+          @for (_ of [1,2,3]; track $index) { <p-skeleton width="2.5rem" height="2.5rem" borderRadius="50%"/> }
+          @for (_ of [1,2]; track $index) { <p-skeleton width="2.5rem" height="2.5rem" borderRadius="50%"/> }
+          <p-skeleton width="4rem" height="2.5rem" borderRadius="6px"/>
+        </div>
+      }
     } @else {
       <div class="rounded-lg overflow-clip border border-edge transition-opacity duration-200"
-           style="flex: 1; min-height: 0"
+           [style.flex]="showPaginator() ? '1' : null"
+           [style.min-height]="showPaginator() ? '0' : null"
            [class.opacity-40]="_loading()" [class.pointer-events-none]="_loading()"
            [attr.data-ag-theme-mode]="themeMode()">
         <ag-grid-angular
@@ -81,7 +84,7 @@ import {
           [rowData]="_rowData()"
           [columnDefs]="agColumnDefs()"
           [defaultColDef]="agDefaultColDef()"
-          [domLayout]="'normal'"
+          [domLayout]="showPaginator() ? 'normal' : 'autoHeight'"
           style="width: 100%; height: 100%"
           [pagination]="false"
           [rowHeight]="rowHeight() ?? undefined"
@@ -93,7 +96,7 @@ import {
           (sortChanged)="onSortChanged($event)"
           (rowClicked)="onRowClicked($event)"/>
       </div>
-      @if (!_loading() || _total() > 0) {
+      @if (showPaginator() && (!_loading() || _total() > 0)) {
         <p-paginator class="mt-4 shrink-0"
           [rows]="_pageSize()"
           [totalRecords]="_total()"
@@ -123,6 +126,7 @@ export class ServerTableComponent<T = any> {
   // ─── Pagination ───────────────────────────────────────────
   pageSize = input(25);
   pageSizeOptions = input<number[]>([25, 50, 100]);
+  showPaginator = input(true);
 
   // ─── Behavior ─────────────────────────────────────────────
   rowClickRoute = input<((row: T) => string | any[]) | null>(null);
@@ -155,6 +159,7 @@ export class ServerTableComponent<T = any> {
 
   private datePipe = new DatePipe('en-US');
   skeletonRows = Array.from({ length: 50 });
+  skeletonRowsSmall = Array.from({ length: 5 });
   _skeletonCols = computed(() => {
     const cols = this.columns();
     if (cols.length > 0) return Array.from({ length: cols.length });

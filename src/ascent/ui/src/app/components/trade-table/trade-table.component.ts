@@ -126,6 +126,7 @@ export class TradeTableComponent {
   totalPages = input(1);
   pageChange = output<number>();
   fetchPage = input<ServerFetchFn<TradeListItem> | null>(null);
+  showPaginator = input(true);
 
   private gridApi: GridApi | null = null;
 

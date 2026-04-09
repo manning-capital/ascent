@@ -307,27 +307,10 @@
       <h2 class="text-lg font-semibold">Recent Trades</h2>
       <a routerLink="/trades" class="text-sm text-primary hover:underline">View All</a>
     </div>
-    @if (tradeService.loading()) {
-      <p-card>
-        <div class="flex flex-col gap-3">
-          @for (_ of [1,2,3,4,5]; track $index) {
-            <div class="flex items-center gap-4">
-              <p-skeleton width="6rem" height="1rem"/>
-              <p-skeleton width="5rem" height="1rem"/>
-              <p-skeleton width="3rem" height="1rem"/>
-              <p-skeleton width="4rem" height="1rem"/>
-              <p-skeleton width="4rem" height="1rem"/>
-              <div class="flex-1"></div>
-              <p-skeleton width="5rem" height="1rem"/>
-              <p-skeleton width="4rem" height="1.5rem" borderRadius="1rem"/>
-            </div>
-          }
-        </div>
-      </p-card>
-    } @else {
-      <p-card>
-        <app-trade-table [trades]="tradeService.trades()" [showStrategy]="true" [page]="1" [totalPages]="1"/>
-      </p-card>
-    }
+    <app-trade-table
+      [showStrategy]="true"
+      [fetchPage]="recentTradesFetchPage()"
+      [showPaginator]="false"
+      [pageSize]="5"/>
   </div>
 </div>
