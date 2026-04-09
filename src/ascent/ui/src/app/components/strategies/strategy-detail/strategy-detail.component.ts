@@ -23,7 +23,7 @@ import { Button } from 'primeng/button';
 import { Tag } from 'primeng/tag';
 import { Card } from 'primeng/card';
 import { Skeleton } from 'primeng/skeleton';
-import { EmptyStateComponent } from '../../shared/empty-state.component';
+
 import { ServerTableComponent } from '../../shared/data-table/server-table.component';
 import type { DataTableColumn, ServerFetchFn } from '../../shared/data-table/data-table.model';
 
@@ -43,7 +43,6 @@ import type { DataTableColumn, ServerFetchFn } from '../../shared/data-table/dat
     Tag,
     Card,
     Skeleton,
-    EmptyStateComponent,
     UniversePanelComponent,
     ServerTableComponent,
     StrategyRunsTabComponent,

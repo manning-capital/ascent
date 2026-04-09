@@ -224,3 +224,6 @@ __marimo__/
 .cursorindexingignore
 .cursorrules
 .DS_Store
+
+# Claude
+.claude/

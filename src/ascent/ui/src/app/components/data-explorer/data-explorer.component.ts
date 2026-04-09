@@ -10,7 +10,6 @@ import { MultiSelect } from 'primeng/multiselect';
 import { DatePicker } from 'primeng/datepicker';
 import { Button } from 'primeng/button';
 import { Card } from 'primeng/card';
-import { Skeleton } from 'primeng/skeleton';
 
 @Component({
   selector: 'app-data-explorer',
@@ -22,7 +21,6 @@ import { Skeleton } from 'primeng/skeleton';
     DatePicker,
     Button,
     Card,
-    Skeleton,
     ServerTableComponent,
   ],
   templateUrl: './data-explorer.component.html',
