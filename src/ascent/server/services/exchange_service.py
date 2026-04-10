@@ -31,12 +31,25 @@ def _build_exchange_schema(e: Exchange) -> ExchangeSchema:
     )
 
 
+EXCHANGE_SORT_COLUMNS = {
+    "display_name": Exchange.display_name,
+    "name": Exchange.name,
+    "exchange_type_name": Exchange.exchange_type_id,
+    "instrument_type_name": Exchange.instrument_type_id,
+    "provider_name": Exchange.provider_id,
+    "created_at": Exchange.created_at,
+    "is_active": Exchange.is_active,
+}
+
+
 def get_exchanges(
     db: Session,
     page: int = 1,
     page_size: int = 25,
     search: str | None = None,
     is_active: bool | None = None,
+    sort_field: str = "name",
+    sort_order: str = "asc",
 ) -> tuple[list[ExchangeSchema], int]:
     conditions = []
     if search:
@@ -58,7 +71,10 @@ def get_exchanges(
     )
     if conditions:
         query = query.where(*conditions)
-    query = query.order_by(Exchange.name).offset((page - 1) * page_size).limit(page_size)
+
+    sort_col = EXCHANGE_SORT_COLUMNS.get(sort_field, Exchange.name)
+    sort_expr = sort_col.desc().nullslast() if sort_order == "desc" else sort_col.asc().nullsfirst()
+    query = query.order_by(sort_expr).offset((page - 1) * page_size).limit(page_size)
     exchanges = db.execute(query).unique().scalars().all()
     return [_build_exchange_schema(e) for e in exchanges], total
 

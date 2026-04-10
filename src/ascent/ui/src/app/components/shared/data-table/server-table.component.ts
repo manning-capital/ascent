@@ -182,6 +182,7 @@ export class ServerTableComponent<T = any> {
       suppressMovable: true,
       floatingFilter: hasFilters,
       flex: 1,
+      comparator: () => 0,
     };
   });
 

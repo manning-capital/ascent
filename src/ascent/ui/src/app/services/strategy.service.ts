@@ -98,10 +98,11 @@ export class StrategyService {
     this.loadStrategies$.next();
   }
 
-  loadStrategiesPaginated(page: number, pageSize: number, filters?: { search?: string; is_active?: boolean | null }): Observable<PaginatedResponse<StrategyListItem>> {
+  loadStrategiesPaginated(page: number, pageSize: number, filters?: { search?: string; is_active?: boolean | null }, sort?: { field: string; order: string }): Observable<PaginatedResponse<StrategyListItem>> {
     const params: Record<string, any> = { page, page_size: pageSize };
     if (filters?.search) params['search'] = filters.search;
     if (filters?.is_active != null) params['is_active'] = filters.is_active;
+    if (sort) { params['sort_field'] = sort.field; params['sort_order'] = sort.order; }
     return this.api.get<PaginatedResponse<StrategyListItem>>('/strategies', params);
   }
 

@@ -45,7 +45,7 @@ export class FeedRunDetailComponent implements OnInit {
     if (!r?.partition_id) return null;
     const feedId = this.feedId;
     const partitionId = r.partition_id;
-    return (page: number, pageSize: number) =>
+    return (page: number, pageSize: number, _sort?: { field: string; order: string }) =>
       this.feedService.loadPartitionData(feedId, partitionId, page, pageSize).pipe(
         map(res => ({ items: res.items, total: res.total })),
       );

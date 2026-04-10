@@ -30,8 +30,8 @@ export class DashboardComponent implements OnInit {
   cumulativePnlData = computed(() => this.dashboardService.stats()?.cumulative_pnl ?? []);
 
   recentTradesFetchPage = computed<ServerFetchFn<TradeListItem>>(() => {
-    return (page: number, pageSize: number) =>
-      this.api.get<PaginatedResponse<TradeListItem>>('/trades', { page, page_size: 5, sort_field: 'entry_at', sort_order: 'desc' }).pipe(
+    return (page: number, pageSize: number, sort?: { field: string; order: string }) =>
+      this.api.get<PaginatedResponse<TradeListItem>>('/trades', { page, page_size: 5, sort_field: sort?.field ?? 'entry_at', sort_order: sort?.order ?? 'desc' }).pipe(
         map(res => ({ items: res.items, total: res.total }))
       );
   });

@@ -39,10 +39,18 @@ def list_feeds(
     page_size: int = 25,
     search: str | None = None,
     is_active: bool | None = None,
+    sort_field: str = "display_name",
+    sort_order: str = "asc",
     db: Session = Depends(get_db),
 ):
     items, total = feed_service.get_feeds(
-        db, page=page, page_size=page_size, search=search, is_active=is_active
+        db,
+        page=page,
+        page_size=page_size,
+        search=search,
+        is_active=is_active,
+        sort_field=sort_field,
+        sort_order=sort_order,
     )
     total_pages = (total + page_size - 1) // page_size
     return PaginatedResponse(
@@ -89,6 +97,8 @@ def list_feed_runs(
     started_after: str | None = None,
     started_before: str | None = None,
     status: str | None = None,
+    sort_field: str = "started_at",
+    sort_order: str = "desc",
     db: Session = Depends(get_db),
 ):
     items, total = feed_service.get_feed_runs(
@@ -99,6 +109,8 @@ def list_feed_runs(
         started_after=started_after,
         started_before=started_before,
         status=status,
+        sort_field=sort_field,
+        sort_order=sort_order,
     )
     total_pages = (total + page_size - 1) // page_size
     return PaginatedResponse(

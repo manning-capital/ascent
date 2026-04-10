@@ -36,10 +36,18 @@ def list_strategies(
     page_size: int = 25,
     search: str | None = None,
     is_active: bool | None = None,
+    sort_field: str = "display_name",
+    sort_order: str = "asc",
     db: Session = Depends(get_db),
 ):
     items, total = strategy_service.get_strategies(
-        db, page=page, page_size=page_size, search=search, is_active=is_active
+        db,
+        page=page,
+        page_size=page_size,
+        search=search,
+        is_active=is_active,
+        sort_field=sort_field,
+        sort_order=sort_order,
     )
     total_pages = (total + page_size - 1) // page_size
     return PaginatedResponse(
@@ -95,10 +103,17 @@ def get_strategy_trades(
     strategy_id: uuid.UUID,
     page: int = 1,
     page_size: int = 10,
+    sort_field: str = "entry_at",
+    sort_order: str = "desc",
     db: Session = Depends(get_db),
 ):
     items, total = trade_service.get_trades(
-        db, strategy_id=strategy_id, page=page, page_size=page_size
+        db,
+        strategy_id=strategy_id,
+        page=page,
+        page_size=page_size,
+        sort_field=sort_field,
+        sort_order=sort_order,
     )
     total_pages = (total + page_size - 1) // page_size
     return PaginatedResponse(
@@ -115,10 +130,17 @@ def get_strategy_orders(
     strategy_id: uuid.UUID,
     page: int = 1,
     page_size: int = 10,
+    sort_field: str = "timestamp",
+    sort_order: str = "desc",
     db: Session = Depends(get_db),
 ):
     items, total = order_service.get_strategy_orders(
-        db, strategy_id, page=page, page_size=page_size
+        db,
+        strategy_id,
+        page=page,
+        page_size=page_size,
+        sort_field=sort_field,
+        sort_order=sort_order,
     )
     total_pages = (total + page_size - 1) // page_size
     return PaginatedResponse(
@@ -198,6 +220,8 @@ def list_strategy_runs(
     started_after: str | None = None,
     started_before: str | None = None,
     status: str | None = None,
+    sort_field: str = "started_at",
+    sort_order: str = "desc",
     db: Session = Depends(get_db),
 ):
     items, total = strategy_service.get_strategy_runs(
@@ -208,6 +232,8 @@ def list_strategy_runs(
         started_after=started_after,
         started_before=started_before,
         status=status,
+        sort_field=sort_field,
+        sort_order=sort_order,
     )
     total_pages = (total + page_size - 1) // page_size
     return PaginatedResponse(

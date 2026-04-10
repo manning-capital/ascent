@@ -31,11 +31,11 @@ export class StrategyListComponent implements OnInit {
 
   columns: DataTableColumn<StrategyListItem>[] = [
     { field: 'display_name', header: 'Display Name' },
-    { field: 'strategy_type', header: 'Type' },
-    { field: 'total_trades', header: 'Trades' },
-    { field: 'win_rate', header: 'Win Rate', valueFormatter: (p) => p.value != null ? `${p.value}%` : '' },
-    { field: 'open_trades', header: 'Open' },
-    { field: 'total_pnl', header: 'Total P&L', cellType: 'currency' },
+    { field: 'strategy_type', header: 'Type', sortable: false },
+    { field: 'total_trades', header: 'Trades', sortable: false },
+    { field: 'win_rate', header: 'Win Rate', sortable: false, valueFormatter: (p) => p.value != null ? `${p.value}%` : '' },
+    { field: 'open_trades', header: 'Open', sortable: false },
+    { field: 'total_pnl', header: 'Total P&L', cellType: 'currency', sortable: false },
     { field: 'is_active', header: 'Status', cellType: 'status', width: 112 },
   ];
 
@@ -44,11 +44,11 @@ export class StrategyListComponent implements OnInit {
   fetchPage = computed<ServerFetchFn<StrategyListItem>>(() => {
     const search = this.search();
     const isActive = this.statusFilter();
-    return (page: number, pageSize: number) => {
+    return (page: number, pageSize: number, sort?: { field: string; order: string }) => {
       const filters: any = {};
       if (search) filters.search = search;
       if (isActive != null) filters.is_active = isActive;
-      return this.strategyService.loadStrategiesPaginated(page, pageSize, filters).pipe(
+      return this.strategyService.loadStrategiesPaginated(page, pageSize, filters, sort).pipe(
         map(res => ({ items: res.items, total: res.total }))
       );
     };

@@ -361,12 +361,20 @@ def get_strategy_stats(db: Session, strategy_id: uuid.UUID) -> StrategyStats:
     )
 
 
+STRATEGY_SORT_COLUMNS = {
+    "display_name": Strategy.display_name,
+    "is_active": Strategy.is_active,
+}
+
+
 def get_strategies(
     db: Session,
     page: int = 1,
     page_size: int = 25,
     search: str | None = None,
     is_active: bool | None = None,
+    sort_field: str = "display_name",
+    sort_order: str = "asc",
 ) -> tuple[list[StrategyListItem], int]:
     conditions = []
     if search:
@@ -382,7 +390,10 @@ def get_strategies(
     query = select(Strategy).options(joinedload(Strategy.strategy_type))
     if conditions:
         query = query.where(*conditions)
-    query = query.order_by(Strategy.display_name).offset((page - 1) * page_size).limit(page_size)
+
+    sort_col = STRATEGY_SORT_COLUMNS.get(sort_field, Strategy.display_name)
+    sort_expr = sort_col.desc().nullslast() if sort_order == "desc" else sort_col.asc().nullsfirst()
+    query = query.order_by(sort_expr).offset((page - 1) * page_size).limit(page_size)
     strategies = db.execute(query).unique().scalars().all()
 
     items = []
@@ -561,6 +572,13 @@ def get_strategy_feed_dag(db: Session, strategy_id: uuid.UUID) -> StrategyFeedDA
     return StrategyFeedDAG(nodes=nodes, edges=all_edges)
 
 
+STRATEGY_RUN_SORT_COLUMNS = {
+    "status": StrategyRun.status,
+    "started_at": StrategyRun.started_at,
+    "completed_at": StrategyRun.completed_at,
+}
+
+
 def get_strategy_runs(
     db: Session,
     strategy_id: uuid.UUID,
@@ -569,6 +587,8 @@ def get_strategy_runs(
     started_after: str | None = None,
     started_before: str | None = None,
     status: str | None = None,
+    sort_field: str = "started_at",
+    sort_order: str = "desc",
 ) -> tuple[list[StrategyRunListItem], int]:
     base = select(StrategyRun).where(StrategyRun.strategy_id == strategy_id)
     count_base = (
@@ -588,10 +608,13 @@ def get_strategy_runs(
         count_base = count_base.where(StrategyRun.started_at <= dt)
 
     total = db.execute(count_base).scalar() or 0
+
+    sort_col = STRATEGY_RUN_SORT_COLUMNS.get(sort_field, StrategyRun.started_at)
+    sort_expr = sort_col.desc().nullslast() if sort_order == "desc" else sort_col.asc().nullsfirst()
     runs = (
         db.execute(
             base.options(joinedload(StrategyRun.feed_run_links))
-            .order_by(StrategyRun.started_at.desc())
+            .order_by(sort_expr)
             .offset((page - 1) * page_size)
             .limit(page_size)
         )

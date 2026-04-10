@@ -26,6 +26,12 @@ from ascent.server.schemas.feeds import (
     StrategyFeedItem,
 )
 
+FEED_SORT_COLUMNS = {
+    "display_name": Feed.display_name,
+    "channel": Feed.channel,
+    "is_active": Feed.is_active,
+}
+
 
 def get_feeds(
     db: Session,
@@ -33,6 +39,8 @@ def get_feeds(
     page_size: int = 25,
     search: str | None = None,
     is_active: bool | None = None,
+    sort_field: str = "display_name",
+    sort_order: str = "asc",
 ) -> tuple[list[FeedListItem], int]:
     conditions = []
     if search:
@@ -50,10 +58,11 @@ def get_feeds(
     query = select(Feed)
     if conditions:
         query = query.where(*conditions)
+
+    sort_col = FEED_SORT_COLUMNS.get(sort_field, Feed.display_name)
+    sort_expr = sort_col.desc().nullslast() if sort_order == "desc" else sort_col.asc().nullsfirst()
     feeds = (
-        db.execute(
-            query.order_by(Feed.display_name).offset((page - 1) * page_size).limit(page_size)
-        )
+        db.execute(query.order_by(sort_expr).offset((page - 1) * page_size).limit(page_size))
         .scalars()
         .all()
     )
@@ -169,6 +178,14 @@ def delete_feed(db: Session, feed_id: uuid.UUID) -> None:
     db.commit()
 
 
+FEED_RUN_SORT_COLUMNS = {
+    "status": FeedRun.status,
+    "started_at": FeedRun.started_at,
+    "completed_at": FeedRun.completed_at,
+    "records_fetched": FeedRun.records_fetched,
+}
+
+
 def get_feed_runs(
     db: Session,
     feed_id: uuid.UUID,
@@ -177,6 +194,8 @@ def get_feed_runs(
     started_after: str | None = None,
     started_before: str | None = None,
     status: str | None = None,
+    sort_field: str = "started_at",
+    sort_order: str = "desc",
 ) -> tuple[list[FeedRunListItem], int]:
     base = select(FeedRun).where(FeedRun.feed_id == feed_id)
     count_base = select(func.count()).select_from(FeedRun).where(FeedRun.feed_id == feed_id)
@@ -195,10 +214,10 @@ def get_feed_runs(
 
     total = db.execute(count_base).scalar() or 0
 
+    sort_col = FEED_RUN_SORT_COLUMNS.get(sort_field, FeedRun.started_at)
+    sort_expr = sort_col.desc().nullslast() if sort_order == "desc" else sort_col.asc().nullsfirst()
     runs = (
-        db.execute(
-            base.order_by(FeedRun.started_at.desc()).offset((page - 1) * page_size).limit(page_size)
-        )
+        db.execute(base.order_by(sort_expr).offset((page - 1) * page_size).limit(page_size))
         .scalars()
         .all()
     )

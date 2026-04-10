@@ -46,11 +46,11 @@ export class StrategyRunsTabComponent {
       const map: Record<string, string> = { COMPLETED: 'success', FAILED: 'danger', RUNNING: 'warn' };
       return { label: v, severity: map[v] ?? 'secondary' };
     }},
-    { field: 'id', header: 'Run ID', cellType: 'monospace' },
+    { field: 'id', header: 'Run ID', cellType: 'monospace', sortable: false },
     { field: 'started_at', header: 'Started', cellType: 'date' },
-    { field: 'duration', header: 'Duration', valueGetter: (p: any) => this.durationLabel(p.data) },
-    { field: 'feed_runs', header: 'Feeds', valueGetter: (p: any) => p.data?.feed_runs?.length ?? 0 },
-    { field: 'error_message', header: 'Error', valueFormatter: (p: any) => p.value ?? '-', cellClass: (p: any) => p.value ? 'text-red-500' : '' },
+    { field: 'duration', header: 'Duration', sortable: false, valueGetter: (p: any) => this.durationLabel(p.data) },
+    { field: 'feed_runs', header: 'Feeds', sortable: false, valueGetter: (p: any) => p.data?.feed_runs?.length ?? 0 },
+    { field: 'error_message', header: 'Error', sortable: false, valueFormatter: (p: any) => p.value ?? '-', cellClass: (p: any) => p.value ? 'text-red-500' : '' },
   ];
 
   fetchPage = computed<ServerFetchFn<StrategyRunListItem> | null>(() => {
@@ -58,9 +58,9 @@ export class StrategyRunsTabComponent {
     const id = this.strategyId();
     if (!id) return null;
     const filter = this.filter();
-    return (page: number, pageSize: number) => {
+    return (page: number, pageSize: number, sort?: { field: string; order: string }) => {
       const f = Object.keys(filter).length > 0 ? filter : undefined;
-      return this.feedService.loadStrategyRuns(id, page, pageSize, f).pipe(
+      return this.feedService.loadStrategyRuns(id, page, pageSize, f, sort).pipe(
         map(res => ({ items: res.items, total: res.total }))
       );
     };

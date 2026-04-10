@@ -44,12 +44,12 @@ export class FeedRunsTabComponent {
       const map: Record<string, string> = { COMPLETED: 'success', FAILED: 'danger', RUNNING: 'warn' };
       return { label: v, severity: map[v] ?? 'secondary' };
     }},
-    { field: 'id', header: 'Run ID', cellType: 'monospace' },
+    { field: 'id', header: 'Run ID', cellType: 'monospace', sortable: false },
     { field: 'started_at', header: 'Started', cellType: 'date' },
-    { field: 'duration', header: 'Duration', valueGetter: (p: any) => this.durationLabel(p.data) },
-    { field: 'partition_key', header: 'Partition Key', cellType: 'date' },
+    { field: 'duration', header: 'Duration', sortable: false, valueGetter: (p: any) => this.durationLabel(p.data) },
+    { field: 'partition_key', header: 'Partition Key', cellType: 'date', sortable: false },
     { field: 'records_fetched', header: 'Records', valueFormatter: (p: any) => p.value ?? '-' },
-    { field: 'error_message', header: 'Error', valueFormatter: (p: any) => p.value ?? '-', cellClass: (p: any) => p.value ? 'text-red-500' : '' },
+    { field: 'error_message', header: 'Error', sortable: false, valueFormatter: (p: any) => p.value ?? '-', cellClass: (p: any) => p.value ? 'text-red-500' : '' },
   ];
 
   fetchPage = computed<ServerFetchFn<FeedRunListItem> | null>(() => {
@@ -57,9 +57,9 @@ export class FeedRunsTabComponent {
     const feedId = this.feedId();
     if (!feedId) return null;
     const filter = this.filter();
-    return (page: number, pageSize: number) => {
+    return (page: number, pageSize: number, sort?: { field: string; order: string }) => {
       const f = Object.keys(filter).length > 0 ? filter : undefined;
-      return this.feedService.loadFeedRuns(feedId, page, pageSize, f).pipe(
+      return this.feedService.loadFeedRuns(feedId, page, pageSize, f, sort).pipe(
         map(res => ({ items: res.items, total: res.total }))
       );
     };

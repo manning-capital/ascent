@@ -43,16 +43,16 @@ export class FeedListComponent implements OnInit {
     { field: 'display_name', header: 'Display Name' },
     { field: 'channel', header: 'Channel', cellType: 'monospace' },
     { field: 'schedule', header: 'Schedule', sortable: false, valueGetter: (p: any) => this.scheduleLabel(p.data?.schedule) },
-    { field: 'total_runs', header: 'Total Runs' },
+    { field: 'total_runs', header: 'Total Runs', sortable: false },
     {
-      field: 'last_run_status', header: 'Last Status', cellType: 'tag',
+      field: 'last_run_status', header: 'Last Status', cellType: 'tag', sortable: false,
       tagMapper: (v: any) => {
         if (!v) return { label: 'N/A', severity: 'secondary' };
         const map: Record<string, string> = { COMPLETED: 'success', FAILED: 'danger', RUNNING: 'warn' };
         return { label: v, severity: map[v] ?? 'secondary' };
       },
     },
-    { field: 'last_run_at', header: 'Last Run', cellType: 'date' },
+    { field: 'last_run_at', header: 'Last Run', cellType: 'date', sortable: false },
     { field: 'is_active', header: 'Status', cellType: 'status', width: 112 },
   ];
 
@@ -61,11 +61,11 @@ export class FeedListComponent implements OnInit {
   fetchPage = computed<ServerFetchFn<FeedListItem>>(() => {
     const search = this.search();
     const isActive = this.statusFilter();
-    return (page: number, pageSize: number) => {
+    return (page: number, pageSize: number, sort?: { field: string; order: string }) => {
       const filters: any = {};
       if (search) filters.search = search;
       if (isActive != null) filters.is_active = isActive;
-      return this.feedService.loadFeedsPaginated(page, pageSize, filters).pipe(
+      return this.feedService.loadFeedsPaginated(page, pageSize, filters, sort).pipe(
         map(res => ({ items: res.items, total: res.total }))
       );
     };

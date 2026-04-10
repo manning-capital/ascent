@@ -44,11 +44,11 @@ export class ExchangeListComponent implements OnInit {
   fetchPage = computed<ServerFetchFn<ExchangeListItem>>(() => {
     const search = this.search();
     const isActive = this.statusFilter();
-    return (page: number, pageSize: number) => {
+    return (page: number, pageSize: number, sort?: { field: string; order: string }) => {
       const filters: any = {};
       if (search) filters.search = search;
       if (isActive != null) filters.is_active = isActive;
-      return this.exchangeService.loadExchangesPaginated(page, pageSize, filters).pipe(
+      return this.exchangeService.loadExchangesPaginated(page, pageSize, filters, sort).pipe(
         map(res => ({ items: res.items, total: res.total }))
       );
     };

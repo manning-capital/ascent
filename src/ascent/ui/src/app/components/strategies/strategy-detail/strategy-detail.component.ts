@@ -66,13 +66,13 @@ export class StrategyDetailComponent implements OnInit {
 
   // Order columns
   orderColumns: DataTableColumn[] = [
-    { field: 'instrument_name', header: 'Pair' },
+    { field: 'instrument_name', header: 'Pair', sortable: false },
     { field: 'side', header: 'Side', cellType: 'tag', tagMapper: (v: string) => ({ label: v, severity: v === 'BUY' ? 'success' : v === 'SELL' ? 'danger' : 'secondary' }) },
-    { field: 'order_type', header: 'Type', cellClass: 'text-muted-color' },
+    { field: 'order_type', header: 'Type', sortable: false, cellClass: 'text-muted-color' },
     { field: 'quantity', header: 'Qty' },
     { field: 'price', header: 'Price', valueFormatter: (p: any) => this.formatCurrency(p.value) },
     { field: 'filled_quantity', header: 'Filled', valueGetter: (p: any) => p.data?.filled_quantity !== null ? `${p.data.filled_quantity} / ${p.data.quantity}` : '\u2014' },
-    { field: 'current_status', header: 'Status', cellType: 'tag', tagMapper: (v: string) => {
+    { field: 'current_status', header: 'Status', sortable: false, cellType: 'tag', tagMapper: (v: string) => {
       if (!v) return { label: '', severity: 'secondary' };
       const map: Record<string, string> = { FILLED: 'success', PARTIALLY_FILLED: 'warn', SUBMITTED: 'warn', ACCEPTED: 'warn', REJECTED: 'danger', CANCELLED: 'secondary' };
       return { label: v, severity: map[v] ?? 'secondary' };
@@ -85,20 +85,26 @@ export class StrategyDetailComponent implements OnInit {
     this.strategyService.selectedStrategy(); // track strategy changes
     const id = this.strategyId;
     if (!id) return null;
-    return (page: number, pageSize: number) =>
-      this.api.get<PaginatedResponse<OrderListItem>>(`/strategies/${id}/orders`, { page, page_size: pageSize }).pipe(
+    return (page: number, pageSize: number, sort?: { field: string; order: string }) => {
+      const params: Record<string, any> = { page, page_size: pageSize };
+      if (sort) { params['sort_field'] = sort.field; params['sort_order'] = sort.order; }
+      return this.api.get<PaginatedResponse<OrderListItem>>(`/strategies/${id}/orders`, params).pipe(
         map(res => ({ items: res.items, total: res.total }))
       );
+    };
   });
 
   tradesFetchPage = computed<ServerFetchFn<TradeListItem> | null>(() => {
     this.strategyService.selectedStrategy(); // track strategy changes
     const id = this.strategyId;
     if (!id) return null;
-    return (page: number, pageSize: number) =>
-      this.api.get<PaginatedResponse<TradeListItem>>(`/strategies/${id}/trades`, { page, page_size: pageSize }).pipe(
+    return (page: number, pageSize: number, sort?: { field: string; order: string }) => {
+      const params: Record<string, any> = { page, page_size: pageSize };
+      if (sort) { params['sort_field'] = sort.field; params['sort_order'] = sort.order; }
+      return this.api.get<PaginatedResponse<TradeListItem>>(`/strategies/${id}/trades`, params).pipe(
         map(res => ({ items: res.items, total: res.total }))
       );
+    };
   });
 
   // Stats from API

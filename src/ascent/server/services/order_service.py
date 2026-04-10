@@ -58,11 +58,22 @@ def get_orders(db: Session) -> list[OrderSchema]:
     return _build_order_schemas(orders)
 
 
+ORDER_SORT_COLUMNS = {
+    "timestamp": Order.timestamp,
+    "side": Order.side,
+    "quantity": Order.quantity,
+    "price": Order.price,
+    "filled_quantity": Order.filled_quantity,
+}
+
+
 def get_strategy_orders(
     db: Session,
     strategy_id: uuid.UUID,
     page: int = 1,
     page_size: int = 10,
+    sort_field: str = "timestamp",
+    sort_order: str = "desc",
 ) -> tuple[list[OrderSchema], int]:
     from ascent.database.models import Trade, TradeLeg
 
@@ -75,6 +86,8 @@ def get_strategy_orders(
 
     total = db.execute(select(func.count()).select_from(base.subquery())).scalar_one()
 
+    sort_col = ORDER_SORT_COLUMNS.get(sort_field, Order.timestamp)
+    sort_expr = sort_col.desc().nullslast() if sort_order == "desc" else sort_col.asc().nullsfirst()
     query = (
         base.options(
             joinedload(Order.order_type),
@@ -82,7 +95,7 @@ def get_strategy_orders(
             joinedload(Order.instrument),
             selectinload(Order.statuses).joinedload(OrderStatus.order_status_type),
         )
-        .order_by(Order.timestamp.desc())
+        .order_by(sort_expr)
         .offset((page - 1) * page_size)
         .limit(page_size)
     )

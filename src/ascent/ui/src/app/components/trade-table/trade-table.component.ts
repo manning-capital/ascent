@@ -149,18 +149,18 @@ export class TradeTableComponent {
 
   colDefs = computed<ColDef[]>(() => {
     const cols: ColDef[] = [
-      { headerName: 'Symbol', field: 'display_symbol', cellRenderer: SymbolCellRenderer, minWidth: 140 },
+      { headerName: 'Symbol', field: 'display_symbol', cellRenderer: SymbolCellRenderer, sortable: false, minWidth: 140 },
     ];
     if (this.showStrategy()) {
-      cols.push({ headerName: 'Strategy', field: 'strategy_name', cellClass: 'text-sm text-surface-500' });
+      cols.push({ headerName: 'Strategy', field: 'strategy_name', sortable: false, cellClass: 'text-sm text-surface-500' });
     }
     cols.push(
       { headerName: 'Type', field: 'tags', cellRenderer: TagsCellRenderer, sortable: false, minWidth: 120 },
-      { headerName: 'Qty', field: 'qty', valueGetter: (p) => { const leg = p.data?.legs?.[0]; return leg?.quantity ?? null; }, valueFormatter: (p) => p.value != null ? new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 4 }).format(p.value) : '', cellClass: 'text-sm' },
-      { headerName: 'Entry Price', field: 'entry', valueGetter: (p) => p.data?.legs?.[0]?.entry_price ?? null, valueFormatter: (p) => this.tradeService.formatCurrency(p.value), cellClass: 'text-sm' },
-      { headerName: 'Exit/Current', field: 'exit', valueGetter: (p) => { const leg = p.data?.legs?.[0]; return leg?.exit_price ?? leg?.entry_price ?? null; }, valueFormatter: (p) => this.tradeService.formatCurrency(p.value), cellClass: 'text-sm' },
+      { headerName: 'Qty', field: 'qty', sortable: false, valueGetter: (p) => { const leg = p.data?.legs?.[0]; return leg?.quantity ?? null; }, valueFormatter: (p) => p.value != null ? new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 4 }).format(p.value) : '', cellClass: 'text-sm' },
+      { headerName: 'Entry Price', field: 'entry', sortable: false, valueGetter: (p) => p.data?.legs?.[0]?.entry_price ?? null, valueFormatter: (p) => this.tradeService.formatCurrency(p.value), cellClass: 'text-sm' },
+      { headerName: 'Exit/Current', field: 'exit', sortable: false, valueGetter: (p) => { const leg = p.data?.legs?.[0]; return leg?.exit_price ?? leg?.entry_price ?? null; }, valueFormatter: (p) => this.tradeService.formatCurrency(p.value), cellClass: 'text-sm' },
       { headerName: 'P&L', field: 'total_realized_pnl', cellRenderer: TradePnlCellRenderer, cellRendererParams: { tradeService: this.tradeService } },
-      { headerName: 'Status', field: 'current_status', cellRenderer: TradeStatusCellRenderer },
+      { headerName: 'Status', field: 'current_status', sortable: false, cellRenderer: TradeStatusCellRenderer },
     );
     return cols;
   });
@@ -170,6 +170,7 @@ export class TradeTableComponent {
     resizable: false,
     suppressMovable: true,
     flex: 1,
+    comparator: () => 0,
   };
 
   onGridReady(event: { api: GridApi }): void {

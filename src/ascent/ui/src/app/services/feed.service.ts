@@ -49,10 +49,11 @@ export class FeedService {
     this.loadFeeds$.next();
   }
 
-  loadFeedsPaginated(page: number, pageSize: number, filters?: { search?: string; is_active?: boolean | null }): Observable<PaginatedResponse<FeedListItem>> {
+  loadFeedsPaginated(page: number, pageSize: number, filters?: { search?: string; is_active?: boolean | null }, sort?: { field: string; order: string }): Observable<PaginatedResponse<FeedListItem>> {
     const params: Record<string, any> = { page, page_size: pageSize };
     if (filters?.search) params['search'] = filters.search;
     if (filters?.is_active != null) params['is_active'] = filters.is_active;
+    if (sort) { params['sort_field'] = sort.field; params['sort_order'] = sort.order; }
     return this.api.get<PaginatedResponse<FeedListItem>>('/feeds', params);
   }
 
@@ -60,11 +61,12 @@ export class FeedService {
     this.loadDetail$.next({ feedId, silent });
   }
 
-  loadFeedRuns(feedId: string, page: number = 1, pageSize: number = 20, filter?: RunFilter): Observable<PaginatedResponse<FeedRunListItem>> {
+  loadFeedRuns(feedId: string, page: number = 1, pageSize: number = 20, filter?: RunFilter, sort?: { field: string; order: string }): Observable<PaginatedResponse<FeedRunListItem>> {
     const params: Record<string, string | number> = { page, page_size: pageSize };
     if (filter?.started_after) params['started_after'] = filter.started_after;
     if (filter?.started_before) params['started_before'] = filter.started_before;
     if (filter?.status) params['status'] = filter.status;
+    if (sort) { params['sort_field'] = sort.field; params['sort_order'] = sort.order; }
     return this.api.get<PaginatedResponse<FeedRunListItem>>(`/feeds/${feedId}/runs`, params);
   }
 
@@ -92,11 +94,12 @@ export class FeedService {
     return this.api.get<FeedRunListItem>(`/feeds/${feedId}/runs/${runId}`);
   }
 
-  loadStrategyRuns(strategyId: string, page: number = 1, pageSize: number = 20, filter?: RunFilter): Observable<PaginatedResponse<StrategyRunListItem>> {
+  loadStrategyRuns(strategyId: string, page: number = 1, pageSize: number = 20, filter?: RunFilter, sort?: { field: string; order: string }): Observable<PaginatedResponse<StrategyRunListItem>> {
     const params: Record<string, string | number> = { page, page_size: pageSize };
     if (filter?.started_after) params['started_after'] = filter.started_after;
     if (filter?.started_before) params['started_before'] = filter.started_before;
     if (filter?.status) params['status'] = filter.status;
+    if (sort) { params['sort_field'] = sort.field; params['sort_order'] = sort.order; }
     return this.api.get<PaginatedResponse<StrategyRunListItem>>(`/strategies/${strategyId}/runs`, params);
   }
 
