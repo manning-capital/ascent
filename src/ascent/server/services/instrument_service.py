@@ -1,7 +1,7 @@
 import datetime
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, tuple_
 from sqlalchemy.orm import Session, joinedload
 
 from ascent.database.models import (
@@ -164,9 +164,11 @@ def _apply_instrument_filters(
     query,
     search: str | None = None,
     instrument_type_id: uuid.UUID | None = None,
+    provider_id: uuid.UUID | None = None,
     is_active: bool | None = None,
     exclude_strategy_id: uuid.UUID | None = None,
     exclude_feed_id: uuid.UUID | None = None,
+    restrict_to_strategy_id: uuid.UUID | None = None,
 ):
     if search:
         query = query.where(
@@ -174,6 +176,8 @@ def _apply_instrument_filters(
         )
     if instrument_type_id:
         query = query.where(Instrument.instrument_type_id == instrument_type_id)
+    if provider_id:
+        query = query.where(Instrument.provider_id == provider_id)
     if is_active is not None:
         query = query.where(Instrument.is_active == is_active)
     if exclude_strategy_id:
@@ -190,6 +194,22 @@ def _apply_instrument_filters(
             FeedInstrumentScope.feed_id == exclude_feed_id
         )
         query = query.where(Instrument.id.not_in(existing))
+    if restrict_to_strategy_id:
+        from ascent.database.models import StrategyExchange
+        from ascent.database.models.exchanges import Exchange
+
+        strategy_exchanges = (
+            select(Exchange.provider_id, Exchange.instrument_type_id)
+            .join(StrategyExchange, StrategyExchange.exchange_id == Exchange.id)
+            .where(StrategyExchange.strategy_id == restrict_to_strategy_id)
+            .subquery()
+        )
+        tradeable = select(Instrument.id).where(
+            tuple_(Instrument.provider_id, Instrument.instrument_type_id).in_(
+                select(strategy_exchanges.c.provider_id, strategy_exchanges.c.instrument_type_id)
+            )
+        )
+        query = query.where(Instrument.id.in_(tradeable))
     return query
 
 
@@ -197,9 +217,11 @@ def search_instruments(
     db: Session,
     search: str | None = None,
     instrument_type_id: uuid.UUID | None = None,
+    provider_id: uuid.UUID | None = None,
     is_active: bool | None = None,
     exclude_strategy_id: uuid.UUID | None = None,
     exclude_feed_id: uuid.UUID | None = None,
+    restrict_to_strategy_id: uuid.UUID | None = None,
     sort_field: str = "display_name",
     sort_order: str = "asc",
     page: int = 1,
@@ -207,7 +229,14 @@ def search_instruments(
 ) -> tuple[list[InstrumentSchema], int]:
     base = select(Instrument)
     base = _apply_instrument_filters(
-        base, search, instrument_type_id, is_active, exclude_strategy_id, exclude_feed_id
+        base,
+        search,
+        instrument_type_id,
+        provider_id,
+        is_active,
+        exclude_strategy_id,
+        exclude_feed_id,
+        restrict_to_strategy_id,
     )
 
     total = db.execute(select(func.count()).select_from(base.subquery())).scalar_one()
@@ -232,13 +261,22 @@ def search_instrument_ids(
     db: Session,
     search: str | None = None,
     instrument_type_id: uuid.UUID | None = None,
+    provider_id: uuid.UUID | None = None,
     is_active: bool | None = None,
     exclude_strategy_id: uuid.UUID | None = None,
     exclude_feed_id: uuid.UUID | None = None,
+    restrict_to_strategy_id: uuid.UUID | None = None,
 ) -> list[uuid.UUID]:
     query = select(Instrument.id)
     query = _apply_instrument_filters(
-        query, search, instrument_type_id, is_active, exclude_strategy_id, exclude_feed_id
+        query,
+        search,
+        instrument_type_id,
+        provider_id,
+        is_active,
+        exclude_strategy_id,
+        exclude_feed_id,
+        restrict_to_strategy_id,
     )
     query = query.order_by(Instrument.display_name.asc())
     return list(db.execute(query).scalars().all())

@@ -27,6 +27,8 @@ import { Skeleton } from 'primeng/skeleton';
 
 import { ServerTableComponent } from '../../shared/data-table/server-table.component';
 import type { DataTableColumn, ServerFetchFn } from '../../shared/data-table/data-table.model';
+import { StageCellRenderer, StatusBadgeCellRenderer, RemoveCellRenderer } from '../../shared/universe-panel.component';
+import type { ColDef } from 'ag-grid-community';
 
 @Component({
   selector: 'app-strategy-detail',
@@ -110,14 +112,19 @@ export class StrategyDetailComponent implements OnInit {
     };
   });
 
-  // Exchange columns for the Exchanges tab
+  // Exchange columns for the current exchanges view (with remove button)
   exchangeColumns: DataTableColumn[] = [
     { field: 'exchange_display_name', header: 'Exchange', sortable: false },
     { field: 'exchange_name', header: 'Name', sortable: false, cellClass: 'font-mono text-surface-500' },
     { field: 'exchange_type_name', header: 'Type', sortable: false, cellClass: 'text-muted-color' },
     { field: 'provider_name', header: 'Provider', sortable: false },
     { field: 'is_active', header: 'Status', sortable: false, cellType: 'tag', tagMapper: (v: boolean) => ({ label: v ? 'Active' : 'Inactive', severity: v ? 'success' : 'secondary' }) },
+    { field: '', header: '', sortable: false, cellType: 'custom', cellRenderer: RemoveCellRenderer, width: 80 },
   ];
+
+  exchangeGridContext = {
+    onRemove: (id: string) => this.removeExchange(id),
+  };
 
   exchangesFetchPage = computed<ServerFetchFn<StrategyExchangeItem> | null>(() => {
     this.strategyService.selectedStrategy(); // track strategy changes
@@ -125,17 +132,44 @@ export class StrategyDetailComponent implements OnInit {
     if (!id) return null;
     return (page: number, pageSize: number) => {
       return this.api.get<PaginatedResponse<StrategyExchangeItem>>(`/strategies/${id}/exchanges/search`, { page, page_size: pageSize }).pipe(
-        map(res => ({ items: res.items, total: res.total }))
+        map(res => {
+          this.exchangeCount.set(res.total);
+          return { items: res.items, total: res.total };
+        })
       );
     };
   });
+
+  // Picker columns using ag-grid ColDef with StageCellRenderer
+  exchangePickerColDefs: ColDef[] = [
+    { headerName: 'Display Name', field: 'display_name', minWidth: 160 },
+    { headerName: 'Name', field: 'name', cellClass: 'font-mono text-surface-500', minWidth: 140 },
+    { headerName: 'Type', field: 'exchange_type_name', sortable: false },
+    { headerName: 'Provider', field: 'provider_name', sortable: false },
+    { headerName: 'Status', field: 'is_active', cellRenderer: StatusBadgeCellRenderer },
+    { headerName: '', field: '', cellRenderer: StageCellRenderer, sortable: false, maxWidth: 80 },
+  ];
+
+  exchangePickerContext = {
+    isStaged: (id: string) => this.stagedExchangeIds().has(id),
+    toggleStage: (id: string) => this.toggleStageExchange(id),
+  };
+
+  getExchangeRowStyle = (params: any) => {
+    const id = params.data?.id;
+    if (id && this.stagedExchangeIds().has(id)) {
+      return {
+        background: 'rgba(34, 197, 94, 0.08)',
+        borderLeft: '3px solid rgb(34, 197, 94)',
+      };
+    }
+    return undefined;
+  };
 
   exchangePickerFetchPage = computed<ServerFetchFn<any> | null>(() => {
     const id = this.strategyId;
     if (!id) return null;
     return (page: number, pageSize: number, sort?: { field: string; order: string }) => {
-      const params: Record<string, any> = { page, page_size: pageSize, is_active: true };
-      if (sort) { params['sort_field'] = sort.field; params['sort_order'] = sort.order; }
       return this.exchangeService.loadExchangesPaginated(page, pageSize, { is_active: true }, sort).pipe(
         map(res => ({ items: res.items, total: res.total }))
       );
@@ -171,6 +205,7 @@ export class StrategyDetailComponent implements OnInit {
   }
 
   strategyId = '';
+  strategyHasExchanges = computed(() => this.exchangeCount() > 0);
 
   constructor() {}
 
@@ -197,6 +232,10 @@ export class StrategyDetailComponent implements OnInit {
       this.strategyService.loadStrategyStats(this.strategyId);
       this.feedService.loadStrategyFeedDAG(this.strategyId).subscribe({
         next: (dag) => this.feedDag.set(dag),
+      });
+      // Eagerly check exchange count so strategyHasExchanges is set before user visits Universe tab
+      this.api.get<PaginatedResponse<StrategyExchangeItem>>(`/strategies/${id}/exchanges/search`, { page: 1, page_size: 1 }).subscribe({
+        next: (res) => this.exchangeCount.set(res.total),
       });
     });
   }
@@ -329,14 +368,6 @@ export class StrategyDetailComponent implements OnInit {
   showExchangePicker = signal(false);
   stagedExchangeIds = signal<Set<string>>(new Set());
   exchangeCount = signal(0);
-
-  exchangePickerColumns: DataTableColumn[] = [
-    { field: 'display_name', header: 'Exchange', sortable: true },
-    { field: 'name', header: 'Name', sortable: true, cellClass: 'font-mono text-surface-500' },
-    { field: 'exchange_type_name', header: 'Type', sortable: false, cellClass: 'text-muted-color' },
-    { field: 'provider_name', header: 'Provider', sortable: false },
-    { field: 'is_active', header: 'Status', sortable: false, cellType: 'tag', tagMapper: (v: boolean) => ({ label: v ? 'Active' : 'Inactive', severity: v ? 'success' : 'secondary' }) },
-  ];
 
   openExchangePicker(): void {
     this.stagedExchangeIds.set(new Set());

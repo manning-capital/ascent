@@ -3,11 +3,12 @@ import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { JsonPipe, KeyValuePipe } from '@angular/common';
 import { map } from 'rxjs/operators';
 import { ExchangeService } from '../../../services/exchange.service';
-import { ToastService } from '../../../services/toast.service';
 import { ApiService } from '../../../services/api.service';
 import { OrderListItem } from '../../../models/order.model';
+import { Instrument } from '../../../models/asset.model';
 import { TradeListItem, PaginatedResponse } from '../../../models/trade.model';
-import { UniversePanelComponent } from '../../shared/universe-panel.component';
+import { SelectButton } from 'primeng/selectbutton';
+import { FormsModule } from '@angular/forms';
 import { Tabs, TabList, Tab } from 'primeng/tabs';
 import { TradeTableComponent } from '../../trade-table/trade-table.component';
 import { Tag } from 'primeng/tag';
@@ -30,15 +31,15 @@ import type { DataTableColumn, ServerFetchFn } from '../../shared/data-table/dat
     Card,
     Skeleton,
     FieldPanelComponent,
-    UniversePanelComponent,
     ServerTableComponent,
+    SelectButton,
+    FormsModule,
   ],
   templateUrl: './exchange-detail.component.html',
 })
 export class ExchangeDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
   private router = inject(Router);
-  private toast = inject(ToastService);
   private api = inject(ApiService);
   exchangeService = inject(ExchangeService);
 
@@ -159,41 +160,57 @@ export class ExchangeDetailComponent implements OnInit {
     return value > 0 ? 'text-positive' : 'text-negative';
   }
 
-  // --- Universe tab methods ---
+  // --- Universe tab (read-only, implicit from provider + instrument type) ---
 
-  onAddInstruments(event: { instrumentIds: string[]; startOrder: number }): void {
-    this.exchangeService.batchAddInstruments(this.exchangeId, event.instrumentIds, event.startOrder).subscribe({
-      next: () => {
-        this.toast.success(`${event.instrumentIds.length} instrument(s) added to universe`);
-      },
-      error: () => this.toast.error('Failed to add instruments to universe'),
-    });
-  }
+  universeMode = signal<'instruments' | 'composites'>('instruments');
+  universeModeOptions = [
+    { label: 'Instruments', value: 'instruments' },
+    { label: 'Composites', value: 'composites' },
+  ];
 
-  removeUniverseItem(instrumentId: string): void {
-    this.exchangeService.removeUniverseItem(this.exchangeId, instrumentId).subscribe({
-      next: () => {
-        this.toast.success('Instrument removed from universe');
-      },
-      error: () => this.toast.error('Failed to remove instrument'),
-    });
-  }
+  instrumentColumns: DataTableColumn[] = [
+    { field: 'display_name', header: 'Instrument', sortable: true },
+    { field: 'name', header: 'Name', sortable: true, cellClass: 'font-mono text-surface-500' },
+    { field: 'is_active', header: 'Status', sortable: false, cellType: 'tag', tagMapper: (v: boolean) => ({ label: v ? 'Active' : 'Inactive', severity: v ? 'success' : 'secondary' }) },
+  ];
 
-  onAddComposites(event: { compositeIds: string[]; startOrder: number }): void {
-    this.exchangeService.batchAddComposites(this.exchangeId, event.compositeIds, event.startOrder).subscribe({
-      next: () => {
-        this.toast.success(`${event.compositeIds.length} composite(s) added to universe`);
-      },
-      error: () => this.toast.error('Failed to add composites to universe'),
-    });
-  }
+  compositeColumns: DataTableColumn[] = [
+    { field: 'display_name', header: 'Composite', sortable: true },
+    { field: 'name', header: 'Name', sortable: true, cellClass: 'font-mono text-surface-500' },
+    { field: 'is_active', header: 'Status', sortable: false, cellType: 'tag', tagMapper: (v: boolean) => ({ label: v ? 'Active' : 'Inactive', severity: v ? 'success' : 'secondary' }) },
+  ];
 
-  removeCompositeItem(compositeId: string): void {
-    this.exchangeService.removeCompositeUniverseItem(this.exchangeId, compositeId).subscribe({
-      next: () => {
-        this.toast.success('Composite removed from universe');
-      },
-      error: () => this.toast.error('Failed to remove composite'),
-    });
-  }
+  instrumentsFetchPage = computed<ServerFetchFn<Instrument> | null>(() => {
+    const exchange = this.exchangeService.selectedExchange();
+    this.universeMode(); // track mode changes
+    if (!exchange || !exchange.provider_id || !exchange.instrument_type_id) return null;
+    const providerId = exchange.provider_id;
+    const instrumentTypeId = exchange.instrument_type_id;
+    return (page: number, pageSize: number, sort?: { field: string; order: string }) => {
+      const params: Record<string, any> = {
+        page, page_size: pageSize,
+        provider_id: providerId,
+        instrument_type_id: instrumentTypeId,
+      };
+      if (sort) { params['sort_field'] = sort.field; params['sort_order'] = sort.order; }
+      return this.api.get<PaginatedResponse<Instrument>>('/instruments/search', params).pipe(
+        map(res => ({ items: res.items, total: res.total }))
+      );
+    };
+  });
+
+  compositesFetchPage = computed<ServerFetchFn<any> | null>(() => {
+    const exchange = this.exchangeService.selectedExchange();
+    this.universeMode(); // track mode changes
+    if (!exchange) return null;
+    // For composites, we don't have a direct provider+type filter on composites/search.
+    // Show all composites for now — the strategy-level validation enforces tradeability.
+    return (page: number, pageSize: number, sort?: { field: string; order: string }) => {
+      const params: Record<string, any> = { page, page_size: pageSize };
+      if (sort) { params['sort_field'] = sort.field; params['sort_order'] = sort.order; }
+      return this.api.get<PaginatedResponse<any>>('/composites/search', params).pipe(
+        map(res => ({ items: res.items, total: res.total }))
+      );
+    };
+  });
 }

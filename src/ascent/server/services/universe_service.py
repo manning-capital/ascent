@@ -8,10 +8,14 @@ from ascent.database.models import (
     ExchangeInstrumentScope,
     FeedCompositeScope,
     StrategyCompositeScope,
+    StrategyExchange,
     StrategyInstrumentScope,
 )
+from ascent.database.models.composites import CompositeMember
+from ascent.database.models.exchanges import Exchange
 from ascent.database.models.feeds import FeedInstrumentScope
-from ascent.server.exceptions import NotFoundError
+from ascent.database.models.instruments import Instrument
+from ascent.server.exceptions import BadRequestError, NotFoundError
 from ascent.server.schemas.universe import (
     CompositeUniverseBatchAdd,
     CompositeUniverseItemSchema,
@@ -19,6 +23,87 @@ from ascent.server.schemas.universe import (
     UniverseItemCreate,
     UniverseItemSchema,
 )
+
+# ---------------------------------------------------------------------------
+# Tradeability validation
+# ---------------------------------------------------------------------------
+
+
+def _get_strategy_tradeable_pairs(
+    db: Session, strategy_id: uuid.UUID
+) -> set[tuple[uuid.UUID, uuid.UUID]]:
+    """Return set of (provider_id, instrument_type_id) tuples tradeable by this strategy's exchanges."""
+    rows = db.execute(
+        select(Exchange.provider_id, Exchange.instrument_type_id)
+        .join(StrategyExchange, StrategyExchange.exchange_id == Exchange.id)
+        .where(StrategyExchange.strategy_id == strategy_id)
+    ).all()
+    return {(r[0], r[1]) for r in rows}
+
+
+def _validate_instruments_tradeable(
+    db: Session, strategy_id: uuid.UUID, instrument_ids: list[uuid.UUID]
+) -> None:
+    """Raise BadRequestError if any instruments are not tradeable on the strategy's exchanges."""
+    tradeable_pairs = _get_strategy_tradeable_pairs(db, strategy_id)
+    if not tradeable_pairs:
+        raise BadRequestError(
+            "This strategy has no exchanges configured. Add exchanges before adding instruments to the universe."
+        )
+
+    instruments = db.execute(
+        select(
+            Instrument.id,
+            Instrument.provider_id,
+            Instrument.instrument_type_id,
+            Instrument.display_name,
+        ).where(Instrument.id.in_(instrument_ids))
+    ).all()
+    non_tradeable = [
+        str(r.display_name or r.id)
+        for r in instruments
+        if (r.provider_id, r.instrument_type_id) not in tradeable_pairs
+    ]
+    if non_tradeable:
+        raise BadRequestError(
+            f"The following instruments are not tradeable on this strategy's exchanges: {', '.join(non_tradeable)}"
+        )
+
+
+def _validate_composites_tradeable(
+    db: Session, strategy_id: uuid.UUID, composite_ids: list[uuid.UUID]
+) -> None:
+    """Raise BadRequestError if any composite has members not tradeable on the strategy's exchanges."""
+    tradeable_pairs = _get_strategy_tradeable_pairs(db, strategy_id)
+    if not tradeable_pairs:
+        raise BadRequestError(
+            "This strategy has no exchanges configured. Add exchanges before adding composites to the universe."
+        )
+
+    from ascent.database.models.composites import Composite
+
+    for composite_id in composite_ids:
+        members = db.execute(
+            select(Instrument.display_name, Instrument.provider_id, Instrument.instrument_type_id)
+            .join(CompositeMember, CompositeMember.instrument_id == Instrument.id)
+            .where(CompositeMember.composite_id == composite_id)
+        ).all()
+
+        if not members:
+            raise BadRequestError(f"Composite {composite_id} has no members")
+
+        non_tradeable = [
+            str(m.display_name)
+            for m in members
+            if (m.provider_id, m.instrument_type_id) not in tradeable_pairs
+        ]
+        if non_tradeable:
+            composite = db.get(Composite, composite_id)
+            name = composite.display_name if composite else str(composite_id)
+            raise BadRequestError(
+                f"Composite '{name}' has members not tradeable on this strategy's exchanges: {', '.join(non_tradeable)}"
+            )
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -76,6 +161,7 @@ def get_strategy_universe_paginated(
 def add_strategy_universe_item(
     db: Session, strategy_id: uuid.UUID, data: UniverseItemCreate
 ) -> StrategyInstrumentScope:
+    _validate_instruments_tradeable(db, strategy_id, [data.instrument_id])
     scope = StrategyInstrumentScope(
         strategy_id=strategy_id,
         instrument_id=data.instrument_id,
@@ -189,6 +275,7 @@ def batch_add_feed_instruments(
 def batch_add_strategy_instruments(
     db: Session, strategy_id: uuid.UUID, data: UniverseBatchAddInstruments
 ) -> list[UniverseItemSchema]:
+    _validate_instruments_tradeable(db, strategy_id, data.instrument_ids)
     existing = {
         r[0]
         for r in db.execute(
@@ -338,6 +425,7 @@ def get_strategy_composite_universe_paginated(
 def batch_add_strategy_composites(
     db: Session, strategy_id: uuid.UUID, data: CompositeUniverseBatchAdd
 ) -> list[CompositeUniverseItemSchema]:
+    _validate_composites_tradeable(db, strategy_id, data.composite_ids)
     existing = {
         r[0]
         for r in db.execute(

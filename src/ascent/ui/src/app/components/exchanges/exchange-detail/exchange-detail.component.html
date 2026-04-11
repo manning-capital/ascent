@@ -278,15 +278,37 @@
         </div>
       }
 
-      <!-- Universe Tab -->
+      <!-- Universe Tab (read-only, implicit from provider + instrument type) -->
       @if (activeTab() === 'Universe') {
-        <app-universe-panel
-          [universeBaseUrl]="'/exchanges/' + exchangeId"
-          subtitle="Instruments and composites available for trading on this exchange."
-          (addInstruments)="onAddInstruments($event)"
-          (addComposites)="onAddComposites($event)"
-          (removeInstrument)="removeUniverseItem($event)"
-          (removeComposite)="removeCompositeItem($event)"/>
+        <div class="flex flex-col flex-1 min-h-0 p-6">
+          <div class="flex items-center gap-4 mb-4 shrink-0">
+            <div>
+              <h3 class="font-semibold text-sm">Universe</h3>
+              <p class="text-xs text-surface-400 mt-1">Instruments and composites implicitly available based on this exchange's provider and instrument type.</p>
+            </div>
+            <p-selectButton
+              [options]="universeModeOptions"
+              [ngModel]="universeMode()"
+              (ngModelChange)="universeMode.set($event)"
+              optionLabel="label"
+              optionValue="value"
+              size="small"/>
+          </div>
+
+          @if (universeMode() === 'instruments') {
+            <app-server-table class="flex-1 min-h-0"
+              [columns]="instrumentColumns"
+              [fetchPage]="instrumentsFetchPage()"
+              [pageSize]="25"
+              emptyMessage="No instruments match this exchange's provider and instrument type."/>
+          } @else {
+            <app-server-table class="flex-1 min-h-0"
+              [columns]="compositeColumns"
+              [fetchPage]="compositesFetchPage()"
+              [pageSize]="25"
+              emptyMessage="No composites available."/>
+          }
+        </div>
       }
 
       <!-- Configuration Tab -->

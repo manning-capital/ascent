@@ -126,9 +126,11 @@ def bulk_update_provider_asset_metadata_history(
 def search_instruments(
     search: str | None = None,
     instrument_type_id: uuid.UUID | None = None,
+    provider_id: uuid.UUID | None = None,
     is_active: bool | None = None,
     exclude_strategy_id: uuid.UUID | None = None,
     exclude_feed_id: uuid.UUID | None = None,
+    restrict_to_strategy_id: uuid.UUID | None = None,
     sort_field: str = "display_name",
     sort_order: str = "asc",
     page: int = 1,
@@ -139,9 +141,11 @@ def search_instruments(
         db,
         search=search,
         instrument_type_id=instrument_type_id,
+        provider_id=provider_id,
         is_active=is_active,
         exclude_strategy_id=exclude_strategy_id,
         exclude_feed_id=exclude_feed_id,
+        restrict_to_strategy_id=restrict_to_strategy_id,
         sort_field=sort_field,
         sort_order=sort_order,
         page=page,
@@ -161,18 +165,22 @@ def search_instruments(
 def search_instrument_ids(
     search: str | None = None,
     instrument_type_id: uuid.UUID | None = None,
+    provider_id: uuid.UUID | None = None,
     is_active: bool | None = None,
     exclude_strategy_id: uuid.UUID | None = None,
     exclude_feed_id: uuid.UUID | None = None,
+    restrict_to_strategy_id: uuid.UUID | None = None,
     db: Session = Depends(get_db),
 ):
     return instrument_service.search_instrument_ids(
         db,
         search=search,
         instrument_type_id=instrument_type_id,
+        provider_id=provider_id,
         is_active=is_active,
         exclude_strategy_id=exclude_strategy_id,
         exclude_feed_id=exclude_feed_id,
+        restrict_to_strategy_id=restrict_to_strategy_id,
     )
 
 

@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, tuple_
 from sqlalchemy.orm import Session, joinedload
 
 from ascent.database.models.composites import Composite, CompositeMember
@@ -87,6 +87,7 @@ def _apply_composite_filters(
     is_active: bool | None = None,
     exclude_strategy_id: uuid.UUID | None = None,
     exclude_feed_id: uuid.UUID | None = None,
+    restrict_to_strategy_id: uuid.UUID | None = None,
 ):
     if search:
         query = query.where(
@@ -110,6 +111,43 @@ def _apply_composite_filters(
             FeedCompositeScope.feed_id == exclude_feed_id
         )
         query = query.where(Composite.id.not_in(existing))
+    if restrict_to_strategy_id:
+        from ascent.database.models import StrategyExchange
+        from ascent.database.models.exchanges import Exchange
+        from ascent.database.models.instruments import Instrument
+
+        strategy_exchanges = (
+            select(Exchange.provider_id, Exchange.instrument_type_id)
+            .join(StrategyExchange, StrategyExchange.exchange_id == Exchange.id)
+            .where(StrategyExchange.strategy_id == restrict_to_strategy_id)
+            .subquery()
+        )
+        # Count members whose (provider_id, instrument_type_id) matches a strategy exchange
+        tradeable_member_count = (
+            select(func.count(CompositeMember.instrument_id))
+            .select_from(CompositeMember)
+            .join(Instrument, CompositeMember.instrument_id == Instrument.id)
+            .where(CompositeMember.composite_id == Composite.id)
+            .where(
+                tuple_(Instrument.provider_id, Instrument.instrument_type_id).in_(
+                    select(
+                        strategy_exchanges.c.provider_id, strategy_exchanges.c.instrument_type_id
+                    )
+                )
+            )
+            .correlate(Composite)
+            .scalar_subquery()
+        )
+        total_member_count = (
+            select(func.count())
+            .select_from(CompositeMember)
+            .where(CompositeMember.composite_id == Composite.id)
+            .correlate(Composite)
+            .scalar_subquery()
+        )
+        # Only include composites where ALL members are tradeable
+        query = query.where(total_member_count > 0)
+        query = query.where(tradeable_member_count >= total_member_count)
     return query
 
 
@@ -120,6 +158,7 @@ def search_composites(
     is_active: bool | None = None,
     exclude_strategy_id: uuid.UUID | None = None,
     exclude_feed_id: uuid.UUID | None = None,
+    restrict_to_strategy_id: uuid.UUID | None = None,
     sort_field: str = "display_name",
     sort_order: str = "asc",
     page: int = 1,
@@ -127,7 +166,13 @@ def search_composites(
 ) -> tuple[list[CompositeSchema], int]:
     base = select(Composite)
     base = _apply_composite_filters(
-        base, search, composite_type_id, is_active, exclude_strategy_id, exclude_feed_id
+        base,
+        search,
+        composite_type_id,
+        is_active,
+        exclude_strategy_id,
+        exclude_feed_id,
+        restrict_to_strategy_id,
     )
 
     total = db.execute(select(func.count()).select_from(base.subquery())).scalar_one()
@@ -153,10 +198,17 @@ def search_composite_ids(
     is_active: bool | None = None,
     exclude_strategy_id: uuid.UUID | None = None,
     exclude_feed_id: uuid.UUID | None = None,
+    restrict_to_strategy_id: uuid.UUID | None = None,
 ) -> list[uuid.UUID]:
     query = select(Composite.id)
     query = _apply_composite_filters(
-        query, search, composite_type_id, is_active, exclude_strategy_id, exclude_feed_id
+        query,
+        search,
+        composite_type_id,
+        is_active,
+        exclude_strategy_id,
+        exclude_feed_id,
+        restrict_to_strategy_id,
     )
     query = query.order_by(Composite.display_name.asc())
     return list(db.execute(query).scalars().all())

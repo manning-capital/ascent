@@ -393,6 +393,8 @@
         <app-universe-panel
           [universeBaseUrl]="'/strategies/' + strategyId"
           [excludeStrategyId]="strategyId"
+          [restrictToStrategyId]="strategyId"
+          [hasExchanges]="strategyHasExchanges()"
           subtitle="Instruments and composites this strategy trades."
           (addInstruments)="onAddInstruments($event)"
           (addComposites)="onAddComposites($event)"
@@ -415,6 +417,7 @@
               [columns]="exchangeColumns"
               [fetchPage]="exchangesFetchPage()"
               [pageSize]="25"
+              [gridContext]="exchangeGridContext"
               emptyMessage="No exchanges configured for this strategy."/>
           } @else {
             <div class="flex items-center justify-between mb-4 shrink-0">
@@ -432,9 +435,11 @@
               </div>
             </div>
             <app-server-table class="flex-1 min-h-0"
-              [columns]="exchangePickerColumns"
+              [columnDefs]="exchangePickerColDefs"
               [fetchPage]="exchangePickerFetchPage()"
               [pageSize]="25"
+              [gridContext]="exchangePickerContext"
+              [getRowStyle]="getExchangeRowStyle"
               emptyMessage="No exchanges found."/>
           }
         </div>

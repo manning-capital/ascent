@@ -72,7 +72,7 @@ export class RemoveCellRenderer implements ICellRendererAngularComp {
   refresh(params: ICellRendererParams): boolean { this.params = params; return true; }
   onClick(e: Event): void {
     e.stopPropagation();
-    const id = this.params.data?.instrument_id ?? this.params.data?.composite_id;
+    const id = this.params.data?.instrument_id ?? this.params.data?.composite_id ?? this.params.data?.exchange_id;
     this.params.context?.onRemove(id);
   }
 }
@@ -108,15 +108,23 @@ export class RemoveCellRenderer implements ICellRendererAngularComp {
               optionValue="value"
               size="small"/>
           </div>
-          <p-button
-            [label]="mode() === 'instruments' ? '+ Add Instruments' : '+ Add Composites'"
-            [outlined]="true"
-            size="small"
-            (onClick)="openForm()"/>
+          @if (hasExchanges()) {
+            <p-button
+              [label]="mode() === 'instruments' ? '+ Add Instruments' : '+ Add Composites'"
+              [outlined]="true"
+              size="small"
+              (onClick)="openForm()"/>
+          }
         </div>
 
-        <!-- Current universe server table -->
-        @if (mode() === 'instruments') {
+        @if (!hasExchanges()) {
+          <div class="flex items-center justify-center flex-1 min-h-0">
+            <div class="text-center p-8">
+              <p class="text-sm text-muted-color mb-1">No exchanges configured</p>
+              <p class="text-xs text-surface-400">Add exchanges to this strategy before adding instruments or composites to the universe.</p>
+            </div>
+          </div>
+        } @else if (mode() === 'instruments') {
           <app-server-table class="flex-1 min-h-0"
             [columns]="instrumentUniverseColumns"
             [fetchPage]="instrumentUniverseFetchFn()"
@@ -219,6 +227,10 @@ export class UniversePanelComponent implements OnInit {
   excludeFeedId = input<string | null>(null);
   /** Base URL for fetching the instrument universe, e.g. '/strategies/{id}' */
   universeBaseUrl = input<string | null>(null);
+  /** When set, restrict picker results to instruments/composites tradeable on this strategy's exchanges. */
+  restrictToStrategyId = input<string | null>(null);
+  /** Whether the parent entity has exchanges configured. When false, shows a message instead of the picker. */
+  hasExchanges = input(true);
 
   // ─── Outputs ──────────────────────────────────────────────
   @Output() addInstruments = new EventEmitter<{ instrumentIds: string[]; startOrder: number }>();
@@ -354,12 +366,14 @@ export class UniversePanelComponent implements OnInit {
     const status = this.statusFilter();
     const excludeStrategyId = this.excludeStrategyId();
     const excludeFeedId = this.excludeFeedId();
+    const restrictToStrategyId = this.restrictToStrategyId();
 
     const params: Record<string, any> = {};
     if (search) params['search'] = search;
     if (status !== '') params['is_active'] = status;
     if (excludeStrategyId) params['exclude_strategy_id'] = excludeStrategyId;
     if (excludeFeedId) params['exclude_feed_id'] = excludeFeedId;
+    if (restrictToStrategyId) params['restrict_to_strategy_id'] = restrictToStrategyId;
 
     if (currentMode === 'instruments') {
       if (typeId) params['instrument_type_id'] = typeId;
@@ -429,10 +443,12 @@ export class UniversePanelComponent implements OnInit {
     const status = this.statusFilter();
     const excludeStrategyId = this.excludeStrategyId();
     const excludeFeedId = this.excludeFeedId();
+    const restrictToStrategyId = this.restrictToStrategyId();
     if (search) params['search'] = search;
     if (status !== '') params['is_active'] = status;
     if (excludeStrategyId) params['exclude_strategy_id'] = excludeStrategyId;
     if (excludeFeedId) params['exclude_feed_id'] = excludeFeedId;
+    if (restrictToStrategyId) params['restrict_to_strategy_id'] = restrictToStrategyId;
 
     const endpoint = this.mode() === 'instruments' ? '/instruments/ids' : '/composites/ids';
     if (this.mode() === 'instruments' && typeId) params['instrument_type_id'] = typeId;

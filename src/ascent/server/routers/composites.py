@@ -36,6 +36,7 @@ def search_composites(
     is_active: bool | None = None,
     exclude_strategy_id: uuid.UUID | None = None,
     exclude_feed_id: uuid.UUID | None = None,
+    restrict_to_strategy_id: uuid.UUID | None = None,
     sort_field: str = "display_name",
     sort_order: str = "asc",
     page: int = 1,
@@ -49,6 +50,7 @@ def search_composites(
         is_active=is_active,
         exclude_strategy_id=exclude_strategy_id,
         exclude_feed_id=exclude_feed_id,
+        restrict_to_strategy_id=restrict_to_strategy_id,
         sort_field=sort_field,
         sort_order=sort_order,
         page=page,
@@ -71,6 +73,7 @@ def search_composite_ids(
     is_active: bool | None = None,
     exclude_strategy_id: uuid.UUID | None = None,
     exclude_feed_id: uuid.UUID | None = None,
+    restrict_to_strategy_id: uuid.UUID | None = None,
     db: Session = Depends(get_db),
 ):
     return composite_service.search_composite_ids(
@@ -80,6 +83,7 @@ def search_composite_ids(
         is_active=is_active,
         exclude_strategy_id=exclude_strategy_id,
         exclude_feed_id=exclude_feed_id,
+        restrict_to_strategy_id=restrict_to_strategy_id,
     )
 
 
