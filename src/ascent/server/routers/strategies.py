@@ -152,6 +152,22 @@ def get_strategy_orders(
     )
 
 
+@router.get("/{strategy_id}/universe/search", response_model=PaginatedResponse[UniverseItemSchema])
+def search_strategy_universe(
+    strategy_id: uuid.UUID,
+    page: int = 1,
+    page_size: int = 25,
+    db: Session = Depends(get_db),
+):
+    items, total = universe_service.get_strategy_universe_paginated(
+        db, strategy_id, page, page_size
+    )
+    total_pages = (total + page_size - 1) // page_size
+    return PaginatedResponse(
+        items=items, total=total, page=page, page_size=page_size, total_pages=total_pages
+    )
+
+
 @router.get("/{strategy_id}/universe", response_model=list[UniverseItemSchema])
 def get_strategy_universe(strategy_id: uuid.UUID, db: Session = Depends(get_db)):
     return universe_service.get_strategy_universe(db, strategy_id)
@@ -184,6 +200,25 @@ def batch_add_strategy_instruments(
 
 
 # ---- Composite Universe ----
+
+
+@router.get(
+    "/{strategy_id}/composite-universe/search",
+    response_model=PaginatedResponse[CompositeUniverseItemSchema],
+)
+def search_strategy_composite_universe(
+    strategy_id: uuid.UUID,
+    page: int = 1,
+    page_size: int = 25,
+    db: Session = Depends(get_db),
+):
+    items, total = universe_service.get_strategy_composite_universe_paginated(
+        db, strategy_id, page, page_size
+    )
+    total_pages = (total + page_size - 1) // page_size
+    return PaginatedResponse(
+        items=items, total=total, page=page, page_size=page_size, total_pages=total_pages
+    )
 
 
 @router.get("/{strategy_id}/composite-universe", response_model=list[CompositeUniverseItemSchema])

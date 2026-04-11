@@ -7,8 +7,6 @@ from typing import Any
 
 
 def seed_portfolios(client: Any, ctx: dict) -> None:
-    print("Creating portfolios...")
-
     usd_id = uuid.UUID(ctx["asset_by_symbol"]["USD"]["id"])
 
     ctx["portfolio_main"] = client.create_portfolio(

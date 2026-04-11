@@ -15,7 +15,6 @@ def _ts(now: datetime.datetime, days_ago: int) -> datetime.datetime:
 
 
 def seed_instruments(client: Any, ctx: dict) -> None:
-    print("Creating instruments...")
     random.seed(42)
 
     now = ctx["now"]
@@ -165,7 +164,6 @@ def seed_instruments(client: Any, ctx: dict) -> None:
     # -----------------------------------------------------------------
     # Instrument metadata
     # -----------------------------------------------------------------
-    print("Creating instrument metadata history...")
 
     # Kraken crypto spot
     for inst in kraken_instruments.values():

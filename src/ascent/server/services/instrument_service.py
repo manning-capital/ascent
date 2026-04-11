@@ -1,7 +1,7 @@
 import datetime
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from ascent.database.models import (
@@ -150,6 +150,98 @@ def get_instruments(db: Session) -> list[InstrumentSchema]:
     )
     instruments = db.execute(query).unique().scalars().all()
     return [_build_instrument_schema(inst) for inst in instruments]
+
+
+INSTRUMENT_SORT_COLUMNS = {
+    "display_name": Instrument.display_name,
+    "name": Instrument.name,
+    "is_active": Instrument.is_active,
+    "created_at": Instrument.created_at,
+}
+
+
+def _apply_instrument_filters(
+    query,
+    search: str | None = None,
+    instrument_type_id: uuid.UUID | None = None,
+    is_active: bool | None = None,
+    exclude_strategy_id: uuid.UUID | None = None,
+    exclude_feed_id: uuid.UUID | None = None,
+):
+    if search:
+        query = query.where(
+            Instrument.display_name.ilike(f"%{search}%") | Instrument.name.ilike(f"%{search}%")
+        )
+    if instrument_type_id:
+        query = query.where(Instrument.instrument_type_id == instrument_type_id)
+    if is_active is not None:
+        query = query.where(Instrument.is_active == is_active)
+    if exclude_strategy_id:
+        from ascent.database.models import StrategyInstrumentScope
+
+        existing = select(StrategyInstrumentScope.instrument_id).where(
+            StrategyInstrumentScope.strategy_id == exclude_strategy_id
+        )
+        query = query.where(Instrument.id.not_in(existing))
+    if exclude_feed_id:
+        from ascent.database.models.feeds import FeedInstrumentScope
+
+        existing = select(FeedInstrumentScope.instrument_id).where(
+            FeedInstrumentScope.feed_id == exclude_feed_id
+        )
+        query = query.where(Instrument.id.not_in(existing))
+    return query
+
+
+def search_instruments(
+    db: Session,
+    search: str | None = None,
+    instrument_type_id: uuid.UUID | None = None,
+    is_active: bool | None = None,
+    exclude_strategy_id: uuid.UUID | None = None,
+    exclude_feed_id: uuid.UUID | None = None,
+    sort_field: str = "display_name",
+    sort_order: str = "asc",
+    page: int = 1,
+    page_size: int = 25,
+) -> tuple[list[InstrumentSchema], int]:
+    base = select(Instrument)
+    base = _apply_instrument_filters(
+        base, search, instrument_type_id, is_active, exclude_strategy_id, exclude_feed_id
+    )
+
+    total = db.execute(select(func.count()).select_from(base.subquery())).scalar_one()
+
+    sort_col = INSTRUMENT_SORT_COLUMNS.get(sort_field, Instrument.display_name)
+    sort_expr = sort_col.desc().nullslast() if sort_order == "desc" else sort_col.asc().nullsfirst()
+    query = (
+        base.options(
+            joinedload(Instrument.provider),
+            joinedload(Instrument.from_asset),
+            joinedload(Instrument.to_asset),
+        )
+        .order_by(sort_expr)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    instruments = db.execute(query).unique().scalars().all()
+    return [_build_instrument_schema(inst) for inst in instruments], total
+
+
+def search_instrument_ids(
+    db: Session,
+    search: str | None = None,
+    instrument_type_id: uuid.UUID | None = None,
+    is_active: bool | None = None,
+    exclude_strategy_id: uuid.UUID | None = None,
+    exclude_feed_id: uuid.UUID | None = None,
+) -> list[uuid.UUID]:
+    query = select(Instrument.id)
+    query = _apply_instrument_filters(
+        query, search, instrument_type_id, is_active, exclude_strategy_id, exclude_feed_id
+    )
+    query = query.order_by(Instrument.display_name.asc())
+    return list(db.execute(query).scalars().all())
 
 
 def get_instrument(db: Session, instrument_id: uuid.UUID) -> InstrumentSchema:

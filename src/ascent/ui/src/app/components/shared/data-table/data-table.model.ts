@@ -6,7 +6,7 @@ export type ServerFetchFn<T = any> = (
   page: number,
   pageSize: number,
   sort?: { field: string; order: string },
-) => Observable<{ items: T[]; total: number }>;
+) => Observable<{ items: T[]; total: number; columns?: string[] }>;
 
 export type CellType =
   | 'text'

@@ -13,8 +13,6 @@ def _ts(now: datetime.datetime, days_ago: int) -> datetime.datetime:
 
 
 def seed_composites(client: Any, ctx: dict) -> None:
-    print("Creating composites...")
-
     now = ctx["now"]
     meta = ctx["meta"]
     ki = ctx["kraken_instruments"]
@@ -158,7 +156,6 @@ def seed_composites(client: Any, ctx: dict) -> None:
     # -----------------------------------------------------------------
     # Composite metadata
     # -----------------------------------------------------------------
-    print("Creating composite metadata...")
 
     # Spread composites
     for comp in kraken_composites + coinbase_composites + stock_composites:

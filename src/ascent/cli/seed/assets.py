@@ -110,8 +110,6 @@ CORP_BOND_DEFS = [
 
 
 def seed_assets(client: Any, ctx: dict) -> None:
-    print("Creating assets...")
-
     asset_type_map = [
         (ctx["fiat_type"]["id"], FIAT_DEFS),
         (ctx["crypto_type"]["id"], CRYPTO_DEFS),

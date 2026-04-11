@@ -43,14 +43,29 @@ export function isLinkColumn(col: string, data: Record<string, any>[]): boolean 
 @Component({
   selector: 'ag-partition-link-cell',
   standalone: true,
-  template: `
-    @if (isLink) {
-      <a (click)="navigate($event)" class="text-primary hover:underline cursor-pointer">{{ text }}</a>
-    } @else {
-      {{ text }}
+  template: `{{ text }}`,
+  styles: [`
+    :host {
+      display: block;
+      font-family: monospace;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: var(--ag-row-height);
     }
-  `,
-  host: { style: 'display:flex;align-items:center;height:100%;font-family:monospace;white-space:nowrap' },
+    :host.is-link {
+      cursor: pointer;
+    }
+    :host.is-link:hover {
+      text-decoration: underline;
+    }
+  `],
+  host: {
+    '[class.text-primary]': 'isLink',
+    '[class.is-link]': 'isLink',
+    '[title]': 'text',
+    '(click)': 'navigate($event)',
+  },
 })
 export class PartitionLinkCellRenderer implements ICellRendererAngularComp {
   text = '';

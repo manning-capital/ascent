@@ -97,6 +97,11 @@ def clear_database(engine: Engine):
     # Create all tables in the database.
     models.Base.metadata.create_all(engine)
 
+    # Convert attribute tables to TimescaleDB hypertables (daily chunks)
+    from ascent.database.setup import ensure_hypertables
+
+    ensure_hypertables(engine)
+
 
 def _cleanup_old_test_containers():
     """
@@ -348,6 +353,11 @@ def postgres_test_harness(prefect_server_startup_timeout: int = 30, use_prefect:
         # Create all models in the database
         LOGGER.info("Creating all tables in the database...")
         models.Base.metadata.create_all(engine)
+
+        # Convert attribute tables to TimescaleDB hypertables (daily chunks)
+        from ascent.database.setup import ensure_hypertables
+
+        ensure_hypertables(engine)
 
         if use_prefect:
             # Lazy import Prefect only when needed

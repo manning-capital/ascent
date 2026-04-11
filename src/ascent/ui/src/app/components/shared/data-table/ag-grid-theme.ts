@@ -15,7 +15,7 @@ export const AG_GRID_THEME = themeQuartz
       headerBackgroundColor: '#ffffff',   // surface.0  — same as content (Aura pattern)
       headerTextColor: '#64748b',         // surface.500 — text.muted.color
       borderColor: '#e2e8f0',            // surface.200 — datatable.border.color
-      columnBorder: false,               // no vertical column dividers (matches Aura)
+      columnBorder: false,
       headerColumnBorder: false,
       wrapperBorder: false,              // container div provides the outer border
       accentColor: '#3b82f6',

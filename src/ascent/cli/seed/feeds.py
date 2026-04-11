@@ -101,8 +101,6 @@ def _ensure_price_paths(ctx: dict) -> None:
 
 
 def seed_feeds(client: Any, ctx: dict) -> None:
-    print("Creating feeds...")
-
     # Generate shared GBM price paths (used here and by trades seed)
     _ensure_price_paths(ctx)
 
@@ -356,12 +354,11 @@ def seed_feeds(client: Any, ctx: dict) -> None:
     # Feed runs & partitions — runs spaced at each feed's actual
     # schedule interval, capped at 200 runs per feed.
     # -----------------------------------------------------------------
-    print("Creating feed runs and partitions...")
 
     from ascent.feeds.partition import partition_key_for, partition_window
     from ascent.feeds.schedule import Schedule
 
-    MAX_RUNS_PER_FEED = 100
+    MAX_RUNS_PER_FEED = 500
 
     all_feeds = [
         feed_market,
@@ -394,7 +391,7 @@ def seed_feeds(client: Any, ctx: dict) -> None:
     progress = ctx.get("progress")
     runs_task = None
     if progress:
-        runs_task = progress.add_task("  Feed runs", total=len(all_feeds) * MAX_RUNS_PER_FEED)
+        runs_task = progress.add_task("Feed runs", total=len(all_feeds) * MAX_RUNS_PER_FEED)
 
     for feed_obj in all_feeds:
         schedule_obj = feed_schedules[feed_obj["id"]]
@@ -460,7 +457,6 @@ def seed_feeds(client: Any, ctx: dict) -> None:
     # Instrument & composite attribute data — prices from GBM paths
     # generated in the trades seed, with intraday interpolation.
     # -----------------------------------------------------------------
-    print("Creating instrument attribute data...")
 
     price_paths = ctx.get("price_paths", {})
     rsi_paths = ctx.get("rsi_paths", {})
@@ -522,7 +518,7 @@ def seed_feeds(client: Any, ctx: dict) -> None:
     ]
     attr_task = None
     if progress:
-        attr_task = progress.add_task("  Attribute data", total=len(materialized))
+        attr_task = progress.add_task("Attribute data", total=len(materialized))
 
     for cache_key, partition_obj in partition_cache.items():
         if partition_obj["status"] != "MATERIALIZED":
@@ -568,7 +564,7 @@ def seed_feeds(client: Any, ctx: dict) -> None:
                         }
                     )
                     paga_count += 1
-                    if len(paga_batch) >= 250:
+                    if len(paga_batch) >= 1000:
                         client.batch_create_instrument_attributes(paga_batch)
                         paga_batch = []
 
@@ -593,7 +589,7 @@ def seed_feeds(client: Any, ctx: dict) -> None:
                         }
                     )
                     comp_count += 1
-                    if len(comp_batch) >= 250:
+                    if len(comp_batch) >= 1000:
                         client.batch_create_composite_attributes(comp_batch)
                         comp_batch = []
 

@@ -282,21 +282,29 @@ export class FeedDetailComponent implements OnInit {
 
   onAddInstruments(event: { instrumentIds: string[]; startOrder: number }): void {
     this.feedService.batchAddFeedInstruments(this.feedId, event.instrumentIds, event.startOrder).subscribe({
-      next: () => {
-        this.toast.success(`${event.instrumentIds.length} instrument(s) added to universe`);
-        this.loadUniverse();
-      },
+      next: () => this.toast.success(`${event.instrumentIds.length} instrument(s) added to universe`),
       error: () => this.toast.error('Failed to add instruments to universe'),
     });
   }
 
   removeUniverseItem(instrumentId: string): void {
     this.feedService.removeFeedUniverseItem(this.feedId, instrumentId).subscribe({
-      next: () => {
-        this.toast.success('Instrument removed from universe');
-        this.loadUniverse();
-      },
+      next: () => this.toast.success('Instrument removed from universe'),
       error: () => this.toast.error('Failed to remove instrument'),
+    });
+  }
+
+  onAddComposites(event: { compositeIds: string[]; startOrder: number }): void {
+    this.feedService.batchAddFeedComposites(this.feedId, event.compositeIds, event.startOrder).subscribe({
+      next: () => this.toast.success(`${event.compositeIds.length} composite(s) added to universe`),
+      error: () => this.toast.error('Failed to add composites to universe'),
+    });
+  }
+
+  removeCompositeItem(compositeId: string): void {
+    this.feedService.removeFeedCompositeUniverseItem(this.feedId, compositeId).subscribe({
+      next: () => this.toast.success('Composite removed from universe'),
+      error: () => this.toast.error('Failed to remove composite'),
     });
   }
 }

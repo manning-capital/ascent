@@ -10,7 +10,6 @@ import { ApiService } from '../../../services/api.service';
 import { StrategyFeedDAG } from '../../../models/feed.model';
 import { OrderListItem } from '../../../models/order.model';
 import { TradeListItem, PaginatedResponse } from '../../../models/trade.model';
-import { UniverseItem } from '../../../models/asset.model';
 import { UniversePanelComponent } from '../../shared/universe-panel.component';
 import { Tabs, TabList, Tab } from 'primeng/tabs';
 import { SchemaFormComponent } from '../../shared/schema-form.component';
@@ -58,7 +57,7 @@ export class StrategyDetailComponent implements OnInit {
   feedService = inject(FeedService);
   tradeService = inject(TradeService);
 
-  tabs = ['Overview', 'Trades', 'Universe', 'Runs', 'Configuration'];
+  tabs = ['Overview', 'Trades', 'Orders', 'Universe', 'Runs', 'Configuration'];
   activeTab = signal('Overview');
   editing = signal(false);
   editedParameters = signal<Record<string, any>>({});
@@ -135,9 +134,6 @@ export class StrategyDetailComponent implements OnInit {
     return `${minutes}m`;
   }
 
-  // Universe tab state
-  universeItems = signal<UniverseItem[]>([]);
-
   strategyId = '';
 
   constructor() {}
@@ -166,7 +162,6 @@ export class StrategyDetailComponent implements OnInit {
       this.feedService.loadStrategyFeedDAG(this.strategyId).subscribe({
         next: (dag) => this.feedDag.set(dag),
       });
-      this.loadUniverse();
     });
   }
 
@@ -257,17 +252,10 @@ export class StrategyDetailComponent implements OnInit {
 
   // --- Universe tab methods ---
 
-  loadUniverse(): void {
-    this.strategyService.loadUniverse(this.strategyId).subscribe({
-      next: items => this.universeItems.set(items),
-    });
-  }
-
   onAddInstruments(event: { instrumentIds: string[]; startOrder: number }): void {
     this.strategyService.batchAddInstruments(this.strategyId, event.instrumentIds, event.startOrder).subscribe({
       next: () => {
         this.toast.success(`${event.instrumentIds.length} instrument(s) added to universe`);
-        this.loadUniverse();
       },
       error: () => this.toast.error('Failed to add instruments to universe'),
     });
@@ -277,9 +265,26 @@ export class StrategyDetailComponent implements OnInit {
     this.strategyService.removeUniverseItem(this.strategyId, instrumentId).subscribe({
       next: () => {
         this.toast.success('Instrument removed from universe');
-        this.loadUniverse();
       },
       error: () => this.toast.error('Failed to remove instrument'),
+    });
+  }
+
+  onAddComposites(event: { compositeIds: string[]; startOrder: number }): void {
+    this.strategyService.batchAddComposites(this.strategyId, event.compositeIds, event.startOrder).subscribe({
+      next: () => {
+        this.toast.success(`${event.compositeIds.length} composite(s) added to universe`);
+      },
+      error: () => this.toast.error('Failed to add composites to universe'),
+    });
+  }
+
+  removeCompositeItem(compositeId: string): void {
+    this.strategyService.removeCompositeUniverseItem(this.strategyId, compositeId).subscribe({
+      next: () => {
+        this.toast.success('Composite removed from universe');
+      },
+      error: () => this.toast.error('Failed to remove composite'),
     });
   }
 

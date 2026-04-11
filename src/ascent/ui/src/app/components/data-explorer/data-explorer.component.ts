@@ -57,7 +57,7 @@ export class DataExplorerComponent implements OnInit {
       params['sort_field'] = sort?.field ?? 'timestamp';
       params['sort_order'] = sort?.order ?? 'desc';
       return this.dataService.queryData(params).pipe(
-        map(res => ({ items: res.items, total: res.total }))
+        map(res => ({ items: res.items, total: res.total, columns: res.columns }))
       );
     };
   });

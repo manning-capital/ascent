@@ -7,8 +7,6 @@ from typing import Any
 
 
 def seed_types(client: Any, ctx: dict) -> None:
-    print("Creating type hierarchies...")
-
     # --- Asset Types ---
     # CURRENCY
     #   ├── FIAT_CURRENCY

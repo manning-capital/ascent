@@ -51,8 +51,6 @@ COINBASE_CRYPTO_SYMBOLS = [
 
 
 def seed_providers(client: Any, ctx: dict) -> None:
-    print("Creating providers and exchanges...")
-
     now = ctx["now"]
     meta = ctx["meta"]
     asset_by_symbol = ctx["asset_by_symbol"]
@@ -139,7 +137,7 @@ def seed_providers(client: Any, ctx: dict) -> None:
     )
 
     # --- Provider metadata ---
-    print("Creating provider metadata...")
+
     provider_meta_history = {
         kraken_id: [
             (90, {"API_KEY_NAME": "KRAKEN_API_KEY", "RATE_LIMIT": 30, "SUPPORTS_WEBSOCKET": True}),
@@ -181,7 +179,6 @@ def seed_providers(client: Any, ctx: dict) -> None:
             client.batch_create_provider_metadata(provider_id, timestamp=ts, entries=entries)
 
     # --- Provider-asset metadata ---
-    print("Creating provider-asset metadata...")
 
     kraken_tickers = {"BTC": "XBT", "DOGE": "XDG"}
     min_order_sizes = {

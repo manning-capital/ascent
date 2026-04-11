@@ -10,7 +10,7 @@
     </div>
     <!-- Tab bar skeleton -->
     <div class="flex gap-2 px-4 py-3 border-b border-surface">
-      @for (_ of [1,2,3,4,5]; track $index) {
+      @for (_ of [1,2,3,4,5,6]; track $index) {
         <p-skeleton width="5rem" height="1rem"/>
       }
     </div>
@@ -51,87 +51,35 @@
           </div>
         </div>
       </div>
-    } @else if (activeTab() === 'Trades') {
-      <div class="flex-1 overflow-y-auto p-6">
-        <!-- Orders skeleton -->
-        <div class="mb-6">
-          <div class="flex items-center gap-2 mb-3">
-            <p-skeleton width="8rem" height="1.125rem"/>
-          </div>
-          <p-card styleClass="overflow-hidden">
-            <div class="flex flex-col">
-              <!-- Header row -->
-              <div class="flex items-center gap-4 px-4 py-3 border-b border-surface">
-                <p-skeleton width="3rem" height="0.75rem"/>
-                <p-skeleton width="3rem" height="0.75rem"/>
-                <p-skeleton width="3rem" height="0.75rem"/>
-                <p-skeleton width="2.5rem" height="0.75rem"/>
-                <p-skeleton width="3rem" height="0.75rem"/>
-                <p-skeleton width="3rem" height="0.75rem"/>
-                <div class="flex-1"></div>
-                <p-skeleton width="3rem" height="0.75rem"/>
-              </div>
-              @for (_ of skeletonRows(10); track $index) {
-                <div class="flex items-center gap-4 px-4 py-3 border-b border-surface last:border-b-0">
-                  <p-skeleton width="5rem" height="1rem"/>
-                  <p-skeleton width="4rem" height="1.5rem" borderRadius="1rem"/>
-                  <p-skeleton width="8rem" height="1rem"/>
-                  <p-skeleton width="4rem" height="1rem"/>
-                  <p-skeleton width="5rem" height="1rem"/>
-                  <div class="flex-1"></div>
-                  <p-skeleton width="4rem" height="1.5rem" borderRadius="1rem"/>
-                </div>
-              }
-            </div>
-            <div class="flex items-center justify-between mt-4 px-2">
-              <p-skeleton width="6rem" height="0.75rem"/>
-              <div class="flex gap-1">
-                <p-skeleton width="3.5rem" height="2rem" borderRadius="6px"/>
-                <p-skeleton width="3.5rem" height="2rem" borderRadius="6px"/>
-              </div>
-            </div>
-          </p-card>
+    } @else if (activeTab() === 'Trades' || activeTab() === 'Orders') {
+      <div class="flex-1 flex flex-col min-h-0 p-6">
+        <div class="flex items-center gap-2 mb-3">
+          <p-skeleton width="8rem" height="1.125rem"/>
         </div>
-        <!-- Trades skeleton -->
-        <div>
-          <div class="flex items-center gap-2 mb-3">
-            <p-skeleton width="8rem" height="1.125rem"/>
+        <div class="flex-1 flex flex-col min-h-0 rounded-lg border border-surface overflow-clip">
+          <div class="flex items-center gap-4 px-4 border-b border-surface shrink-0" style="height:48px">
+            @for (_ of skeletonRows(7); track $index) { <p-skeleton width="4rem" height="0.75rem"/> }
           </div>
-          <p-card styleClass="overflow-hidden">
-            <div class="flex flex-col">
-              <!-- Header row -->
-              <div class="flex items-center gap-4 px-4 py-3 border-b border-surface">
-                <p-skeleton width="4rem" height="0.75rem"/>
-                <p-skeleton width="5rem" height="0.75rem"/>
-                <p-skeleton width="3rem" height="0.75rem"/>
-                <p-skeleton width="2.5rem" height="0.75rem"/>
-                <p-skeleton width="5rem" height="0.75rem"/>
-                <p-skeleton width="5rem" height="0.75rem"/>
+          <div class="flex-1 overflow-hidden">
+            @for (_ of skeletonRows(10); track $index) {
+              <div class="flex items-center gap-4 px-4 border-b border-surface" style="height:42px">
+                <p-skeleton width="5rem" height="1rem"/>
+                <p-skeleton width="4rem" height="1.5rem" borderRadius="1rem"/>
+                <p-skeleton width="6rem" height="1rem"/>
+                <p-skeleton width="4rem" height="1rem"/>
+                <p-skeleton width="5rem" height="1rem"/>
                 <div class="flex-1"></div>
-                <p-skeleton width="2.5rem" height="0.75rem"/>
-                <p-skeleton width="3rem" height="0.75rem"/>
+                <p-skeleton width="4rem" height="1.5rem" borderRadius="1rem"/>
               </div>
-              @for (_ of skeletonRows(10); track $index) {
-                <div class="flex items-center gap-4 px-4 py-3 border-b border-surface last:border-b-0">
-                  <p-skeleton width="6rem" height="1rem"/>
-                  <p-skeleton width="4rem" height="1.5rem" borderRadius="1rem"/>
-                  <p-skeleton width="3rem" height="1rem"/>
-                  <p-skeleton width="5rem" height="1rem"/>
-                  <p-skeleton width="5rem" height="1rem"/>
-                  <div class="flex-1"></div>
-                  <p-skeleton width="4rem" height="1rem"/>
-                  <p-skeleton width="4rem" height="1.5rem" borderRadius="1rem"/>
-                </div>
-              }
-            </div>
-            <div class="flex items-center justify-between mt-4 px-2">
-              <p-skeleton width="6rem" height="0.75rem"/>
-              <div class="flex gap-1">
-                <p-skeleton width="3.5rem" height="2rem" borderRadius="6px"/>
-                <p-skeleton width="3.5rem" height="2rem" borderRadius="6px"/>
-              </div>
-            </div>
-          </p-card>
+            }
+          </div>
+        </div>
+        <div class="flex items-center justify-center gap-1 mt-4 shrink-0">
+          <p-skeleton width="10rem" height="0.875rem"/>
+          @for (_ of [1,2]; track $index) { <p-skeleton width="2.5rem" height="2.5rem" borderRadius="50%"/> }
+          @for (_ of [1,2,3]; track $index) { <p-skeleton width="2.5rem" height="2.5rem" borderRadius="50%"/> }
+          @for (_ of [1,2]; track $index) { <p-skeleton width="2.5rem" height="2.5rem" borderRadius="50%"/> }
+          <p-skeleton width="4rem" height="2.5rem" borderRadius="6px"/>
         </div>
       </div>
     } @else if (activeTab() === 'Universe') {
@@ -415,39 +363,41 @@
 
       <!-- Trades Tab -->
       @if (activeTab() === 'Trades') {
-        <div class="flex flex-col flex-1 min-h-0 p-6 gap-4">
-          <!-- Open Orders -->
-          <div class="shrink-0">
-            <h2 class="text-lg font-semibold flex items-center gap-2 mb-3">
-              Open Orders
-            </h2>
-            <app-server-table
-              [columns]="orderColumns"
-              [fetchPage]="ordersFetchPage()"
-              [pageSize]="25"
-              emptyMessage="No orders."/>
-          </div>
+        <div class="flex flex-col flex-1 min-h-0 p-6">
+          <h2 class="text-lg font-semibold flex items-center gap-2 mb-3 shrink-0">
+            Trade History
+            <a [routerLink]="['/trades']" [queryParams]="{strategy_id: strategy.id}" class="text-xs font-normal text-primary hover:underline ml-auto">View All</a>
+          </h2>
+          <app-trade-table class="flex-1 min-h-0"
+            [showStrategy]="false"
+            [fetchPage]="tradesFetchPage()"/>
+        </div>
+      }
 
-          <!-- Trade History -->
-          <div>
-            <h2 class="text-lg font-semibold flex items-center gap-2 mb-3">
-              Trade History
-              <a [routerLink]="['/trades']" [queryParams]="{strategy_id: strategy.id}" class="text-xs font-normal text-primary hover:underline ml-auto">View All</a>
-            </h2>
-            <app-trade-table
-              [showStrategy]="false"
-              [fetchPage]="tradesFetchPage()"/>
-          </div>
+      <!-- Orders Tab -->
+      @if (activeTab() === 'Orders') {
+        <div class="flex flex-col flex-1 min-h-0 p-6">
+          <h2 class="text-lg font-semibold flex items-center gap-2 mb-3 shrink-0">
+            Open Orders
+          </h2>
+          <app-server-table class="flex-1 min-h-0"
+            [columns]="orderColumns"
+            [fetchPage]="ordersFetchPage()"
+            [pageSize]="25"
+            emptyMessage="No orders."/>
         </div>
       }
 
       <!-- Universe Tab -->
       @if (activeTab() === 'Universe') {
         <app-universe-panel
-          [items]="universeItems()"
-          subtitle="Instruments this strategy trades."
+          [universeBaseUrl]="'/strategies/' + strategyId"
+          [excludeStrategyId]="strategyId"
+          subtitle="Instruments and composites this strategy trades."
           (addInstruments)="onAddInstruments($event)"
-          (remove)="removeUniverseItem($event)"/>
+          (addComposites)="onAddComposites($event)"
+          (removeInstrument)="removeUniverseItem($event)"
+          (removeComposite)="removeCompositeItem($event)"/>
       }
 
       <!-- Runs Tab -->

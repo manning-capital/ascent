@@ -56,6 +56,11 @@ def _create_tables() -> None:
 
     Base.metadata.create_all(bind=engine)
 
+    # Convert attribute tables to TimescaleDB hypertables (daily chunks)
+    from ascent.database.setup import ensure_hypertables
+
+    ensure_hypertables(engine)
+
     # Add columns that create_all() won't add to existing tables
     with engine.connect() as conn:
         conn.execute(

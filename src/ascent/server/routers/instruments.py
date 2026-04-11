@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from ascent.server.dependencies import get_db
+from ascent.server.schemas.common import PaginatedResponse
 from ascent.server.schemas.instruments import (
     InstrumentCreate,
     InstrumentSchema,
@@ -119,6 +120,60 @@ def bulk_update_provider_asset_metadata_history(
 # ---------------------------------------------------------------------------
 # Instruments
 # ---------------------------------------------------------------------------
+
+
+@router.get("/instruments/search", response_model=PaginatedResponse[InstrumentSchema])
+def search_instruments(
+    search: str | None = None,
+    instrument_type_id: uuid.UUID | None = None,
+    is_active: bool | None = None,
+    exclude_strategy_id: uuid.UUID | None = None,
+    exclude_feed_id: uuid.UUID | None = None,
+    sort_field: str = "display_name",
+    sort_order: str = "asc",
+    page: int = 1,
+    page_size: int = 25,
+    db: Session = Depends(get_db),
+):
+    items, total = instrument_service.search_instruments(
+        db,
+        search=search,
+        instrument_type_id=instrument_type_id,
+        is_active=is_active,
+        exclude_strategy_id=exclude_strategy_id,
+        exclude_feed_id=exclude_feed_id,
+        sort_field=sort_field,
+        sort_order=sort_order,
+        page=page,
+        page_size=page_size,
+    )
+    total_pages = (total + page_size - 1) // page_size
+    return PaginatedResponse(
+        items=items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+    )
+
+
+@router.get("/instruments/ids", response_model=list[uuid.UUID])
+def search_instrument_ids(
+    search: str | None = None,
+    instrument_type_id: uuid.UUID | None = None,
+    is_active: bool | None = None,
+    exclude_strategy_id: uuid.UUID | None = None,
+    exclude_feed_id: uuid.UUID | None = None,
+    db: Session = Depends(get_db),
+):
+    return instrument_service.search_instrument_ids(
+        db,
+        search=search,
+        instrument_type_id=instrument_type_id,
+        is_active=is_active,
+        exclude_strategy_id=exclude_strategy_id,
+        exclude_feed_id=exclude_feed_id,
+    )
 
 
 @router.get("/instruments", response_model=list[InstrumentSchema])

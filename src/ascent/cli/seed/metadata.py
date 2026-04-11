@@ -13,8 +13,6 @@ def _ts(now: datetime.datetime, days_ago: int) -> datetime.datetime:
 
 
 def seed_asset_metadata(client: Any, ctx: dict) -> None:
-    print("Creating asset metadata...")
-
     now = ctx["now"]
     meta = ctx["meta"]
     asset_by_symbol = ctx["asset_by_symbol"]

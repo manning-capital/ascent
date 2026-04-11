@@ -7,8 +7,6 @@ from typing import Any
 
 
 def seed_type_metadata(client: Any, ctx: dict) -> None:
-    print("Creating type-metadata field definitions...")
-
     meta = ctx["meta"]
 
     def _link(add_fn, type_id: str, pairs: list[tuple[str, bool]]) -> None:

@@ -9,8 +9,6 @@ from typing import Any
 
 
 def seed_strategies(client: Any, ctx: dict) -> None:
-    print("Creating strategies...")
-
     now = ctx["now"]
     strategy_type_by_name = ctx["strategy_type_by_name"]
     feed_deps = ctx["feed_deps"]
@@ -378,17 +376,20 @@ def seed_strategies(client: Any, ctx: dict) -> None:
     # -----------------------------------------------------------------
     # Strategy runs
     # -----------------------------------------------------------------
-    print("Creating strategy runs...")
+
+    MAX_RUNS_PER_STRATEGY = 500
 
     progress = ctx.get("progress")
     runs_task = None
     if progress:
-        runs_task = progress.add_task("  Strategy runs", total=len(strategies) * 100)
+        runs_task = progress.add_task(
+            "Strategy runs", total=len(strategies) * MAX_RUNS_PER_STRATEGY
+        )
 
     strat_runs_by_strategy: dict[str, list] = {}
     for s, _ in strategies:
         strat_runs_by_strategy[s["id"]] = []
-        for i in range(100):
+        for i in range(MAX_RUNS_PER_STRATEGY):
             hours_ago = i * 3
             started = now - datetime.timedelta(hours=hours_ago, minutes=random.randint(0, 59))
             status_roll = random.random()

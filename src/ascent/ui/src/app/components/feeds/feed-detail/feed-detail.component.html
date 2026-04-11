@@ -183,10 +183,13 @@
       <!-- Universe Tab -->
       @if (activeTab() === 'Universe') {
         <app-universe-panel
-          [items]="universeItems()"
-          subtitle="Instruments this feed covers."
+          [universeBaseUrl]="'/feeds/' + feedId"
+          [excludeFeedId]="feedId"
+          subtitle="Instruments and composites this feed covers."
           (addInstruments)="onAddInstruments($event)"
-          (remove)="removeUniverseItem($event)"/>
+          (addComposites)="onAddComposites($event)"
+          (removeInstrument)="removeUniverseItem($event)"
+          (removeComposite)="removeCompositeItem($event)"/>
       }
 
       <!-- Configuration Tab -->

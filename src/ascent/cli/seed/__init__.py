@@ -28,7 +28,6 @@ def run(
         BarColumn,
         MofNCompleteColumn,
         Progress,
-        SpinnerColumn,
         TextColumn,
         TimeElapsedColumn,
     )
@@ -87,7 +86,6 @@ def run(
     ]
 
     progress = Progress(
-        SpinnerColumn(),
         TextColumn("{task.description}"),
         BarColumn(bar_width=30),
         MofNCompleteColumn(),
@@ -110,7 +108,7 @@ def run(
                 step_start = time.time()
                 tag = f"[dim]({i}/{len(steps)})[/]"
                 step_task = progress.add_task(
-                    f"  {tag} [bold blue]{label}[/]",
+                    f"⠋ {tag} [bold blue]{label}[/]",
                     total=None,
                 )
                 fn(client, ctx)
@@ -118,7 +116,7 @@ def run(
                 progress.update(step_task, completed=1, total=1)
                 progress.update(
                     step_task,
-                    description=f"  [green]✓[/] {tag} {label} [dim]({elapsed:.1f}s)[/]",
+                    description=f"[green]✓[/] {tag} {label} [dim]({elapsed:.1f}s)[/]",
                 )
     finally:
         sys.stdout.close()

@@ -94,8 +94,6 @@ _VOLATILITIES: dict[str, tuple[float, float]] = {
 
 
 def seed_trades(client: Any, ctx: dict) -> None:
-    print("Creating trades...")
-
     now = ctx["now"]
     strategy_objs = ctx["strategy_objs"]
     strategy_pairs = ctx["strategy_pairs"]
@@ -141,7 +139,7 @@ def seed_trades(client: Any, ctx: dict) -> None:
     all_trades: list[dict] = []
     trades_task = None
     if progress:
-        trades_task = progress.add_task("  Trades", total=len(strategy_objs))
+        trades_task = progress.add_task("Trades", total=len(strategy_objs))
 
     for strat_idx, strat in enumerate(strategy_objs):
         pairs = strategy_pairs.get(strat_idx, [("BTC", "USD")])
@@ -311,7 +309,6 @@ def seed_trades(client: Any, ctx: dict) -> None:
     # -----------------------------------------------------------------
     # Trade conditions & snapshots
     # -----------------------------------------------------------------
-    print("Creating trade conditions and snapshots...")
 
     attr_zscore = ctx["attr_zscore"]
     attr_close = ctx["attr_close"]
@@ -375,12 +372,11 @@ def seed_trades(client: Any, ctx: dict) -> None:
     # -----------------------------------------------------------------
     # Orders
     # -----------------------------------------------------------------
-    print("Creating orders...")
 
     order_trades = all_trades[:60]
     orders_task = None
     if progress:
-        orders_task = progress.add_task("  Orders", total=len(order_trades))
+        orders_task = progress.add_task("Orders", total=len(order_trades))
 
     for trade in order_trades:
         trade_entry_at = (

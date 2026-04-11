@@ -80,10 +80,11 @@ import {
            [class.opacity-40]="_loading()" [class.pointer-events-none]="_loading()"
            [attr.data-ag-theme-mode]="themeMode()">
         <ag-grid-angular
-          [theme]="theme"
+          [theme]="theme()"
           [rowData]="_rowData()"
           [columnDefs]="agColumnDefs()"
           [defaultColDef]="agDefaultColDef()"
+          [autoSizeStrategy]="autoSizeStrategy()"
           [domLayout]="showPaginator() ? 'normal' : 'autoHeight'"
           style="width: 100%; height: 100%"
           [pagination]="false"
@@ -92,6 +93,8 @@ import {
           [suppressCellFocus]="true"
           [overlayNoRowsTemplate]="noRowsHtml()"
           [rowClass]="rowClickRoute() ? 'cursor-pointer' : ''"
+          [context]="gridContext()"
+          [getRowStyle]="getRowStyle()"
           (gridReady)="onGridReady($event)"
           (sortChanged)="onSortChanged($event)"
           (rowClicked)="onRowClicked($event)"/>
@@ -119,6 +122,8 @@ export class ServerTableComponent<T = any> {
   autoColumns = input(false);
   /** Enable partition-style link detection in auto-columns mode. */
   autoLinks = input(false);
+  /** Show vertical column border lines. */
+  columnBorders = input(false);
 
   // ─── Data fetching ────────────────────────────────────────
   fetchPage = input<ServerFetchFn<T> | null>(null);
@@ -133,6 +138,10 @@ export class ServerTableComponent<T = any> {
   emptyMessage = input('No data found.');
   rowHeight = input<number | undefined>(undefined);
   headerHeight = input<number | undefined>(undefined);
+  /** AG Grid context object passed to cell renderers. */
+  gridContext = input<any>(undefined);
+  /** AG Grid getRowStyle callback for conditional row styling. */
+  getRowStyle = input<((params: any) => any) | undefined>(undefined);
 
   // ─── Outputs ──────────────────────────────────────────────
   sortChange = output<{ field: string; order: string }>();
@@ -149,12 +158,18 @@ export class ServerTableComponent<T = any> {
   _loading = signal(false);
   _initialLoad = signal(true);
   _sort = signal<{ field: string; order: string } | undefined>(undefined);
+  _serverColumns = signal<string[] | null>(null);
 
   // ─── Services & utilities ─────────────────────────────────
   private router = inject(Router);
   private themeSvc = inject(ThemeService);
   themeMode = agThemeMode(this.themeSvc);
-  theme = AG_GRID_THEME;
+  theme = computed(() => {
+    if (this.columnBorders()) {
+      return AG_GRID_THEME.withParams({ columnBorder: true, headerColumnBorder: true });
+    }
+    return AG_GRID_THEME;
+  });
   gridApi: GridApi | null = null;
 
   private datePipe = new DatePipe('en-US');
@@ -176,14 +191,22 @@ export class ServerTableComponent<T = any> {
   // ─── Computed: default column def ─────────────────────────
   agDefaultColDef = computed<ColDef>(() => {
     const hasFilters = this.columns().some(c => c.filterType && c.filterType !== 'none');
+    const serverCols = this._serverColumns();
     return {
       sortable: true,
       resizable: false,
       suppressMovable: true,
       floatingFilter: hasFilters,
-      flex: 1,
+      // When server provides columns, use fixed widths so the grid scrolls
+      // horizontally instead of squishing all columns into the viewport.
+      ...(serverCols ? { minWidth: 150 } : { flex: 1 }),
       comparator: () => 0,
     };
+  });
+
+  // ─── Computed: auto-size strategy ─────────────────────────
+  autoSizeStrategy = computed(() => {
+    return { type: 'fitGridWidth' as const };
   });
 
   // ─── Computed: resolved column defs ───────────────────────
@@ -227,9 +250,12 @@ export class ServerTableComponent<T = any> {
       next: (res) => {
         this._rowData.set(res.items);
         this._total.set(res.total);
+        this._serverColumns.set(res.columns ?? null);
         this._loading.set(false);
         this._initialLoad.set(false);
         this.dataLoaded.emit(res.items);
+        // Re-fit columns after the grid updates with new column defs
+        setTimeout(() => this.gridApi?.sizeColumnsToFit(), 0);
       },
       error: () => {
         this._loading.set(false);
@@ -470,12 +496,36 @@ export class ServerTableComponent<T = any> {
     if (data.length === 0) return [];
 
     const useLinks = this.autoLinks();
-    const cols = Object.keys(data[0]).filter(col => !HIDDEN_COLUMNS.has(col));
+    const serverCols = this._serverColumns();
+    const cols = serverCols
+      ? serverCols.filter(col => !HIDDEN_COLUMNS.has(col))
+      : Object.keys(data[0]).filter(col => !HIDDEN_COLUMNS.has(col));
+
+    // When server provides column definitions, pin key columns left and use
+    // fixed widths so the grid scrolls horizontally instead of squishing.
+    const pinLeft = serverCols ? new Set(['timestamp', ...cols.filter(c => isLinkColumn(c, data) || KEY_COLUMNS.has(c))]) : null;
 
     return cols.map(col => {
       const isLink = useLinks && isLinkColumn(col, data);
       const isKey = KEY_COLUMNS.has(col) || isLink;
-      const def: ColDef = { headerName: formatHeader(col), field: col };
+      const headerName = serverCols ? col : formatHeader(col);
+      const def: ColDef = { headerName, field: col };
+
+      if (pinLeft?.has(col)) {
+        def.pinned = 'left';
+        def.lockPinned = true;
+      }
+
+      if (serverCols) {
+        if (DATE_COLUMNS.has(col)) {
+          def.width = 280;
+          def.minWidth = 280;
+          def.maxWidth = 280;
+        } else if (isLink) {
+          def.minWidth = 290;
+          def.flex = 1;
+        }
+      }
 
       if (isKey) {
         def.cellStyle = {

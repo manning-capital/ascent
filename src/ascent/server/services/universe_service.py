@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from ascent.database.models import (
@@ -51,6 +51,26 @@ def get_strategy_universe(db: Session, strategy_id: uuid.UUID) -> list[UniverseI
     return [_build_item(s) for s in scopes]
 
 
+def get_strategy_universe_paginated(
+    db: Session,
+    strategy_id: uuid.UUID,
+    page: int = 1,
+    page_size: int = 25,
+    sort_field: str = "order",
+    sort_order: str = "asc",
+) -> tuple[list[UniverseItemSchema], int]:
+    base = select(StrategyInstrumentScope).where(StrategyInstrumentScope.strategy_id == strategy_id)
+    total = db.execute(select(func.count()).select_from(base.subquery())).scalar_one()
+    query = (
+        base.options(joinedload(StrategyInstrumentScope.instrument))
+        .order_by(StrategyInstrumentScope.order.asc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    scopes = db.execute(query).unique().scalars().all()
+    return [_build_item(s) for s in scopes], total
+
+
 def add_strategy_universe_item(
     db: Session, strategy_id: uuid.UUID, data: UniverseItemCreate
 ) -> StrategyInstrumentScope:
@@ -91,6 +111,26 @@ def get_feed_universe(db: Session, feed_id: uuid.UUID) -> list[UniverseItemSchem
     )
     scopes = db.execute(query).unique().scalars().all()
     return [_build_item(s) for s in scopes]
+
+
+def get_feed_universe_paginated(
+    db: Session,
+    feed_id: uuid.UUID,
+    page: int = 1,
+    page_size: int = 25,
+    sort_field: str = "order",
+    sort_order: str = "asc",
+) -> tuple[list[UniverseItemSchema], int]:
+    base = select(FeedInstrumentScope).where(FeedInstrumentScope.feed_id == feed_id)
+    total = db.execute(select(func.count()).select_from(base.subquery())).scalar_one()
+    query = (
+        base.options(joinedload(FeedInstrumentScope.instrument))
+        .order_by(FeedInstrumentScope.order.asc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    scopes = db.execute(query).unique().scalars().all()
+    return [_build_item(s) for s in scopes], total
 
 
 def add_feed_universe_item(
@@ -205,6 +245,26 @@ def get_feed_composite_universe(
     return [_build_composite_item(s) for s in scopes]
 
 
+def get_feed_composite_universe_paginated(
+    db: Session,
+    feed_id: uuid.UUID,
+    page: int = 1,
+    page_size: int = 25,
+    sort_field: str = "order",
+    sort_order: str = "asc",
+) -> tuple[list[CompositeUniverseItemSchema], int]:
+    base = select(FeedCompositeScope).where(FeedCompositeScope.feed_id == feed_id)
+    total = db.execute(select(func.count()).select_from(base.subquery())).scalar_one()
+    query = (
+        base.options(joinedload(FeedCompositeScope.composite))
+        .order_by(FeedCompositeScope.order.asc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    scopes = db.execute(query).unique().scalars().all()
+    return [_build_composite_item(s) for s in scopes], total
+
+
 def batch_add_feed_composites(
     db: Session, feed_id: uuid.UUID, data: CompositeUniverseBatchAdd
 ) -> list[CompositeUniverseItemSchema]:
@@ -251,6 +311,26 @@ def get_strategy_composite_universe(
     )
     scopes = db.execute(query).unique().scalars().all()
     return [_build_composite_item(s) for s in scopes]
+
+
+def get_strategy_composite_universe_paginated(
+    db: Session,
+    strategy_id: uuid.UUID,
+    page: int = 1,
+    page_size: int = 25,
+    sort_field: str = "order",
+    sort_order: str = "asc",
+) -> tuple[list[CompositeUniverseItemSchema], int]:
+    base = select(StrategyCompositeScope).where(StrategyCompositeScope.strategy_id == strategy_id)
+    total = db.execute(select(func.count()).select_from(base.subquery())).scalar_one()
+    query = (
+        base.options(joinedload(StrategyCompositeScope.composite))
+        .order_by(StrategyCompositeScope.order.asc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    scopes = db.execute(query).unique().scalars().all()
+    return [_build_composite_item(s) for s in scopes], total
 
 
 def batch_add_strategy_composites(

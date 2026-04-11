@@ -72,6 +72,96 @@ def _build_composite_schema(c: Composite) -> CompositeSchema:
 # ---------------------------------------------------------------------------
 
 
+COMPOSITE_SORT_COLUMNS = {
+    "display_name": Composite.display_name,
+    "name": Composite.name,
+    "is_active": Composite.is_active,
+    "created_at": Composite.created_at,
+}
+
+
+def _apply_composite_filters(
+    query,
+    search: str | None = None,
+    composite_type_id: uuid.UUID | None = None,
+    is_active: bool | None = None,
+    exclude_strategy_id: uuid.UUID | None = None,
+    exclude_feed_id: uuid.UUID | None = None,
+):
+    if search:
+        query = query.where(
+            Composite.display_name.ilike(f"%{search}%") | Composite.name.ilike(f"%{search}%")
+        )
+    if composite_type_id:
+        query = query.where(Composite.composite_type_id == composite_type_id)
+    if is_active is not None:
+        query = query.where(Composite.is_active == is_active)
+    if exclude_strategy_id:
+        from ascent.database.models import StrategyCompositeScope
+
+        existing = select(StrategyCompositeScope.composite_id).where(
+            StrategyCompositeScope.strategy_id == exclude_strategy_id
+        )
+        query = query.where(Composite.id.not_in(existing))
+    if exclude_feed_id:
+        from ascent.database.models.feeds import FeedCompositeScope
+
+        existing = select(FeedCompositeScope.composite_id).where(
+            FeedCompositeScope.feed_id == exclude_feed_id
+        )
+        query = query.where(Composite.id.not_in(existing))
+    return query
+
+
+def search_composites(
+    db: Session,
+    search: str | None = None,
+    composite_type_id: uuid.UUID | None = None,
+    is_active: bool | None = None,
+    exclude_strategy_id: uuid.UUID | None = None,
+    exclude_feed_id: uuid.UUID | None = None,
+    sort_field: str = "display_name",
+    sort_order: str = "asc",
+    page: int = 1,
+    page_size: int = 25,
+) -> tuple[list[CompositeSchema], int]:
+    base = select(Composite)
+    base = _apply_composite_filters(
+        base, search, composite_type_id, is_active, exclude_strategy_id, exclude_feed_id
+    )
+
+    total = db.execute(select(func.count()).select_from(base.subquery())).scalar_one()
+
+    sort_col = COMPOSITE_SORT_COLUMNS.get(sort_field, Composite.display_name)
+    sort_expr = sort_col.desc().nullslast() if sort_order == "desc" else sort_col.asc().nullsfirst()
+    query = (
+        base.options(
+            joinedload(Composite.members).joinedload(CompositeMember.instrument),
+        )
+        .order_by(sort_expr)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    composites = db.execute(query).unique().scalars().all()
+    return [_build_composite_schema(c) for c in composites], total
+
+
+def search_composite_ids(
+    db: Session,
+    search: str | None = None,
+    composite_type_id: uuid.UUID | None = None,
+    is_active: bool | None = None,
+    exclude_strategy_id: uuid.UUID | None = None,
+    exclude_feed_id: uuid.UUID | None = None,
+) -> list[uuid.UUID]:
+    query = select(Composite.id)
+    query = _apply_composite_filters(
+        query, search, composite_type_id, is_active, exclude_strategy_id, exclude_feed_id
+    )
+    query = query.order_by(Composite.display_name.asc())
+    return list(db.execute(query).scalars().all())
+
+
 def get_composites(db: Session, min_members: int | None = None) -> list[CompositeSchema]:
     query = (
         select(Composite)

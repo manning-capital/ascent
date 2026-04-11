@@ -6,8 +6,6 @@ from typing import Any
 
 
 def seed_descriptors(client: Any, ctx: dict) -> None:
-    print("Creating attributes...")
-
     ctx["attr_close"] = client.create_attribute(
         name="CLOSE", display_name="Close", description="Close price"
     )
@@ -89,7 +87,6 @@ def seed_descriptors(client: Any, ctx: dict) -> None:
     ]
 
     # --- Metadata types ---
-    print("Creating metadata types...")
 
     # Each entry: (name, display_name, description, value_type, config_or_None)
     meta_defs: list[tuple[str, str, str, str, dict | None]] = [
