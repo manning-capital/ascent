@@ -279,9 +279,7 @@ def add_strategy_exchange(
     return strategy_service.add_strategy_exchange(db, strategy_id, data)
 
 
-@router.post(
-    "/{strategy_id}/exchanges/batch", response_model=list[StrategyExchangeSchema]
-)
+@router.post("/{strategy_id}/exchanges/batch", response_model=list[StrategyExchangeSchema])
 def batch_add_strategy_exchanges(
     strategy_id: uuid.UUID, data: StrategyExchangeBatchAdd, db: Session = Depends(get_db)
 ):

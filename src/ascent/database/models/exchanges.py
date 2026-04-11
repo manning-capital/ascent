@@ -60,7 +60,9 @@ class Exchange(NamedEntityMixin, Base):
 
 class ExchangeInstrumentScope(Base):
     __tablename__ = "exchange_instrument_scope"
-    __table_args__ = {"comment": "Defines which instruments are available for trading on an exchange."}
+    __table_args__ = {
+        "comment": "Defines which instruments are available for trading on an exchange."
+    }
 
     exchange_id: Mapped[uuid.UUID] = mapped_column(
         Uuid,
@@ -87,7 +89,9 @@ class ExchangeInstrumentScope(Base):
 
 class ExchangeCompositeScope(Base):
     __tablename__ = "exchange_composite_scope"
-    __table_args__ = {"comment": "Defines which composites are available for trading on an exchange."}
+    __table_args__ = {
+        "comment": "Defines which composites are available for trading on an exchange."
+    }
 
     exchange_id: Mapped[uuid.UUID] = mapped_column(
         Uuid,

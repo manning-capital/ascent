@@ -391,8 +391,10 @@ def create_trade(db: Session, data: TradeCreate) -> Trade:
         # Auto-resolve exchange_id if not provided
         if leg_dict.get("exchange_id") is None:
             try:
-                leg_dict["exchange_id"] = exchange_resolution_service.resolve_exchange_for_instrument(
-                    db, data.strategy_id, leg_data.instrument_id
+                leg_dict["exchange_id"] = (
+                    exchange_resolution_service.resolve_exchange_for_instrument(
+                        db, data.strategy_id, leg_data.instrument_id
+                    )
                 )
             except Exception:
                 # Resolution is best-effort; leave as None if no exchanges configured

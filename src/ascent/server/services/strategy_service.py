@@ -730,9 +730,7 @@ def _build_strategy_exchange_schema(scope: StrategyExchange) -> StrategyExchange
     )
 
 
-def get_strategy_exchanges(
-    db: Session, strategy_id: uuid.UUID
-) -> list[StrategyExchangeSchema]:
+def get_strategy_exchanges(db: Session, strategy_id: uuid.UUID) -> list[StrategyExchangeSchema]:
     query = (
         select(StrategyExchange)
         .where(StrategyExchange.strategy_id == strategy_id)
@@ -781,9 +779,7 @@ def add_strategy_exchange(
     return scope
 
 
-def remove_strategy_exchange(
-    db: Session, strategy_id: uuid.UUID, exchange_id: uuid.UUID
-) -> None:
+def remove_strategy_exchange(db: Session, strategy_id: uuid.UUID, exchange_id: uuid.UUID) -> None:
     scope = db.get(StrategyExchange, (strategy_id, exchange_id))
     if not scope:
         raise NotFoundError("Strategy exchange not found")
@@ -797,9 +793,7 @@ def batch_add_strategy_exchanges(
     existing = {
         r[0]
         for r in db.execute(
-            select(StrategyExchange.exchange_id).where(
-                StrategyExchange.strategy_id == strategy_id
-            )
+            select(StrategyExchange.exchange_id).where(StrategyExchange.strategy_id == strategy_id)
         ).all()
     }
     order = data.start_order
@@ -807,11 +801,7 @@ def batch_add_strategy_exchanges(
         if exchange_id in existing:
             continue
         existing.add(exchange_id)
-        db.add(
-            StrategyExchange(
-                strategy_id=strategy_id, exchange_id=exchange_id, order=order
-            )
-        )
+        db.add(StrategyExchange(strategy_id=strategy_id, exchange_id=exchange_id, order=order))
         order += 1
     db.commit()
     return get_strategy_exchanges(db, strategy_id)

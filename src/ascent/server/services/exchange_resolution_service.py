@@ -78,8 +78,6 @@ def resolve_exchanges_for_composite(
 
     result: dict[uuid.UUID, uuid.UUID] = {}
     for instrument_id in members:
-        result[instrument_id] = resolve_exchange_for_instrument(
-            db, strategy_id, instrument_id
-        )
+        result[instrument_id] = resolve_exchange_for_instrument(db, strategy_id, instrument_id)
 
     return result

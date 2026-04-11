@@ -128,8 +128,9 @@ def delete_exchange(db: Session, exchange_id: uuid.UUID) -> None:
 def get_exchange_stats(db: Session, exchange_id: uuid.UUID) -> ExchangeStats:
     # Total orders
     total_orders = (
-        db.execute(select(func.count()).select_from(Order).where(Order.exchange_id == exchange_id))
-        .scalar()
+        db.execute(
+            select(func.count()).select_from(Order).where(Order.exchange_id == exchange_id)
+        ).scalar()
         or 0
     )
 
