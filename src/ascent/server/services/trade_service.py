@@ -207,6 +207,37 @@ def get_trades(
     return items, total
 
 
+def get_exchange_trades(
+    db: Session,
+    exchange_id: uuid.UUID,
+    page: int = 1,
+    page_size: int = 10,
+    sort_field: str = "entry_at",
+    sort_order: str = "desc",
+) -> tuple[list[TradeListItem], int]:
+    base_filter = Trade.legs.any(TradeLeg.exchange_id == exchange_id)
+
+    count_query = select(func.count()).select_from(Trade).where(base_filter)
+    total = db.execute(count_query).scalar() or 0
+
+    query = (
+        select(Trade)
+        .where(base_filter)
+        .options(
+            joinedload(Trade.strategy),
+            joinedload(Trade.current_status_type),
+            selectinload(Trade.legs).joinedload(TradeLeg.instrument),
+        )
+    )
+
+    sort_col = TRADE_SORT_COLUMNS.get(sort_field, Trade.entry_at)
+    sort_expr = sort_col.desc().nullslast() if sort_order == "desc" else sort_col.asc().nullsfirst()
+    query = query.order_by(sort_expr).offset((page - 1) * page_size).limit(page_size)
+
+    trades = db.execute(query).unique().scalars().all()
+    return [_build_trade_list_item(t) for t in trades], total
+
+
 def get_trade_detail(db: Session, trade_id: uuid.UUID) -> TradeDetail:
     query = (
         select(Trade)
@@ -348,13 +379,25 @@ def get_trade_detail(db: Session, trade_id: uuid.UUID) -> TradeDetail:
 
 
 def create_trade(db: Session, data: TradeCreate) -> Trade:
+    from ascent.server.services import exchange_resolution_service
+
     legs_data = data.legs
     trade = Trade(**data.model_dump(exclude={"legs"}))
     db.add(trade)
     db.flush()
 
     for leg_data in legs_data:
-        leg = TradeLeg(trade_id=trade.id, **leg_data.model_dump())
+        leg_dict = leg_data.model_dump()
+        # Auto-resolve exchange_id if not provided
+        if leg_dict.get("exchange_id") is None:
+            try:
+                leg_dict["exchange_id"] = exchange_resolution_service.resolve_exchange_for_instrument(
+                    db, data.strategy_id, leg_data.instrument_id
+                )
+            except Exception:
+                # Resolution is best-effort; leave as None if no exchanges configured
+                pass
+        leg = TradeLeg(trade_id=trade.id, **leg_dict)
         db.add(leg)
 
     db.commit()

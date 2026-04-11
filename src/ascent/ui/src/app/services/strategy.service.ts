@@ -6,6 +6,7 @@ import { StrategyListItem, StrategyDetail, StrategyStats } from '../models/strat
 import { TradeListItem, PaginatedResponse } from '../models/trade.model';
 import { OrderListItem } from '../models/order.model';
 import { UniverseItem, UniverseItemCreate } from '../models/asset.model';
+import { StrategyExchangeItem } from '../models/exchange.model';
 
 @Injectable({ providedIn: 'root' })
 export class StrategyService {
@@ -153,5 +154,14 @@ export class StrategyService {
 
   removeCompositeUniverseItem(strategyId: string, compositeId: string): Observable<any> {
     return this.api.delete(`/strategies/${strategyId}/composite-universe/${compositeId}`);
+  }
+
+  // Strategy exchanges
+  batchAddExchanges(strategyId: string, exchangeIds: string[], startOrder: number): Observable<StrategyExchangeItem[]> {
+    return this.api.post<StrategyExchangeItem[]>(`/strategies/${strategyId}/exchanges/batch`, { exchange_ids: exchangeIds, start_order: startOrder });
+  }
+
+  removeExchange(strategyId: string, exchangeId: string): Observable<any> {
+    return this.api.delete(`/strategies/${strategyId}/exchanges/${exchangeId}`);
   }
 }

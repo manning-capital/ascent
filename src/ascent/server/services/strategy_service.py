@@ -6,7 +6,8 @@ import uuid
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
-from ascent.database.models import Strategy, StrategyRun, Trade, TradeStatusType
+from ascent.database.models import Strategy, StrategyExchange, StrategyRun, Trade, TradeStatusType
+from ascent.database.models.exchanges import Exchange
 from ascent.database.models.feeds import Feed, FeedDependency, FeedRun, StrategyFeed
 from ascent.server.exceptions import NotFoundError
 from ascent.server.schemas.strategies import (
@@ -14,6 +15,9 @@ from ascent.server.schemas.strategies import (
     PnlDistributionBin,
     StrategyCreate,
     StrategyDetail,
+    StrategyExchangeBatchAdd,
+    StrategyExchangeCreate,
+    StrategyExchangeSchema,
     StrategyFeedCreate,
     StrategyFeedDAG,
     StrategyFeedNode,
@@ -706,3 +710,108 @@ def get_strategy_run(db: Session, strategy_id: uuid.UUID, run_id: uuid.UUID) -> 
         feed_runs=feed_run_items,
         trigger_feed_id=trigger_feed_id,
     )
+
+
+# ---------------------------------------------------------------------------
+# Strategy Exchanges
+# ---------------------------------------------------------------------------
+
+
+def _build_strategy_exchange_schema(scope: StrategyExchange) -> StrategyExchangeSchema:
+    e = scope.exchange
+    return StrategyExchangeSchema(
+        exchange_id=scope.exchange_id,
+        exchange_name=e.name if e else None,
+        exchange_display_name=e.display_name if e else None,
+        exchange_type_name=e.exchange_type.display_name if e and e.exchange_type else None,
+        provider_name=e.provider.display_name if e and e.provider else None,
+        is_active=e.is_active if e else True,
+        order=scope.order,
+    )
+
+
+def get_strategy_exchanges(
+    db: Session, strategy_id: uuid.UUID
+) -> list[StrategyExchangeSchema]:
+    query = (
+        select(StrategyExchange)
+        .where(StrategyExchange.strategy_id == strategy_id)
+        .options(
+            joinedload(StrategyExchange.exchange).joinedload(Exchange.exchange_type),
+            joinedload(StrategyExchange.exchange).joinedload(Exchange.provider),
+        )
+        .order_by(StrategyExchange.order)
+    )
+    scopes = db.execute(query).unique().scalars().all()
+    return [_build_strategy_exchange_schema(s) for s in scopes]
+
+
+def get_strategy_exchanges_paginated(
+    db: Session,
+    strategy_id: uuid.UUID,
+    page: int = 1,
+    page_size: int = 25,
+) -> tuple[list[StrategyExchangeSchema], int]:
+    base = select(StrategyExchange).where(StrategyExchange.strategy_id == strategy_id)
+    total = db.execute(select(func.count()).select_from(base.subquery())).scalar_one()
+    query = (
+        base.options(
+            joinedload(StrategyExchange.exchange).joinedload(Exchange.exchange_type),
+            joinedload(StrategyExchange.exchange).joinedload(Exchange.provider),
+        )
+        .order_by(StrategyExchange.order.asc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    scopes = db.execute(query).unique().scalars().all()
+    return [_build_strategy_exchange_schema(s) for s in scopes], total
+
+
+def add_strategy_exchange(
+    db: Session, strategy_id: uuid.UUID, data: StrategyExchangeCreate
+) -> StrategyExchange:
+    scope = StrategyExchange(
+        strategy_id=strategy_id,
+        exchange_id=data.exchange_id,
+        order=data.order,
+    )
+    db.add(scope)
+    db.commit()
+    db.refresh(scope)
+    return scope
+
+
+def remove_strategy_exchange(
+    db: Session, strategy_id: uuid.UUID, exchange_id: uuid.UUID
+) -> None:
+    scope = db.get(StrategyExchange, (strategy_id, exchange_id))
+    if not scope:
+        raise NotFoundError("Strategy exchange not found")
+    db.delete(scope)
+    db.commit()
+
+
+def batch_add_strategy_exchanges(
+    db: Session, strategy_id: uuid.UUID, data: StrategyExchangeBatchAdd
+) -> list[StrategyExchangeSchema]:
+    existing = {
+        r[0]
+        for r in db.execute(
+            select(StrategyExchange.exchange_id).where(
+                StrategyExchange.strategy_id == strategy_id
+            )
+        ).all()
+    }
+    order = data.start_order
+    for exchange_id in data.exchange_ids:
+        if exchange_id in existing:
+            continue
+        existing.add(exchange_id)
+        db.add(
+            StrategyExchange(
+                strategy_id=strategy_id, exchange_id=exchange_id, order=order
+            )
+        )
+        order += 1
+    db.commit()
+    return get_strategy_exchanges(db, strategy_id)

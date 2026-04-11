@@ -103,6 +103,35 @@ def get_strategy_orders(
     return _build_order_schemas(orders), total
 
 
+def get_exchange_orders(
+    db: Session,
+    exchange_id: uuid.UUID,
+    page: int = 1,
+    page_size: int = 10,
+    sort_field: str = "timestamp",
+    sort_order: str = "desc",
+) -> tuple[list[OrderSchema], int]:
+    base = select(Order).where(Order.exchange_id == exchange_id)
+
+    total = db.execute(select(func.count()).select_from(base.subquery())).scalar_one()
+
+    sort_col = ORDER_SORT_COLUMNS.get(sort_field, Order.timestamp)
+    sort_expr = sort_col.desc().nullslast() if sort_order == "desc" else sort_col.asc().nullsfirst()
+    query = (
+        base.options(
+            joinedload(Order.order_type),
+            joinedload(Order.exchange),
+            joinedload(Order.instrument),
+            selectinload(Order.statuses).joinedload(OrderStatus.order_status_type),
+        )
+        .order_by(sort_expr)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    orders = db.execute(query).unique().scalars().all()
+    return _build_order_schemas(orders), total
+
+
 def create_order(db: Session, data: OrderCreate) -> Order:
     order = Order(**data.model_dump())
     db.add(order)

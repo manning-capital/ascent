@@ -28,7 +28,11 @@ from ascent.database.models.composites import (
 from ascent.database.models.descriptors import Attribute, Metadata, Period
 
 # Import exchanges
-from ascent.database.models.exchanges import Exchange
+from ascent.database.models.exchanges import (
+    Exchange,
+    ExchangeCompositeScope,
+    ExchangeInstrumentScope,
+)
 
 # Import feeds
 from ascent.database.models.feeds import (
@@ -84,6 +88,7 @@ from ascent.database.models.providers import Provider
 from ascent.database.models.strategy import (
     Strategy,
     StrategyCompositeScope,
+    StrategyExchange,
     StrategyInstrumentScope,
     StrategyRun,
     StrategyState,
@@ -153,6 +158,8 @@ __all__ = [
     "Asset",
     # Exchanges
     "Exchange",
+    "ExchangeInstrumentScope",
+    "ExchangeCompositeScope",
     # Providers
     "Provider",
     # Portfolio
@@ -205,6 +212,7 @@ __all__ = [
     "Strategy",
     "StrategyInstrumentScope",
     "StrategyCompositeScope",
+    "StrategyExchange",
     "StrategyRun",
     "StrategyRunFeedRun",
     "StrategyState",

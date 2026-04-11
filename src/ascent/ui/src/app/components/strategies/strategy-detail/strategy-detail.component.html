@@ -10,7 +10,7 @@
     </div>
     <!-- Tab bar skeleton -->
     <div class="flex gap-2 px-4 py-3 border-b border-surface">
-      @for (_ of [1,2,3,4,5,6]; track $index) {
+      @for (_ of [1,2,3,4,5,6,7]; track $index) {
         <p-skeleton width="5rem" height="1rem"/>
       }
     </div>
@@ -398,6 +398,46 @@
           (addComposites)="onAddComposites($event)"
           (removeInstrument)="removeUniverseItem($event)"
           (removeComposite)="removeCompositeItem($event)"/>
+      }
+
+      <!-- Exchanges Tab -->
+      @if (activeTab() === 'Exchanges') {
+        <div class="flex flex-col flex-1 min-h-0 p-6">
+          @if (!showExchangePicker()) {
+            <div class="flex items-center justify-between mb-4 shrink-0">
+              <div>
+                <h3 class="font-semibold text-sm">Exchanges</h3>
+                <p class="text-xs text-surface-400 mt-1">Exchanges this strategy can use for order execution.</p>
+              </div>
+              <p-button label="+ Add Exchanges" [outlined]="true" size="small" (onClick)="openExchangePicker()"/>
+            </div>
+            <app-server-table class="flex-1 min-h-0"
+              [columns]="exchangeColumns"
+              [fetchPage]="exchangesFetchPage()"
+              [pageSize]="25"
+              emptyMessage="No exchanges configured for this strategy."/>
+          } @else {
+            <div class="flex items-center justify-between mb-4 shrink-0">
+              <div>
+                <h3 class="font-semibold text-sm">Select Exchanges</h3>
+                <p class="text-xs text-surface-400 mt-1">{{ stagedExchangeIds().size }} staged</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <p-button label="Cancel" severity="secondary" [text]="true" size="small" (onClick)="cancelExchangePicker()"/>
+                <p-button
+                  [label]="'Add ' + stagedExchangeIds().size + ' Exchange' + (stagedExchangeIds().size === 1 ? '' : 's')"
+                  size="small"
+                  (onClick)="submitStagedExchanges()"
+                  [disabled]="stagedExchangeIds().size === 0"/>
+              </div>
+            </div>
+            <app-server-table class="flex-1 min-h-0"
+              [columns]="exchangePickerColumns"
+              [fetchPage]="exchangePickerFetchPage()"
+              [pageSize]="25"
+              emptyMessage="No exchanges found."/>
+          }
+        </div>
       }
 
       <!-- Runs Tab -->

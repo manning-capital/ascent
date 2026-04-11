@@ -4,6 +4,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from ascent.database.models import (
+    ExchangeCompositeScope,
+    ExchangeInstrumentScope,
     FeedCompositeScope,
     StrategyCompositeScope,
     StrategyInstrumentScope,
@@ -361,6 +363,166 @@ def remove_strategy_composite_universe_item(
     db: Session, strategy_id: uuid.UUID, composite_id: uuid.UUID
 ) -> None:
     scope = db.get(StrategyCompositeScope, (strategy_id, composite_id))
+    if not scope:
+        raise NotFoundError("Composite universe item not found")
+    db.delete(scope)
+    db.commit()
+
+
+# ---------------------------------------------------------------------------
+# Exchange Universe
+# ---------------------------------------------------------------------------
+
+
+def get_exchange_universe(db: Session, exchange_id: uuid.UUID) -> list[UniverseItemSchema]:
+    query = (
+        select(ExchangeInstrumentScope)
+        .where(ExchangeInstrumentScope.exchange_id == exchange_id)
+        .options(joinedload(ExchangeInstrumentScope.instrument))
+        .order_by(ExchangeInstrumentScope.order)
+    )
+    scopes = db.execute(query).unique().scalars().all()
+    return [_build_item(s) for s in scopes]
+
+
+def get_exchange_universe_paginated(
+    db: Session,
+    exchange_id: uuid.UUID,
+    page: int = 1,
+    page_size: int = 25,
+    sort_field: str = "order",
+    sort_order: str = "asc",
+) -> tuple[list[UniverseItemSchema], int]:
+    base = select(ExchangeInstrumentScope).where(ExchangeInstrumentScope.exchange_id == exchange_id)
+    total = db.execute(select(func.count()).select_from(base.subquery())).scalar_one()
+    query = (
+        base.options(joinedload(ExchangeInstrumentScope.instrument))
+        .order_by(ExchangeInstrumentScope.order.asc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    scopes = db.execute(query).unique().scalars().all()
+    return [_build_item(s) for s in scopes], total
+
+
+def add_exchange_universe_item(
+    db: Session, exchange_id: uuid.UUID, data: UniverseItemCreate
+) -> ExchangeInstrumentScope:
+    scope = ExchangeInstrumentScope(
+        exchange_id=exchange_id,
+        instrument_id=data.instrument_id,
+        order=data.order,
+    )
+    db.add(scope)
+    db.commit()
+    db.refresh(scope)
+    return scope
+
+
+def remove_exchange_universe_item(
+    db: Session,
+    exchange_id: uuid.UUID,
+    instrument_id: uuid.UUID,
+) -> None:
+    scope = db.get(ExchangeInstrumentScope, (exchange_id, instrument_id))
+    if not scope:
+        raise NotFoundError("Universe item not found")
+    db.delete(scope)
+    db.commit()
+
+
+def batch_add_exchange_instruments(
+    db: Session, exchange_id: uuid.UUID, data: UniverseBatchAddInstruments
+) -> list[UniverseItemSchema]:
+    existing = {
+        r[0]
+        for r in db.execute(
+            select(ExchangeInstrumentScope.instrument_id).where(
+                ExchangeInstrumentScope.exchange_id == exchange_id
+            )
+        ).all()
+    }
+    order = data.start_order
+    for instrument_id in data.instrument_ids:
+        if instrument_id in existing:
+            continue
+        existing.add(instrument_id)
+        db.add(
+            ExchangeInstrumentScope(
+                exchange_id=exchange_id, instrument_id=instrument_id, order=order
+            )
+        )
+        order += 1
+    db.commit()
+    return get_exchange_universe(db, exchange_id)
+
+
+# ---------------------------------------------------------------------------
+# Exchange Composite Universe
+# ---------------------------------------------------------------------------
+
+
+def get_exchange_composite_universe(
+    db: Session, exchange_id: uuid.UUID
+) -> list[CompositeUniverseItemSchema]:
+    query = (
+        select(ExchangeCompositeScope)
+        .where(ExchangeCompositeScope.exchange_id == exchange_id)
+        .options(joinedload(ExchangeCompositeScope.composite))
+        .order_by(ExchangeCompositeScope.order)
+    )
+    scopes = db.execute(query).unique().scalars().all()
+    return [_build_composite_item(s) for s in scopes]
+
+
+def get_exchange_composite_universe_paginated(
+    db: Session,
+    exchange_id: uuid.UUID,
+    page: int = 1,
+    page_size: int = 25,
+    sort_field: str = "order",
+    sort_order: str = "asc",
+) -> tuple[list[CompositeUniverseItemSchema], int]:
+    base = select(ExchangeCompositeScope).where(ExchangeCompositeScope.exchange_id == exchange_id)
+    total = db.execute(select(func.count()).select_from(base.subquery())).scalar_one()
+    query = (
+        base.options(joinedload(ExchangeCompositeScope.composite))
+        .order_by(ExchangeCompositeScope.order.asc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    )
+    scopes = db.execute(query).unique().scalars().all()
+    return [_build_composite_item(s) for s in scopes], total
+
+
+def batch_add_exchange_composites(
+    db: Session, exchange_id: uuid.UUID, data: CompositeUniverseBatchAdd
+) -> list[CompositeUniverseItemSchema]:
+    existing = {
+        r[0]
+        for r in db.execute(
+            select(ExchangeCompositeScope.composite_id).where(
+                ExchangeCompositeScope.exchange_id == exchange_id
+            )
+        ).all()
+    }
+    order = data.start_order
+    for composite_id in data.composite_ids:
+        if composite_id in existing:
+            continue
+        existing.add(composite_id)
+        db.add(
+            ExchangeCompositeScope(exchange_id=exchange_id, composite_id=composite_id, order=order)
+        )
+        order += 1
+    db.commit()
+    return get_exchange_composite_universe(db, exchange_id)
+
+
+def remove_exchange_composite_universe_item(
+    db: Session, exchange_id: uuid.UUID, composite_id: uuid.UUID
+) -> None:
+    scope = db.get(ExchangeCompositeScope, (exchange_id, composite_id))
     if not scope:
         raise NotFoundError("Composite universe item not found")
     db.delete(scope)

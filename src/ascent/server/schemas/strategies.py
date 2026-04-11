@@ -117,6 +117,28 @@ class StrategyStats(BaseModel):
     pnl_distribution: list[PnlDistributionBin] = []
 
 
+class StrategyExchangeSchema(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    exchange_id: uuid.UUID
+    exchange_name: str | None = None
+    exchange_display_name: str | None = None
+    exchange_type_name: str | None = None
+    provider_name: str | None = None
+    is_active: bool = True
+    order: int = 0
+
+
+class StrategyExchangeCreate(BaseModel):
+    exchange_id: uuid.UUID
+    order: int = 0
+
+
+class StrategyExchangeBatchAdd(BaseModel):
+    exchange_ids: list[uuid.UUID]
+    start_order: int = 1
+
+
 class StrategyFeedNode(BaseModel):
     """A feed node in the strategy's feed dependency DAG."""
 

@@ -2,7 +2,8 @@ import { Injectable, inject, signal } from '@angular/core';
 import { Subject, EMPTY, Observable } from 'rxjs';
 import { switchMap, tap, catchError } from 'rxjs/operators';
 import { ApiService } from './api.service';
-import { ExchangeListItem } from '../models/exchange.model';
+import { ExchangeListItem, ExchangeStats } from '../models/exchange.model';
+import { UniverseItem } from '../models/asset.model';
 import { PaginatedResponse } from '../models/trade.model';
 
 @Injectable({ providedIn: 'root' })
@@ -12,9 +13,12 @@ export class ExchangeService {
   exchanges = signal<ExchangeListItem[]>([]);
   selectedExchange = signal<ExchangeListItem | null>(null);
   loading = signal(true);
+  exchangeStats = signal<ExchangeStats | null>(null);
+  statsLoading = signal(false);
 
   private loadExchanges$ = new Subject<void>();
   private loadDetail$ = new Subject<{ exchangeId: string; silent: boolean }>();
+  private loadStats$ = new Subject<string>();
 
   constructor() {
     this.loadExchanges$.pipe(
@@ -40,6 +44,18 @@ export class ExchangeService {
       this.selectedExchange.set(exchange);
       this.loading.set(false);
     });
+
+    this.loadStats$.pipe(
+      tap(() => this.statsLoading.set(true)),
+      switchMap(exchangeId =>
+        this.api.get<ExchangeStats>(`/exchanges/${exchangeId}/stats`).pipe(
+          catchError(() => { this.statsLoading.set(false); return EMPTY; })
+        )
+      ),
+    ).subscribe(stats => {
+      this.exchangeStats.set(stats);
+      this.statsLoading.set(false);
+    });
   }
 
   loadExchanges(): void {
@@ -56,5 +72,26 @@ export class ExchangeService {
 
   loadExchangeDetail(exchangeId: string, silent = false): void {
     this.loadDetail$.next({ exchangeId, silent });
+  }
+
+  loadExchangeStats(exchangeId: string): void {
+    this.loadStats$.next(exchangeId);
+  }
+
+  // Universe methods
+  batchAddInstruments(exchangeId: string, instrumentIds: string[], startOrder: number): Observable<UniverseItem[]> {
+    return this.api.post<UniverseItem[]>(`/exchanges/${exchangeId}/universe/batch`, { instrument_ids: instrumentIds, start_order: startOrder });
+  }
+
+  removeUniverseItem(exchangeId: string, instrumentId: string): Observable<any> {
+    return this.api.delete(`/exchanges/${exchangeId}/universe/${instrumentId}`);
+  }
+
+  batchAddComposites(exchangeId: string, compositeIds: string[], startOrder: number): Observable<any[]> {
+    return this.api.post<any[]>(`/exchanges/${exchangeId}/composite-universe/batch`, { composite_ids: compositeIds, start_order: startOrder });
+  }
+
+  removeCompositeUniverseItem(exchangeId: string, compositeId: string): Observable<any> {
+    return this.api.delete(`/exchanges/${exchangeId}/composite-universe/${compositeId}`);
   }
 }

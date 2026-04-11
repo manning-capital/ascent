@@ -84,6 +84,7 @@ class TradeLegCreate(BaseModel):
     instrument_id: uuid.UUID
     direction: str
     quantity: float
+    exchange_id: uuid.UUID | None = None
     expected_entry_price: float | None = None
     entry_price: float | None = None
     expected_exit_price: float | None = None

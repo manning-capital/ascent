@@ -13,6 +13,7 @@ from ascent.database.models.portfolio import Portfolio
 from ascent.database.models.types import StrategyType
 
 if TYPE_CHECKING:
+    from ascent.database.models.exchanges import Exchange
     from ascent.database.models.feeds import StrategyFeed
     from ascent.database.models.strategy_run_feeds import StrategyRunFeedRun
     from ascent.database.models.trades import Trade
@@ -62,6 +63,12 @@ class Strategy(NamedEntityMixin, Base):
         back_populates="strategy",
         cascade="all, delete-orphan",
         order_by="StrategyCompositeScope.order.asc()",
+    )
+    exchange_scopes: Mapped[list["StrategyExchange"]] = relationship(
+        "StrategyExchange",
+        back_populates="strategy",
+        cascade="all, delete-orphan",
+        order_by="StrategyExchange.order.asc()",
     )
     states: Mapped[list["StrategyState"]] = relationship(
         "StrategyState",
@@ -117,6 +124,35 @@ class StrategyCompositeScope(Base):
         nullable=False,
     )
     composite: Mapped["Composite"] = relationship("Composite")
+    order: Mapped[int] = mapped_column(nullable=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        nullable=False,
+        server_default=func.now(),
+    )
+
+
+class StrategyExchange(Base):
+    __tablename__ = "strategy_exchange"
+    __table_args__ = {
+        "comment": "Defines which exchanges a strategy can use for order execution. Enables routing of instruments to the correct exchange when trading composites that span multiple providers."
+    }
+
+    strategy_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        ForeignKey("strategy.id"),
+        primary_key=True,
+        nullable=False,
+    )
+    strategy: Mapped["Strategy"] = relationship(
+        "Strategy", back_populates="exchange_scopes", overlaps="exchange_scopes"
+    )
+    exchange_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        ForeignKey("exchange.id"),
+        primary_key=True,
+        nullable=False,
+    )
+    exchange: Mapped["Exchange"] = relationship("Exchange")
     order: Mapped[int] = mapped_column(nullable=False)
     created_at: Mapped[datetime.datetime] = mapped_column(
         nullable=False,

@@ -1,14 +1,17 @@
 import uuid
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
-from ascent.database.models import Exchange
+from ascent.database.models import Exchange, Order, OrderStatus, OrderStatusType, TradeLeg
 from ascent.server.exceptions import NotFoundError
 from ascent.server.schemas.exchanges import (
     ExchangeCreate,
     ExchangeSchema,
+    ExchangeStats,
     ExchangeUpdate,
+    RecentOrderItem,
+    RecentTradeLegItem,
 )
 
 
@@ -120,3 +123,111 @@ def delete_exchange(db: Session, exchange_id: uuid.UUID) -> None:
         raise NotFoundError("Exchange not found")
     db.delete(exchange)
     db.commit()
+
+
+def get_exchange_stats(db: Session, exchange_id: uuid.UUID) -> ExchangeStats:
+    # Total orders
+    total_orders = (
+        db.execute(select(func.count()).select_from(Order).where(Order.exchange_id == exchange_id))
+        .scalar()
+        or 0
+    )
+
+    # Orders by status: get latest status for each order, group by status name
+    latest_status_subq = (
+        select(
+            OrderStatus.order_id,
+            func.max(OrderStatus.timestamp).label("max_ts"),
+        )
+        .group_by(OrderStatus.order_id)
+        .subquery()
+    )
+    status_counts_query = (
+        select(OrderStatusType.name, func.count())
+        .select_from(OrderStatus)
+        .join(
+            latest_status_subq,
+            (OrderStatus.order_id == latest_status_subq.c.order_id)
+            & (OrderStatus.timestamp == latest_status_subq.c.max_ts),
+        )
+        .join(Order, Order.id == OrderStatus.order_id)
+        .join(OrderStatusType, OrderStatus.order_status_type_id == OrderStatusType.id)
+        .where(Order.exchange_id == exchange_id)
+        .group_by(OrderStatusType.name)
+    )
+    orders_by_status = dict(db.execute(status_counts_query).all())
+
+    # Trade leg aggregates
+    leg_agg = db.execute(
+        select(
+            func.count(),
+            func.sum(TradeLeg.realized_pnl),
+            func.sum(TradeLeg.quantity),
+        )
+        .select_from(TradeLeg)
+        .where(TradeLeg.exchange_id == exchange_id)
+    ).one()
+    total_trade_legs = leg_agg[0] or 0
+    total_realized_pnl = float(leg_agg[1]) if leg_agg[1] is not None else None
+    total_volume = float(leg_agg[2]) if leg_agg[2] is not None else None
+
+    # Recent orders (5 most recent)
+    recent_orders_query = (
+        select(Order)
+        .where(Order.exchange_id == exchange_id)
+        .options(
+            joinedload(Order.instrument),
+            selectinload(Order.statuses).joinedload(OrderStatus.order_status_type),
+        )
+        .order_by(Order.timestamp.desc())
+        .limit(5)
+    )
+    recent_orders_raw = db.execute(recent_orders_query).unique().scalars().all()
+    recent_orders = [
+        RecentOrderItem(
+            id=o.id,
+            timestamp=o.timestamp,
+            side=o.side,
+            instrument_name=o.instrument.display_name if o.instrument else None,
+            quantity=o.quantity,
+            price=o.price,
+            filled_quantity=o.filled_quantity,
+            average_fill_price=o.average_fill_price,
+            status=o.statuses[-1].order_status_type.name if o.statuses else None,
+        )
+        for o in recent_orders_raw
+    ]
+
+    # Recent trade legs (5 most recent)
+    recent_legs_query = (
+        select(TradeLeg)
+        .where(TradeLeg.exchange_id == exchange_id)
+        .options(joinedload(TradeLeg.instrument))
+        .order_by(TradeLeg.created_at.desc())
+        .limit(5)
+    )
+    recent_legs_raw = db.execute(recent_legs_query).unique().scalars().all()
+    recent_trade_legs = [
+        RecentTradeLegItem(
+            id=leg.id,
+            trade_id=leg.trade_id,
+            instrument_name=leg.instrument.display_name if leg.instrument else None,
+            direction=leg.direction,
+            quantity=leg.quantity,
+            entry_price=leg.entry_price,
+            exit_price=leg.exit_price,
+            realized_pnl=leg.realized_pnl,
+            created_at=leg.created_at,
+        )
+        for leg in recent_legs_raw
+    ]
+
+    return ExchangeStats(
+        total_orders=total_orders,
+        orders_by_status=orders_by_status,
+        total_trade_legs=total_trade_legs,
+        total_realized_pnl=total_realized_pnl,
+        total_volume=total_volume,
+        recent_orders=recent_orders,
+        recent_trade_legs=recent_trade_legs,
+    )

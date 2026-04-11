@@ -10,6 +10,8 @@ import { ApiService } from '../../../services/api.service';
 import { StrategyFeedDAG } from '../../../models/feed.model';
 import { OrderListItem } from '../../../models/order.model';
 import { TradeListItem, PaginatedResponse } from '../../../models/trade.model';
+import { StrategyExchangeItem } from '../../../models/exchange.model';
+import { ExchangeService } from '../../../services/exchange.service';
 import { UniversePanelComponent } from '../../shared/universe-panel.component';
 import { Tabs, TabList, Tab } from 'primeng/tabs';
 import { SchemaFormComponent } from '../../shared/schema-form.component';
@@ -57,7 +59,9 @@ export class StrategyDetailComponent implements OnInit {
   feedService = inject(FeedService);
   tradeService = inject(TradeService);
 
-  tabs = ['Overview', 'Trades', 'Orders', 'Universe', 'Runs', 'Configuration'];
+  exchangeService = inject(ExchangeService);
+
+  tabs = ['Overview', 'Trades', 'Orders', 'Universe', 'Exchanges', 'Runs', 'Configuration'];
   activeTab = signal('Overview');
   editing = signal(false);
   editedParameters = signal<Record<string, any>>({});
@@ -101,6 +105,38 @@ export class StrategyDetailComponent implements OnInit {
       const params: Record<string, any> = { page, page_size: pageSize };
       if (sort) { params['sort_field'] = sort.field; params['sort_order'] = sort.order; }
       return this.api.get<PaginatedResponse<TradeListItem>>(`/strategies/${id}/trades`, params).pipe(
+        map(res => ({ items: res.items, total: res.total }))
+      );
+    };
+  });
+
+  // Exchange columns for the Exchanges tab
+  exchangeColumns: DataTableColumn[] = [
+    { field: 'exchange_display_name', header: 'Exchange', sortable: false },
+    { field: 'exchange_name', header: 'Name', sortable: false, cellClass: 'font-mono text-surface-500' },
+    { field: 'exchange_type_name', header: 'Type', sortable: false, cellClass: 'text-muted-color' },
+    { field: 'provider_name', header: 'Provider', sortable: false },
+    { field: 'is_active', header: 'Status', sortable: false, cellType: 'tag', tagMapper: (v: boolean) => ({ label: v ? 'Active' : 'Inactive', severity: v ? 'success' : 'secondary' }) },
+  ];
+
+  exchangesFetchPage = computed<ServerFetchFn<StrategyExchangeItem> | null>(() => {
+    this.strategyService.selectedStrategy(); // track strategy changes
+    const id = this.strategyId;
+    if (!id) return null;
+    return (page: number, pageSize: number) => {
+      return this.api.get<PaginatedResponse<StrategyExchangeItem>>(`/strategies/${id}/exchanges/search`, { page, page_size: pageSize }).pipe(
+        map(res => ({ items: res.items, total: res.total }))
+      );
+    };
+  });
+
+  exchangePickerFetchPage = computed<ServerFetchFn<any> | null>(() => {
+    const id = this.strategyId;
+    if (!id) return null;
+    return (page: number, pageSize: number, sort?: { field: string; order: string }) => {
+      const params: Record<string, any> = { page, page_size: pageSize, is_active: true };
+      if (sort) { params['sort_field'] = sort.field; params['sort_order'] = sort.order; }
+      return this.exchangeService.loadExchangesPaginated(page, pageSize, { is_active: true }, sort).pipe(
         map(res => ({ items: res.items, total: res.total }))
       );
     };
@@ -285,6 +321,58 @@ export class StrategyDetailComponent implements OnInit {
         this.toast.success('Composite removed from universe');
       },
       error: () => this.toast.error('Failed to remove composite'),
+    });
+  }
+
+  // --- Exchanges tab methods ---
+
+  showExchangePicker = signal(false);
+  stagedExchangeIds = signal<Set<string>>(new Set());
+  exchangeCount = signal(0);
+
+  exchangePickerColumns: DataTableColumn[] = [
+    { field: 'display_name', header: 'Exchange', sortable: true },
+    { field: 'name', header: 'Name', sortable: true, cellClass: 'font-mono text-surface-500' },
+    { field: 'exchange_type_name', header: 'Type', sortable: false, cellClass: 'text-muted-color' },
+    { field: 'provider_name', header: 'Provider', sortable: false },
+    { field: 'is_active', header: 'Status', sortable: false, cellType: 'tag', tagMapper: (v: boolean) => ({ label: v ? 'Active' : 'Inactive', severity: v ? 'success' : 'secondary' }) },
+  ];
+
+  openExchangePicker(): void {
+    this.stagedExchangeIds.set(new Set());
+    this.showExchangePicker.set(true);
+  }
+
+  cancelExchangePicker(): void {
+    this.showExchangePicker.set(false);
+    this.stagedExchangeIds.set(new Set());
+  }
+
+  toggleStageExchange(id: string): void {
+    this.stagedExchangeIds.update(s => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  }
+
+  submitStagedExchanges(): void {
+    const ids = Array.from(this.stagedExchangeIds());
+    if (ids.length === 0) return;
+    this.strategyService.batchAddExchanges(this.strategyId, ids, this.exchangeCount() + 1).subscribe({
+      next: () => {
+        this.toast.success(`${ids.length} exchange(s) added`);
+        this.showExchangePicker.set(false);
+        this.stagedExchangeIds.set(new Set());
+      },
+      error: () => this.toast.error('Failed to add exchanges'),
+    });
+  }
+
+  removeExchange(exchangeId: string): void {
+    this.strategyService.removeExchange(this.strategyId, exchangeId).subscribe({
+      next: () => this.toast.success('Exchange removed'),
+      error: () => this.toast.error('Failed to remove exchange'),
     });
   }
 

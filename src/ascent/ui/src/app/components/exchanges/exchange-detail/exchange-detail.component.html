@@ -1,22 +1,118 @@
 @if (exchangeService.loading()) {
-  <div class="flex flex-col h-[calc(100vh-3.5rem)]">
+  <div class="flex flex-col h-[calc(100vh-3.5rem)] md:h-screen">
+    <!-- Header skeleton -->
     <div class="flex items-center gap-3 px-4 py-2 border-b border-surface shrink-0 bg-emphasis">
-      <p-skeleton width="4rem" height="0.875rem"/>
+      <p-skeleton width="5rem" height="0.875rem"/>
       <span class="text-surface-300">|</span>
       <p-skeleton width="10rem" height="1.125rem"/>
       <p-skeleton width="3.5rem" height="1.375rem" borderRadius="1rem"/>
+      <p-skeleton width="4rem" height="0.75rem"/>
     </div>
-    <div class="flex-1 p-6">
-      <div class="max-w-3xl mx-auto space-y-6">
-        <p-skeleton width="100%" height="12rem"/>
-        <p-skeleton width="100%" height="8rem"/>
+    <!-- Tab bar skeleton -->
+    <div class="flex gap-2 px-4 py-3 border-b border-surface">
+      @for (_ of [1,2,3,4,5]; track $index) {
+        <p-skeleton width="5rem" height="1rem"/>
+      }
+    </div>
+
+    <!-- Tab-specific content skeleton -->
+    @if (activeTab() === 'Overview') {
+      <div class="flex-1 overflow-y-auto p-6">
+        <!-- Metric cards skeleton -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          @for (_ of [1,2,3,4]; track $index) {
+            <p-card>
+              <p-skeleton width="60%" height="0.75rem" class="mb-2"/>
+              <p-skeleton width="40%" height="1.5rem"/>
+            </p-card>
+          }
+        </div>
+        <!-- Status breakdown + recent activity skeleton -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          @for (_ of [1,2]; track $index) {
+            <p-card>
+              <p-skeleton width="8rem" height="1rem" class="mb-4"/>
+              @for (_ of [1,2,3,4,5]; track $index) {
+                <div class="flex justify-between mb-3">
+                  <p-skeleton width="35%" height="1rem"/>
+                  <p-skeleton width="25%" height="1rem"/>
+                </div>
+              }
+            </p-card>
+          }
+        </div>
       </div>
-    </div>
+    } @else if (activeTab() === 'Orders' || activeTab() === 'Trades') {
+      <div class="flex-1 flex flex-col min-h-0 p-6">
+        <div class="flex items-center gap-2 mb-3">
+          <p-skeleton width="8rem" height="1.125rem"/>
+        </div>
+        <div class="flex-1 flex flex-col min-h-0 rounded-lg border border-surface overflow-clip">
+          <div class="flex items-center gap-4 px-4 border-b border-surface shrink-0" style="height:48px">
+            @for (_ of skeletonRows(7); track $index) { <p-skeleton width="4rem" height="0.75rem"/> }
+          </div>
+          <div class="flex-1 overflow-hidden">
+            @for (_ of skeletonRows(10); track $index) {
+              <div class="flex items-center gap-4 px-4 border-b border-surface" style="height:42px">
+                <p-skeleton width="5rem" height="1rem"/>
+                <p-skeleton width="4rem" height="1.5rem" borderRadius="1rem"/>
+                <p-skeleton width="6rem" height="1rem"/>
+                <p-skeleton width="4rem" height="1rem"/>
+                <p-skeleton width="5rem" height="1rem"/>
+                <div class="flex-1"></div>
+                <p-skeleton width="4rem" height="1.5rem" borderRadius="1rem"/>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+    } @else if (activeTab() === 'Universe') {
+      <div class="flex-1 overflow-y-auto p-6">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <p-skeleton width="8rem" height="1rem" class="mb-1"/>
+            <p-skeleton width="16rem" height="0.75rem"/>
+          </div>
+          <p-skeleton width="4rem" height="2rem" borderRadius="6px"/>
+        </div>
+        <p-card>
+          <div class="flex gap-4 pb-3 border-b border-surface">
+            @for (_ of [1,2,3,4]; track $index) {
+              <p-skeleton width="5rem" height="0.75rem"/>
+            }
+          </div>
+          @for (_ of [1,2,3,4,5]; track $index) {
+            <div class="flex gap-4 py-3 border-b border-surface">
+              <p-skeleton width="6rem" height="1rem"/>
+              <p-skeleton width="5rem" height="1rem"/>
+              <p-skeleton width="3rem" height="1rem"/>
+              <p-skeleton width="4rem" height="1rem"/>
+            </div>
+          }
+        </p-card>
+      </div>
+    } @else if (activeTab() === 'Configuration') {
+      <div class="flex-1 overflow-y-auto p-6 max-w-3xl mx-auto">
+        @for (_ of [1,2,3]; track $index) {
+          <p-card class="mb-6">
+            <p-skeleton width="6rem" height="1rem" class="mb-4"/>
+            <div class="space-y-3">
+              @for (_ of [1,2,3,4]; track $index) {
+                <div class="flex justify-between">
+                  <p-skeleton width="30%" height="1rem"/>
+                  <p-skeleton width="40%" height="1rem"/>
+                </div>
+              }
+            </div>
+          </p-card>
+        }
+      </div>
+    }
   </div>
 } @else {
   @let exchange = exchangeService.selectedExchange();
   @if (exchange) {
-  <div class="flex flex-col h-[calc(100vh-3.5rem)]">
+  <div class="flex flex-col h-[calc(100vh-3.5rem)] md:h-screen">
     <!-- Header Bar -->
     <div class="flex items-center gap-3 px-4 py-2 border-b border-surface shrink-0 bg-emphasis">
       <a routerLink="/exchanges" class="text-sm text-primary hover:underline">&larr; Exchanges</a>
@@ -28,33 +124,200 @@
       }
     </div>
 
-    <!-- Content -->
-    <div class="flex-1 overflow-y-auto">
-      <div class="max-w-3xl mx-auto p-6 space-y-6">
-        <!-- General -->
-        <app-field-panel
-          header="General"
-          [fields]="generalFields()"/>
+    <!-- Tab Bar -->
+    <p-tabs class="shrink-0" [value]="activeTab()" (valueChange)="onTabChange($any($event))">
+      <p-tablist>
+        @for (tab of tabs; track tab) {
+          <p-tab [value]="tab">{{ tab }}</p-tab>
+        }
+      </p-tablist>
+    </p-tabs>
 
-        <!-- Implementation -->
-        @if (exchange.implementation_class) {
-          <p-card header="Implementation">
-            <div class="space-y-2 text-sm">
-              <div class="flex justify-between">
-                <span class="text-surface-500">Class</span>
-                <span class="font-mono text-xs">{{ exchange.implementation_class }}</span>
+    <!-- Tab Content -->
+    <div class="flex-1 flex flex-col min-h-0">
+
+      <!-- Overview Tab -->
+      @if (activeTab() === 'Overview') {
+        <div class="overflow-y-auto h-full">
+          @if (exchangeService.statsLoading()) {
+            <div class="p-6">
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                @for (_ of [1,2,3,4]; track $index) {
+                  <p-card>
+                    <p-skeleton width="60%" height="0.75rem" class="mb-2"/>
+                    <p-skeleton width="40%" height="1.5rem"/>
+                  </p-card>
+                }
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                @for (_ of [1,2,3]; track $index) {
+                  <p-card>
+                    <p-skeleton width="8rem" height="1rem" class="mb-4"/>
+                    @for (_ of [1,2,3,4,5]; track $index) {
+                      <div class="flex justify-between mb-3">
+                        <p-skeleton width="35%" height="1rem"/>
+                        <p-skeleton width="25%" height="1rem"/>
+                      </div>
+                    }
+                  </p-card>
+                }
               </div>
             </div>
-          </p-card>
-        }
+          } @else if (stats(); as s) {
+            <div class="p-6">
+              <!-- Metric Cards -->
+              <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <p-card>
+                  <div class="text-xs text-muted-color uppercase tracking-wide mb-1">Total Orders</div>
+                  <div class="text-2xl font-bold">{{ s.total_orders }}</div>
+                </p-card>
+                <p-card>
+                  <div class="text-xs text-muted-color uppercase tracking-wide mb-1">Trade Legs</div>
+                  <div class="text-2xl font-bold">{{ s.total_trade_legs }}</div>
+                </p-card>
+                <p-card>
+                  <div class="text-xs text-muted-color uppercase tracking-wide mb-1">Realized P&L</div>
+                  <div class="text-2xl font-bold" [class]="pnlClass(s.total_realized_pnl)">{{ formatCurrency(s.total_realized_pnl) }}</div>
+                </p-card>
+                <p-card>
+                  <div class="text-xs text-muted-color uppercase tracking-wide mb-1">Total Volume</div>
+                  <div class="text-2xl font-bold">{{ formatNumber(s.total_volume) }}</div>
+                </p-card>
+              </div>
 
-        <!-- Configuration -->
-        @if (exchange.config) {
-          <p-card header="Configuration">
-            <pre class="text-xs text-surface-500 overflow-x-auto">{{ exchange.config | json }}</pre>
-          </p-card>
-        }
-      </div>
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <!-- Orders by Status -->
+                <p-card>
+                  <div class="text-xs font-bold uppercase tracking-widest text-primary mb-3 pb-2 border-b border-surface">Orders by Status</div>
+                  @if (s.orders_by_status && (s.orders_by_status | json) !== '{}') {
+                    <div class="space-y-2">
+                      @for (entry of (s.orders_by_status | keyvalue); track entry.key) {
+                        <div class="flex justify-between text-sm">
+                          <span class="text-muted-color">{{ entry.key }}</span>
+                          <span class="font-semibold">{{ entry.value }}</span>
+                        </div>
+                      }
+                    </div>
+                  } @else {
+                    <p class="text-sm text-muted-color">No orders yet.</p>
+                  }
+                </p-card>
+
+                <!-- Recent Orders -->
+                <p-card>
+                  <div class="text-xs font-bold uppercase tracking-widest text-primary mb-3 pb-2 border-b border-surface">Recent Orders</div>
+                  @if (s.recent_orders.length > 0) {
+                    <div class="space-y-3">
+                      @for (order of s.recent_orders; track order.id) {
+                        <div class="flex items-center justify-between text-sm">
+                          <div class="flex items-center gap-2">
+                            <p-tag [value]="order.side" [severity]="order.side === 'BUY' ? 'success' : 'danger'" [rounded]="true"/>
+                            <span class="truncate max-w-32">{{ order.instrument_name ?? 'Unknown' }}</span>
+                          </div>
+                          <div class="text-right">
+                            <span class="text-muted-color text-xs">{{ order.quantity }} @ {{ formatCurrency(order.price) }}</span>
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  } @else {
+                    <p class="text-sm text-muted-color">No recent orders.</p>
+                  }
+                </p-card>
+
+                <!-- Recent Trade Legs -->
+                <p-card>
+                  <div class="text-xs font-bold uppercase tracking-widest text-primary mb-3 pb-2 border-b border-surface">Recent Trade Legs</div>
+                  @if (s.recent_trade_legs.length > 0) {
+                    <div class="space-y-3">
+                      @for (leg of s.recent_trade_legs; track leg.id) {
+                        <div class="flex items-center justify-between text-sm">
+                          <div class="flex items-center gap-2">
+                            <p-tag [value]="leg.direction" [severity]="leg.direction === 'LONG' ? 'success' : 'danger'" [rounded]="true"/>
+                            <span class="truncate max-w-32">{{ leg.instrument_name ?? 'Unknown' }}</span>
+                          </div>
+                          <div class="text-right">
+                            @if (leg.realized_pnl !== null) {
+                              <span [class]="'font-semibold ' + pnlClass(leg.realized_pnl)">{{ formatCurrency(leg.realized_pnl) }}</span>
+                            } @else {
+                              <span class="text-muted-color text-xs">{{ leg.quantity }} units</span>
+                            }
+                          </div>
+                        </div>
+                      }
+                    </div>
+                  } @else {
+                    <p class="text-sm text-muted-color">No recent trade legs.</p>
+                  }
+                </p-card>
+              </div>
+            </div>
+          }
+        </div>
+      }
+
+      <!-- Orders Tab -->
+      @if (activeTab() === 'Orders') {
+        <div class="flex flex-col flex-1 min-h-0 p-6">
+          <h2 class="text-lg font-semibold mb-3 shrink-0">Orders</h2>
+          <app-server-table class="flex-1 min-h-0"
+            [columns]="orderColumns"
+            [fetchPage]="ordersFetchPage()"
+            [pageSize]="25"
+            emptyMessage="No orders on this exchange."/>
+        </div>
+      }
+
+      <!-- Trades Tab -->
+      @if (activeTab() === 'Trades') {
+        <div class="flex flex-col flex-1 min-h-0 p-6">
+          <h2 class="text-lg font-semibold mb-3 shrink-0">Trades</h2>
+          <app-trade-table class="flex-1 min-h-0"
+            [showStrategy]="true"
+            [fetchPage]="tradesFetchPage()"/>
+        </div>
+      }
+
+      <!-- Universe Tab -->
+      @if (activeTab() === 'Universe') {
+        <app-universe-panel
+          [universeBaseUrl]="'/exchanges/' + exchangeId"
+          subtitle="Instruments and composites available for trading on this exchange."
+          (addInstruments)="onAddInstruments($event)"
+          (addComposites)="onAddComposites($event)"
+          (removeInstrument)="removeUniverseItem($event)"
+          (removeComposite)="removeCompositeItem($event)"/>
+      }
+
+      <!-- Configuration Tab -->
+      @if (activeTab() === 'Configuration') {
+        <div class="max-w-3xl mx-auto p-6 space-y-6 overflow-y-auto h-full">
+          <!-- General -->
+          <app-field-panel
+            header="General"
+            [fields]="generalFields()"/>
+
+          <!-- Implementation -->
+          @if (exchange.implementation_class) {
+            <p-card header="Implementation">
+              <div class="space-y-2 text-sm">
+                <div class="flex justify-between">
+                  <span class="text-surface-500">Class</span>
+                  <span class="font-mono text-xs">{{ exchange.implementation_class }}</span>
+                </div>
+              </div>
+            </p-card>
+          }
+
+          <!-- Configuration -->
+          @if (exchange.config) {
+            <p-card header="Configuration">
+              <pre class="text-xs text-surface-500 overflow-x-auto">{{ exchange.config | json }}</pre>
+            </p-card>
+          }
+        </div>
+      }
+
     </div>
   </div>
   }

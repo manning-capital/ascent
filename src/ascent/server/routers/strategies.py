@@ -10,6 +10,9 @@ from ascent.server.schemas.orders import OrderSchema
 from ascent.server.schemas.strategies import (
     StrategyCreate,
     StrategyDetail,
+    StrategyExchangeBatchAdd,
+    StrategyExchangeCreate,
+    StrategyExchangeSchema,
     StrategyFeedCreate,
     StrategyFeedDAG,
     StrategyListItem,
@@ -240,6 +243,56 @@ def remove_strategy_composite_universe_item(
     strategy_id: uuid.UUID, composite_id: uuid.UUID, db: Session = Depends(get_db)
 ):
     universe_service.remove_strategy_composite_universe_item(db, strategy_id, composite_id)
+
+
+# ---- Strategy Exchanges ----
+
+
+@router.get(
+    "/{strategy_id}/exchanges/search",
+    response_model=PaginatedResponse[StrategyExchangeSchema],
+)
+def search_strategy_exchanges(
+    strategy_id: uuid.UUID,
+    page: int = 1,
+    page_size: int = 25,
+    db: Session = Depends(get_db),
+):
+    items, total = strategy_service.get_strategy_exchanges_paginated(
+        db, strategy_id, page, page_size
+    )
+    total_pages = (total + page_size - 1) // page_size
+    return PaginatedResponse(
+        items=items, total=total, page=page, page_size=page_size, total_pages=total_pages
+    )
+
+
+@router.get("/{strategy_id}/exchanges", response_model=list[StrategyExchangeSchema])
+def get_strategy_exchanges(strategy_id: uuid.UUID, db: Session = Depends(get_db)):
+    return strategy_service.get_strategy_exchanges(db, strategy_id)
+
+
+@router.post("/{strategy_id}/exchanges", status_code=201)
+def add_strategy_exchange(
+    strategy_id: uuid.UUID, data: StrategyExchangeCreate, db: Session = Depends(get_db)
+):
+    return strategy_service.add_strategy_exchange(db, strategy_id, data)
+
+
+@router.post(
+    "/{strategy_id}/exchanges/batch", response_model=list[StrategyExchangeSchema]
+)
+def batch_add_strategy_exchanges(
+    strategy_id: uuid.UUID, data: StrategyExchangeBatchAdd, db: Session = Depends(get_db)
+):
+    return strategy_service.batch_add_strategy_exchanges(db, strategy_id, data)
+
+
+@router.delete("/{strategy_id}/exchanges/{exchange_id}", status_code=204)
+def remove_strategy_exchange(
+    strategy_id: uuid.UUID, exchange_id: uuid.UUID, db: Session = Depends(get_db)
+):
+    strategy_service.remove_strategy_exchange(db, strategy_id, exchange_id)
 
 
 @router.get("/{strategy_id}/runs/{run_id}", response_model=StrategyRunListItem)
