@@ -32,7 +32,6 @@ export class ExchangeListComponent implements OnInit {
   columns: DataTableColumn<ExchangeListItem>[] = [
     { field: 'display_name', header: 'Display Name' },
     { field: 'name', header: 'Name', cellType: 'monospace' },
-    { field: 'exchange_type_name', header: 'Type' },
     { field: 'instrument_type_name', header: 'Instrument Type', cellType: 'link', linkRoute: (row: any) => row.instrument_type_id ? `/settings/instrument-types/${row.instrument_type_id}` : null, valueFormatter: (p: any) => p.value || 'Any' },
     { field: 'provider_name', header: 'Provider', cellType: 'link', linkRoute: (row: any) => row.provider_id ? `/settings/providers/${row.provider_id}` : null, valueFormatter: (p: any) => p.value || 'None' },
     { field: 'created_at', header: 'Created', cellType: 'date' },

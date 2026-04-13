@@ -104,9 +104,11 @@ class Runner:
 
         self._feeds: list[type[Feed]] = []
         self._strategies: list[type[Strategy]] = []
+        self._exchanges: list[type] = []
 
     def add(self, obj: type) -> Runner:
-        """Register a Feed or Strategy class to be run.  Returns self for chaining."""
+        """Register a Feed, Strategy, or Exchange class to be run.  Returns self for chaining."""
+        from ascent.exchanges.base import BaseExchange
         from ascent.feeds.base import Feed
         from ascent.strategies.base import Strategy
 
@@ -114,8 +116,10 @@ class Runner:
             self._feeds.append(obj)
         elif isinstance(obj, type) and issubclass(obj, Strategy) and obj is not Strategy:
             self._strategies.append(obj)
+        elif isinstance(obj, type) and issubclass(obj, BaseExchange) and obj is not BaseExchange:
+            self._exchanges.append(obj)
         else:
-            raise TypeError(f"Expected a Feed or Strategy subclass, got {obj!r}")
+            raise TypeError(f"Expected a Feed, Strategy, or Exchange subclass, got {obj!r}")
         return self
 
     def run(self) -> None:
@@ -123,7 +127,11 @@ class Runner:
 
         Blocks until SIGINT/SIGTERM.
         """
-        logging.basicConfig(level=getattr(logging, self._log_level.upper(), logging.INFO))
+        logging.basicConfig(
+            level=getattr(logging, self._log_level.upper(), logging.INFO),
+            format="%(asctime)s %(levelname)-8s %(name)s  %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
 
         # Setup infrastructure
         engine = create_engine(self._database_url)
@@ -143,6 +151,8 @@ class Runner:
         feed_ids: dict[str, uuid.UUID] = {}
         strategy_ids: dict[str, uuid.UUID] = {}
 
+        exchange_ids: dict[str, uuid.UUID] = {}
+
         with Session(engine) as db:
             for feed_cls in sorted_feeds:
                 feed_id = deploy_feed(feed_cls, db)
@@ -150,6 +160,11 @@ class Runner:
             for strategy_cls in self._strategies:
                 strategy_id = deploy_strategy(strategy_cls, db)
                 strategy_ids[strategy_cls.ref()] = strategy_id
+            for exchange_cls in self._exchanges:
+                from ascent.engine.deploy import deploy_exchange
+
+                exchange_id = deploy_exchange(exchange_cls, db)
+                exchange_ids[exchange_cls.ref()] = exchange_id
             db.commit()
 
         # Shared shutdown event
@@ -168,6 +183,8 @@ class Runner:
             all_heartbeat_targets.append(("feed", fid))
         for _ref, sid in strategy_ids.items():
             all_heartbeat_targets.append(("strategy", sid))
+        for _ref, eid in exchange_ids.items():
+            all_heartbeat_targets.append(("exchange", eid))
 
         heartbeat_thread = threading.Thread(
             target=self._heartbeat_loop,
@@ -197,6 +214,7 @@ class Runner:
                         "database_url": self._database_url,
                         "redis_url": self._redis_url,
                         "shutdown_event": shutdown_event,
+                        "feed_cls": feed_cls,
                     },
                     name=f"feed-{feed_cls.__name__}",
                 )
@@ -211,6 +229,7 @@ class Runner:
                         "database_url": self._database_url,
                         "redis_url": self._redis_url,
                         "shutdown_event": shutdown_event,
+                        "feed_cls": feed_cls,
                     },
                     name=f"feed-{feed_cls.__name__}",
                 )
@@ -232,8 +251,26 @@ class Runner:
                     "database_url": self._database_url,
                     "redis_url": self._redis_url,
                     "shutdown_event": shutdown_event,
+                    "strategy_cls": strategy_cls,
                 },
                 name=f"strategy-{strategy_cls.__name__}",
+            )
+            threads.append(t)
+
+        for exchange_cls in self._exchanges:
+            eid = exchange_ids[exchange_cls.ref()]
+            from ascent.engine.exchange_runner import run_exchange
+
+            t = threading.Thread(
+                target=run_exchange,
+                args=(eid,),
+                kwargs={
+                    "database_url": self._database_url,
+                    "redis_url": self._redis_url,
+                    "shutdown_event": shutdown_event,
+                    "exchange_cls": exchange_cls,
+                },
+                name=f"exchange-{exchange_cls.__name__}",
             )
             threads.append(t)
 
@@ -256,7 +293,7 @@ class Runner:
             t.start()
 
         # Log startup banner
-        self._log_banner(feed_ids, strategy_ids, threads)
+        self._log_banner(feed_ids, strategy_ids, threads, exchange_ids)
 
         # Block until shutdown
         shutdown_event.wait()
@@ -287,6 +324,7 @@ class Runner:
         feed_ids: dict[str, uuid.UUID],
         strategy_ids: dict[str, uuid.UUID],
         threads: list[threading.Thread],
+        exchange_ids: dict[str, uuid.UUID] | None = None,
     ) -> None:
         """Log a startup banner showing all running objects."""
         lines = ["", "=" * 60, "  Ascent Runner", "=" * 60]
@@ -298,6 +336,10 @@ class Runner:
             lines.append("  Strategies:")
             for ref, sid in strategy_ids.items():
                 lines.append(f"    {ref}  ({sid})")
+        if exchange_ids:
+            lines.append("  Exchanges:")
+            for ref, eid in exchange_ids.items():
+                lines.append(f"    {ref}  ({eid})")
         lines.append(f"  Threads: {len(threads)}")
         lines.append("=" * 60)
         logger.info("\n".join(lines))

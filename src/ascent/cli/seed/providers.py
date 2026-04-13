@@ -94,7 +94,6 @@ def seed_providers(client: Any, ctx: dict) -> None:
     # Each exchange is tied to a specific provider + instrument type combination.
     # This means we implement a separate exchange class per provider per instrument type.
     kraken_exchange = client.create_exchange(
-        exchange_type_id=uuid.UUID(ctx["spot_etype"]["id"]),
         instrument_type_id=uuid.UUID(ctx["spot_itype"]["id"]),
         name="KRAKEN_SPOT",
         display_name="Kraken Spot",
@@ -103,7 +102,6 @@ def seed_providers(client: Any, ctx: dict) -> None:
         implementation_class="ascent.exchanges.kraken.KrakenSpotExchange",
     )
     coinbase_exchange = client.create_exchange(
-        exchange_type_id=uuid.UUID(ctx["spot_etype"]["id"]),
         instrument_type_id=uuid.UUID(ctx["spot_itype"]["id"]),
         name="COINBASE_SPOT",
         display_name="Coinbase Spot",
@@ -112,7 +110,6 @@ def seed_providers(client: Any, ctx: dict) -> None:
         implementation_class="ascent.exchanges.coinbase.CoinbaseSpotExchange",
     )
     ib_equity_exchange = client.create_exchange(
-        exchange_type_id=uuid.UUID(ctx["spot_etype"]["id"]),
         instrument_type_id=uuid.UUID(ctx["spot_itype"]["id"]),
         name="IB_US_EQUITY",
         display_name="IB US Equity",
@@ -120,7 +117,6 @@ def seed_providers(client: Any, ctx: dict) -> None:
         provider_id=ib_id,
     )
     ib_futures_exchange = client.create_exchange(
-        exchange_type_id=uuid.UUID(ctx["futures_etype"]["id"]),
         instrument_type_id=uuid.UUID(ctx["future_itype"]["id"]),
         name="IB_US_FUTURES",
         display_name="IB US Futures",
@@ -128,7 +124,6 @@ def seed_providers(client: Any, ctx: dict) -> None:
         provider_id=ib_id,
     )
     client.create_exchange(
-        exchange_type_id=uuid.UUID(ctx["paper_etype"]["id"]),
         name="PAPER_TRADING",
         display_name="Paper Trading",
         description="Simulated paper trading exchange",

@@ -7,7 +7,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ascent.database.models.base import Base, NamedEntityMixin
-from ascent.database.models.types import ExchangeType, InstrumentType
+from ascent.database.models.types import InstrumentType
 
 if TYPE_CHECKING:
     from ascent.database.models.composites import Composite
@@ -21,12 +21,6 @@ class Exchange(NamedEntityMixin, Base):
         "comment": "Represents a trading exchange or execution venue. Users implement exchange classes via the BaseExchange interface and register them here with their configuration."
     }
 
-    exchange_type_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid,
-        ForeignKey("exchange_type.id"),
-        nullable=False,
-    )
-    exchange_type: Mapped["ExchangeType"] = relationship("ExchangeType")
     instrument_type_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid,
         ForeignKey("instrument_type.id"),

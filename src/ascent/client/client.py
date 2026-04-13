@@ -121,36 +121,6 @@ class AscentClient:
         self._raise(resp)
         return resp.json()
 
-    def get_exchange_types(self) -> list[dict[str, Any]]:
-        resp = self._client.get("/types/exchange-types")
-        self._raise(resp)
-        return resp.json()
-
-    def create_exchange_type(self, **kwargs: Any) -> dict[str, Any]:
-        resp = self._client.post("/types/exchange-types", json=_body(**kwargs))
-        self._raise(resp)
-        return resp.json()
-
-    def get_strategy_types(self) -> list[dict[str, Any]]:
-        resp = self._client.get("/types/strategy-types")
-        self._raise(resp)
-        return resp.json()
-
-    def create_strategy_type(self, **kwargs: Any) -> dict[str, Any]:
-        resp = self._client.post("/types/strategy-types", json=_body(**kwargs))
-        self._raise(resp)
-        return resp.json()
-
-    def get_feed_types(self) -> list[dict[str, Any]]:
-        resp = self._client.get("/types/feed-types")
-        self._raise(resp)
-        return resp.json()
-
-    def create_feed_type(self, **kwargs: Any) -> dict[str, Any]:
-        resp = self._client.post("/types/feed-types", json=_body(**kwargs))
-        self._raise(resp)
-        return resp.json()
-
     def get_trade_status_types(self) -> list[dict[str, Any]]:
         resp = self._client.get("/types/trade-statuses")
         self._raise(resp)

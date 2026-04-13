@@ -119,9 +119,6 @@
       <span class="text-surface-300">|</span>
       <h1 class="text-lg font-bold truncate">{{ exchange.display_name }}</h1>
       <p-tag [value]="exchange.is_active ? 'Active' : 'Inactive'" [severity]="exchange.is_active ? 'success' : 'secondary'" [rounded]="true"/>
-      @if (exchange.exchange_type_name) {
-        <span class="text-xs text-surface-500 shrink-0">{{ exchange.exchange_type_name }}</span>
-      }
     </div>
 
     <!-- Tab Bar -->

@@ -47,17 +47,6 @@ def make_provider_type(**overrides) -> dict:
     return defaults
 
 
-def make_exchange_type(**overrides) -> dict:
-    n = _next_id()
-    defaults = {
-        "name": f"EXCHANGE_TYPE_{n}",
-        "display_name": f"Exchange Type {n}",
-        "description": f"Test exchange type {n}",
-    }
-    defaults.update(overrides)
-    return defaults
-
-
 def make_instrument_type(**overrides) -> dict:
     n = _next_id()
     defaults = {
@@ -77,28 +66,6 @@ def make_composite_type(**overrides) -> dict:
         "description": f"Test composite type {n}",
         "min_members": 2,
         "max_members": 2,
-    }
-    defaults.update(overrides)
-    return defaults
-
-
-def make_feed_type(**overrides) -> dict:
-    n = _next_id()
-    defaults = {
-        "name": f"FEED_TYPE_{n}",
-        "display_name": f"Feed Type {n}",
-        "description": f"Test feed type {n}",
-    }
-    defaults.update(overrides)
-    return defaults
-
-
-def make_strategy_type(**overrides) -> dict:
-    n = _next_id()
-    defaults = {
-        "name": f"STRATEGY_TYPE_{n}",
-        "display_name": f"Strategy Type {n}",
-        "description": f"Test strategy type {n}",
     }
     defaults.update(overrides)
     return defaults
@@ -167,10 +134,9 @@ def make_provider(provider_type_id: uuid.UUID, **overrides) -> dict:
     return defaults
 
 
-def make_exchange(exchange_type_id: uuid.UUID, **overrides) -> dict:
+def make_exchange(**overrides) -> dict:
     n = _next_id()
     defaults = {
-        "exchange_type_id": exchange_type_id,
         "name": f"EXCHANGE_{n}",
         "display_name": f"Exchange {n}",
         "description": f"Test exchange {n}",
@@ -262,7 +228,6 @@ def make_portfolio(**overrides) -> dict:
 
 
 def make_feed(
-    feed_type_id: uuid.UUID,
     provider_id: uuid.UUID,
     instrument_type_id: uuid.UUID | None = None,
     composite_type_id: uuid.UUID | None = None,
@@ -270,7 +235,6 @@ def make_feed(
 ) -> dict:
     n = _next_id()
     defaults = {
-        "feed_type_id": feed_type_id,
         "provider_id": provider_id,
         "instrument_type_id": instrument_type_id,
         "composite_type_id": composite_type_id,
@@ -287,13 +251,11 @@ def make_feed(
 
 
 def make_strategy(
-    strategy_type_id: uuid.UUID,
     portfolio_id: uuid.UUID,
     **overrides,
 ) -> dict:
     n = _next_id()
     defaults = {
-        "strategy_type_id": strategy_type_id,
         "portfolio_id": portfolio_id,
         "name": f"STRATEGY_{n}",
         "display_name": f"Strategy {n}",

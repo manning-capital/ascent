@@ -39,11 +39,6 @@ class ProviderType(NamedEntityMixin, Base):
     child_types: Mapped[list["ProviderType"]] = relationship(back_populates="parent_type")
 
 
-class ExchangeType(NamedEntityMixin, Base):
-    __tablename__ = "exchange_type"
-    __table_args__ = {"comment": "The type of exchange, e.g. spot, futures, paper, OTC"}
-
-
 class ContentType(NamedEntityMixin, Base):
     __tablename__ = "content_type"
     __table_args__ = {"comment": "The type of content, e.g. news, social media, etc."}
@@ -67,20 +62,6 @@ class TransactionStatusType(NamedEntityMixin, Base):
     __tablename__ = "transaction_status_type"
     __table_args__ = {
         "comment": "The type of transaction status, e.g. pending, open, closed, cancelled, etc."
-    }
-
-
-class FeedType(NamedEntityMixin, Base):
-    __tablename__ = "feed_type"
-    __table_args__ = {
-        "comment": "The type of data feed, e.g. market data, sentiment, alternative data, etc."
-    }
-
-
-class StrategyType(NamedEntityMixin, Base):
-    __tablename__ = "strategy_type"
-    __table_args__ = {
-        "comment": "The type of trading strategy, e.g. pairs trading, momentum, mean reversion, etc."
     }
 
 

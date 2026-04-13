@@ -10,7 +10,6 @@ from ascent.database.models.base import Base, NamedEntityMixin
 from ascent.database.models.composites import Composite
 from ascent.database.models.instruments import Instrument
 from ascent.database.models.portfolio import Portfolio
-from ascent.database.models.types import StrategyType
 
 if TYPE_CHECKING:
     from ascent.database.models.exchanges import Exchange
@@ -25,12 +24,6 @@ class Strategy(NamedEntityMixin, Base):
         "comment": "Represents a registered trading strategy. Stores the strategy configuration, importable class path, and JSONB parameters."
     }
 
-    strategy_type_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid,
-        ForeignKey("strategy_type.id"),
-        nullable=False,
-    )
-    strategy_type: Mapped["StrategyType"] = relationship("StrategyType")
     strategy_ref: Mapped[str] = mapped_column(String(500), nullable=False)
     parameters: Mapped[dict | list | str | int | float | bool | None] = mapped_column(
         JSONB,

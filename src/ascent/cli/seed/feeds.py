@@ -110,22 +110,6 @@ def seed_feeds(client: Any, ctx: dict) -> None:
     all_composites = ctx["all_composites"]
     all_attributes = ctx["all_attributes"]
 
-    # --- Feed Types ---
-    feed_types_created = []
-    for name, display_name, desc in [
-        ("MARKET_DATA", "Market Data", "Real-time market data"),
-        ("DERIVED", "Derived", "Computed from other feeds"),
-        ("ALTERNATIVE", "Alternative", "Alternative data sources"),
-        ("EXTERNAL", "External", "Data published via the Ascent API by an external process"),
-    ]:
-        ft = client.create_feed_type(name=name, display_name=display_name, description=desc)
-        feed_types_created.append(ft)
-
-    ft_market = feed_types_created[0]["id"]
-    ft_derived = feed_types_created[1]["id"]
-    ft_alt = feed_types_created[2]["id"]
-    ft_external = feed_types_created[3]["id"]
-
     # Provider and type IDs for feed scope constraints
     kraken_id = ctx["kraken_id"]
     coinbase_id = ctx["coinbase_id"]
@@ -143,7 +127,6 @@ def seed_feeds(client: Any, ctx: dict) -> None:
     feed_market = client.create_feed(
         name="MARKET_DATA",
         display_name="Market Data",
-        feed_type_id=uuid.UUID(ft_market),
         provider_id=kraken_id,
         scope_type="instrument",
         scope_type_id=spot_itype_id,
@@ -158,7 +141,6 @@ def seed_feeds(client: Any, ctx: dict) -> None:
     feed_orderbook = client.create_feed(
         name="ORDER_BOOK",
         display_name="Order Book",
-        feed_type_id=uuid.UUID(ft_market),
         provider_id=kraken_id,
         scope_type="instrument",
         scope_type_id=spot_itype_id,
@@ -172,7 +154,6 @@ def seed_feeds(client: Any, ctx: dict) -> None:
     feed_sentiment = client.create_feed(
         name="SENTIMENT",
         display_name="Sentiment",
-        feed_type_id=uuid.UUID(ft_alt),
         provider_id=kraken_id,
         scope_type="instrument",
         scope_type_id=spot_itype_id,
@@ -186,7 +167,6 @@ def seed_feeds(client: Any, ctx: dict) -> None:
     feed_cointegration = client.create_feed(
         name="COINTEGRATION",
         display_name="Cointegration",
-        feed_type_id=uuid.UUID(ft_derived),
         provider_id=kraken_id,
         scope_type="instrument",
         scope_type_id=spot_itype_id,
@@ -200,7 +180,6 @@ def seed_feeds(client: Any, ctx: dict) -> None:
     feed_ou = client.create_feed(
         name="OU_PARAMETERS",
         display_name="OU Parameters",
-        feed_type_id=uuid.UUID(ft_external),
         provider_id=kraken_id,
         scope_type="instrument",
         scope_type_id=spot_itype_id,
@@ -215,7 +194,6 @@ def seed_feeds(client: Any, ctx: dict) -> None:
     feed_funding = client.create_feed(
         name="FUNDING_RATES",
         display_name="Funding Rates",
-        feed_type_id=uuid.UUID(ft_external),
         provider_id=kraken_id,
         scope_type="instrument",
         scope_type_id=spot_itype_id,
@@ -229,7 +207,6 @@ def seed_feeds(client: Any, ctx: dict) -> None:
     feed_spread = client.create_feed(
         name="SPREAD_ANALYTICS",
         display_name="Spread Analytics",
-        feed_type_id=uuid.UUID(ft_derived),
         provider_id=kraken_id,
         scope_type="instrument",
         scope_type_id=spot_itype_id,
@@ -243,7 +220,6 @@ def seed_feeds(client: Any, ctx: dict) -> None:
     feed_sent_score = client.create_feed(
         name="SENTIMENT_SCORE",
         display_name="Sentiment Score",
-        feed_type_id=uuid.UUID(ft_derived),
         provider_id=kraken_id,
         scope_type="instrument",
         scope_type_id=spot_itype_id,
@@ -257,7 +233,6 @@ def seed_feeds(client: Any, ctx: dict) -> None:
     feed_half_life = client.create_feed(
         name="HALF_LIFE",
         display_name="Half-Life",
-        feed_type_id=uuid.UUID(ft_derived),
         provider_id=kraken_id,
         scope_type="instrument",
         scope_type_id=spot_itype_id,
@@ -273,7 +248,6 @@ def seed_feeds(client: Any, ctx: dict) -> None:
     feed_cb_market = client.create_feed(
         name="MARKET_DATA_COINBASE",
         display_name="Market Data (Coinbase)",
-        feed_type_id=uuid.UUID(ft_market),
         provider_id=coinbase_id,
         scope_type="instrument",
         scope_type_id=spot_itype_id,
@@ -288,7 +262,6 @@ def seed_feeds(client: Any, ctx: dict) -> None:
     feed_cb_orderbook = client.create_feed(
         name="ORDER_BOOK_COINBASE",
         display_name="Order Book (Coinbase)",
-        feed_type_id=uuid.UUID(ft_market),
         provider_id=coinbase_id,
         scope_type="instrument",
         scope_type_id=spot_itype_id,
@@ -304,7 +277,6 @@ def seed_feeds(client: Any, ctx: dict) -> None:
     feed_ib_market = client.create_feed(
         name="MARKET_DATA_IB",
         display_name="Market Data (IB)",
-        feed_type_id=uuid.UUID(ft_market),
         provider_id=ib_id,
         scope_type="instrument",
         scope_type_id=spot_itype_id,
@@ -325,7 +297,6 @@ def seed_feeds(client: Any, ctx: dict) -> None:
     feed_vol_surface = client.create_feed(
         name="VOLATILITY_SURFACE",
         display_name="Volatility Surface",
-        feed_type_id=uuid.UUID(ft_derived),
         provider_id=kraken_id,
         scope_type="instrument",
         scope_type_id=spot_itype_id,
@@ -339,7 +310,6 @@ def seed_feeds(client: Any, ctx: dict) -> None:
     feed_volume_profile = client.create_feed(
         name="VOLUME_PROFILE",
         display_name="Volume Profile",
-        feed_type_id=uuid.UUID(ft_derived),
         provider_id=kraken_id,
         scope_type="instrument",
         scope_type_id=spot_itype_id,
@@ -353,7 +323,6 @@ def seed_feeds(client: Any, ctx: dict) -> None:
     feed_correlation = client.create_feed(
         name="CORRELATION_MATRIX",
         display_name="Correlation Matrix",
-        feed_type_id=uuid.UUID(ft_derived),
         provider_id=kraken_id,
         scope_type="composite",
         scope_type_id=spread_ctype_id,
@@ -367,7 +336,6 @@ def seed_feeds(client: Any, ctx: dict) -> None:
     feed_macro = client.create_feed(
         name="MACRO_INDICATORS",
         display_name="Macro Indicators",
-        feed_type_id=uuid.UUID(ft_external),
         provider_id=kraken_id,
         scope_type="instrument",
         scope_type_id=spot_itype_id,
@@ -381,7 +349,6 @@ def seed_feeds(client: Any, ctx: dict) -> None:
     feed_tech_indicators = client.create_feed(
         name="TECHNICAL_INDICATORS",
         display_name="Technical Indicators",
-        feed_type_id=uuid.UUID(ft_derived),
         provider_id=kraken_id,
         scope_type="instrument",
         scope_type_id=spot_itype_id,

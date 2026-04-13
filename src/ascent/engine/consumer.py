@@ -17,14 +17,16 @@ import pandas as pd
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
+from ascent.database.models.exchanges import Exchange as ExchangeModel
 from ascent.database.models.feeds import Feed as FeedModel
 from ascent.database.models.feeds import StrategyFeed
 from ascent.database.models.strategy import Strategy as StrategyModel
-from ascent.database.models.strategy import StrategyRun
+from ascent.database.models.strategy import StrategyExchange, StrategyRun
 from ascent.database.models.strategy_run_feeds import StrategyRunFeedRun
 from ascent.engine.cache import EngineCache
 from ascent.engine.context import StrategyContext, _current_context, _current_logger
 from ascent.engine.tracker import RunTracker
+from ascent.engine.trade_router import TradeRouter
 from ascent.engine.trigger import should_evaluate
 
 if TYPE_CHECKING:
@@ -155,6 +157,7 @@ def run_strategy(
     database_url: str = "postgresql://localhost:5432/ascent",
     redis_url: str = "redis://localhost:6379/0",
     shutdown_event: threading.Event | None = None,
+    strategy_cls: type | None = None,
 ) -> None:
     """Run a strategy consumer in a long-running Redis pub/sub poll loop.
 
@@ -175,6 +178,7 @@ def run_strategy(
 
         strategy_ref = strategy_record.strategy_ref
         parameters = strategy_record.parameters or {}
+        portfolio_id = strategy_record.portfolio_id
 
         strategy_feeds = (
             db.execute(
@@ -198,9 +202,51 @@ def run_strategy(
                 feed_records[sf.feed_id] = feed_record
                 channels.append(feed_record.channel)
 
-    # Import and instantiate the Strategy class
-    strategy_cls = _import_strategy(strategy_ref)
+        # Load exchange associations
+        strategy_exchanges = (
+            db.execute(
+                select(StrategyExchange)
+                .where(StrategyExchange.strategy_id == strategy_id)
+                .order_by(StrategyExchange.order)
+            )
+            .scalars()
+            .all()
+        )
+        exchange_map: dict[uuid.UUID, dict] = {}
+        for se in strategy_exchanges:
+            exchange_record = db.get(ExchangeModel, se.exchange_id)
+            if exchange_record and exchange_record.is_active:
+                exchange_map[exchange_record.id] = {
+                    "name": exchange_record.name,
+                    "channel": f"ascent.exchange.{exchange_record.id}",
+                    "is_active": exchange_record.is_active,
+                    "instrument_type_id": exchange_record.instrument_type_id,
+                    "provider_id": exchange_record.provider_id,
+                }
+
+    # Use provided strategy class, or fall back to import via ref
+    if strategy_cls is None:
+        strategy_cls = _import_strategy(strategy_ref)
     strategy_instance = strategy_cls(parameters)
+
+    # Wire up trade router if exchanges are configured
+    if exchange_map:
+        from ascent.engine.type_cache import TypeCache
+
+        type_cache = TypeCache(session_factory)
+        strategy_instance._trade_router = TradeRouter(
+            cache=cache,
+            strategy_id=strategy_id,
+            portfolio_id=portfolio_id,
+            exchange_map=exchange_map,
+            session_factory=session_factory,
+            type_cache=type_cache,
+        )
+        logger.info(
+            "Trade router configured with %d exchange(s): %s",
+            len(exchange_map),
+            ", ".join(info["name"] for info in exchange_map.values()),
+        )
 
     # Build feed ref mapping: feed_id → feed_ref string
     feed_ref_map: dict[uuid.UUID, str] = {}
@@ -275,6 +321,10 @@ def run_strategy(
                 latest_feed_run_ids=latest_feed_run_ids,
                 trigger_feed_id=updated_feed_id,
             )
+
+            # Update trade router with current run ID
+            if strategy_instance._trade_router is not None:
+                strategy_instance._trade_router._strategy_run_id = tracker.run_id
 
             token_logger = _current_logger.set(run_logger)
             try:

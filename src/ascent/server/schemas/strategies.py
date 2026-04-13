@@ -13,7 +13,6 @@ class StrategyListItem(BaseModel):
     name: str
     display_name: str
     description: str | None = None
-    strategy_type: str
     strategy_ref: str
     parameters: dict | list | str | int | float | bool | None = None
     portfolio_id: uuid.UUID
@@ -32,7 +31,6 @@ class StrategyListItem(BaseModel):
 class StrategyCreate(BaseModel):
     name: Identifier
     display_name: str
-    strategy_type_id: uuid.UUID
     strategy_ref: str
     portfolio_id: uuid.UUID
     description: str | None = None
@@ -124,7 +122,6 @@ class StrategyExchangeSchema(BaseModel):
     exchange_id: uuid.UUID
     exchange_name: str | None = None
     exchange_display_name: str | None = None
-    exchange_type_name: str | None = None
     provider_name: str | None = None
     is_active: bool = True
     order: int = 0

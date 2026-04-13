@@ -23,7 +23,7 @@ services:
 
   redis:
     image: dhi.io/redis:8.6.1-debian13
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --protected-mode no
     ports:
       - "6379:6379"
     volumes:

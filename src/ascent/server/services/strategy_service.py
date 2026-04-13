@@ -393,7 +393,7 @@ def get_strategies(
         count_q = count_q.where(*conditions)
     total = db.execute(count_q).scalar() or 0
 
-    query = select(Strategy).options(joinedload(Strategy.strategy_type))
+    query = select(Strategy)
     if conditions:
         query = query.where(*conditions)
 
@@ -418,7 +418,6 @@ def get_strategies(
                 name=s.name,
                 display_name=s.display_name,
                 description=s.description,
-                strategy_type=s.strategy_type.display_name,
                 strategy_ref=s.strategy_ref,
                 parameters=s.parameters,
                 portfolio_id=s.portfolio_id,
@@ -475,9 +474,7 @@ def get_strategy_detail(
     db: Session, strategy_id: uuid.UUID, cache: "EngineCache | None" = None
 ) -> StrategyDetail:
     query = (
-        select(Strategy)
-        .where(Strategy.id == strategy_id)
-        .options(joinedload(Strategy.strategy_type), joinedload(Strategy.portfolio))
+        select(Strategy).where(Strategy.id == strategy_id).options(joinedload(Strategy.portfolio))
     )
     strategy = db.execute(query).unique().scalars().first()
     if not strategy:
@@ -489,7 +486,6 @@ def get_strategy_detail(
         name=strategy.name,
         display_name=strategy.display_name,
         description=strategy.description,
-        strategy_type=strategy.strategy_type.display_name,
         strategy_ref=strategy.strategy_ref,
         parameters=strategy.parameters,
         portfolio_id=strategy.portfolio_id,
@@ -740,7 +736,6 @@ def _build_strategy_exchange_schema(scope: StrategyExchange) -> StrategyExchange
         exchange_id=scope.exchange_id,
         exchange_name=e.name if e else None,
         exchange_display_name=e.display_name if e else None,
-        exchange_type_name=e.exchange_type.display_name if e and e.exchange_type else None,
         provider_name=e.provider.display_name if e and e.provider else None,
         is_active=e.is_active if e else True,
         order=scope.order,
@@ -752,7 +747,6 @@ def get_strategy_exchanges(db: Session, strategy_id: uuid.UUID) -> list[Strategy
         select(StrategyExchange)
         .where(StrategyExchange.strategy_id == strategy_id)
         .options(
-            joinedload(StrategyExchange.exchange).joinedload(Exchange.exchange_type),
             joinedload(StrategyExchange.exchange).joinedload(Exchange.provider),
         )
         .order_by(StrategyExchange.order)
@@ -771,7 +765,6 @@ def get_strategy_exchanges_paginated(
     total = db.execute(select(func.count()).select_from(base.subquery())).scalar_one()
     query = (
         base.options(
-            joinedload(StrategyExchange.exchange).joinedload(Exchange.exchange_type),
             joinedload(StrategyExchange.exchange).joinedload(Exchange.provider),
         )
         .order_by(StrategyExchange.order.asc())

@@ -125,6 +125,15 @@ class Feed(ABC):
     #: Long description shown in the UI.
     description: ClassVar[str | None] = None
 
+    #: Provider name or UUID.  Resolved to a UUID at deploy time.
+    provider: ClassVar[str | None] = None
+
+    #: Instrument type name or UUID.  Mutually exclusive with ``composite_type``.
+    instrument_type: ClassVar[str | None] = None
+
+    #: Composite type name or UUID.  Mutually exclusive with ``instrument_type``.
+    composite_type: ClassVar[str | None] = None
+
     #: Seconds to wait before reconnecting a streaming feed after disconnect.
     reconnect_delay: ClassVar[float] = 5.0
 
@@ -271,8 +280,10 @@ class Feed(ABC):
 
     @classmethod
     def data_schema(cls) -> dict:
-        """Return the Pandera schema for this feed's output as JSON."""
-        return cls.output.to_schema().to_json()
+        """Return the Pandera schema for this feed's output as a dict."""
+        import json
+
+        return json.loads(cls.output.to_schema().to_json())
 
     @classmethod
     def output_table(cls) -> str:
@@ -281,13 +292,34 @@ class Feed(ABC):
 
     @classmethod
     def ref(cls) -> str:
-        """Canonical ``module:ClassName`` reference for DB lookup."""
-        return f"{cls.__module__}:{cls.__name__}"
+        """Canonical reference for DB lookup.  Uses the name."""
+        return cls.get_name()
+
+    @classmethod
+    def get_name(cls) -> str:
+        """Return the unique name (``UPPER_SNAKE_CASE``).
+
+        Derives from the class name by inserting underscores before
+        uppercase letters and uppercasing
+        (e.g. ``TimingFeed`` -> ``TIMING_FEED``).
+        """
+        import re
+
+        return re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", cls.__name__).upper()
 
     @classmethod
     def get_display_name(cls) -> str:
-        """Return the display name, falling back to the class name."""
-        return cls.display_name or cls.__name__
+        """Return the display name.
+
+        If ``display_name`` is not set, derives it from the class name
+        by inserting spaces before each uppercase letter
+        (e.g. ``TimingFeed`` -> ``Timing Feed``).
+        """
+        if cls.display_name:
+            return cls.display_name
+        import re
+
+        return re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", cls.__name__)
 
     # ------------------------------------------------------------------
     # Mode detection
@@ -316,6 +348,10 @@ class Feed(ABC):
         Registers (or updates) the feed in the database, then starts
         the appropriate engine loop (scheduled, streaming, or triggered).
         Blocks until SIGINT/SIGTERM.
+
+        The ``provider``, ``instrument_type``, and ``composite_type``
+        class attributes are resolved at deploy time — they accept either
+        a UUID or a name string that is looked up in the database.
         """
         from ascent.engine.runner import Runner
 

@@ -7,15 +7,12 @@ from ascent.database.models import (
     AssetTypeMetadata,
     AssetTypeProviderAssetMetadata,
     CompositeType,
-    ExchangeType,
-    FeedType,
     InstrumentType,
     Metadata,
     OrderStatusType,
     OrderType,
     ProviderType,
     ProviderTypeMetadata,
-    StrategyType,
     TradeStatusType,
     TransactionStatusType,
     TransactionType,
@@ -704,17 +701,6 @@ def remove_instrument_type_metadata(
     db.commit()
 
 
-@router.get("/strategy-types", response_model=list[TypeItem])
-def list_strategy_types(db: Session = Depends(get_db)):
-    result = db.execute(select(StrategyType)).scalars().all()
-    return [TypeItem.model_validate(r) for r in result]
-
-
-@router.post("/strategy-types", status_code=201)
-def create_strategy_type(data: TypeCreate, db: Session = Depends(get_db)):
-    return _create_type(db, StrategyType, data)
-
-
 @router.get("/trade-statuses", response_model=list[TypeItem])
 def list_trade_statuses(db: Session = Depends(get_db)):
     result = db.execute(select(TradeStatusType)).scalars().all()
@@ -768,34 +754,6 @@ def list_transaction_statuses(db: Session = Depends(get_db)):
 @router.post("/transaction-statuses", status_code=201)
 def create_transaction_status_type(data: TypeCreate, db: Session = Depends(get_db)):
     return _create_type(db, TransactionStatusType, data)
-
-
-# --- Exchange Types ---
-
-
-@router.get("/exchange-types", response_model=list[TypeItem])
-def list_exchange_types(db: Session = Depends(get_db)):
-    result = db.execute(select(ExchangeType)).scalars().all()
-    return [TypeItem.model_validate(r) for r in result]
-
-
-@router.post("/exchange-types", status_code=201)
-def create_exchange_type(data: TypeCreate, db: Session = Depends(get_db)):
-    return _create_type(db, ExchangeType, data)
-
-
-# --- Feed Types ---
-
-
-@router.get("/feed-types", response_model=list[TypeItem])
-def list_feed_types(db: Session = Depends(get_db)):
-    result = db.execute(select(FeedType)).scalars().all()
-    return [TypeItem.model_validate(r) for r in result]
-
-
-@router.post("/feed-types", status_code=201)
-def create_feed_type(data: TypeCreate, db: Session = Depends(get_db)):
-    return _create_type(db, FeedType, data)
 
 
 # ---- Composite Type endpoints ----

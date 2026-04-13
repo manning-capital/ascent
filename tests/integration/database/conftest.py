@@ -16,9 +16,7 @@ from ascent.database.models import (
     CompositeMember,
     CompositeType,
     Exchange,
-    ExchangeType,
     Feed,
-    FeedType,
     Instrument,
     InstrumentType,
     Metadata,
@@ -28,7 +26,6 @@ from ascent.database.models import (
     Provider,
     ProviderType,
     Strategy,
-    StrategyType,
     TradeStatusType,
 )
 from tests.factories import (
@@ -38,9 +35,7 @@ from tests.factories import (
     make_composite,
     make_composite_type,
     make_exchange,
-    make_exchange_type,
     make_feed,
-    make_feed_type,
     make_instrument,
     make_instrument_type,
     make_metadata,
@@ -50,7 +45,6 @@ from tests.factories import (
     make_provider,
     make_provider_type,
     make_strategy,
-    make_strategy_type,
     make_trade_status_type,
 )
 
@@ -60,21 +54,16 @@ def base_types(db_session) -> dict:
     """Create all foundational type entities.
 
     Returns dict with keys:
-        asset_type, provider_type, exchange_type, instrument_type,
-        composite_type, feed_type, strategy_type, order_type,
+        asset_type, provider_type, instrument_type,
+        composite_type, order_type,
         order_status_type, trade_status_types (dict[str, TradeStatusType])
     """
     asset_type = AssetType(**make_asset_type(name="CRYPTO", display_name="Cryptocurrency"))
     provider_type = ProviderType(**make_provider_type(name="EXCHANGE", display_name="Exchange"))
-    exchange_type = ExchangeType(**make_exchange_type(name="SPOT", display_name="Spot"))
     instrument_type = InstrumentType(
         **make_instrument_type(name="SPOT_PAIR", display_name="Spot Pair")
     )
     composite_type = CompositeType(**make_composite_type(name="SPREAD", display_name="Spread"))
-    feed_type = FeedType(**make_feed_type(name="MARKET_DATA", display_name="Market Data"))
-    strategy_type = StrategyType(
-        **make_strategy_type(name="PAIRS_TRADING", display_name="Pairs Trading")
-    )
     order_type = OrderType(**make_order_type(name="MARKET", display_name="Market"))
     order_status_type = OrderStatusType(
         **make_order_status_type(name="SUBMITTED", display_name="Submitted")
@@ -84,11 +73,8 @@ def base_types(db_session) -> dict:
         [
             asset_type,
             provider_type,
-            exchange_type,
             instrument_type,
             composite_type,
-            feed_type,
-            strategy_type,
             order_type,
             order_status_type,
         ]
@@ -107,11 +93,8 @@ def base_types(db_session) -> dict:
     for obj in [
         asset_type,
         provider_type,
-        exchange_type,
         instrument_type,
         composite_type,
-        feed_type,
-        strategy_type,
         order_type,
         order_status_type,
     ]:
@@ -122,11 +105,8 @@ def base_types(db_session) -> dict:
     return {
         "asset_type": asset_type,
         "provider_type": provider_type,
-        "exchange_type": exchange_type,
         "instrument_type": instrument_type,
         "composite_type": composite_type,
-        "feed_type": feed_type,
-        "strategy_type": strategy_type,
         "order_type": order_type,
         "order_status_type": order_status_type,
         "trade_status_types": trade_status_types,
@@ -197,7 +177,6 @@ def base_exchange(db_session, base_types, base_provider) -> Exchange:
     """Create an exchange linked to the provider."""
     exchange = Exchange(
         **make_exchange(
-            base_types["exchange_type"].id,
             name="KRAKEN_SPOT",
             display_name="Kraken Spot",
             provider_id=base_provider.id,
@@ -292,7 +271,6 @@ def base_feed(db_session, base_types, base_provider) -> Feed:
     """Create a feed."""
     feed = Feed(
         **make_feed(
-            base_types["feed_type"].id,
             base_provider.id,
             instrument_type_id=base_types["instrument_type"].id,
             name="TEST_MARKET_DATA",
@@ -310,7 +288,6 @@ def base_strategy(db_session, base_types, base_portfolio) -> Strategy:
     """Create a strategy."""
     strategy = Strategy(
         **make_strategy(
-            base_types["strategy_type"].id,
             base_portfolio.id,
             name="TEST_PAIRS",
             display_name="Test Pairs Trading",

@@ -18,8 +18,6 @@ from ascent.server.schemas.exchanges import (
 def _build_exchange_schema(e: Exchange) -> ExchangeSchema:
     return ExchangeSchema(
         id=e.id,
-        exchange_type_id=e.exchange_type_id,
-        exchange_type_name=e.exchange_type.display_name if e.exchange_type else None,
         instrument_type_id=e.instrument_type_id,
         instrument_type_name=e.instrument_type.display_name if e.instrument_type else None,
         name=e.name,
@@ -37,7 +35,6 @@ def _build_exchange_schema(e: Exchange) -> ExchangeSchema:
 EXCHANGE_SORT_COLUMNS = {
     "display_name": Exchange.display_name,
     "name": Exchange.name,
-    "exchange_type_name": Exchange.exchange_type_id,
     "instrument_type_name": Exchange.instrument_type_id,
     "provider_name": Exchange.provider_id,
     "created_at": Exchange.created_at,
@@ -68,7 +65,6 @@ def get_exchanges(
     total = db.execute(count_q).scalar() or 0
 
     query = select(Exchange).options(
-        joinedload(Exchange.exchange_type),
         joinedload(Exchange.instrument_type),
         joinedload(Exchange.provider),
     )
@@ -86,7 +82,6 @@ def get_exchange(db: Session, exchange_id: uuid.UUID) -> ExchangeSchema:
     query = (
         select(Exchange)
         .options(
-            joinedload(Exchange.exchange_type),
             joinedload(Exchange.instrument_type),
             joinedload(Exchange.provider),
         )

@@ -23,7 +23,6 @@ def deploy_feed(
     feed_ref: str,
     *,
     name: str | None = None,
-    feed_type_id: uuid.UUID | None = None,
     database_url: str = "postgresql://localhost:5432/ascent",
     update: bool = False,
 ):
@@ -39,8 +38,6 @@ def deploy_feed(
         ``ascent.feeds.examples.market:market_data``
     name
         Display name for the feed. Defaults to the feed's display_name.
-    feed_type_id
-        Feed type ID from the feed_type table.
     database_url
         PostgreSQL connection string.
     update
@@ -99,7 +96,6 @@ def deploy_feed(
             feed_record = FeedModel(
                 name=display_name,
                 description=obj.description,
-                feed_type_id=feed_type_id,
                 feed_ref=canonical_ref,
                 parameter_schema=param_schema,
                 data_schema=data_schema,
@@ -160,7 +156,6 @@ def deploy_strategy(
     *,
     name: str | None = None,
     portfolio_id: uuid.UUID | None = None,
-    strategy_type_id: uuid.UUID | None = None,
     database_url: str = "postgresql://localhost:5432/ascent",
     update: bool = False,
 ):
@@ -180,8 +175,6 @@ def deploy_strategy(
         Display name for the strategy. Defaults to the strategy's display_name.
     portfolio_id
         Portfolio to associate with the strategy.
-    strategy_type_id
-        Strategy type ID from the strategy_type table.
     database_url
         PostgreSQL connection string.
     update
@@ -250,7 +243,6 @@ def deploy_strategy(
             strat = StrategyModel(
                 name=display_name,
                 description=description,
-                strategy_type_id=strategy_type_id,
                 strategy_ref=canonical_ref,
                 portfolio_id=portfolio_id,
                 parameters=defaults,

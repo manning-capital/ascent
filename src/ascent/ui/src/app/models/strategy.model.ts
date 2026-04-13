@@ -3,7 +3,6 @@ export interface StrategyListItem {
   name: string;
   display_name: string;
   description: string | null;
-  strategy_type: string;
   strategy_ref: string;
   parameters: any;
   portfolio_id: string;

@@ -31,7 +31,6 @@ export class StrategyListComponent implements OnInit {
 
   columns: DataTableColumn<StrategyListItem>[] = [
     { field: 'display_name', header: 'Display Name' },
-    { field: 'strategy_type', header: 'Type', sortable: false },
     { field: 'total_trades', header: 'Trades', sortable: false },
     { field: 'win_rate', header: 'Win Rate', sortable: false, valueFormatter: (p) => p.value != null ? `${p.value}%` : '' },
     { field: 'open_trades', header: 'Open', sortable: false },

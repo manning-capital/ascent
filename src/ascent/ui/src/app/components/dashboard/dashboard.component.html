@@ -280,9 +280,8 @@
                 </div>
               </ng-template>
               <div class="flex items-center gap-2 mb-3">
-                <span class="text-xs text-surface-500">{{ strategy.strategy_type }}</span>
                 @if (strategy.last_trade_at) {
-                  <span class="text-xs text-surface-400">&middot; {{ relativeTime(strategy.last_trade_at) }}</span>
+                  <span class="text-xs text-surface-400">{{ relativeTime(strategy.last_trade_at) }}</span>
                 }
               </div>
               <div class="grid grid-cols-3 gap-2">

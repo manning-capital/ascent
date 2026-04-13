@@ -1,7 +1,5 @@
 export interface ExchangeListItem {
   id: string;
-  exchange_type_id: string;
-  exchange_type_name: string | null;
   instrument_type_id: string | null;
   instrument_type_name: string | null;
   name: string;
@@ -43,7 +41,6 @@ export interface StrategyExchangeItem {
   exchange_id: string;
   exchange_name: string | null;
   exchange_display_name: string | null;
-  exchange_type_name: string | null;
   provider_name: string | null;
   is_active: boolean;
   order: number;

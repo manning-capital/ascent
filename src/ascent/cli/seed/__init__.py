@@ -8,6 +8,7 @@ def run(
     *,
     server_url: str = "http://localhost:8000",
     drop: bool = False,
+    profile: str = "full",
 ):
     """Load fake data into the database for UI testing.
 
@@ -17,6 +18,14 @@ def run(
         Base URL of the running Ascent server.
     drop
         If True, instructs the user to restart the server with --drop first.
+    profile
+        Which seed profile to run.  Options:
+
+        - ``full`` (default) — everything including feeds, strategies,
+          exchanges, and trades.
+        - ``base`` — types, assets, descriptors, metadata, providers,
+          portfolios, instruments, and composites only (no feeds,
+          strategies, exchanges, or trades).
     """
     import datetime
     import os
@@ -70,7 +79,14 @@ def run(
     now = datetime.datetime.now(datetime.UTC)
     ctx: dict = {"now": now}
 
-    steps = [
+    valid_profiles = ("full", "base")
+    if profile not in valid_profiles:
+        console.print(
+            f"[red]✗[/] Unknown profile '{profile}'. Choose from: {', '.join(valid_profiles)}"
+        )
+        return
+
+    base_steps = [
         ("Type hierarchies", seed_types),
         ("Assets", seed_assets),
         ("Attributes & metadata types", seed_descriptors),
@@ -80,10 +96,15 @@ def run(
         ("Portfolios", seed_portfolios),
         ("Instruments", seed_instruments),
         ("Composites", seed_composites),
+    ]
+
+    full_steps = [
         ("Feeds, runs & partitions", seed_feeds),
         ("Strategies & runs", seed_strategies),
         ("Trades, orders & snapshots", seed_trades),
     ]
+
+    steps = base_steps if profile == "base" else base_steps + full_steps
 
     progress = Progress(
         TextColumn("{task.description}"),
@@ -141,12 +162,13 @@ def run(
     table.add_row("Instruments", str(len(ctx["all_instruments"])))
     table.add_row("Composite types", "8 (hierarchical)")
     table.add_row("Composites", str(len(ctx["all_composites"])))
-    table.add_row("Feeds", str(len(ctx["all_feeds"])))
-    table.add_row("Instrument attributes", f"{ctx['paga_count']:,}")
-    table.add_row("Composite attributes", f"{ctx['comp_count']:,}")
-    table.add_row("Strategies", str(len(ctx["strategy_objs"])))
-    table.add_row("Strategy-run / feed-run links", str(ctx["link_count"]))
-    table.add_row("Trades", str(len(ctx["all_trades"])))
+    if profile == "full":
+        table.add_row("Feeds", str(len(ctx["all_feeds"])))
+        table.add_row("Instrument attributes", f"{ctx['paga_count']:,}")
+        table.add_row("Composite attributes", f"{ctx['comp_count']:,}")
+        table.add_row("Strategies", str(len(ctx["strategy_objs"])))
+        table.add_row("Strategy-run / feed-run links", str(ctx["link_count"]))
+        table.add_row("Trades", str(len(ctx["all_trades"])))
 
     console.print(table)
     console.print(f"\n[bold green]✓ Seeded successfully in {total_elapsed:.1f}s[/]")

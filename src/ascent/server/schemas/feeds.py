@@ -16,7 +16,6 @@ class FeedListItem(BaseModel):
     name: str
     display_name: str
     description: str | None = None
-    feed_type_id: uuid.UUID
     provider_id: uuid.UUID
     provider_name: str | None = None
     scope_type: Literal["instrument", "composite"]
@@ -44,7 +43,6 @@ class FeedDetail(FeedListItem):
 class FeedCreate(BaseModel):
     name: Identifier
     display_name: str
-    feed_type_id: uuid.UUID
     provider_id: uuid.UUID
     scope_type: Literal["instrument", "composite"]
     scope_type_id: uuid.UUID

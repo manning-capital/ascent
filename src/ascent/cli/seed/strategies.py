@@ -10,7 +10,6 @@ from typing import Any
 
 def seed_strategies(client: Any, ctx: dict) -> None:
     now = ctx["now"]
-    strategy_type_by_name = ctx["strategy_type_by_name"]
     feed_deps = ctx["feed_deps"]
     feed_runs_by_feed = ctx["feed_runs_by_feed"]
 
@@ -20,13 +19,12 @@ def seed_strategies(client: Any, ctx: dict) -> None:
     pairs_schema = pairs_strategy.parameter_schema()
     momentum_schema = momentum_strategy.parameter_schema()
 
-    # (name, display, desc, strategy_type, ref, portfolio_id, params, schema, feeds)
+    # (name, display, desc, ref, portfolio_id, params, schema, feeds)
     strategies_data = [
         (
             "BTC_ETH_PAIRS",
             "BTC-ETH Pairs",
             "Pairs trading BTC/ETH spread on Kraken",
-            "PAIRS_TRADING",
             "ascent.strategies.examples.pairs:pairs_strategy",
             ctx["portfolio_main"]["id"],
             {
@@ -43,7 +41,6 @@ def seed_strategies(client: Any, ctx: dict) -> None:
             "SOL_MOMENTUM",
             "SOL Momentum",
             "Momentum strategy on SOL/USD via Kraken",
-            "MOMENTUM",
             "ascent.strategies.examples.momentum:momentum_strategy",
             ctx["portfolio_main"]["id"],
             {
@@ -68,7 +65,6 @@ def seed_strategies(client: Any, ctx: dict) -> None:
             "ADA_MEAN_REV",
             "ADA Mean Rev",
             "Mean reversion on ADA/USD via Kraken",
-            "MEAN_REVERSION",
             "ascent.strategies.examples.momentum:momentum_strategy",
             ctx["portfolio_main"]["id"],
             {
@@ -92,7 +88,6 @@ def seed_strategies(client: Any, ctx: dict) -> None:
             "XRP_DOGE_PAIRS",
             "XRP-DOGE Pairs",
             "Pairs trading XRP/DOGE spread on Kraken",
-            "PAIRS_TRADING",
             "ascent.strategies.examples.pairs:pairs_strategy",
             ctx["portfolio_main"]["id"],
             {
@@ -116,7 +111,6 @@ def seed_strategies(client: Any, ctx: dict) -> None:
             "BTC_GRID",
             "BTC Grid Trading",
             "Grid trading on BTC/USD with 0.5% grid spacing",
-            "GRID_TRADING",
             "ascent.strategies.examples.pairs:pairs_strategy",
             ctx["portfolio_main"]["id"],
             {
@@ -133,7 +127,6 @@ def seed_strategies(client: Any, ctx: dict) -> None:
             "CRYPTO_STAT_ARB",
             "Crypto Statistical Arb",
             "Multi-pair statistical arbitrage across crypto spreads",
-            "STATISTICAL_ARBITRAGE",
             "ascent.strategies.examples.pairs:pairs_strategy",
             ctx["portfolio_main"]["id"],
             {
@@ -156,7 +149,6 @@ def seed_strategies(client: Any, ctx: dict) -> None:
             "ETH_BREAKOUT",
             "ETH Breakout",
             "Breakout strategy on ETH/USD using Bollinger Bands",
-            "BREAKOUT",
             "ascent.strategies.examples.momentum:momentum_strategy",
             ctx["portfolio_main"]["id"],
             {
@@ -180,7 +172,6 @@ def seed_strategies(client: Any, ctx: dict) -> None:
             "DEFI_MOMENTUM",
             "DeFi Momentum",
             "Momentum strategy across DeFi basket tokens",
-            "MOMENTUM",
             "ascent.strategies.examples.momentum:momentum_strategy",
             ctx["portfolio_main"]["id"],
             {
@@ -204,7 +195,6 @@ def seed_strategies(client: Any, ctx: dict) -> None:
             "FUNDING_CARRY",
             "Funding Rate Carry",
             "Carry trade exploiting perpetual swap funding rate differentials",
-            "CARRY_TRADE",
             "ascent.strategies.examples.momentum:momentum_strategy",
             ctx["portfolio_main"]["id"],
             {
@@ -223,7 +213,6 @@ def seed_strategies(client: Any, ctx: dict) -> None:
             "AVAX_MOMENTUM_COINBASE",
             "AVAX Momentum (Coinbase)",
             "Momentum strategy on AVAX/USD via Coinbase",
-            "MOMENTUM",
             "ascent.strategies.examples.momentum:momentum_strategy",
             ctx["portfolio_coinbase"]["id"],
             {
@@ -242,7 +231,6 @@ def seed_strategies(client: Any, ctx: dict) -> None:
             "LINK_MEAN_REV_COINBASE",
             "LINK Mean Rev (Coinbase)",
             "Mean reversion on LINK/USD via Coinbase",
-            "MEAN_REVERSION",
             "ascent.strategies.examples.pairs:pairs_strategy",
             ctx["portfolio_coinbase"]["id"],
             {
@@ -259,7 +247,6 @@ def seed_strategies(client: Any, ctx: dict) -> None:
             "CROSS_BTC_ARB",
             "Cross-Exchange BTC Arb",
             "Cross-exchange arbitrage on BTC between Kraken and Coinbase",
-            "STATISTICAL_ARBITRAGE",
             "ascent.strategies.examples.pairs:pairs_strategy",
             ctx["portfolio_main"]["id"],
             {
@@ -281,7 +268,6 @@ def seed_strategies(client: Any, ctx: dict) -> None:
             "AAPL_MSFT_PAIRS",
             "AAPL-MSFT Pairs",
             "Pairs trading Apple vs Microsoft",
-            "PAIRS_TRADING",
             "ascent.strategies.examples.pairs:pairs_strategy",
             ctx["portfolio_equity"]["id"],
             {
@@ -298,7 +284,6 @@ def seed_strategies(client: Any, ctx: dict) -> None:
             "TECH_TREND",
             "Tech Trend Following",
             "Trend following strategy on top tech stocks",
-            "TREND_FOLLOWING",
             "ascent.strategies.examples.momentum:momentum_strategy",
             ctx["portfolio_equity"]["id"],
             {
@@ -317,7 +302,6 @@ def seed_strategies(client: Any, ctx: dict) -> None:
             "GOLD_SILVER_RATIO",
             "Gold/Silver Ratio Trade",
             "Mean reversion on the gold/silver price ratio",
-            "MEAN_REVERSION",
             "ascent.strategies.examples.pairs:pairs_strategy",
             ctx["portfolio_commodity"]["id"],
             {
@@ -334,7 +318,6 @@ def seed_strategies(client: Any, ctx: dict) -> None:
             "WTI_BRENT_SPREAD",
             "WTI-Brent Spread",
             "Trading the spread between WTI and Brent crude oil",
-            "PAIRS_TRADING",
             "ascent.strategies.examples.pairs:pairs_strategy",
             ctx["portfolio_commodity"]["id"],
             {
@@ -350,12 +333,11 @@ def seed_strategies(client: Any, ctx: dict) -> None:
     ]
 
     strategies = []
-    for name, display_name, desc, st_name, ref, pid, params, schema, feeds in strategies_data:
+    for name, display_name, desc, ref, pid, params, schema, feeds in strategies_data:
         s = client.create_strategy(
             name=name,
             display_name=display_name,
             description=desc,
-            strategy_type_id=uuid.UUID(strategy_type_by_name[st_name]["id"]),
             strategy_ref=ref,
             portfolio_id=uuid.UUID(pid),
             parameters=params,

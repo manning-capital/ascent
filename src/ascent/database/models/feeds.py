@@ -12,7 +12,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ascent.database.models.base import Base, NamedEntityMixin
 from ascent.database.models.instruments import Instrument
-from ascent.database.models.types import CompositeType, FeedType, InstrumentType
+from ascent.database.models.types import CompositeType, InstrumentType
 
 if TYPE_CHECKING:
     from ascent.database.models.composites import Composite
@@ -36,12 +36,6 @@ class Feed(NamedEntityMixin, Base):
         },
     )
 
-    feed_type_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid,
-        ForeignKey("feed_type.id"),
-        nullable=False,
-    )
-    feed_type: Mapped[FeedType] = relationship("FeedType")
     provider_id: Mapped[uuid.UUID] = mapped_column(
         Uuid,
         ForeignKey("provider.id"),

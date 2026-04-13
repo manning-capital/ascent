@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from ascent.database.models.portfolio import Portfolio
 from ascent.database.models.providers import Provider
-from ascent.database.models.types import FeedType, InstrumentType, ProviderType, StrategyType
+from ascent.database.models.types import InstrumentType, ProviderType
 from ascent.engine.deploy import deploy_feed, deploy_strategy
 from ascent.feeds.base import Feed
 from ascent.feeds.output import InstrumentAttributes
@@ -236,15 +236,8 @@ def _reset_stub_state():
 def engine_types(db_session: Session) -> dict[str, uuid.UUID]:
     """Create all prerequisite type entities for deploy.
 
-    Returns dict with keys: feed_type_id, strategy_type_id, provider_id,
-    instrument_type_id, portfolio_id.
+    Returns dict with keys: provider_id, instrument_type_id, portfolio_id.
     """
-    feed_type = FeedType(name="TEST_FEED_TYPE", display_name="Test Feed Type")
-    db_session.add(feed_type)
-
-    strategy_type = StrategyType(name="TEST_STRATEGY_TYPE", display_name="Test Strategy Type")
-    db_session.add(strategy_type)
-
     instrument_type = InstrumentType(
         name="TEST_INSTRUMENT_TYPE", display_name="Test Instrument Type"
     )
@@ -263,8 +256,6 @@ def engine_types(db_session: Session) -> dict[str, uuid.UUID]:
     db_session.flush()
 
     return {
-        "feed_type_id": feed_type.id,
-        "strategy_type_id": strategy_type.id,
         "provider_id": provider.id,
         "instrument_type_id": instrument_type.id,
         "portfolio_id": portfolio.id,
@@ -284,7 +275,6 @@ def deploy_feed_cls(db_session: Session, engine_types: dict[str, uuid.UUID]):
         feed_id = deploy_feed(
             feed_cls,
             db_session,
-            feed_type_id=engine_types["feed_type_id"],
             provider_id=engine_types["provider_id"],
             instrument_type_id=engine_types["instrument_type_id"],
         )
@@ -302,7 +292,6 @@ def deploy_strategy_cls(db_session: Session, engine_types: dict[str, uuid.UUID])
         strategy_id = deploy_strategy(
             strategy_cls,
             db_session,
-            strategy_type_id=engine_types["strategy_type_id"],
             portfolio_id=engine_types["portfolio_id"],
         )
         db_session.commit()

@@ -7,7 +7,6 @@ from ascent.server.schemas.common import Identifier
 
 
 class ExchangeCreate(BaseModel):
-    exchange_type_id: uuid.UUID
     instrument_type_id: uuid.UUID | None = None
     name: Identifier
     display_name: str
@@ -33,8 +32,6 @@ class ExchangeSchema(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
-    exchange_type_id: uuid.UUID
-    exchange_type_name: str | None = None
     instrument_type_id: uuid.UUID | None = None
     instrument_type_name: str | None = None
     name: str

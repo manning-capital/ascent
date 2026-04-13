@@ -178,6 +178,7 @@ def run_scheduled_feed(
     database_url: str = "postgresql://localhost:5432/ascent",
     redis_url: str = "redis://localhost:6379/0",
     shutdown_event: threading.Event | None = None,
+    feed_cls: type[Feed] | None = None,
 ) -> None:
     """Run a scheduled feed in a long-running loop driven by AlignedTimer.
 
@@ -206,8 +207,9 @@ def run_scheduled_feed(
         schedule_data = feed_record.schedule
         parameters = feed_record.parameters or {}
 
-    # Import and instantiate the Feed class
-    feed_cls = _import_feed(feed_ref)
+    # Use provided feed class, or fall back to import via ref
+    if feed_cls is None:
+        feed_cls = _import_feed(feed_ref)
     feed_instance = feed_cls(parameters)
 
     # Build schedule and timer
@@ -326,6 +328,7 @@ def run_triggered_feed(
     database_url: str = "postgresql://localhost:5432/ascent",
     redis_url: str = "redis://localhost:6379/0",
     shutdown_event: threading.Event | None = None,
+    feed_cls: type[Feed] | None = None,
 ) -> None:
     """Run a triggered feed that fires when all parent feeds have fresh data.
 
@@ -383,8 +386,9 @@ def run_triggered_feed(
             if effective_schedule is None or s.interval < effective_schedule.interval:
                 effective_schedule = s
 
-    # Import and instantiate the Feed class
-    feed_cls = _import_feed(feed_ref)
+    # Use provided feed class, or fall back to import via ref
+    if feed_cls is None:
+        feed_cls = _import_feed(feed_ref)
     feed_instance = feed_cls(parameters)
 
     # Build parent ref mapping: parent_feed_id → parent_feed_ref

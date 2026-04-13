@@ -116,7 +116,6 @@ export class StrategyDetailComponent implements OnInit {
   exchangeColumns: DataTableColumn[] = [
     { field: 'exchange_display_name', header: 'Exchange', sortable: false },
     { field: 'exchange_name', header: 'Name', sortable: false, cellClass: 'font-mono text-surface-500' },
-    { field: 'exchange_type_name', header: 'Type', sortable: false, cellClass: 'text-muted-color' },
     { field: 'provider_name', header: 'Provider', sortable: false },
     { field: 'is_active', header: 'Status', sortable: false, cellType: 'tag', tagMapper: (v: boolean) => ({ label: v ? 'Active' : 'Inactive', severity: v ? 'success' : 'secondary' }) },
     { field: '', header: '', sortable: false, cellType: 'custom', cellRenderer: RemoveCellRenderer, width: 80 },
@@ -144,7 +143,6 @@ export class StrategyDetailComponent implements OnInit {
   exchangePickerColDefs: ColDef[] = [
     { headerName: 'Display Name', field: 'display_name', minWidth: 160 },
     { headerName: 'Name', field: 'name', cellClass: 'font-mono text-surface-500', minWidth: 140 },
-    { headerName: 'Type', field: 'exchange_type_name', sortable: false },
     { headerName: 'Provider', field: 'provider_name', sortable: false },
     { headerName: 'Status', field: 'is_active', cellRenderer: StatusBadgeCellRenderer },
     { headerName: '', field: '', cellRenderer: StageCellRenderer, sortable: false, maxWidth: 80 },

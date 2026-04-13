@@ -98,7 +98,6 @@ export class ExchangeDetailComponent implements OnInit {
     return [
       { type: 'mono', key: 'name', label: 'Name', value: exchange.name },
       { type: 'text', key: 'displayName', label: 'Display Name', value: exchange.display_name },
-      { type: 'text', key: 'type', label: 'Type', value: exchange.exchange_type_name, fallback: '--' },
       { type: 'link', key: 'instrumentType', label: 'Instrument Type', value: exchange.instrument_type_name, route: exchange.instrument_type_id ? ['/settings/instrument-types', exchange.instrument_type_id] : [], fallback: 'Any' },
       { type: 'link', key: 'provider', label: 'Provider', value: exchange.provider_name, route: exchange.provider_id ? ['/settings/providers', exchange.provider_id] : [], fallback: 'None' },
       { type: 'active', key: 'isActive', label: 'Active', value: exchange.is_active },

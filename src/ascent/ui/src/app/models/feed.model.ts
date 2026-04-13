@@ -5,7 +5,6 @@ export interface FeedListItem {
   name: string;
   display_name: string;
   description: string | null;
-  feed_type_id: string;
   provider_id: string;
   provider_name: string | null;
   scope_type: 'instrument' | 'composite';
