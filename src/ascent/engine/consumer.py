@@ -47,6 +47,7 @@ def _build_strategy_context(
     latest_data: dict[uuid.UUID, pd.DataFrame],
     cache: EngineCache,
     strategy_id: uuid.UUID,
+    feed_ref_map: dict[uuid.UUID, str] | None = None,
 ) -> StrategyContext:
     """Build a StrategyContext from cached feed data and instrument state.
 
@@ -55,16 +56,18 @@ def _build_strategy_context(
         latest_data: Map of feed_id → latest DataFrame from Redis.
         cache: The engine cache for instrument state.
         strategy_id: The strategy's database ID.
+        feed_ref_map: Map of feed_id → feed_ref string for ref-keyed lookups.
 
     Returns:
         A fully populated StrategyContext.
     """
-    # Build feed frames dict (feed_id → DataFrame)
-    feed_frames: dict[uuid.UUID, pd.DataFrame] = {}
+    # Build feed frames dict keyed by feed ref string
+    feed_frames: dict[str, pd.DataFrame] = {}
     for sf in strategy_feeds:
         df = latest_data.get(sf.feed_id)
         if df is not None:
-            feed_frames[sf.feed_id] = df
+            ref = feed_ref_map.get(sf.feed_id, str(sf.feed_id)) if feed_ref_map else str(sf.feed_id)
+            feed_frames[ref] = df
 
     # Load instrument and composite state from Redis
     cached_state = cache.get_strategy_state(strategy_id)
@@ -195,8 +198,14 @@ def run_strategy(
                 feed_records[sf.feed_id] = feed_record
                 channels.append(feed_record.channel)
 
-    # Import the decorated strategy function
-    strategy_obj = _import_strategy(strategy_ref)
+    # Import and instantiate the Strategy class
+    strategy_cls = _import_strategy(strategy_ref)
+    strategy_instance = strategy_cls(parameters)
+
+    # Build feed ref mapping: feed_id → feed_ref string
+    feed_ref_map: dict[uuid.UUID, str] = {}
+    for fid, fr in feed_records.items():
+        feed_ref_map[fid] = fr.feed_ref
 
     # In-memory latest data from feeds
     latest_data: dict[uuid.UUID, pd.DataFrame] = {}
@@ -270,7 +279,9 @@ def run_strategy(
             token_logger = _current_logger.set(run_logger)
             try:
                 # Build vectorized context
-                ctx = _build_strategy_context(strategy_feeds, latest_data, cache, strategy_id)
+                ctx = _build_strategy_context(
+                    strategy_feeds, latest_data, cache, strategy_id, feed_ref_map
+                )
                 token_ctx = _current_context.set(ctx)
 
                 try:
@@ -279,7 +290,7 @@ def run_strategy(
                         strategy_ref,
                         updated_feed_id,
                     )
-                    strategy_obj(**parameters)
+                    strategy_instance.evaluate()
 
                     # Persist updated instrument and composite states to Redis
                     state_data: dict = {}

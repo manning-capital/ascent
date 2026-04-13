@@ -242,8 +242,8 @@ class Feed(ABC):
         Args:
             feed_cls: The parent Feed class to retrieve data for.
 
-        The engine populates the feeds context as a dict keyed by
-        feed class ref string (``"module:ClassName"``) → DataFrame.
+        The engine populates the feeds context as a ``dict[str, DataFrame]``
+        keyed by feed ref string (``"module:ClassName"``).
         """
         from ascent.engine.context import _current_feeds
 
@@ -252,18 +252,13 @@ class Feed(ABC):
         except LookupError:
             raise RuntimeError("get_feed() called outside of a triggered feed context.") from None
 
-        # The feeds dict is keyed by feed_id (UUID).  The engine maps
-        # feed_cls.ref() → feed_id at setup time and stores the mapping
-        # in the context.  For now we iterate to find a match by UUID key.
-        # TODO: update when engine populates ref-keyed dict for class-based feeds
-        for _id, df in feeds.items():
-            if df is not None:
-                return df
-
-        raise KeyError(
-            f"Feed {feed_cls.__name__!r} not found in current feeds context. "
-            f"Make sure it is listed in depends_on."
-        )
+        ref = feed_cls.ref()
+        if ref not in feeds:
+            raise KeyError(
+                f"Feed {feed_cls.__name__!r} (ref={ref!r}) not found in current feeds context. "
+                f"Make sure it is listed in depends_on."
+            )
+        return feeds[ref]
 
     # ------------------------------------------------------------------
     # Schema helpers

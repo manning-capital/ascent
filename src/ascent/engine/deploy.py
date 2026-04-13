@@ -30,6 +30,9 @@ def deploy_feed(
     db: Session,
     *,
     feed_type_id: uuid.UUID | None = None,
+    provider_id: uuid.UUID | None = None,
+    instrument_type_id: uuid.UUID | None = None,
+    composite_type_id: uuid.UUID | None = None,
     name: str | None = None,
 ) -> uuid.UUID:
     """Register or update a Feed class in the database.
@@ -57,7 +60,7 @@ def deploy_feed(
     param_schema = feed_cls.parameter_schema()
     data_schema = feed_cls.data_schema()
     output_table = feed_cls.output_table()
-    schedule_dict = feed_cls.schedule.model_dump() if feed_cls.schedule else None
+    schedule_dict = feed_cls.schedule.model_dump(mode="json") if feed_cls.schedule else None
     description = feed_cls.description or ""
 
     existing = (
@@ -79,8 +82,12 @@ def deploy_feed(
     else:
         feed_record = FeedModel(
             name=display_name,
+            display_name=display_name,
             description=description,
             feed_type_id=feed_type_id,
+            provider_id=provider_id,
+            instrument_type_id=instrument_type_id,
+            composite_type_id=composite_type_id,
             feed_ref=canonical_ref,
             parameter_schema=param_schema,
             data_schema=data_schema,
@@ -185,6 +192,7 @@ def deploy_strategy(
     else:
         strat = StrategyModel(
             name=display_name,
+            display_name=display_name,
             description=description,
             strategy_type_id=strategy_type_id,
             strategy_ref=canonical_ref,

@@ -42,7 +42,7 @@ class PartitionInfo(BaseModel):
 
 _current_context: contextvars.ContextVar[StrategyContext] = contextvars.ContextVar("ascent_context")
 _current_logger: contextvars.ContextVar[logging.Logger] = contextvars.ContextVar("ascent_logger")
-_current_feeds: contextvars.ContextVar[dict[int, pd.DataFrame]] = contextvars.ContextVar(
+_current_feeds: contextvars.ContextVar[dict[str, pd.DataFrame]] = contextvars.ContextVar(
     "ascent_feeds"
 )
 _current_partition: contextvars.ContextVar[PartitionInfo] = contextvars.ContextVar(
@@ -140,14 +140,17 @@ class StrategyContext:
         self,
         instruments: pd.DataFrame,
         composites: pd.DataFrame,
-        feed_frames: dict[int, pd.DataFrame],
+        feed_frames: dict[str, pd.DataFrame],
     ) -> None:
         self.instruments = instruments
         self.composites = composites
         self._feed_frames = feed_frames
 
-    def get(self, feed: Feed) -> pd.DataFrame:
+    def get(self, feed_cls: type) -> pd.DataFrame:
         """Get feed data as a DataFrame for ALL instruments.
+
+        Args:
+            feed_cls: The Feed class to retrieve data for.
 
         Returns a DataFrame with columns:
           - ``instrument_id``: int (matches ``instruments.index``)
@@ -157,12 +160,13 @@ class StrategyContext:
         The engine pre-joins attribute IDs → names and pivots from EAV format
         into a wide DataFrame.  Strategies never deal with ``attribute_id`` integers.
         """
-        if feed._feed_id not in self._feed_frames:
+        ref = feed_cls.ref() if hasattr(feed_cls, "ref") else str(feed_cls)
+        if ref not in self._feed_frames:
             raise KeyError(
-                f"Feed {feed.__name__!r} (id={feed._feed_id}) not found in strategy context. "
-                f"Make sure it is listed in @strategy(feeds=[...])."
+                f"Feed {feed_cls.__name__!r} (ref={ref!r}) not found in strategy context. "
+                f"Make sure it is listed in Strategy.feeds."
             )
-        return self._feed_frames[feed._feed_id]
+        return self._feed_frames[ref]
 
     def __repr__(self) -> str:
         n_instruments = len(self.instruments)

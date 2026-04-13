@@ -1,15 +1,15 @@
 """Tests for the Feed abstract base class — schemas, ref, mode detection."""
 
 from tests.integration.engine.conftest import (
-    StubFeed,
-    StubStreamFeed,
-    StubTriggeredFeed,
+    DAGTriggeredFeed,
+    EmptyFeed,
+    TimingFeed,
 )
 
 
 def test_feed_parameter_schema():
     """parameter_schema() returns JSON Schema from inner Parameters model."""
-    schema = StubFeed.parameter_schema()
+    schema = TimingFeed.parameter_schema()
     assert "properties" in schema
     assert "value" in schema["properties"]
     assert schema["properties"]["value"]["type"] == "number"
@@ -17,25 +17,25 @@ def test_feed_parameter_schema():
 
 def test_feed_data_schema():
     """data_schema() returns Pandera schema as JSON."""
-    schema = StubFeed.data_schema()
+    schema = TimingFeed.data_schema()
     assert schema is not None
 
 
 def test_feed_output_table():
     """output_table() returns the EAV table name from output.Config.name."""
-    assert StubFeed.output_table() == "instrument_attribute"
+    assert TimingFeed.output_table() == "instrument_attribute"
 
 
 def test_feed_ref():
     """ref() returns 'module:ClassName' format."""
-    ref = StubFeed.ref()
-    assert ref.endswith(":StubFeed")
-    assert "." in ref  # has module path
+    ref = TimingFeed.ref()
+    assert ref.endswith(":TimingFeed")
+    assert "." in ref
 
 
 def test_feed_get_display_name():
     """get_display_name() returns display_name or falls back to class name."""
-    assert StubFeed.get_display_name() == "Stub Feed"
+    assert TimingFeed.get_display_name() == "Timing Feed"
 
 
 def test_feed_get_display_name_fallback():
@@ -58,32 +58,53 @@ def test_feed_get_display_name_fallback():
 
 def test_feed_is_streaming_false():
     """is_streaming() returns False for feeds that override fetch()."""
-    assert StubFeed.is_streaming() is False
+    assert TimingFeed.is_streaming() is False
 
 
 def test_feed_is_streaming_true():
     """is_streaming() returns True for feeds that override stream()."""
-    assert StubStreamFeed.is_streaming() is True
+    from collections.abc import Iterator
+    from datetime import datetime
+
+    from ascent.feeds.base import Feed
+    from ascent.feeds.output import InstrumentAttributes
+    from ascent.feeds.schedule import Schedule
+
+    class StreamFeed(Feed):
+        schedule = Schedule(interval=1, start_date=datetime(2024, 1, 1))
+        output = InstrumentAttributes
+
+        def stream(self) -> Iterator:
+            yield None
+
+    assert StreamFeed.is_streaming() is True
 
 
 def test_feed_triggered_not_streaming():
     """Triggered feeds are not streaming."""
-    assert StubTriggeredFeed.is_streaming() is False
+    assert DAGTriggeredFeed.is_streaming() is False
 
 
 def test_feed_instantiation():
     """Feed can be instantiated with dict or Parameters model."""
-    f1 = StubFeed({"value": 2.0})
+    f1 = TimingFeed({"value": 2.0})
     assert f1.parameters.value == 2.0
 
-    f2 = StubFeed(StubFeed.Parameters(value=3.0))
+    f2 = TimingFeed(TimingFeed.Parameters(value=3.0))
     assert f2.parameters.value == 3.0
 
-    f3 = StubFeed()
-    assert f3.parameters.value == 1.0  # default
+    f3 = TimingFeed()
+    assert f3.parameters.value == 42.0  # default
 
 
 def test_feed_depends_on():
     """depends_on references parent feed classes."""
-    assert StubTriggeredFeed.depends_on == [StubFeed]
-    assert StubFeed.depends_on is None
+    assert DAGTriggeredFeed.depends_on == [TimingFeed]
+    assert TimingFeed.depends_on is None
+
+
+def test_feed_empty_default_parameters():
+    """Feed with no Parameters class uses empty model."""
+    schema = EmptyFeed.parameter_schema()
+    assert schema["type"] == "object"
+    assert schema["properties"] == {}

@@ -31,7 +31,7 @@ from ascent.feeds.partition import partition_key_for, partition_window
 from ascent.feeds.schedule import Schedule
 
 if TYPE_CHECKING:
-    from ascent.feeds.decorator import Feed
+    from ascent.feeds.base import Feed
 
 logger = logging.getLogger(__name__)
 
@@ -206,8 +206,9 @@ def run_scheduled_feed(
         schedule_data = feed_record.schedule
         parameters = feed_record.parameters or {}
 
-    # Import the decorated feed function
-    feed_obj = _import_feed(feed_ref)
+    # Import and instantiate the Feed class
+    feed_cls = _import_feed(feed_ref)
+    feed_instance = feed_cls(parameters)
 
     # Build schedule and timer
     schedule = Schedule(**schedule_data)
@@ -222,6 +223,9 @@ def run_scheduled_feed(
         feed_ref,
         schedule.interval,
     )
+
+    # Lifecycle: on_start
+    feed_instance.on_start()
 
     # Graceful shutdown
     shutdown = shutdown_event or threading.Event()
@@ -260,47 +264,54 @@ def run_scheduled_feed(
             window_end=partition.window_end,
         )
 
-        with tracker as run_logger:
-            token_logger = _current_logger.set(run_logger)
-            token_partition = _current_partition.set(partition_info)
-            try:
-                run_logger.info(
-                    "Executing feed %s at %s (partition %s)",
-                    feed_ref,
-                    tick.isoformat(),
-                    partition.partition_key,
-                )
+        try:
+            with tracker as run_logger:
+                token_logger = _current_logger.set(run_logger)
+                token_partition = _current_partition.set(partition_info)
+                try:
+                    run_logger.info(
+                        "Executing feed %s at %s (partition %s)",
+                        feed_ref,
+                        tick.isoformat(),
+                        partition.partition_key,
+                    )
 
-                # Execute the feed function
-                df = feed_obj(**parameters)
+                    # Execute the feed
+                    df = feed_instance.fetch()
 
-                # Write to Redis cache
-                timestamp = datetime.datetime.now(tz=datetime.UTC).isoformat()
-                cache.set_feed_data(feed_id, df, timestamp)
+                    # Write to Redis cache
+                    timestamp = datetime.datetime.now(tz=datetime.UTC).isoformat()
+                    cache.set_feed_data(feed_id, df, timestamp)
 
-                # Publish event via Redis pub/sub
-                _publish_event(
-                    cache,
-                    channel,
-                    feed_id,
-                    feed_ref,
-                    output_table,
-                    feed_run_id=tracker.run_id,
-                    partition_key=partition.partition_key,
-                )
+                    # Publish event via Redis pub/sub
+                    _publish_event(
+                        cache,
+                        channel,
+                        feed_id,
+                        feed_ref,
+                        output_table,
+                        feed_run_id=tracker.run_id,
+                        partition_key=partition.partition_key,
+                    )
 
-                # Mark partition as materialized
-                _update_partition_status(session_factory, partition.id, "MATERIALIZED")
+                    # Mark partition as materialized
+                    _update_partition_status(session_factory, partition.id, "MATERIALIZED")
 
-                run_logger.info("Feed %s produced %d rows", feed_ref, len(df))
-            except Exception:
-                # Mark partition as failed
-                _update_partition_status(session_factory, partition.id, "FAILED")
-                raise
-            finally:
-                _current_logger.reset(token_logger)
-                _current_partition.reset(token_partition)
+                    run_logger.info("Feed %s produced %d rows", feed_ref, len(df))
+                except Exception:
+                    # Mark partition as failed
+                    _update_partition_status(session_factory, partition.id, "FAILED")
+                    raise  # let RunTracker see the exception to mark run FAILED
+                finally:
+                    _current_logger.reset(token_logger)
+                    _current_partition.reset(token_partition)
+        except Exception as exc:
+            # Catch outside tracker so the loop continues
+            feed_instance.on_error(exc)
+            logger.exception("Feed %s tick failed, will retry next tick", feed_ref)
 
+    # Lifecycle: on_shutdown
+    feed_instance.on_shutdown()
     logger.info("Feed %s shut down cleanly", feed_id)
 
 
@@ -372,8 +383,14 @@ def run_triggered_feed(
             if effective_schedule is None or s.interval < effective_schedule.interval:
                 effective_schedule = s
 
-    # Import the decorated feed function
-    feed_obj = _import_feed(feed_ref)
+    # Import and instantiate the Feed class
+    feed_cls = _import_feed(feed_ref)
+    feed_instance = feed_cls(parameters)
+
+    # Build parent ref mapping: parent_feed_id → parent_feed_ref
+    parent_ref_map: dict[uuid.UUID, str] = {}
+    for pid, pf in parent_feeds.items():
+        parent_ref_map[pid] = pf.feed_ref
 
     # Track which parents have fresh data since last run
     fresh_parents: dict[uuid.UUID, pd.DataFrame] = {}
@@ -392,6 +409,9 @@ def run_triggered_feed(
         len(parent_feeds),
         f"{effective_schedule.interval}s" if effective_schedule else "none",
     )
+
+    # Lifecycle: on_start
+    feed_instance.on_start()
 
     shutdown = shutdown_event or threading.Event()
 
@@ -454,16 +474,18 @@ def run_triggered_feed(
 
         with tracker as run_logger:
             # Set contextvars for get_logger() and get_feed()
-            feed_data = {}
+            # Key by feed ref string so Feed.get_feed(ParentCls) works
+            feed_data: dict[str, pd.DataFrame] = {}
             for pid, pdf in fresh_parents.items():
-                feed_data[pid] = pdf
+                ref = parent_ref_map.get(pid, str(pid))
+                feed_data[ref] = pdf
 
             token_feeds = _current_feeds.set(feed_data)
             token_logger = _current_logger.set(run_logger)
             token_partition = _current_partition.set(partition_info) if partition_info else None
             try:
                 run_logger.info("Executing triggered feed %s", feed_ref)
-                df = feed_obj(**parameters)
+                df = feed_instance.fetch()
 
                 timestamp = datetime.datetime.now(tz=datetime.UTC).isoformat()
                 cache.set_feed_data(feed_id, df, timestamp)
@@ -481,10 +503,11 @@ def run_triggered_feed(
                     _update_partition_status(session_factory, partition.id, "MATERIALIZED")
 
                 run_logger.info("Triggered feed %s produced %d rows", feed_ref, len(df))
-            except Exception:
+            except Exception as exc:
                 if partition:
                     _update_partition_status(session_factory, partition.id, "FAILED")
-                raise
+                feed_instance.on_error(exc)
+                run_logger.exception("Triggered feed %s failed, will retry", feed_ref)
             finally:
                 _current_feeds.reset(token_feeds)
                 _current_logger.reset(token_logger)
@@ -495,4 +518,6 @@ def run_triggered_feed(
         fresh_parents.clear()
 
     pubsub.close()
+    # Lifecycle: on_shutdown
+    feed_instance.on_shutdown()
     logger.info("Triggered feed %s shut down cleanly", feed_id)
