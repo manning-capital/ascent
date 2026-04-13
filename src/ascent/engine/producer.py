@@ -177,6 +177,7 @@ def run_scheduled_feed(
     *,
     database_url: str = "postgresql://localhost:5432/ascent",
     redis_url: str = "redis://localhost:6379/0",
+    shutdown_event: threading.Event | None = None,
 ) -> None:
     """Run a scheduled feed in a long-running loop driven by AlignedTimer.
 
@@ -223,14 +224,16 @@ def run_scheduled_feed(
     )
 
     # Graceful shutdown
-    shutdown = threading.Event()
+    shutdown = shutdown_event or threading.Event()
 
-    def _signal_handler(signum, frame):
-        logger.info("Received signal %s, shutting down feed %s", signum, feed_id)
-        shutdown.set()
+    if shutdown_event is None:
 
-    signal.signal(signal.SIGTERM, _signal_handler)
-    signal.signal(signal.SIGINT, _signal_handler)
+        def _signal_handler(signum, frame):
+            logger.info("Received signal %s, shutting down feed %s", signum, feed_id)
+            shutdown.set()
+
+        signal.signal(signal.SIGTERM, _signal_handler)
+        signal.signal(signal.SIGINT, _signal_handler)
 
     while not shutdown.is_set():
         tick = timer.wait_for_tick()
@@ -311,6 +314,7 @@ def run_triggered_feed(
     *,
     database_url: str = "postgresql://localhost:5432/ascent",
     redis_url: str = "redis://localhost:6379/0",
+    shutdown_event: threading.Event | None = None,
 ) -> None:
     """Run a triggered feed that fires when all parent feeds have fresh data.
 
@@ -389,14 +393,16 @@ def run_triggered_feed(
         f"{effective_schedule.interval}s" if effective_schedule else "none",
     )
 
-    shutdown = threading.Event()
+    shutdown = shutdown_event or threading.Event()
 
-    def _signal_handler(signum, frame):
-        logger.info("Received signal %s, shutting down triggered feed %s", signum, feed_id)
-        shutdown.set()
+    if shutdown_event is None:
 
-    signal.signal(signal.SIGTERM, _signal_handler)
-    signal.signal(signal.SIGINT, _signal_handler)
+        def _signal_handler(signum, frame):
+            logger.info("Received signal %s, shutting down triggered feed %s", signum, feed_id)
+            shutdown.set()
+
+        signal.signal(signal.SIGTERM, _signal_handler)
+        signal.signal(signal.SIGINT, _signal_handler)
 
     while not shutdown.is_set():
         event = cache.poll(pubsub, timeout=1.0)

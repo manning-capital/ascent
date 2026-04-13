@@ -91,6 +91,44 @@ class EngineCache:
         return json.loads(data)
 
     # ------------------------------------------------------------------
+    # Heartbeat (runner liveness)
+    # ------------------------------------------------------------------
+
+    def set_heartbeat(self, entity_type: str, entity_id: uuid.UUID, ttl: int = 30) -> None:
+        """Write a heartbeat key with TTL.  Called periodically by the runner.
+
+        Args:
+            entity_type: ``"feed"`` or ``"strategy"``.
+            entity_id: The database UUID of the entity.
+            ttl: Seconds until the key expires (default 30).
+        """
+        import datetime
+
+        key = f"ascent:heartbeat:{entity_type}:{entity_id}"
+        self._redis.setex(key, ttl, datetime.datetime.now(tz=datetime.UTC).isoformat())
+
+    def get_heartbeat(self, entity_type: str, entity_id: uuid.UUID) -> str | None:
+        """Read heartbeat timestamp, or ``None`` if expired/missing."""
+        key = f"ascent:heartbeat:{entity_type}:{entity_id}"
+        return self._redis.get(key)
+
+    def is_connected(self, entity_type: str, entity_id: uuid.UUID) -> bool:
+        """Check if a heartbeat key exists (not expired)."""
+        return self._redis.exists(f"ascent:heartbeat:{entity_type}:{entity_id}") > 0
+
+    def get_connection_statuses(
+        self, entity_type: str, entity_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, bool]:
+        """Batch-check heartbeat existence for a list of IDs via pipeline."""
+        if not entity_ids:
+            return {}
+        pipe = self._redis.pipeline()
+        for eid in entity_ids:
+            pipe.exists(f"ascent:heartbeat:{entity_type}:{eid}")
+        results = pipe.execute()
+        return {eid: bool(r) for eid, r in zip(entity_ids, results, strict=False)}
+
+    # ------------------------------------------------------------------
     # Utilities
     # ------------------------------------------------------------------
 

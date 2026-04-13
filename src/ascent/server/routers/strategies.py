@@ -3,7 +3,8 @@ import uuid
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from ascent.server.dependencies import get_db
+from ascent.engine.cache import EngineCache
+from ascent.server.dependencies import get_cache, get_db
 from ascent.server.schemas.common import PaginatedResponse
 from ascent.server.schemas.feeds import StrategyFeedItem
 from ascent.server.schemas.orders import OrderSchema
@@ -42,6 +43,7 @@ def list_strategies(
     sort_field: str = "display_name",
     sort_order: str = "asc",
     db: Session = Depends(get_db),
+    cache: EngineCache = Depends(get_cache),
 ):
     items, total = strategy_service.get_strategies(
         db,
@@ -51,6 +53,7 @@ def list_strategies(
         is_active=is_active,
         sort_field=sort_field,
         sort_order=sort_order,
+        cache=cache,
     )
     total_pages = (total + page_size - 1) // page_size
     return PaginatedResponse(
@@ -64,8 +67,12 @@ def create_strategy(data: StrategyCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/{strategy_id}", response_model=StrategyDetail)
-def get_strategy(strategy_id: uuid.UUID, db: Session = Depends(get_db)):
-    return strategy_service.get_strategy_detail(db, strategy_id)
+def get_strategy(
+    strategy_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    cache: EngineCache = Depends(get_cache),
+):
+    return strategy_service.get_strategy_detail(db, strategy_id, cache=cache)
 
 
 @router.put("/{strategy_id}")

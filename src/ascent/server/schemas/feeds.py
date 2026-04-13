@@ -27,6 +27,7 @@ class FeedListItem(BaseModel):
     schedule: dict | None = None
     channel: str
     is_active: bool
+    connection_status: str = "disconnected"
     total_runs: int = 0
     last_run_at: datetime.datetime | None = None
     last_run_status: str | None = None

@@ -71,7 +71,12 @@ def _validate_output_table(scope_type: str, output_table: str) -> None:
         )
 
 
-def _build_feed_list_item(feed: Feed, total_runs: int, last_run: FeedRun | None) -> FeedListItem:
+def _build_feed_list_item(
+    feed: Feed,
+    total_runs: int,
+    last_run: FeedRun | None,
+    connection_status: str = "disconnected",
+) -> FeedListItem:
     """Build a FeedListItem from a Feed ORM object with scope translation."""
     scope_type, scope_type_id, scope_type_name = _resolve_scope(feed)
     return FeedListItem(
@@ -90,6 +95,7 @@ def _build_feed_list_item(feed: Feed, total_runs: int, last_run: FeedRun | None)
         schedule=feed.schedule,
         channel=feed.channel,
         is_active=feed.is_active,
+        connection_status=connection_status,
         total_runs=total_runs,
         last_run_at=last_run.started_at if last_run else None,
         last_run_status=last_run.status if last_run else None,
@@ -111,6 +117,7 @@ def get_feeds(
     is_active: bool | None = None,
     sort_field: str = "display_name",
     sort_order: str = "asc",
+    cache: EngineCache | None = None,
 ) -> tuple[list[FeedListItem], int]:
     conditions = []
     if search:
@@ -142,6 +149,12 @@ def get_feeds(
         .all()
     )
 
+    # Batch-query heartbeat statuses if cache is available
+    feed_ids = [f.id for f in feeds]
+    heartbeat_map: dict[uuid.UUID, bool] = {}
+    if cache is not None and feed_ids:
+        heartbeat_map = cache.get_connection_statuses("feed", feed_ids)
+
     items = []
     for f in feeds:
         # Compute run stats
@@ -162,11 +175,14 @@ def get_feeds(
             .first()
         )
 
-        items.append(_build_feed_list_item(f, total_runs, last_run))
+        conn_status = "connected" if heartbeat_map.get(f.id, False) else "disconnected"
+        items.append(_build_feed_list_item(f, total_runs, last_run, conn_status))
     return items, total
 
 
-def get_feed_detail(db: Session, feed_id: uuid.UUID) -> FeedDetail:
+def get_feed_detail(
+    db: Session, feed_id: uuid.UUID, cache: EngineCache | None = None
+) -> FeedDetail:
     query = (
         select(Feed)
         .options(
@@ -215,6 +231,11 @@ def get_feed_detail(db: Session, feed_id: uuid.UUID) -> FeedDetail:
         schedule=feed.schedule,
         channel=feed.channel,
         is_active=feed.is_active,
+        connection_status=(
+            "connected"
+            if cache is not None and cache.is_connected("feed", feed_id)
+            else "disconnected"
+        ),
         parameters=feed.parameters,
         parameter_schema=feed.parameter_schema,
         data_schema=feed.data_schema,

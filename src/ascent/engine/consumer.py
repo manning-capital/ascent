@@ -151,6 +151,7 @@ def run_strategy(
     *,
     database_url: str = "postgresql://localhost:5432/ascent",
     redis_url: str = "redis://localhost:6379/0",
+    shutdown_event: threading.Event | None = None,
 ) -> None:
     """Run a strategy consumer in a long-running Redis pub/sub poll loop.
 
@@ -214,14 +215,16 @@ def run_strategy(
         len(channels),
     )
 
-    shutdown = threading.Event()
+    shutdown = shutdown_event or threading.Event()
 
-    def _signal_handler(signum, frame):
-        logger.info("Received signal %s, shutting down strategy %s", signum, strategy_id)
-        shutdown.set()
+    if shutdown_event is None:
 
-    signal.signal(signal.SIGTERM, _signal_handler)
-    signal.signal(signal.SIGINT, _signal_handler)
+        def _signal_handler(signum, frame):
+            logger.info("Received signal %s, shutting down strategy %s", signum, strategy_id)
+            shutdown.set()
+
+        signal.signal(signal.SIGTERM, _signal_handler)
+        signal.signal(signal.SIGINT, _signal_handler)
 
     while not shutdown.is_set():
         event = cache.poll(pubsub, timeout=1.0)

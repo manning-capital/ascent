@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 from ascent.database.models import Strategy, StrategyExchange, StrategyRun, Trade, TradeStatusType
 from ascent.database.models.exchanges import Exchange
 from ascent.database.models.feeds import Feed, FeedDependency, FeedRun, StrategyFeed
+from ascent.engine.cache import EngineCache
 from ascent.server.exceptions import NotFoundError
 from ascent.server.schemas.strategies import (
     CumulativePnlPoint,
@@ -379,6 +380,7 @@ def get_strategies(
     is_active: bool | None = None,
     sort_field: str = "display_name",
     sort_order: str = "asc",
+    cache: EngineCache | None = None,
 ) -> tuple[list[StrategyListItem], int]:
     conditions = []
     if search:
@@ -400,9 +402,16 @@ def get_strategies(
     query = query.order_by(sort_expr).offset((page - 1) * page_size).limit(page_size)
     strategies = db.execute(query).unique().scalars().all()
 
+    # Batch-query heartbeat statuses if cache is available
+    strategy_ids = [s.id for s in strategies]
+    heartbeat_map: dict[uuid.UUID, bool] = {}
+    if cache is not None and strategy_ids:
+        heartbeat_map = cache.get_connection_statuses("strategy", strategy_ids)
+
     items = []
     for s in strategies:
         stats = _build_strategy_stats(db, s.id)
+        conn_status = "connected" if heartbeat_map.get(s.id, False) else "disconnected"
         items.append(
             StrategyListItem(
                 id=s.id,
@@ -414,6 +423,7 @@ def get_strategies(
                 parameters=s.parameters,
                 portfolio_id=s.portfolio_id,
                 is_active=s.is_active,
+                connection_status=conn_status,
                 **stats,
             )
         )
@@ -461,7 +471,9 @@ def add_strategy_feed(
     return obj
 
 
-def get_strategy_detail(db: Session, strategy_id: uuid.UUID) -> StrategyDetail:
+def get_strategy_detail(
+    db: Session, strategy_id: uuid.UUID, cache: "EngineCache | None" = None
+) -> StrategyDetail:
     query = (
         select(Strategy)
         .where(Strategy.id == strategy_id)
@@ -482,6 +494,11 @@ def get_strategy_detail(db: Session, strategy_id: uuid.UUID) -> StrategyDetail:
         parameters=strategy.parameters,
         portfolio_id=strategy.portfolio_id,
         is_active=strategy.is_active,
+        connection_status=(
+            "connected"
+            if cache is not None and cache.is_connected("strategy", strategy_id)
+            else "disconnected"
+        ),
         portfolio_name=strategy.portfolio.display_name if strategy.portfolio else None,
         parameter_schema=strategy.parameter_schema,
         created_at=strategy.created_at,

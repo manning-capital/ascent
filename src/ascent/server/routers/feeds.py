@@ -42,6 +42,7 @@ def list_feeds(
     sort_field: str = "display_name",
     sort_order: str = "asc",
     db: Session = Depends(get_db),
+    cache: EngineCache = Depends(get_cache),
 ):
     items, total = feed_service.get_feeds(
         db,
@@ -51,6 +52,7 @@ def list_feeds(
         is_active=is_active,
         sort_field=sort_field,
         sort_order=sort_order,
+        cache=cache,
     )
     total_pages = (total + page_size - 1) // page_size
     return PaginatedResponse(
@@ -64,8 +66,12 @@ def create_feed(data: FeedCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/{feed_id}", response_model=FeedDetail)
-def get_feed(feed_id: uuid.UUID, db: Session = Depends(get_db)):
-    return feed_service.get_feed_detail(db, feed_id)
+def get_feed(
+    feed_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    cache: EngineCache = Depends(get_cache),
+):
+    return feed_service.get_feed_detail(db, feed_id, cache=cache)
 
 
 @router.put("/{feed_id}")

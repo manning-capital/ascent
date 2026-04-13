@@ -18,6 +18,7 @@ class StrategyListItem(BaseModel):
     parameters: dict | list | str | int | float | bool | None = None
     portfolio_id: uuid.UUID
     is_active: bool
+    connection_status: str = "disconnected"
     # Computed stats
     total_trades: int = 0
     open_trades: int = 0
