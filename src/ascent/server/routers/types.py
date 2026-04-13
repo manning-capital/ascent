@@ -34,9 +34,6 @@ from ascent.server.schemas.metadata import (
     EntityUsage,
     InstrumentTypeMetadataCreate,
     InstrumentTypeMetadataSchema,
-    MetadataTypeCreate,
-    MetadataTypeSchema,
-    MetadataTypeUpdate,
     ProviderTypeMetadataCreate,
     ProviderTypeMetadataSchema,
 )
@@ -81,40 +78,6 @@ def _create_type(db: Session, model_class, data: TypeCreate):
     db.commit()
     db.refresh(obj)
     return obj
-
-
-@router.get("/metadata-types", response_model=list[MetadataTypeSchema])
-def list_metadata_types(db: Session = Depends(get_db)):
-    return [MetadataTypeSchema.model_validate(r) for r in field_service.get_metadata_types(db)]
-
-
-@router.post("/metadata-types", status_code=201, response_model=MetadataTypeSchema)
-def create_metadata_type(data: MetadataTypeCreate, db: Session = Depends(get_db)):
-    return MetadataTypeSchema.model_validate(field_service.create_metadata_type(db, data))
-
-
-@router.get("/metadata-types/{metadata_type_id}", response_model=MetadataTypeSchema)
-def get_metadata_type(metadata_type_id: str, db: Session = Depends(get_db)):
-    return MetadataTypeSchema.model_validate(field_service.get_metadata_type(db, metadata_type_id))
-
-
-@router.put("/metadata-types/{metadata_type_id}", response_model=MetadataTypeSchema)
-def update_metadata_type(
-    metadata_type_id: str, data: MetadataTypeUpdate, db: Session = Depends(get_db)
-):
-    return MetadataTypeSchema.model_validate(
-        field_service.update_metadata_type(db, metadata_type_id, data)
-    )
-
-
-@router.get("/metadata-types/{metadata_type_id}/usage", response_model=EntityUsage)
-def get_metadata_type_usage(metadata_type_id: str, db: Session = Depends(get_db)):
-    return field_service.get_metadata_type_usage(db, metadata_type_id)
-
-
-@router.delete("/metadata-types/{metadata_type_id}", status_code=204)
-def delete_metadata_type(metadata_type_id: str, db: Session = Depends(get_db)):
-    field_service.delete_metadata_type(db, metadata_type_id)
 
 
 @router.get("/asset-types", response_model=list[TypeItem])

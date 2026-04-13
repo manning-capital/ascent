@@ -1,6 +1,7 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import { map } from 'rxjs/operators';
 import { ProviderService } from '../../services/provider.service';
 import { ToastService } from '../../services/toast.service';
 import { Select } from 'primeng/select';
@@ -8,32 +9,52 @@ import { InputText } from 'primeng/inputtext';
 import { Textarea } from 'primeng/textarea';
 import { Card } from 'primeng/card';
 import { Button } from 'primeng/button';
-import { ProviderCreate } from '../../models/provider.model';
-import { DataTableComponent } from '../shared/data-table/data-table.component';
-import type { DataTableColumn } from '../shared/data-table/data-table.model';
+import { ProviderCreate, ProviderListItem } from '../../models/provider.model';
+import { ServerTableComponent } from '../shared/data-table/server-table.component';
+import type { DataTableColumn, ServerFetchFn } from '../shared/data-table/data-table.model';
 
 @Component({
   selector: 'app-provider-list',
   standalone: true,
-  imports: [FormsModule, Select, InputText, Textarea, Card, Button, DataTableComponent],
+  imports: [FormsModule, Select, InputText, Textarea, Card, Button, ServerTableComponent],
   templateUrl: './provider-list.component.html',
 })
 export class ProviderListComponent implements OnInit {
+  private route = inject(ActivatedRoute);
   private router = inject(Router);
   providerService = inject(ProviderService);
   private toast = inject(ToastService);
 
-  typeNames = computed(() => this.providerService.providerTypes().map(t => t.display_name));
+  search = signal('');
+  statusFilter = signal<boolean | null>(null);
 
-  columns: DataTableColumn[] = [
-    { field: 'display_name', header: 'Display Name', filterType: 'text' },
-    { field: 'name', header: 'Name', cellType: 'monospace', filterType: 'text' },
-    { field: 'provider_type_name', header: 'Type', cellType: 'link', linkRoute: (row: any) => `/settings/provider-types/${row.provider_type_id}`, filterType: 'select', filterOptions: this.typeNames },
-    { field: 'provider_external_code', header: 'Code', cellType: 'monospace', filterType: 'text', valueFormatter: (p) => p.value ?? '\u2014' },
-    { field: 'is_active', header: 'Status', cellType: 'status', width: 112, filterType: 'select', filterOptions: [{ label: 'Active', value: true }, { label: 'Inactive', value: false }] },
+  statusOptions = [
+    { label: 'Active', value: true },
+    { label: 'Inactive', value: false },
+  ];
+
+  columns: DataTableColumn<ProviderListItem>[] = [
+    { field: 'display_name', header: 'Display Name' },
+    { field: 'name', header: 'Name', cellType: 'monospace' },
+    { field: 'provider_type_name', header: 'Type', cellType: 'link', linkRoute: (row: any) => `/settings/provider-types/${row.provider_type_id}` },
+    { field: 'provider_external_code', header: 'Code', cellType: 'monospace', valueFormatter: (p) => p.value ?? '\u2014' },
+    { field: 'is_active', header: 'Status', cellType: 'status', width: 112 },
   ];
 
   navigateToProvider = (row: any) => ['/settings/providers', row.id];
+
+  fetchPage = computed<ServerFetchFn<ProviderListItem>>(() => {
+    const search = this.search();
+    const isActive = this.statusFilter();
+    return (page: number, pageSize: number, sort?: { field: string; order: string }) => {
+      const filters: any = {};
+      if (search) filters.search = search;
+      if (isActive != null) filters.is_active = isActive;
+      return this.providerService.loadProvidersPaginated(page, pageSize, filters, sort).pipe(
+        map(res => ({ items: res.items, total: res.total }))
+      );
+    };
+  });
 
   showCreateForm = signal(false);
   newDisplayName = '';
@@ -44,11 +65,36 @@ export class ProviderListComponent implements OnInit {
   newUrl = '';
 
   ngOnInit(): void {
-    this.providerService.loadProviders();
     this.providerService.loadProviderTypes();
+    const qp = this.route.snapshot.queryParamMap;
+    if (qp.get('search')) this.search.set(qp.get('search')!);
+    if (qp.get('is_active') != null) this.statusFilter.set(qp.get('is_active') === 'true');
   }
 
+  onSearch(value: string): void {
+    this.search.set(value);
+    this.updateUrl();
+  }
 
+  onStatusChange(value: boolean | null): void {
+    this.statusFilter.set(value);
+    this.updateUrl();
+  }
+
+  clearFilters(): void {
+    this.search.set('');
+    this.statusFilter.set(null);
+    this.updateUrl();
+  }
+
+  private updateUrl(): void {
+    const queryParams: Record<string, any> = {};
+    const search = this.search();
+    if (search) queryParams['search'] = search;
+    const isActive = this.statusFilter();
+    if (isActive != null) queryParams['is_active'] = isActive;
+    this.router.navigate([], { relativeTo: this.route, queryParams, replaceUrl: true });
+  }
 
   openCreate(): void {
     this.newDisplayName = '';
@@ -78,7 +124,7 @@ export class ProviderListComponent implements OnInit {
       next: () => {
         this.toast.success('Provider created');
         this.showCreateForm.set(false);
-        this.providerService.loadProviders();
+        this.search.update(s => s);
       },
       error: () => this.toast.error('Failed to create provider'),
     });

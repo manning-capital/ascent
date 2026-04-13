@@ -1,6 +1,7 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
-import { Router } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import { map } from 'rxjs/operators';
 import { CompositeService } from '../../services/composite.service';
 import { AssetService } from '../../services/asset.service';
 import { ToastService } from '../../services/toast.service';
@@ -8,65 +9,94 @@ import { Select } from 'primeng/select';
 import { InputText } from 'primeng/inputtext';
 import { Card } from 'primeng/card';
 import { Button } from 'primeng/button';
-import { MultiSelect } from 'primeng/multiselect';
-import { CompositeCreate, CompositeMemberCreate } from '../../models/composite.model';
-import { Instrument } from '../../models/asset.model';
-import { DataTableComponent } from '../shared/data-table/data-table.component';
-import type { DataTableColumn } from '../shared/data-table/data-table.model';
+import { Composite, CompositeCreate, CompositeMemberCreate } from '../../models/composite.model';
+import { ServerTableComponent } from '../shared/data-table/server-table.component';
+import type { DataTableColumn, ServerFetchFn } from '../shared/data-table/data-table.model';
+import { SearchSelectComponent, SearchOption } from '../shared/search-select.component';
 
 @Component({
   selector: 'app-composite-list',
   standalone: true,
-  imports: [FormsModule, Select, MultiSelect, InputText, Card, Button, DataTableComponent],
+  imports: [FormsModule, Select, InputText, Card, Button, ServerTableComponent, SearchSelectComponent],
   templateUrl: './composite-list.component.html',
 })
 export class CompositeListComponent implements OnInit {
+  private route = inject(ActivatedRoute);
   private router = inject(Router);
   compositeService = inject(CompositeService);
   assetService = inject(AssetService);
   private toast = inject(ToastService);
 
-  typeNames = computed(() => this.compositeService.compositeTypes().map(t => t.display_name));
+  search = signal('');
+  statusFilter = signal<boolean | null>(null);
 
-  /** Composites enriched with type_display_name for filtering/sorting. */
-  enrichedComposites = computed(() => {
-    const types = this.compositeService.compositeTypes();
-    const typeMap = new Map(types.map(t => [t.id, t.display_name]));
-    return this.compositeService.composites().map(c => ({
-      ...c,
-      type_display_name: typeMap.get(c.composite_type_id) ?? 'Unknown',
-    }));
-  });
+  statusOptions = [
+    { label: 'Active', value: true },
+    { label: 'Inactive', value: false },
+  ];
 
-  columns: DataTableColumn[] = [
-    { field: 'display_name', header: 'Display Name', filterType: 'text' },
-    { field: 'name', header: 'Name', cellType: 'monospace', filterType: 'text' },
-    { field: 'type_display_name', header: 'Type', cellType: 'link', linkRoute: (row: any) => `/settings/composite-types/${row.composite_type_id}`, filterType: 'select', filterOptions: this.typeNames },
+  columns: DataTableColumn<Composite>[] = [
+    { field: 'display_name', header: 'Display Name' },
+    { field: 'name', header: 'Name', cellType: 'monospace' },
+    { field: 'composite_type_name', header: 'Type', cellType: 'link', linkRoute: (row: any) => `/settings/composite-types/${row.composite_type_id}` },
     { field: 'members', header: 'Members', sortable: false, cellType: 'monospace', valueGetter: (p: any) => p.data?.members?.length ?? 0 },
-    { field: 'is_active', header: 'Status', cellType: 'status', width: 112, filterType: 'select', filterOptions: [{ label: 'Active', value: true }, { label: 'Inactive', value: false }] },
+    { field: 'is_active', header: 'Status', cellType: 'status', width: 112 },
   ];
 
   navigateToComposite = (row: any) => ['/settings/composites', row.id];
+
+  fetchPage = computed<ServerFetchFn<Composite>>(() => {
+    const search = this.search();
+    const isActive = this.statusFilter();
+    return (page: number, pageSize: number, sort?: { field: string; order: string }) => {
+      const filters: any = {};
+      if (search) filters.search = search;
+      if (isActive != null) filters.is_active = isActive;
+      return this.compositeService.loadCompositesPaginated(page, pageSize, filters, sort).pipe(
+        map(res => ({ items: res.items, total: res.total }))
+      );
+    };
+  });
 
   showCreateForm = signal(false);
   newDisplayName = '';
   newName = '';
   newDescription = '';
   newTypeId = '';
-  selectedInstruments: Instrument[] = [];
-
-  nameTaken(): boolean {
-    const n = this.newName.trim().toLowerCase();
-    if (!n) return false;
-    return this.compositeService.composites().some(c => c.name?.toLowerCase() === n);
-  }
+  selectedInstruments: SearchOption[] = [];
+  instrumentSearchFn = (q: string) => this.assetService.searchInstruments(q);
 
   ngOnInit(): void {
-    this.compositeService.loadComposites();
     this.compositeService.loadCompositeTypes();
+    const qp = this.route.snapshot.queryParamMap;
+    if (qp.get('search')) this.search.set(qp.get('search')!);
+    if (qp.get('is_active') != null) this.statusFilter.set(qp.get('is_active') === 'true');
   }
 
+  onSearch(value: string): void {
+    this.search.set(value);
+    this.updateUrl();
+  }
 
+  onStatusChange(value: boolean | null): void {
+    this.statusFilter.set(value);
+    this.updateUrl();
+  }
+
+  clearFilters(): void {
+    this.search.set('');
+    this.statusFilter.set(null);
+    this.updateUrl();
+  }
+
+  private updateUrl(): void {
+    const queryParams: Record<string, any> = {};
+    const search = this.search();
+    if (search) queryParams['search'] = search;
+    const isActive = this.statusFilter();
+    if (isActive != null) queryParams['is_active'] = isActive;
+    this.router.navigate([], { relativeTo: this.route, queryParams, replaceUrl: true });
+  }
 
   openCreate(): void {
     this.newDisplayName = '';
@@ -74,7 +104,6 @@ export class CompositeListComponent implements OnInit {
     this.newDescription = '';
     this.newTypeId = this.compositeService.compositeTypes()[0]?.id ?? '';
     this.selectedInstruments = [];
-    this.assetService.loadInstruments();
     this.showCreateForm.set(true);
   }
 
@@ -83,10 +112,10 @@ export class CompositeListComponent implements OnInit {
   }
 
   submitCreate(): void {
-    if (!this.newDisplayName.trim() || !this.newName.trim() || !this.newTypeId || this.nameTaken()) return;
+    if (!this.newDisplayName.trim() || !this.newName.trim() || !this.newTypeId) return;
 
-    const members: CompositeMemberCreate[] = this.selectedInstruments.map((inst, idx) => ({
-      instrument_id: inst.id,
+    const members: CompositeMemberCreate[] = this.selectedInstruments.map((opt, idx) => ({
+      instrument_id: opt.value,
       order: idx + 1,
     }));
 
@@ -101,13 +130,9 @@ export class CompositeListComponent implements OnInit {
       next: () => {
         this.toast.success('Composite created');
         this.showCreateForm.set(false);
-        this.compositeService.loadComposites();
+        this.search.update(s => s);
       },
       error: () => this.toast.error('Failed to create composite'),
     });
-  }
-
-  typeRoute(typeId: string): string {
-    return `/settings/composite-types/${typeId}`;
   }
 }

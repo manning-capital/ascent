@@ -169,6 +169,7 @@ def _apply_instrument_filters(
     exclude_strategy_id: uuid.UUID | None = None,
     exclude_feed_id: uuid.UUID | None = None,
     restrict_to_strategy_id: uuid.UUID | None = None,
+    restrict_to_feed_id: uuid.UUID | None = None,
 ):
     if search:
         query = query.where(
@@ -210,6 +211,19 @@ def _apply_instrument_filters(
             )
         )
         query = query.where(Instrument.id.in_(tradeable))
+    if restrict_to_feed_id:
+        from ascent.database.models.feeds import Feed
+
+        query = query.where(
+            Instrument.provider_id.in_(
+                select(Feed.provider_id).where(Feed.id == restrict_to_feed_id)
+            )
+        )
+        query = query.where(
+            Instrument.instrument_type_id.in_(
+                select(Feed.instrument_type_id).where(Feed.id == restrict_to_feed_id)
+            )
+        )
     return query
 
 
@@ -222,6 +236,7 @@ def search_instruments(
     exclude_strategy_id: uuid.UUID | None = None,
     exclude_feed_id: uuid.UUID | None = None,
     restrict_to_strategy_id: uuid.UUID | None = None,
+    restrict_to_feed_id: uuid.UUID | None = None,
     sort_field: str = "display_name",
     sort_order: str = "asc",
     page: int = 1,
@@ -237,6 +252,7 @@ def search_instruments(
         exclude_strategy_id,
         exclude_feed_id,
         restrict_to_strategy_id,
+        restrict_to_feed_id,
     )
 
     total = db.execute(select(func.count()).select_from(base.subquery())).scalar_one()
@@ -266,6 +282,7 @@ def search_instrument_ids(
     exclude_strategy_id: uuid.UUID | None = None,
     exclude_feed_id: uuid.UUID | None = None,
     restrict_to_strategy_id: uuid.UUID | None = None,
+    restrict_to_feed_id: uuid.UUID | None = None,
 ) -> list[uuid.UUID]:
     query = select(Instrument.id)
     query = _apply_instrument_filters(
@@ -277,6 +294,7 @@ def search_instrument_ids(
         exclude_strategy_id,
         exclude_feed_id,
         restrict_to_strategy_id,
+        restrict_to_feed_id,
     )
     query = query.order_by(Instrument.display_name.asc())
     return list(db.execute(query).scalars().all())

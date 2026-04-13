@@ -37,6 +37,7 @@ def search_composites(
     exclude_strategy_id: uuid.UUID | None = None,
     exclude_feed_id: uuid.UUID | None = None,
     restrict_to_strategy_id: uuid.UUID | None = None,
+    restrict_to_feed_id: uuid.UUID | None = None,
     sort_field: str = "display_name",
     sort_order: str = "asc",
     page: int = 1,
@@ -51,6 +52,7 @@ def search_composites(
         exclude_strategy_id=exclude_strategy_id,
         exclude_feed_id=exclude_feed_id,
         restrict_to_strategy_id=restrict_to_strategy_id,
+        restrict_to_feed_id=restrict_to_feed_id,
         sort_field=sort_field,
         sort_order=sort_order,
         page=page,
@@ -74,6 +76,7 @@ def search_composite_ids(
     exclude_strategy_id: uuid.UUID | None = None,
     exclude_feed_id: uuid.UUID | None = None,
     restrict_to_strategy_id: uuid.UUID | None = None,
+    restrict_to_feed_id: uuid.UUID | None = None,
     db: Session = Depends(get_db),
 ):
     return composite_service.search_composite_ids(
@@ -84,12 +87,35 @@ def search_composite_ids(
         exclude_strategy_id=exclude_strategy_id,
         exclude_feed_id=exclude_feed_id,
         restrict_to_strategy_id=restrict_to_strategy_id,
+        restrict_to_feed_id=restrict_to_feed_id,
     )
 
 
-@router.get("/composites", response_model=list[CompositeSchema])
-def list_composites(db: Session = Depends(get_db)):
-    return composite_service.get_composites(db)
+@router.get("/composites", response_model=PaginatedResponse[CompositeSchema])
+def list_composites(
+    search: str | None = None,
+    composite_type_id: uuid.UUID | None = None,
+    is_active: bool | None = None,
+    sort_field: str = "name",
+    sort_order: str = "asc",
+    page: int = 1,
+    page_size: int = 25,
+    db: Session = Depends(get_db),
+):
+    items, total = composite_service.search_composites(
+        db,
+        search=search,
+        composite_type_id=composite_type_id,
+        is_active=is_active,
+        sort_field=sort_field,
+        sort_order=sort_order,
+        page=page,
+        page_size=page_size,
+    )
+    total_pages = (total + page_size - 1) // page_size
+    return PaginatedResponse(
+        items=items, total=total, page=page, page_size=page_size, total_pages=total_pages
+    )
 
 
 @router.get("/composites/{composite_id}", response_model=CompositeSchema)

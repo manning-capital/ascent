@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from ascent.server.dependencies import get_db
 from ascent.server.schemas.assets import AssetCreate, AssetDetailSchema, AssetSchema, AssetUpdate
+from ascent.server.schemas.common import PaginatedResponse
 from ascent.server.schemas.metadata import (
     BatchMetadataCreate,
     BulkHistoryUpdate,
@@ -21,9 +22,29 @@ from ascent.server.services import asset_service, field_service, metadata_servic
 router = APIRouter(prefix="/assets", tags=["assets"])
 
 
-@router.get("", response_model=list[AssetSchema])
-def list_assets(db: Session = Depends(get_db)):
-    return asset_service.get_assets(db)
+@router.get("", response_model=PaginatedResponse[AssetSchema])
+def list_assets(
+    page: int = 1,
+    page_size: int = 25,
+    search: str | None = None,
+    is_active: bool | None = None,
+    sort_field: str = "name",
+    sort_order: str = "asc",
+    db: Session = Depends(get_db),
+):
+    items, total = asset_service.get_assets(
+        db,
+        page=page,
+        page_size=page_size,
+        search=search,
+        is_active=is_active,
+        sort_field=sort_field,
+        sort_order=sort_order,
+    )
+    total_pages = (total + page_size - 1) // page_size
+    return PaginatedResponse(
+        items=items, total=total, page=page, page_size=page_size, total_pages=total_pages
+    )
 
 
 @router.get("/{asset_id}", response_model=AssetDetailSchema)

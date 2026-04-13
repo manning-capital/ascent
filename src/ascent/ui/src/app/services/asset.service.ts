@@ -1,7 +1,8 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { Subject, EMPTY, Observable } from 'rxjs';
-import { switchMap, tap, catchError } from 'rxjs/operators';
+import { switchMap, tap, catchError, map } from 'rxjs/operators';
 import { ApiService } from './api.service';
+import { PaginatedResponse } from '../models/trade.model';
 import {
   AssetListItem, AssetDetail, AssetCreate, AssetUpdate,
   ProviderAssetLink, ProviderAssetLinkCreate,
@@ -42,12 +43,12 @@ export class AssetService {
     this.loadAssets$.pipe(
       tap(() => this.loading.set(true)),
       switchMap(() =>
-        this.api.get<AssetListItem[]>('/assets').pipe(
+        this.api.get<PaginatedResponse<AssetListItem>>('/assets').pipe(
           catchError(() => { this.loading.set(false); return EMPTY; })
         )
       ),
-    ).subscribe(assets => {
-      this.assets.set(assets);
+    ).subscribe(res => {
+      this.assets.set(res.items);
       this.loading.set(false);
     });
 
@@ -73,12 +74,12 @@ export class AssetService {
 
     this.loadInstruments$.pipe(
       switchMap(params =>
-        this.api.get<Instrument[]>('/instruments', params).pipe(
+        this.api.get<PaginatedResponse<Instrument>>('/instruments', params).pipe(
           catchError(() => EMPTY)
         )
       ),
-    ).subscribe(instruments => {
-      this.instruments.set(instruments);
+    ).subscribe(res => {
+      this.instruments.set(res.items);
     });
 
     this.loadInstrumentTypes$.pipe(
@@ -105,17 +106,46 @@ export class AssetService {
 
     this.loadMetadataTypes$.pipe(
       switchMap(() =>
-        this.api.get<MetadataType[]>('/types/metadata-types').pipe(
+        this.api.get<PaginatedResponse<MetadataType>>('/metadata').pipe(
           catchError(() => EMPTY)
         )
       ),
-    ).subscribe(types => {
-      this.metadataTypes.set(types);
+    ).subscribe(res => {
+      this.metadataTypes.set(res.items);
     });
   }
 
   loadAssets(): void {
     this.loadAssets$.next();
+  }
+
+  loadAssetsPaginated(page: number, pageSize: number, filters?: { search?: string; is_active?: boolean | null }, sort?: { field: string; order: string }): Observable<PaginatedResponse<AssetListItem>> {
+    const params: Record<string, any> = { page, page_size: pageSize };
+    if (filters?.search) params['search'] = filters.search;
+    if (filters?.is_active != null) params['is_active'] = filters.is_active;
+    if (sort) { params['sort_field'] = sort.field; params['sort_order'] = sort.order; }
+    return this.api.get<PaginatedResponse<AssetListItem>>('/assets', params);
+  }
+
+  loadInstrumentsPaginated(page: number, pageSize: number, filters?: { search?: string; is_active?: boolean | null; instrument_type_id?: string }, sort?: { field: string; order: string }): Observable<PaginatedResponse<Instrument>> {
+    const params: Record<string, any> = { page, page_size: pageSize };
+    if (filters?.search) params['search'] = filters.search;
+    if (filters?.is_active != null) params['is_active'] = filters.is_active;
+    if (filters?.instrument_type_id) params['instrument_type_id'] = filters.instrument_type_id;
+    if (sort) { params['sort_field'] = sort.field; params['sort_order'] = sort.order; }
+    return this.api.get<PaginatedResponse<Instrument>>('/instruments', params);
+  }
+
+  searchAssets(query: string): Observable<{ label: string; value: string }[]> {
+    return this.loadAssetsPaginated(1, 25, { search: query || undefined }).pipe(
+      map(res => res.items.map(a => ({ label: a.display_name || a.name, value: a.id })))
+    );
+  }
+
+  searchInstruments(query: string): Observable<{ label: string; value: string }[]> {
+    return this.loadInstrumentsPaginated(1, 25, { search: query || undefined }).pipe(
+      map(res => res.items.map(i => ({ label: i.display_name || i.name, value: i.id })))
+    );
   }
 
   loadAssetTypes(): void {
@@ -305,7 +335,7 @@ export class AssetService {
   }
 
   createMetadataType(name: string, displayName: string, description?: string, valueType = 'string'): Observable<MetadataType> {
-    return this.api.post<MetadataType>('/types/metadata-types', { name, display_name: displayName, description, value_type: valueType });
+    return this.api.post<MetadataType>('/metadata', { name, display_name: displayName, description, value_type: valueType });
   }
 
   // Asset Type Metadata Fields

@@ -1,7 +1,8 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { Subject, EMPTY, Observable } from 'rxjs';
-import { switchMap, tap, catchError } from 'rxjs/operators';
+import { switchMap, tap, catchError, map } from 'rxjs/operators';
 import { ApiService } from './api.service';
+import { PaginatedResponse } from '../models/trade.model';
 import {
   Composite, CompositeCreate, CompositeMember, CompositeMemberCreate,
   CompositeTypeItem, CompositeTypeCreate, CompositeTypeMetadataField,
@@ -29,12 +30,12 @@ export class CompositeService {
     this.loadComposites$.pipe(
       tap(() => this.loading.set(true)),
       switchMap(() =>
-        this.api.get<Composite[]>('/composites').pipe(
+        this.api.get<PaginatedResponse<Composite>>('/composites').pipe(
           catchError(() => { this.loading.set(false); return EMPTY; })
         )
       ),
-    ).subscribe(items => {
-      this.composites.set(items);
+    ).subscribe(res => {
+      this.composites.set(res.items);
       this.loading.set(false);
     });
 
@@ -47,8 +48,23 @@ export class CompositeService {
     ).subscribe(types => this.compositeTypes.set(types));
   }
 
+  searchComposites(query: string): Observable<{ label: string; value: string }[]> {
+    return this.loadCompositesPaginated(1, 25, { search: query || undefined }).pipe(
+      map(res => res.items.map(c => ({ label: c.display_name || c.name, value: c.id })))
+    );
+  }
+
   // Composites
   loadComposites(): void { this.loadComposites$.next(); }
+
+  loadCompositesPaginated(page: number, pageSize: number, filters?: { search?: string; is_active?: boolean | null; composite_type_id?: string }, sort?: { field: string; order: string }): Observable<PaginatedResponse<Composite>> {
+    const params: Record<string, any> = { page, page_size: pageSize };
+    if (filters?.search) params['search'] = filters.search;
+    if (filters?.is_active != null) params['is_active'] = filters.is_active;
+    if (filters?.composite_type_id) params['composite_type_id'] = filters.composite_type_id;
+    if (sort) { params['sort_field'] = sort.field; params['sort_order'] = sort.order; }
+    return this.api.get<PaginatedResponse<Composite>>('/composites', params);
+  }
 
   getCompositeDetail(id: string): Observable<Composite> {
     return this.api.get<Composite>(`/composites/${id}`);

@@ -202,9 +202,46 @@ def _delete_providers_cascade(db: Session, provider_ids: list) -> None:
 # Metadata Types
 # ---------------------------------------------------------------------------
 
+METADATA_SORT_COLUMNS = {
+    "name": Metadata.name,
+    "display_name": Metadata.display_name,
+    "value_type": Metadata.value_type,
+    "is_active": Metadata.is_active,
+    "created_at": Metadata.created_at,
+}
 
-def get_metadata_types(db: Session) -> list[Metadata]:
-    return list(db.execute(select(Metadata)).scalars().all())
+
+def get_metadata_types(
+    db: Session,
+    page: int = 1,
+    page_size: int = 25,
+    search: str | None = None,
+    is_active: bool | None = None,
+    sort_field: str = "name",
+    sort_order: str = "asc",
+) -> tuple[list[Metadata], int]:
+    conditions = []
+    if search:
+        conditions.append(
+            Metadata.display_name.ilike(f"%{search}%") | Metadata.name.ilike(f"%{search}%")
+        )
+    if is_active is not None:
+        conditions.append(Metadata.is_active == is_active)
+
+    count_q = select(func.count()).select_from(Metadata)
+    if conditions:
+        count_q = count_q.where(*conditions)
+    total = db.execute(count_q).scalar() or 0
+
+    query = select(Metadata)
+    if conditions:
+        query = query.where(*conditions)
+
+    sort_col = METADATA_SORT_COLUMNS.get(sort_field, Metadata.name)
+    sort_expr = sort_col.desc().nullslast() if sort_order == "desc" else sort_col.asc().nullsfirst()
+    query = query.order_by(sort_expr).offset((page - 1) * page_size).limit(page_size)
+    items = list(db.execute(query).scalars().all())
+    return items, total
 
 
 def get_metadata_type(db: Session, metadata_id: uuid.UUID) -> Metadata:
@@ -311,9 +348,45 @@ def delete_metadata_type(db: Session, metadata_id: uuid.UUID) -> None:
 # Attributes
 # ---------------------------------------------------------------------------
 
+ATTRIBUTE_SORT_COLUMNS = {
+    "name": Attribute.name,
+    "display_name": Attribute.display_name,
+    "is_active": Attribute.is_active,
+    "created_at": Attribute.created_at,
+}
 
-def get_attributes(db: Session) -> list[Attribute]:
-    return list(db.execute(select(Attribute)).scalars().all())
+
+def get_attributes(
+    db: Session,
+    page: int = 1,
+    page_size: int = 25,
+    search: str | None = None,
+    is_active: bool | None = None,
+    sort_field: str = "name",
+    sort_order: str = "asc",
+) -> tuple[list[Attribute], int]:
+    conditions = []
+    if search:
+        conditions.append(
+            Attribute.display_name.ilike(f"%{search}%") | Attribute.name.ilike(f"%{search}%")
+        )
+    if is_active is not None:
+        conditions.append(Attribute.is_active == is_active)
+
+    count_q = select(func.count()).select_from(Attribute)
+    if conditions:
+        count_q = count_q.where(*conditions)
+    total = db.execute(count_q).scalar() or 0
+
+    query = select(Attribute)
+    if conditions:
+        query = query.where(*conditions)
+
+    sort_col = ATTRIBUTE_SORT_COLUMNS.get(sort_field, Attribute.name)
+    sort_expr = sort_col.desc().nullslast() if sort_order == "desc" else sort_col.asc().nullsfirst()
+    query = query.order_by(sort_expr).offset((page - 1) * page_size).limit(page_size)
+    items = list(db.execute(query).scalars().all())
+    return items, total
 
 
 def get_attribute(db: Session, attribute_id: uuid.UUID) -> Attribute:

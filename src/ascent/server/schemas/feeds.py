@@ -2,6 +2,7 @@
 
 import datetime
 import uuid
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -16,6 +17,11 @@ class FeedListItem(BaseModel):
     display_name: str
     description: str | None = None
     feed_type_id: uuid.UUID
+    provider_id: uuid.UUID
+    provider_name: str | None = None
+    scope_type: Literal["instrument", "composite"]
+    scope_type_id: uuid.UUID
+    scope_type_name: str | None = None
     feed_ref: str
     output_table: str
     schedule: dict | None = None
@@ -38,6 +44,9 @@ class FeedCreate(BaseModel):
     name: Identifier
     display_name: str
     feed_type_id: uuid.UUID
+    provider_id: uuid.UUID
+    scope_type: Literal["instrument", "composite"]
+    scope_type_id: uuid.UUID
     feed_ref: str
     output_table: str
     description: str | None = None
@@ -53,6 +62,9 @@ class FeedUpdate(BaseModel):
     name: Identifier | None = None
     display_name: str | None = None
     description: str | None = None
+    provider_id: uuid.UUID | None = None
+    scope_type: Literal["instrument", "composite"] | None = None
+    scope_type_id: uuid.UUID | None = None
     parameters: dict | list | str | int | float | bool | None = None
     parameter_schema: dict | None = None
     data_schema: dict | None = None

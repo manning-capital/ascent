@@ -3,15 +3,40 @@ from sqlalchemy.orm import Session
 
 from ascent.server.dependencies import get_db
 from ascent.server.schemas.attributes import AttributeCreate, AttributeSchema, AttributeUpdate
+from ascent.server.schemas.common import PaginatedResponse
 from ascent.server.schemas.metadata import EntityUsage
 from ascent.server.services import field_service
 
 router = APIRouter(prefix="/attributes", tags=["attributes"])
 
 
-@router.get("", response_model=list[AttributeSchema])
-def list_attributes(db: Session = Depends(get_db)):
-    return [AttributeSchema.model_validate(r) for r in field_service.get_attributes(db)]
+@router.get("", response_model=PaginatedResponse[AttributeSchema])
+def list_attributes(
+    page: int = 1,
+    page_size: int = 25,
+    search: str | None = None,
+    is_active: bool | None = None,
+    sort_field: str = "name",
+    sort_order: str = "asc",
+    db: Session = Depends(get_db),
+):
+    items, total = field_service.get_attributes(
+        db,
+        page=page,
+        page_size=page_size,
+        search=search,
+        is_active=is_active,
+        sort_field=sort_field,
+        sort_order=sort_order,
+    )
+    total_pages = (total + page_size - 1) // page_size
+    return PaginatedResponse(
+        items=[AttributeSchema.model_validate(r) for r in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+    )
 
 
 @router.post("", status_code=201, response_model=AttributeSchema)

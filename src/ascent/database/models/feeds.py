@@ -6,27 +6,35 @@ import datetime
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, String, Text, UniqueConstraint, Uuid, func
+from sqlalchemy import CheckConstraint, ForeignKey, String, Text, UniqueConstraint, Uuid, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ascent.database.models.base import Base, NamedEntityMixin
 from ascent.database.models.instruments import Instrument
-from ascent.database.models.types import FeedType
+from ascent.database.models.types import CompositeType, FeedType, InstrumentType
 
 if TYPE_CHECKING:
     from ascent.database.models.composites import Composite
+    from ascent.database.models.providers import Provider
 
 
 class Feed(NamedEntityMixin, Base):
     __tablename__ = "feed"
-    __table_args__ = {
-        "comment": (
-            "Represents a registered data feed. Stores the feed configuration, "
-            "importable function path, Pandera schema info, schedule, and Redis "
-            "pub/sub channel."
-        )
-    }
+    __table_args__ = (
+        CheckConstraint(
+            "(instrument_type_id IS NOT NULL AND composite_type_id IS NULL) OR "
+            "(instrument_type_id IS NULL AND composite_type_id IS NOT NULL)",
+            name="ck_feed_scope_xor",
+        ),
+        {
+            "comment": (
+                "Represents a registered data feed. Stores the feed configuration, "
+                "importable function path, Pandera schema info, schedule, and Redis "
+                "pub/sub channel."
+            )
+        },
+    )
 
     feed_type_id: Mapped[uuid.UUID] = mapped_column(
         Uuid,
@@ -34,6 +42,24 @@ class Feed(NamedEntityMixin, Base):
         nullable=False,
     )
     feed_type: Mapped[FeedType] = relationship("FeedType")
+    provider_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid,
+        ForeignKey("provider.id"),
+        nullable=False,
+    )
+    provider: Mapped[Provider] = relationship("Provider")
+    instrument_type_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("instrument_type.id"),
+        nullable=True,
+    )
+    instrument_type: Mapped[InstrumentType | None] = relationship("InstrumentType")
+    composite_type_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("composite_type.id"),
+        nullable=True,
+    )
+    composite_type: Mapped[CompositeType | None] = relationship("CompositeType")
     feed_ref: Mapped[str] = mapped_column(String(500), nullable=False)
     parameters: Mapped[dict | list | str | int | float | bool | None] = mapped_column(
         JSONB,

@@ -1,46 +1,68 @@
-<div class="p-6">
-  <div class="flex items-center justify-between mb-6">
-    <h1 class="text-2xl font-bold">Instruments</h1>
-    <p-button (onClick)="openCreate()" severity="primary" [outlined]="true" label="+ New Instrument"/>
+<div class="flex flex-col h-[calc(100vh-3.5rem)] md:h-screen">
+  <div class="p-6 flex flex-col flex-1 min-h-0 gap-4">
+    <div class="flex items-center justify-between shrink-0">
+      <h1 class="text-2xl font-bold">Instruments</h1>
+      <p-button (onClick)="openCreate()" severity="primary" [outlined]="true" label="+ New Instrument"/>
+    </div>
+
+    <!-- Create Form -->
+    @if (showCreateForm()) {
+      <p-card styleClass="shrink-0">
+        <h3 class="font-semibold mb-4">New Instrument</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs text-surface-500 mb-1">Display Name *</label>
+            <input type="text" pInputText [(ngModel)]="newDisplayName" class="w-full"/>
+          </div>
+          <div>
+            <label class="block text-xs text-surface-500 mb-1">Name *</label>
+            <input type="text" pInputText [(ngModel)]="newName" class="w-full"/>
+          </div>
+          <div>
+            <label class="block text-xs text-surface-500 mb-1">Type *</label>
+            <p-select [(ngModel)]="newTypeId" [options]="assetService.instrumentTypes()" optionLabel="display_name" optionValue="id" placeholder="Select type"/>
+          </div>
+          <div>
+            <label class="block text-xs text-surface-500 mb-1">Provider *</label>
+            <app-search-select [searchFn]="providerSearchFn" placeholder="Search providers..." (valueChange)="newProviderId = $event ?? ''"/>
+          </div>
+          <div>
+            <label class="block text-xs text-surface-500 mb-1">From Asset *</label>
+            <app-search-select [searchFn]="assetSearchFn" placeholder="Search assets..." (valueChange)="newFromAssetId = $event ?? ''"/>
+          </div>
+          <div>
+            <label class="block text-xs text-surface-500 mb-1">To Asset *</label>
+            <app-search-select [searchFn]="assetSearchFn" placeholder="Search assets..." (valueChange)="newToAssetId = $event ?? ''"/>
+          </div>
+          <div>
+            <label class="block text-xs text-surface-500 mb-1">Description</label>
+            <input type="text" pInputText [(ngModel)]="newDescription" class="w-full"/>
+          </div>
+        </div>
+        <div class="flex gap-2 mt-4">
+          <p-button (onClick)="submitCreate()" severity="success" [outlined]="true" label="Create"/>
+          <p-button (onClick)="cancelCreate()" severity="secondary" [text]="true" label="Cancel"/>
+        </div>
+      </p-card>
+    }
+
+    <!-- Filters -->
+    <div class="rounded-lg border border-edge bg-surface p-4 shrink-0">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <input type="text" pInputText placeholder="Search instruments..."
+          [ngModel]="search()" (ngModelChange)="onSearch($event)">
+        <p-select [ngModel]="statusFilter()" (ngModelChange)="onStatusChange($event)"
+          [options]="statusOptions" optionLabel="label" optionValue="value"
+          placeholder="All Statuses" [showClear]="true"/>
+        <p-button (onClick)="clearFilters()" severity="secondary" [outlined]="true" label="Clear Filters"/>
+      </div>
+    </div>
+
+    <app-server-table class="flex-1 min-h-0"
+      [columns]="columns"
+      [fetchPage]="fetchPage()"
+      [rowClickRoute]="navigateToInstrument"
+      [pageSize]="25"
+      emptyMessage="No instruments found."/>
   </div>
-
-  <!-- Create Form -->
-  @if (showCreateForm()) {
-    <p-card styleClass="mb-6">
-      <h3 class="font-semibold mb-4">New Instrument</h3>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label class="block text-xs text-surface-500 mb-1">Display Name *</label>
-          <input type="text" pInputText [(ngModel)]="newDisplayName" class="w-full"/>
-        </div>
-        <div>
-          <label class="block text-xs text-surface-500 mb-1">Name *</label>
-          <input type="text" pInputText [(ngModel)]="newName" class="w-full"/>
-          @if (nameTaken()) {
-            <small class="text-red-500 mt-1 block">Name already exists</small>
-          }
-        </div>
-        <div>
-          <label class="block text-xs text-surface-500 mb-1">Type *</label>
-          <p-select [(ngModel)]="newTypeId" [options]="assetService.instrumentTypes()" optionLabel="display_name" optionValue="id" placeholder="Select type"/>
-        </div>
-        <div>
-          <label class="block text-xs text-surface-500 mb-1">Description</label>
-          <input type="text" pInputText [(ngModel)]="newDescription" class="w-full"/>
-        </div>
-      </div>
-      <div class="flex gap-2 mt-4">
-        <p-button (onClick)="submitCreate()" severity="success" [outlined]="true" label="Create"/>
-        <p-button (onClick)="cancelCreate()" severity="secondary" [text]="true" label="Cancel"/>
-      </div>
-    </p-card>
-  }
-
-  <!-- Instruments Table -->
-  <app-data-table
-    [columns]="columns"
-    [rowData]="enrichedInstruments()"
-    [loading]="assetService.instruments().length === 0 && !showCreateForm()"
-    [rowClickRoute]="navigateToInstrument"
-    emptyMessage="No instruments found."/>
 </div>

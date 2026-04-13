@@ -1,7 +1,7 @@
-import { Injectable, inject, signal } from '@angular/core';
-import { Subject, EMPTY, Observable } from 'rxjs';
-import { switchMap, tap, catchError } from 'rxjs/operators';
+import { Injectable, inject } from '@angular/core';
+import { Observable } from 'rxjs';
 import { ApiService } from './api.service';
+import { PaginatedResponse } from '../models/trade.model';
 import {
   EntityUsage,
   MetadataTypeItem, MetadataTypeCreate, MetadataTypeUpdate,
@@ -12,67 +12,43 @@ import {
 export class FieldService {
   private api = inject(ApiService);
 
-  metadataTypes = signal<MetadataTypeItem[]>([]);
-  attributes = signal<AttributeItem[]>([]);
-  loading = signal(false);
-
-  private loadMetadataTypes$ = new Subject<void>();
-  private loadAttributes$ = new Subject<void>();
-
-  constructor() {
-    this.loadMetadataTypes$.pipe(
-      tap(() => this.loading.set(true)),
-      switchMap(() =>
-        this.api.get<MetadataTypeItem[]>('/types/metadata-types').pipe(
-          catchError(() => { this.loading.set(false); return EMPTY; })
-        )
-      ),
-    ).subscribe(types => {
-      this.metadataTypes.set(types);
-      this.loading.set(false);
-    });
-
-    this.loadAttributes$.pipe(
-      tap(() => this.loading.set(true)),
-      switchMap(() =>
-        this.api.get<AttributeItem[]>('/attributes').pipe(
-          catchError(() => { this.loading.set(false); return EMPTY; })
-        )
-      ),
-    ).subscribe(attrs => {
-      this.attributes.set(attrs);
-      this.loading.set(false);
-    });
-  }
-
   // Metadata Types
-  loadMetadataTypes(): void {
-    this.loadMetadataTypes$.next();
+
+  loadMetadataTypesPaginated(page: number, pageSize: number, filters?: { search?: string; is_active?: boolean | null }, sort?: { field: string; order: string }): Observable<PaginatedResponse<MetadataTypeItem>> {
+    const params: Record<string, any> = { page, page_size: pageSize };
+    if (filters?.search) params['search'] = filters.search;
+    if (filters?.is_active != null) params['is_active'] = filters.is_active;
+    if (sort) { params['sort_field'] = sort.field; params['sort_order'] = sort.order; }
+    return this.api.get<PaginatedResponse<MetadataTypeItem>>('/metadata', params);
   }
 
   getMetadataType(id: string): Observable<MetadataTypeItem> {
-    return this.api.get<MetadataTypeItem>(`/types/metadata-types/${id}`);
+    return this.api.get<MetadataTypeItem>(`/metadata/${id}`);
   }
 
   createMetadataType(data: MetadataTypeCreate): Observable<MetadataTypeItem> {
-    return this.api.post<MetadataTypeItem>('/types/metadata-types', data);
+    return this.api.post<MetadataTypeItem>('/metadata', data);
   }
 
   updateMetadataType(id: string, data: MetadataTypeUpdate): Observable<MetadataTypeItem> {
-    return this.api.put<MetadataTypeItem>(`/types/metadata-types/${id}`, data);
+    return this.api.put<MetadataTypeItem>(`/metadata/${id}`, data);
   }
 
   getMetadataTypeUsage(id: string): Observable<EntityUsage> {
-    return this.api.get<EntityUsage>(`/types/metadata-types/${id}/usage`);
+    return this.api.get<EntityUsage>(`/metadata/${id}/usage`);
   }
 
   deleteMetadataType(id: string): Observable<any> {
-    return this.api.delete(`/types/metadata-types/${id}`);
+    return this.api.delete(`/metadata/${id}`);
   }
 
   // Attributes
-  loadAttributes(): void {
-    this.loadAttributes$.next();
+  loadAttributesPaginated(page: number, pageSize: number, filters?: { search?: string; is_active?: boolean | null }, sort?: { field: string; order: string }): Observable<PaginatedResponse<AttributeItem>> {
+    const params: Record<string, any> = { page, page_size: pageSize };
+    if (filters?.search) params['search'] = filters.search;
+    if (filters?.is_active != null) params['is_active'] = filters.is_active;
+    if (sort) { params['sort_field'] = sort.field; params['sort_order'] = sort.order; }
+    return this.api.get<PaginatedResponse<AttributeItem>>('/attributes', params);
   }
 
   getAttribute(id: string): Observable<AttributeItem> {

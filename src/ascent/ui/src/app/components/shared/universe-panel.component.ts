@@ -100,13 +100,15 @@ export class RemoveCellRenderer implements ICellRendererAngularComp {
               <h3 class="font-semibold text-sm">Universe</h3>
               <p class="text-xs text-surface-400 mt-1">{{ subtitle() }}</p>
             </div>
-            <p-selectButton
-              [options]="modeOptions"
-              [ngModel]="mode()"
-              (ngModelChange)="mode.set($event)"
-              optionLabel="label"
-              optionValue="value"
-              size="small"/>
+            @if (!restrictMode()) {
+              <p-selectButton
+                [options]="modeOptions"
+                [ngModel]="mode()"
+                (ngModelChange)="mode.set($event)"
+                optionLabel="label"
+                optionValue="value"
+                size="small"/>
+            }
           </div>
           @if (hasExchanges()) {
             <p-button
@@ -219,6 +221,10 @@ export class UniversePanelComponent implements OnInit {
   ngOnInit(): void {
     this.assetService.loadInstrumentTypes();
     this.compositeService.loadCompositeTypes();
+    const locked = this.restrictMode();
+    if (locked) {
+      this.mode.set(locked);
+    }
   }
 
   // ─── Inputs ───────────────────────────────────────────────
@@ -229,6 +235,10 @@ export class UniversePanelComponent implements OnInit {
   universeBaseUrl = input<string | null>(null);
   /** When set, restrict picker results to instruments/composites tradeable on this strategy's exchanges. */
   restrictToStrategyId = input<string | null>(null);
+  /** When set, restrict picker results to instruments/composites matching the feed's provider + type constraints. */
+  restrictToFeedId = input<string | null>(null);
+  /** When set, locks the mode toggle to 'instruments' or 'composites'. */
+  restrictMode = input<'instruments' | 'composites' | null>(null);
   /** Whether the parent entity has exchanges configured. When false, shows a message instead of the picker. */
   hasExchanges = input(true);
 
@@ -256,7 +266,7 @@ export class UniversePanelComponent implements OnInit {
   // Filters
   searchFilter = signal('');
   typeFilter = signal<string>('');
-  statusFilter = signal<boolean | ''>('');
+  statusFilter = signal<boolean | ''>(true);
 
   statusFilterOptions = [
     { label: 'Active', value: true },
@@ -367,6 +377,7 @@ export class UniversePanelComponent implements OnInit {
     const excludeStrategyId = this.excludeStrategyId();
     const excludeFeedId = this.excludeFeedId();
     const restrictToStrategyId = this.restrictToStrategyId();
+    const restrictToFeedId = this.restrictToFeedId();
 
     const params: Record<string, any> = {};
     if (search) params['search'] = search;
@@ -374,6 +385,7 @@ export class UniversePanelComponent implements OnInit {
     if (excludeStrategyId) params['exclude_strategy_id'] = excludeStrategyId;
     if (excludeFeedId) params['exclude_feed_id'] = excludeFeedId;
     if (restrictToStrategyId) params['restrict_to_strategy_id'] = restrictToStrategyId;
+    if (restrictToFeedId) params['restrict_to_feed_id'] = restrictToFeedId;
 
     if (currentMode === 'instruments') {
       if (typeId) params['instrument_type_id'] = typeId;
@@ -444,11 +456,13 @@ export class UniversePanelComponent implements OnInit {
     const excludeStrategyId = this.excludeStrategyId();
     const excludeFeedId = this.excludeFeedId();
     const restrictToStrategyId = this.restrictToStrategyId();
+    const restrictToFeedId = this.restrictToFeedId();
     if (search) params['search'] = search;
     if (status !== '') params['is_active'] = status;
     if (excludeStrategyId) params['exclude_strategy_id'] = excludeStrategyId;
     if (excludeFeedId) params['exclude_feed_id'] = excludeFeedId;
     if (restrictToStrategyId) params['restrict_to_strategy_id'] = restrictToStrategyId;
+    if (restrictToFeedId) params['restrict_to_feed_id'] = restrictToFeedId;
 
     const endpoint = this.mode() === 'instruments' ? '/instruments/ids' : '/composites/ids';
     if (this.mode() === 'instruments' && typeId) params['instrument_type_id'] = typeId;

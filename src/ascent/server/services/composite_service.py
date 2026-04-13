@@ -88,6 +88,7 @@ def _apply_composite_filters(
     exclude_strategy_id: uuid.UUID | None = None,
     exclude_feed_id: uuid.UUID | None = None,
     restrict_to_strategy_id: uuid.UUID | None = None,
+    restrict_to_feed_id: uuid.UUID | None = None,
 ):
     if search:
         query = query.where(
@@ -148,6 +149,38 @@ def _apply_composite_filters(
         # Only include composites where ALL members are tradeable
         query = query.where(total_member_count > 0)
         query = query.where(tradeable_member_count >= total_member_count)
+    if restrict_to_feed_id:
+        from ascent.database.models.feeds import Feed
+        from ascent.database.models.instruments import Instrument
+
+        # Filter by composite_type_id from the feed
+        query = query.where(
+            Composite.composite_type_id.in_(
+                select(Feed.composite_type_id).where(Feed.id == restrict_to_feed_id)
+            )
+        )
+        # Only include composites where ALL members belong to the feed's provider
+        feed_provider = (
+            select(Feed.provider_id).where(Feed.id == restrict_to_feed_id).scalar_subquery()
+        )
+        matching_member_count = (
+            select(func.count(CompositeMember.instrument_id))
+            .select_from(CompositeMember)
+            .join(Instrument, CompositeMember.instrument_id == Instrument.id)
+            .where(CompositeMember.composite_id == Composite.id)
+            .where(Instrument.provider_id == feed_provider)
+            .correlate(Composite)
+            .scalar_subquery()
+        )
+        all_member_count = (
+            select(func.count())
+            .select_from(CompositeMember)
+            .where(CompositeMember.composite_id == Composite.id)
+            .correlate(Composite)
+            .scalar_subquery()
+        )
+        query = query.where(all_member_count > 0)
+        query = query.where(matching_member_count >= all_member_count)
     return query
 
 
@@ -159,6 +192,7 @@ def search_composites(
     exclude_strategy_id: uuid.UUID | None = None,
     exclude_feed_id: uuid.UUID | None = None,
     restrict_to_strategy_id: uuid.UUID | None = None,
+    restrict_to_feed_id: uuid.UUID | None = None,
     sort_field: str = "display_name",
     sort_order: str = "asc",
     page: int = 1,
@@ -173,6 +207,7 @@ def search_composites(
         exclude_strategy_id,
         exclude_feed_id,
         restrict_to_strategy_id,
+        restrict_to_feed_id,
     )
 
     total = db.execute(select(func.count()).select_from(base.subquery())).scalar_one()
@@ -199,6 +234,7 @@ def search_composite_ids(
     exclude_strategy_id: uuid.UUID | None = None,
     exclude_feed_id: uuid.UUID | None = None,
     restrict_to_strategy_id: uuid.UUID | None = None,
+    restrict_to_feed_id: uuid.UUID | None = None,
 ) -> list[uuid.UUID]:
     query = select(Composite.id)
     query = _apply_composite_filters(
@@ -209,6 +245,7 @@ def search_composite_ids(
         exclude_strategy_id,
         exclude_feed_id,
         restrict_to_strategy_id,
+        restrict_to_feed_id,
     )
     query = query.order_by(Composite.display_name.asc())
     return list(db.execute(query).scalars().all())

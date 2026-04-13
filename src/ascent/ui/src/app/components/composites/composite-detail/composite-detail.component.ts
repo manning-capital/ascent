@@ -1,11 +1,12 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import { forkJoin } from 'rxjs';
+import { forkJoin, Observable } from 'rxjs';
 import type { ICellRendererAngularComp } from 'ag-grid-angular';
 import type { ICellRendererParams } from 'ag-grid-community';
 import { CompositeService } from '../../../services/composite.service';
 import { AssetService } from '../../../services/asset.service';
+import { ProviderService } from '../../../services/provider.service';
 import { FieldService } from '../../../services/field.service';
 import { ToastService } from '../../../services/toast.service';
 import {
@@ -18,7 +19,6 @@ import {
 import { EntityUsage } from '../../../models/field.model';
 import { Tabs, TabList, Tab } from 'primeng/tabs';
 import { Skeleton } from 'primeng/skeleton';
-import { Select } from 'primeng/select';
 import { DatePicker } from 'primeng/datepicker';
 import { Tag } from 'primeng/tag';
 import { Button } from 'primeng/button';
@@ -28,6 +28,7 @@ import type { DataTableColumn } from '../../shared/data-table/data-table.model';
 import { MetadataHistoryTableComponent } from '../../shared/metadata-history-table.component';
 import { SafeDeleteDialogComponent } from '../../shared/safe-delete-dialog.component';
 import { FieldPanelComponent, PanelField } from '../../shared/field-panel.component';
+import { SearchSelectComponent } from '../../shared/search-select.component';
 
 // ─── Remove button cell renderer for members table ─────────
 @Component({
@@ -61,7 +62,6 @@ export class RemoveMemberCellRenderer implements ICellRendererAngularComp {
     RouterLink,
     FormsModule,
     Tabs, TabList, Tab,
-    Select,
     DatePicker,
     Tag,
     Button,
@@ -71,6 +71,7 @@ export class RemoveMemberCellRenderer implements ICellRendererAngularComp {
     MetadataHistoryTableComponent,
     SafeDeleteDialogComponent,
     FieldPanelComponent,
+    SearchSelectComponent,
   ],
   templateUrl: './composite-detail.component.html',
 })
@@ -80,6 +81,7 @@ export class CompositeDetailComponent implements OnInit {
   private toast = inject(ToastService);
   compositeService = inject(CompositeService);
   assetService = inject(AssetService);
+  private providerService = inject(ProviderService);
   private fieldService = inject(FieldService);
 
   tabs = ['Details', 'History', 'Settings'];
@@ -145,10 +147,11 @@ export class CompositeDetailComponent implements OnInit {
         case 'datetime': return { ...base, type: 'datetime' as const, value: val != null ? String(val) : null, fallback: 'Not set' };
         case 'enum': return { ...base, type: 'tag' as const, value: val != null ? String(val) : '', severity: 'secondary', options: (field.config?.['options'] as string[] ?? []).map((o: string) => ({ label: o, value: o })) };
         case 'reference': {
-          const refOpts = this.getReferenceOptions(field.config?.['ref_table'] ?? null);
+          const refTable = field.config?.['ref_table'] ?? null;
+          const refOpts = this.getReferenceOptions(refTable);
           const refItem = refOpts.find(o => o.value === val);
-          const refRoute = val ? this.getReferenceRoute(field.config?.['ref_table'] ?? null, String(val)) : [];
-          return { ...base, type: 'link' as const, value: refItem?.label ?? (val ? String(val) : null), route: refRoute, fallback: 'Not set', options: refOpts };
+          const refRoute = val ? this.getReferenceRoute(refTable, String(val)) : [];
+          return { ...base, type: 'link' as const, value: refItem?.label ?? (val ? String(val) : null), route: refRoute, fallback: 'Not set', searchFn: this.getReferenceSearchFn(refTable) };
         }
         default: return { ...base, type: 'text' as const, value: val != null ? String(val) : null, fallback: 'Not set' };
       }
@@ -158,11 +161,22 @@ export class CompositeDetailComponent implements OnInit {
   private getReferenceOptions(refTable: string | null): { label: string; value: string }[] {
     if (!refTable) return [];
     switch (refTable) {
-      case 'asset': return (this as any).assetService?.assets()?.map((a: any) => ({ label: a.display_name || a.name, value: a.id })) ?? [];
-      case 'instrument': return (this as any).assetService?.instruments()?.map((i: any) => ({ label: i.display_name || i.name, value: i.id })) ?? [];
-      case 'composite': return (this as any).compositeService?.composites()?.map((c: any) => ({ label: c.display_name || c.name, value: c.id })) ?? [];
-      case 'provider': return (this as any).providerService?.providers()?.map((p: any) => ({ label: p.display_name || p.name, value: p.id })) ?? [];
+      case 'asset': return this.assetService.assets().map(a => ({ label: a.display_name || a.name, value: a.id }));
+      case 'instrument': return this.assetService.instruments().map(i => ({ label: i.display_name || i.name, value: i.id }));
+      case 'composite': return this.compositeService.composites().map(c => ({ label: c.display_name || c.name, value: c.id }));
+      case 'provider': return this.providerService.providers().map(p => ({ label: p.display_name || p.name, value: p.id }));
       default: return [];
+    }
+  }
+
+  private getReferenceSearchFn(refTable: string | null): ((query: string) => Observable<{ label: string; value: string }[]>) | undefined {
+    if (!refTable) return undefined;
+    switch (refTable) {
+      case 'asset': return (q: string) => this.assetService.searchAssets(q);
+      case 'instrument': return (q: string) => this.assetService.searchInstruments(q);
+      case 'composite': return (q: string) => this.compositeService.searchComposites(q);
+      case 'provider': return (q: string) => this.providerService.searchProviders(q);
+      default: return undefined;
     }
   }
 
@@ -400,8 +414,10 @@ export class CompositeDetailComponent implements OnInit {
 
   // ---- Members ----
 
+  instrumentSearchFn = (q: string) => this.assetService.searchInstruments(q);
+
   openMemberForm(): void {
-    this.newInstrumentId = this.assetService.instruments()[0]?.id ?? '';
+    this.newInstrumentId = '';
     this.showMemberForm.set(true);
   }
 

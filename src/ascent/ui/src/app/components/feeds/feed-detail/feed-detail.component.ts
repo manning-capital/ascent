@@ -1,4 +1,4 @@
-import { Component, effect, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, effect, inject, OnInit, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DatePipe, JsonPipe } from '@angular/common';
 import { FeedService } from '../../../services/feed.service';
@@ -72,6 +72,12 @@ export class FeedDetailComponent implements OnInit {
 
   // Universe state
   universeItems = signal<UniverseItem[]>([]);
+
+  feedScopeMode = computed<'instruments' | 'composites' | null>(() => {
+    const feed = this.feedService.selectedFeed();
+    if (!feed) return null;
+    return feed.scope_type === 'instrument' ? 'instruments' : 'composites';
+  });
 
   private partitionsLoaded = false;
 

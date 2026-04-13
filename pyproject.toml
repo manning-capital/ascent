@@ -35,6 +35,7 @@ dependencies = [
     "alembic>=1.17.2",
     "cyclopts>=3.0.0",
     "dask>=2025.12.0",
+    "docker>=7.1.0",
     "fastapi>=0.125.0",
     "httpx>=0.28.0",
     "pandas>=2.3.3",
@@ -57,6 +58,7 @@ dev = [
     "mypy>=1.11.0",
 ]
 test = [
+    "docker>=7.0.0",
     "prefect==3.6.7",
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
@@ -156,6 +158,7 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
     "unit: marks tests as unit tests",
+    "standalone_harness: tests that manage their own Docker containers (skip shared autouse fixtures)",
 ]
 
 [tool.coverage.run]

@@ -2,9 +2,10 @@ import { Component, computed, effect, inject, OnInit, signal } from '@angular/co
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { forkJoin } from 'rxjs';
+import { forkJoin, Observable } from 'rxjs';
 import { AssetService } from '../../../services/asset.service';
 import { ProviderService } from '../../../services/provider.service';
+import { CompositeService } from '../../../services/composite.service';
 import { FieldService } from '../../../services/field.service';
 import { ToastService } from '../../../services/toast.service';
 import { MetadataEntry, AssetTypeMetadataField, AssetTypeProviderAssetMetadataField, MetadataHistoryGrid, BulkHistoryUpdate, ProviderAssetLink } from '../../../models/asset.model';
@@ -48,6 +49,7 @@ export class AssetDetailComponent implements OnInit {
   private toast = inject(ToastService);
   assetService = inject(AssetService);
   providerService = inject(ProviderService);
+  private compositeService = inject(CompositeService);
   private fieldService = inject(FieldService);
 
   assetId = '';
@@ -99,10 +101,11 @@ export class AssetDetailComponent implements OnInit {
         case 'datetime': return { ...base, type: 'datetime' as const, value: val != null ? String(val) : null, fallback: 'Not set' };
         case 'enum': return { ...base, type: 'tag' as const, value: val != null ? String(val) : '', severity: 'secondary', options: (field.config?.['options'] as string[] ?? []).map((o: string) => ({ label: o, value: o })) };
         case 'reference': {
-          const refOpts = this.getReferenceOptions(field.config?.['ref_table'] ?? null);
+          const refTable = field.config?.['ref_table'] ?? null;
+          const refOpts = this.getReferenceOptions(refTable);
           const refItem = refOpts.find(o => o.value === val);
-          const refRoute = val ? this.getReferenceRoute(field.config?.['ref_table'] ?? null, String(val)) : [];
-          return { ...base, type: 'link' as const, value: refItem?.label ?? (val ? String(val) : null), route: refRoute, fallback: 'Not set', options: refOpts };
+          const refRoute = val ? this.getReferenceRoute(refTable, String(val)) : [];
+          return { ...base, type: 'link' as const, value: refItem?.label ?? (val ? String(val) : null), route: refRoute, fallback: 'Not set', searchFn: this.getReferenceSearchFn(refTable) };
         }
         default: return { ...base, type: 'text' as const, value: val != null ? String(val) : null, fallback: 'Not set' };
       }
@@ -112,11 +115,22 @@ export class AssetDetailComponent implements OnInit {
   private getReferenceOptions(refTable: string | null): { label: string; value: string }[] {
     if (!refTable) return [];
     switch (refTable) {
-      case 'asset': return (this as any).assetService?.assets()?.map((a: any) => ({ label: a.display_name || a.name, value: a.id })) ?? [];
-      case 'instrument': return (this as any).assetService?.instruments()?.map((i: any) => ({ label: i.display_name || i.name, value: i.id })) ?? [];
-      case 'composite': return (this as any).compositeService?.composites()?.map((c: any) => ({ label: c.display_name || c.name, value: c.id })) ?? [];
-      case 'provider': return (this as any).providerService?.providers()?.map((p: any) => ({ label: p.display_name || p.name, value: p.id })) ?? [];
+      case 'asset': return this.assetService.assets().map(a => ({ label: a.display_name || a.name, value: a.id }));
+      case 'instrument': return this.assetService.instruments().map(i => ({ label: i.display_name || i.name, value: i.id }));
+      case 'composite': return this.compositeService.composites().map(c => ({ label: c.display_name || c.name, value: c.id }));
+      case 'provider': return this.providerService.providers().map(p => ({ label: p.display_name || p.name, value: p.id }));
       default: return [];
+    }
+  }
+
+  private getReferenceSearchFn(refTable: string | null): ((query: string) => Observable<{ label: string; value: string }[]>) | undefined {
+    if (!refTable) return undefined;
+    switch (refTable) {
+      case 'asset': return (q: string) => this.assetService.searchAssets(q);
+      case 'instrument': return (q: string) => this.assetService.searchInstruments(q);
+      case 'composite': return (q: string) => this.compositeService.searchComposites(q);
+      case 'provider': return (q: string) => this.providerService.searchProviders(q);
+      default: return undefined;
     }
   }
 

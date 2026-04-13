@@ -182,12 +182,12 @@ class AscentClient:
         return resp.json()
 
     def get_metadata_types(self) -> list[dict[str, Any]]:
-        resp = self._client.get("/types/metadata-types")
+        resp = self._client.get("/metadata", params={"page_size": 10000})
         self._raise(resp)
-        return resp.json()
+        return resp.json()["items"]
 
     def create_metadata_type(self, **kwargs: Any) -> dict[str, Any]:
-        resp = self._client.post("/types/metadata-types", json=_body(**kwargs))
+        resp = self._client.post("/metadata", json=_body(**kwargs))
         self._raise(resp)
         return resp.json()
 
@@ -262,9 +262,9 @@ class AscentClient:
     # ------------------------------------------------------------------
 
     def get_assets(self) -> list[dict[str, Any]]:
-        resp = self._client.get("/assets")
+        resp = self._client.get("/assets", params={"page_size": 10000})
         self._raise(resp)
-        return resp.json()
+        return resp.json()["items"]
 
     def create_asset(self, **kwargs: Any) -> dict[str, Any]:
         resp = self._client.post("/assets", json=_body(**kwargs))
@@ -296,9 +296,9 @@ class AscentClient:
     # ------------------------------------------------------------------
 
     def get_providers(self) -> list[dict[str, Any]]:
-        resp = self._client.get("/providers")
+        resp = self._client.get("/providers", params={"page_size": 10000})
         self._raise(resp)
-        return resp.json()
+        return resp.json()["items"]
 
     def create_provider(self, **kwargs: Any) -> dict[str, Any]:
         resp = self._client.post("/providers", json=_body(**kwargs))
@@ -377,9 +377,9 @@ class AscentClient:
     # ------------------------------------------------------------------
 
     def get_attributes(self) -> list[dict[str, Any]]:
-        resp = self._client.get("/attributes")
+        resp = self._client.get("/attributes", params={"page_size": 10000})
         self._raise(resp)
-        return resp.json()
+        return resp.json()["items"]
 
     def create_attribute(self, **kwargs: Any) -> dict[str, Any]:
         resp = self._client.post("/attributes", json=_body(**kwargs))
@@ -410,9 +410,9 @@ class AscentClient:
     # ------------------------------------------------------------------
 
     def get_instruments(self) -> list[dict[str, Any]]:
-        resp = self._client.get("/instruments")
+        resp = self._client.get("/instruments", params={"page_size": 10000})
         self._raise(resp)
-        return resp.json()
+        return resp.json()["items"]
 
     def create_instrument(self, **kwargs: Any) -> dict[str, Any]:
         resp = self._client.post("/instruments", json=_body(**kwargs))
@@ -440,9 +440,9 @@ class AscentClient:
     # ------------------------------------------------------------------
 
     def get_composites(self) -> list[dict[str, Any]]:
-        resp = self._client.get("/composites")
+        resp = self._client.get("/composites", params={"page_size": 10000})
         self._raise(resp)
-        return resp.json()
+        return resp.json()["items"]
 
     def create_composite(self, **kwargs: Any) -> dict[str, Any]:
         body = _body(**kwargs)

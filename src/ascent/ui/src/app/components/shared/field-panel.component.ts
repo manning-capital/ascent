@@ -2,11 +2,13 @@ import { Component, input, output } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
+import { Observable } from 'rxjs';
 import { Panel } from 'primeng/panel';
 import { Tag } from 'primeng/tag';
 import { InputText } from 'primeng/inputtext';
 import { Checkbox } from 'primeng/checkbox';
 import { Select } from 'primeng/select';
+import { SearchSelectComponent, SearchOption } from './search-select.component';
 
 export type PanelField = {
   label: string;
@@ -17,7 +19,7 @@ export type PanelField = {
 } & (
   | { type: 'text'; value: string | number | null; fallback?: string }
   | { type: 'mono'; value: string | null; fallback?: string }
-  | { type: 'link'; value: string | null; route: string[]; fallback?: string; options?: { label: string; value: any }[] }
+  | { type: 'link'; value: string | null; route: string[]; fallback?: string; options?: { label: string; value: any }[]; searchFn?: (query: string) => Observable<SearchOption[]> }
   | { type: 'external-link'; value: string | null; href: string | null; fallback?: string }
   | { type: 'active'; value: boolean }
   | { type: 'date'; value: string | null }
@@ -33,7 +35,7 @@ const BOOL_OPTIONS = [{ label: 'true', value: 'true' }, { label: 'false', value:
 @Component({
   selector: 'app-field-panel',
   standalone: true,
-  imports: [DatePipe, FormsModule, RouterLink, Panel, Tag, InputText, Checkbox, Select],
+  imports: [DatePipe, FormsModule, RouterLink, Panel, Tag, InputText, Checkbox, Select, SearchSelectComponent],
   host: { class: 'block' },
   template: `
     <p-panel [header]="header()">
@@ -54,7 +56,11 @@ const BOOL_OPTIONS = [{ label: 'true', value: 'true' }, { label: 'false', value:
                   <input pInputText [ngModel]="ev(field.key)" (ngModelChange)="onEdit(field.key, $event)" class="w-full text-sm font-mono"/>
                 }
                 @case ('link') {
-                  <p-select [ngModel]="ev(field.key)" (ngModelChange)="onEdit(field.key, $event)" [options]="$any(field).options || []" optionLabel="label" optionValue="value" class="w-full" [filter]="true" placeholder="Select..."/>
+                  @if ($any(field).searchFn) {
+                    <app-search-select [searchFn]="$any(field).searchFn" [value]="ev(field.key)" [displayValue]="$any(field).value" (valueChange)="onEdit(field.key, $event)" placeholder="Search..."/>
+                  } @else {
+                    <p-select [ngModel]="ev(field.key)" (ngModelChange)="onEdit(field.key, $event)" [options]="$any(field).options || []" optionLabel="label" optionValue="value" class="w-full" [filter]="true" placeholder="Select..."/>
+                  }
                 }
                 @case ('external-link') {
                   <input pInputText [ngModel]="ev(field.key)" (ngModelChange)="onEdit(field.key, $event)" class="w-full text-sm"/>

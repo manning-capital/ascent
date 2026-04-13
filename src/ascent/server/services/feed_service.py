@@ -2,12 +2,14 @@
 
 import datetime
 import uuid
+from typing import Literal
 
 import pandas as pd
 from sqlalchemy import bindparam, func, select, text
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from ascent.database.models.feeds import Feed, FeedDependency, FeedPartition, FeedRun, StrategyFeed
+from ascent.database.models.types import CompositeType, InstrumentType
 from ascent.engine.cache import EngineCache
 from ascent.feeds.partition import generate_keys, partition_key_for, partition_window
 from ascent.feeds.schedule import Schedule
@@ -25,6 +27,74 @@ from ascent.server.schemas.feeds import (
     FeedUpdate,
     StrategyFeedItem,
 )
+
+
+def _resolve_scope(feed: Feed) -> tuple[Literal["instrument", "composite"], uuid.UUID, str | None]:
+    """Derive scope_type, scope_type_id, and scope_type_name from internal DB columns."""
+    if feed.instrument_type_id is not None:
+        name = feed.instrument_type.display_name if feed.instrument_type else None
+        return "instrument", feed.instrument_type_id, name
+    name = feed.composite_type.display_name if feed.composite_type else None
+    return "composite", feed.composite_type_id, name  # type: ignore[return-value]
+
+
+def _scope_to_db_columns(scope_type: str, scope_type_id: uuid.UUID) -> dict[str, uuid.UUID | None]:
+    """Translate API scope_type/scope_type_id to internal DB column values."""
+    if scope_type == "instrument":
+        return {"instrument_type_id": scope_type_id, "composite_type_id": None}
+    return {"instrument_type_id": None, "composite_type_id": scope_type_id}
+
+
+_INSTRUMENT_OUTPUT_TABLES = {"instrument_attribute", "instrument_period_attribute"}
+_COMPOSITE_OUTPUT_TABLES = {"composite_attribute", "composite_period_attribute"}
+
+
+def _validate_scope_type_id(db: Session, scope_type: str, scope_type_id: uuid.UUID) -> None:
+    """Verify the scope_type_id exists in the appropriate type table."""
+    if scope_type == "instrument":
+        if not db.get(InstrumentType, scope_type_id):
+            raise BadRequestError(f"Instrument type {scope_type_id} not found")
+    else:
+        if not db.get(CompositeType, scope_type_id):
+            raise BadRequestError(f"Composite type {scope_type_id} not found")
+
+
+def _validate_output_table(scope_type: str, output_table: str) -> None:
+    """Verify output_table is consistent with scope_type."""
+    if scope_type == "instrument" and output_table in _COMPOSITE_OUTPUT_TABLES:
+        raise BadRequestError(
+            f"Instrument-scoped feed cannot use composite output table '{output_table}'"
+        )
+    if scope_type == "composite" and output_table in _INSTRUMENT_OUTPUT_TABLES:
+        raise BadRequestError(
+            f"Composite-scoped feed cannot use instrument output table '{output_table}'"
+        )
+
+
+def _build_feed_list_item(feed: Feed, total_runs: int, last_run: FeedRun | None) -> FeedListItem:
+    """Build a FeedListItem from a Feed ORM object with scope translation."""
+    scope_type, scope_type_id, scope_type_name = _resolve_scope(feed)
+    return FeedListItem(
+        id=feed.id,
+        name=feed.name,
+        display_name=feed.display_name,
+        description=feed.description,
+        feed_type_id=feed.feed_type_id,
+        provider_id=feed.provider_id,
+        provider_name=feed.provider.name if feed.provider else None,
+        scope_type=scope_type,
+        scope_type_id=scope_type_id,
+        scope_type_name=scope_type_name,
+        feed_ref=feed.feed_ref,
+        output_table=feed.output_table,
+        schedule=feed.schedule,
+        channel=feed.channel,
+        is_active=feed.is_active,
+        total_runs=total_runs,
+        last_run_at=last_run.started_at if last_run else None,
+        last_run_status=last_run.status if last_run else None,
+    )
+
 
 FEED_SORT_COLUMNS = {
     "display_name": Feed.display_name,
@@ -55,7 +125,11 @@ def get_feeds(
         count_q = count_q.where(*conditions)
     total = db.execute(count_q).scalar() or 0
 
-    query = select(Feed)
+    query = select(Feed).options(
+        joinedload(Feed.provider),
+        joinedload(Feed.instrument_type),
+        joinedload(Feed.composite_type),
+    )
     if conditions:
         query = query.where(*conditions)
 
@@ -63,6 +137,7 @@ def get_feeds(
     sort_expr = sort_col.desc().nullslast() if sort_order == "desc" else sort_col.asc().nullsfirst()
     feeds = (
         db.execute(query.order_by(sort_expr).offset((page - 1) * page_size).limit(page_size))
+        .unique()
         .scalars()
         .all()
     )
@@ -87,28 +162,21 @@ def get_feeds(
             .first()
         )
 
-        items.append(
-            FeedListItem(
-                id=f.id,
-                name=f.name,
-                display_name=f.display_name,
-                description=f.description,
-                feed_type_id=f.feed_type_id,
-                feed_ref=f.feed_ref,
-                output_table=f.output_table,
-                schedule=f.schedule,
-                channel=f.channel,
-                is_active=f.is_active,
-                total_runs=total_runs,
-                last_run_at=last_run.started_at if last_run else None,
-                last_run_status=last_run.status if last_run else None,
-            )
-        )
+        items.append(_build_feed_list_item(f, total_runs, last_run))
     return items, total
 
 
 def get_feed_detail(db: Session, feed_id: uuid.UUID) -> FeedDetail:
-    feed = db.get(Feed, feed_id)
+    query = (
+        select(Feed)
+        .options(
+            joinedload(Feed.provider),
+            joinedload(Feed.instrument_type),
+            joinedload(Feed.composite_type),
+        )
+        .where(Feed.id == feed_id)
+    )
+    feed = db.execute(query).unique().scalar_one_or_none()
     if not feed:
         raise NotFoundError("Feed not found")
 
@@ -129,12 +197,19 @@ def get_feed_detail(db: Session, feed_id: uuid.UUID) -> FeedDetail:
         .first()
     )
 
+    scope_type, scope_type_id, scope_type_name = _resolve_scope(feed)
+
     return FeedDetail(
         id=feed.id,
         name=feed.name,
         display_name=feed.display_name,
         description=feed.description,
         feed_type_id=feed.feed_type_id,
+        provider_id=feed.provider_id,
+        provider_name=feed.provider.name if feed.provider else None,
+        scope_type=scope_type,
+        scope_type_id=scope_type_id,
+        scope_type_name=scope_type_name,
         feed_ref=feed.feed_ref,
         output_table=feed.output_table,
         schedule=feed.schedule,
@@ -152,7 +227,12 @@ def get_feed_detail(db: Session, feed_id: uuid.UUID) -> FeedDetail:
 
 
 def create_feed(db: Session, data: FeedCreate) -> Feed:
-    feed = Feed(**data.model_dump())
+    _validate_scope_type_id(db, data.scope_type, data.scope_type_id)
+    _validate_output_table(data.scope_type, data.output_table)
+    db_columns = _scope_to_db_columns(data.scope_type, data.scope_type_id)
+    feed_data = data.model_dump(exclude={"scope_type", "scope_type_id"})
+    feed_data.update(db_columns)
+    feed = Feed(**feed_data)
     db.add(feed)
     db.commit()
     db.refresh(feed)
@@ -163,7 +243,21 @@ def update_feed(db: Session, feed_id: uuid.UUID, data: FeedUpdate) -> Feed:
     feed = db.get(Feed, feed_id)
     if not feed:
         raise NotFoundError("Feed not found")
-    for key, value in data.model_dump(exclude_unset=True).items():
+    updates = data.model_dump(exclude_unset=True)
+    scope_type = updates.pop("scope_type", None)
+    scope_type_id = updates.pop("scope_type_id", None)
+    if scope_type is not None or scope_type_id is not None:
+        resolved_type = scope_type or ("instrument" if feed.instrument_type_id else "composite")
+        resolved_id = scope_type_id or feed.instrument_type_id or feed.composite_type_id
+        _validate_scope_type_id(db, resolved_type, resolved_id)
+        output_table = updates.get("output_table", feed.output_table)
+        _validate_output_table(resolved_type, output_table)
+        db_columns = _scope_to_db_columns(resolved_type, resolved_id)
+        updates.update(db_columns)
+    elif "output_table" in updates:
+        current_scope = "instrument" if feed.instrument_type_id else "composite"
+        _validate_output_table(current_scope, updates["output_table"])
+    for key, value in updates.items():
         setattr(feed, key, value)
     db.commit()
     db.refresh(feed)

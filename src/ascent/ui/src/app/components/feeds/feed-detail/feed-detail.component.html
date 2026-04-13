@@ -138,6 +138,9 @@
             @if (f) {
               <p-card header="Feed Details">
                 <div class="space-y-2 text-sm">
+                  <div class="flex justify-between"><span class="text-muted-color">Provider</span><span>{{ f.provider_name ?? '—' }}</span></div>
+                  <div class="flex justify-between"><span class="text-muted-color">Scope</span><span class="capitalize">{{ f.scope_type }}</span></div>
+                  <div class="flex justify-between"><span class="text-muted-color">{{ f.scope_type === 'instrument' ? 'Instrument Type' : 'Composite Type' }}</span><span>{{ f.scope_type_name ?? '—' }}</span></div>
                   <div class="flex justify-between"><span class="text-muted-color">Feed Ref</span><span class="font-mono text-xs">{{ f.feed_ref }}</span></div>
                   <div class="flex justify-between"><span class="text-muted-color">Output Table</span><span>{{ f.output_table }}</span></div>
                   <div class="flex justify-between"><span class="text-muted-color">Channel</span><span class="font-mono text-xs">{{ f.channel }}</span></div>
@@ -185,6 +188,8 @@
         <app-universe-panel
           [universeBaseUrl]="'/feeds/' + feedId"
           [excludeFeedId]="feedId"
+          [restrictToFeedId]="feedId"
+          [restrictMode]="feedScopeMode()"
           subtitle="Instruments and composites this feed covers."
           (addInstruments)="onAddInstruments($event)"
           (addComposites)="onAddComposites($event)"

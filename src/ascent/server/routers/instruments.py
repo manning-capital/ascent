@@ -131,6 +131,7 @@ def search_instruments(
     exclude_strategy_id: uuid.UUID | None = None,
     exclude_feed_id: uuid.UUID | None = None,
     restrict_to_strategy_id: uuid.UUID | None = None,
+    restrict_to_feed_id: uuid.UUID | None = None,
     sort_field: str = "display_name",
     sort_order: str = "asc",
     page: int = 1,
@@ -146,6 +147,7 @@ def search_instruments(
         exclude_strategy_id=exclude_strategy_id,
         exclude_feed_id=exclude_feed_id,
         restrict_to_strategy_id=restrict_to_strategy_id,
+        restrict_to_feed_id=restrict_to_feed_id,
         sort_field=sort_field,
         sort_order=sort_order,
         page=page,
@@ -170,6 +172,7 @@ def search_instrument_ids(
     exclude_strategy_id: uuid.UUID | None = None,
     exclude_feed_id: uuid.UUID | None = None,
     restrict_to_strategy_id: uuid.UUID | None = None,
+    restrict_to_feed_id: uuid.UUID | None = None,
     db: Session = Depends(get_db),
 ):
     return instrument_service.search_instrument_ids(
@@ -181,12 +184,37 @@ def search_instrument_ids(
         exclude_strategy_id=exclude_strategy_id,
         exclude_feed_id=exclude_feed_id,
         restrict_to_strategy_id=restrict_to_strategy_id,
+        restrict_to_feed_id=restrict_to_feed_id,
     )
 
 
-@router.get("/instruments", response_model=list[InstrumentSchema])
-def list_instruments(db: Session = Depends(get_db)):
-    return instrument_service.get_instruments(db)
+@router.get("/instruments", response_model=PaginatedResponse[InstrumentSchema])
+def list_instruments(
+    search: str | None = None,
+    instrument_type_id: uuid.UUID | None = None,
+    provider_id: uuid.UUID | None = None,
+    is_active: bool | None = None,
+    sort_field: str = "name",
+    sort_order: str = "asc",
+    page: int = 1,
+    page_size: int = 25,
+    db: Session = Depends(get_db),
+):
+    items, total = instrument_service.search_instruments(
+        db,
+        search=search,
+        instrument_type_id=instrument_type_id,
+        provider_id=provider_id,
+        is_active=is_active,
+        sort_field=sort_field,
+        sort_order=sort_order,
+        page=page,
+        page_size=page_size,
+    )
+    total_pages = (total + page_size - 1) // page_size
+    return PaginatedResponse(
+        items=items, total=total, page=page, page_size=page_size, total_pages=total_pages
+    )
 
 
 @router.get("/instruments/{instrument_id}", response_model=InstrumentSchema)

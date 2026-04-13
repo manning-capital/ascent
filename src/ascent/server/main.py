@@ -24,6 +24,7 @@ from ascent.server.routers import (
     exchanges,
     feeds,
     instruments,
+    metadata,
     orders,
     portfolios,
     providers,
@@ -105,6 +106,36 @@ def _create_tables() -> None:
                     f"WHERE jsonb_typeof(value) IN ('object', 'array')"
                 )
             )
+        # Feed scope columns: provider_id, instrument_type_id, composite_type_id
+        conn.execute(
+            text(
+                "ALTER TABLE feed ADD COLUMN IF NOT EXISTS provider_id UUID REFERENCES provider(id)"
+            )
+        )
+        conn.execute(
+            text(
+                "ALTER TABLE feed ADD COLUMN IF NOT EXISTS "
+                "instrument_type_id UUID REFERENCES instrument_type(id)"
+            )
+        )
+        conn.execute(
+            text(
+                "ALTER TABLE feed ADD COLUMN IF NOT EXISTS "
+                "composite_type_id UUID REFERENCES composite_type(id)"
+            )
+        )
+        # XOR check: exactly one of instrument_type_id / composite_type_id must be set.
+        # Added NOT VALID so existing rows (which may have both NULL before backfill)
+        # don't block the constraint creation.
+        conn.execute(
+            text(
+                "DO $$ BEGIN "
+                "ALTER TABLE feed ADD CONSTRAINT ck_feed_scope_xor CHECK ("
+                "(instrument_type_id IS NOT NULL AND composite_type_id IS NULL) OR "
+                "(instrument_type_id IS NULL AND composite_type_id IS NOT NULL)"
+                ") NOT VALID; EXCEPTION WHEN duplicate_object THEN NULL; END $$"
+            )
+        )
         conn.commit()
 
 
@@ -172,6 +203,7 @@ def create_app() -> FastAPI:
     app.include_router(composites.router, prefix="/api")
     app.include_router(exchanges.router, prefix="/api")
     app.include_router(attributes.router, prefix="/api")
+    app.include_router(metadata.router, prefix="/api")
     app.include_router(data_explorer.router, prefix="/api")
 
     # Serve the UI if the static files exist

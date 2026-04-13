@@ -1,7 +1,8 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { Subject, EMPTY, Observable } from 'rxjs';
-import { switchMap, tap, catchError } from 'rxjs/operators';
+import { switchMap, tap, catchError, map } from 'rxjs/operators';
 import { ApiService } from './api.service';
+import { PaginatedResponse } from '../models/trade.model';
 import { ProviderListItem, ProviderDetail, ProviderCreate, ProviderUpdate } from '../models/provider.model';
 import {
   TypeItem, TypeHierarchyNode, MetadataEntry, MetadataEntryCreate,
@@ -29,12 +30,12 @@ export class ProviderService {
     this.loadProviders$.pipe(
       tap(() => this.loading.set(true)),
       switchMap(() =>
-        this.api.get<ProviderListItem[]>('/providers').pipe(
+        this.api.get<PaginatedResponse<ProviderListItem>>('/providers').pipe(
           catchError(() => { this.loading.set(false); return EMPTY; })
         )
       ),
-    ).subscribe(providers => {
-      this.providers.set(providers);
+    ).subscribe(res => {
+      this.providers.set(res.items);
       this.loading.set(false);
     });
 
@@ -61,8 +62,22 @@ export class ProviderService {
     });
   }
 
+  searchProviders(query: string): Observable<{ label: string; value: string }[]> {
+    return this.loadProvidersPaginated(1, 25, { search: query || undefined }).pipe(
+      map(res => res.items.map(p => ({ label: p.display_name || p.name, value: p.id })))
+    );
+  }
+
   loadProviders(): void {
     this.loadProviders$.next();
+  }
+
+  loadProvidersPaginated(page: number, pageSize: number, filters?: { search?: string; is_active?: boolean | null }, sort?: { field: string; order: string }): Observable<PaginatedResponse<ProviderListItem>> {
+    const params: Record<string, any> = { page, page_size: pageSize };
+    if (filters?.search) params['search'] = filters.search;
+    if (filters?.is_active != null) params['is_active'] = filters.is_active;
+    if (sort) { params['sort_field'] = sort.field; params['sort_order'] = sort.order; }
+    return this.api.get<PaginatedResponse<ProviderListItem>>('/providers', params);
   }
 
   loadProviderTypes(): void {

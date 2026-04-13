@@ -6,6 +6,11 @@ export interface FeedListItem {
   display_name: string;
   description: string | null;
   feed_type_id: string;
+  provider_id: string;
+  provider_name: string | null;
+  scope_type: 'instrument' | 'composite';
+  scope_type_id: string;
+  scope_type_name: string | null;
   feed_ref: string;
   output_table: string;
   schedule: Record<string, any> | null;
