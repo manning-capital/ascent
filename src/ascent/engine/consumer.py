@@ -173,9 +173,7 @@ def _build_trade_columns(
     from ascent.database.models.trades import Trade, TradeLeg
 
     # Create MultiIndex columns under the 'trade' namespace
-    pd.MultiIndex.from_tuples(
-        [("trade", f) for f in _TRADE_FIELDS], names=["group", "field"]
-    )
+    pd.MultiIndex.from_tuples([("trade", f) for f in _TRADE_FIELDS], names=["group", "field"])
 
     # Initialize all rows as WAITING
     n = len(index)
