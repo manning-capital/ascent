@@ -22,9 +22,8 @@ Example
 
         feeds = [MarketData]
 
-        def evaluate(self) -> None:
-            ctx = self.get_context()
-            prices = ctx.get(MarketData)
+        def evaluate(self, ctx: pd.DataFrame) -> None:
+            prices = ctx[('market_data', 'close')]
             ...
 
     if __name__ == "__main__":
@@ -38,10 +37,10 @@ import uuid
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, ClassVar, Literal
 
+import pandas as pd
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
-    from ascent.engine.context import StrategyContext
     from ascent.engine.trade_router import TradeRouter
     from ascent.feeds.base import Feed
 
@@ -101,21 +100,31 @@ class Strategy(ABC):
     # ------------------------------------------------------------------
 
     @abstractmethod
-    def evaluate(self) -> None:
-        """Called on each execution tick.  Must be implemented by subclasses."""
+    def evaluate(self, ctx: pd.DataFrame) -> None:
+        """Called on each execution tick with the consolidated context DataFrame.
+
+        The ``ctx`` DataFrame has a two-level :class:`~pandas.MultiIndex` on
+        columns.  Level 0 groups data by source (``'trade'`` for trade/order
+        state, or a feed name like ``'market_data'``).  Level 1 holds the
+        individual fields (``'status'``, ``'close'``, etc.).
+
+        **Index** — ``instrument_id`` for instrument strategies, or a
+        ``(composite_id, instrument_id)`` MultiIndex for composite strategies.
+
+        Trade columns (under ``('trade', ...)``):
+            ``status``, ``trade_id``, ``direction``, ``entry_price``,
+            ``quantity``, ``unrealized_pnl``, ``entry_at``,
+            ``order_status``, ``filled_quantity``.
+
+        Feed columns are pivoted from EAV and namespaced by feed name,
+        e.g. ``('market_data', 'close')``.
+
+        Must be implemented by subclasses.
+        """
 
     # ------------------------------------------------------------------
     # Runtime accessors (thin wrappers around contextvars)
     # ------------------------------------------------------------------
-
-    def get_context(self) -> StrategyContext:
-        """Get the current strategy evaluation context."""
-        from ascent.engine.context import _current_context
-
-        try:
-            return _current_context.get()
-        except LookupError:
-            raise RuntimeError("get_context() called outside of a strategy evaluation.") from None
 
     def get_logger(self) -> logging.Logger:
         """Get the current run-scoped logger."""

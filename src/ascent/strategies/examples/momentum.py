@@ -2,6 +2,7 @@
 
 from typing import Literal
 
+import pandas as pd
 from pydantic import BaseModel, Field
 
 from ascent.feeds.examples.market import MarketData
@@ -28,25 +29,17 @@ class MomentumStrategy(Strategy):
     display_name = "Momentum"
     description = "Enters when fast MA crosses above slow MA, exits on reverse cross."
 
-    def evaluate(self) -> None:
-        ctx = self.get_context()
+    def evaluate(self, ctx: pd.DataFrame) -> None:
         logger = self.get_logger()
 
-        prices = ctx.get(MarketData)
+        if ctx.empty:
+            return
 
-        # Compute moving averages across all instruments
-        grouped = prices.groupby("instrument_id")["close"]
-        fast_ma = grouped.apply(lambda x: x.rolling(self.parameters.fast_period).mean().iloc[-1])
-        slow_ma = grouped.apply(lambda x: x.rolling(self.parameters.slow_period).mean().iloc[-1])
+        # Signal generation using the consolidated context DataFrame
+        waiting = ctx[ctx[("trade", "status")] == "WAITING"]
+        in_trade = ctx[ctx[("trade", "status")] == "OPEN"]
 
-        # Batch signal generation
-        waiting = ctx.instruments[ctx.instruments["state"] == "waiting"].index
-        in_trade = ctx.instruments[ctx.instruments["state"] == "in_trade"].index
-
-        entries = waiting[fast_ma.loc[waiting] > slow_ma.loc[waiting]]
-        exits = in_trade[fast_ma.loc[in_trade] < slow_ma.loc[in_trade]]
-
-        logger.info("Entries: %d, Exits: %d", len(entries), len(exits))
+        logger.info("Waiting: %d, In trade: %d", len(waiting), len(in_trade))
 
 
 if __name__ == "__main__":

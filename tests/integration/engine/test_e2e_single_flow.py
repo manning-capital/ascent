@@ -19,7 +19,7 @@ def test_feed_produces_data_to_redis(deploy_feed_cls, database_url, redis_url, e
     feed_id = deploy_feed_cls(TimingFeed)
 
     with run_engine_threads(
-        (run_scheduled_feed, feed_id),
+        (run_scheduled_feed, feed_id, {"feed_cls": TimingFeed}),
         database_url=database_url,
         redis_url=redis_url,
         wait_seconds=3.0,
@@ -38,8 +38,8 @@ def test_strategy_receives_feed_data(
     strategy_id = deploy_strategy_cls(TimingStrategy)
 
     with run_engine_threads(
-        (run_scheduled_feed, feed_id),
-        (run_strategy, strategy_id),
+        (run_scheduled_feed, feed_id, {"feed_cls": TimingFeed}),
+        (run_strategy, strategy_id, {"strategy_cls": TimingStrategy}),
         database_url=database_url,
         redis_url=redis_url,
         wait_seconds=4.0,
@@ -56,8 +56,8 @@ def test_end_to_end_latency(deploy_feed_cls, deploy_strategy_cls, database_url, 
     strategy_id = deploy_strategy_cls(TimingStrategy)
 
     with run_engine_threads(
-        (run_scheduled_feed, feed_id),
-        (run_strategy, strategy_id),
+        (run_scheduled_feed, feed_id, {"feed_cls": TimingFeed}),
+        (run_strategy, strategy_id, {"strategy_cls": TimingStrategy}),
         database_url=database_url,
         redis_url=redis_url,
         wait_seconds=5.0,
@@ -72,7 +72,7 @@ def test_feed_run_records_created(deploy_feed_cls, database_url, redis_url, db_s
     feed_id = deploy_feed_cls(TimingFeed)
 
     with run_engine_threads(
-        (run_scheduled_feed, feed_id),
+        (run_scheduled_feed, feed_id, {"feed_cls": TimingFeed}),
         database_url=database_url,
         redis_url=redis_url,
         wait_seconds=3.0,
@@ -96,7 +96,7 @@ def test_partition_materialized(deploy_feed_cls, database_url, redis_url, db_ses
     feed_id = deploy_feed_cls(TimingFeed)
 
     with run_engine_threads(
-        (run_scheduled_feed, feed_id),
+        (run_scheduled_feed, feed_id, {"feed_cls": TimingFeed}),
         database_url=database_url,
         redis_url=redis_url,
         wait_seconds=3.0,
@@ -122,8 +122,8 @@ def test_strategy_run_records_created(
     strategy_id = deploy_strategy_cls(TimingStrategy)
 
     with run_engine_threads(
-        (run_scheduled_feed, feed_id),
-        (run_strategy, strategy_id),
+        (run_scheduled_feed, feed_id, {"feed_cls": TimingFeed}),
+        (run_strategy, strategy_id, {"strategy_cls": TimingStrategy}),
         database_url=database_url,
         redis_url=redis_url,
         wait_seconds=4.0,
@@ -146,7 +146,7 @@ def test_multiple_ticks_sequential(deploy_feed_cls, database_url, redis_url, eng
     feed_id = deploy_feed_cls(TimingFeed)
 
     with run_engine_threads(
-        (run_scheduled_feed, feed_id),
+        (run_scheduled_feed, feed_id, {"feed_cls": TimingFeed}),
         database_url=database_url,
         redis_url=redis_url,
         wait_seconds=5.0,

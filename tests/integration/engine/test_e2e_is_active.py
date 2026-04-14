@@ -18,7 +18,7 @@ def test_is_active_false_skips_ticks(deploy_feed_cls, database_url, redis_url, d
     db_session.commit()
 
     with run_engine_threads(
-        (run_scheduled_feed, feed_id),
+        (run_scheduled_feed, feed_id, {"feed_cls": TimingFeed}),
         database_url=database_url,
         redis_url=redis_url,
         wait_seconds=3.0,

@@ -169,11 +169,9 @@ class TimingStrategy(Strategy):
     evaluated_at: ClassVar[list[float]] = []
     received_data: ClassVar[list[pd.DataFrame]] = []
 
-    def evaluate(self) -> None:
+    def evaluate(self, ctx: pd.DataFrame) -> None:
         TimingStrategy.evaluated_at.append(time.monotonic())
-        ctx = self.get_context()
-        df = ctx.get(TimingFeed)
-        TimingStrategy.received_data.append(df.copy())
+        TimingStrategy.received_data.append(ctx.copy())
 
 
 class DAGStrategy(Strategy):
@@ -184,10 +182,8 @@ class DAGStrategy(Strategy):
 
     evaluated_at: ClassVar[list[float]] = []
 
-    def evaluate(self) -> None:
+    def evaluate(self, ctx: pd.DataFrame) -> None:
         DAGStrategy.evaluated_at.append(time.monotonic())
-        ctx = self.get_context()
-        ctx.get(DAGTriggeredFeed)
 
 
 class MultiDepStrategy(Strategy):
@@ -198,11 +194,8 @@ class MultiDepStrategy(Strategy):
 
     evaluated_at: ClassVar[list[float]] = []
 
-    def evaluate(self) -> None:
+    def evaluate(self, ctx: pd.DataFrame) -> None:
         MultiDepStrategy.evaluated_at.append(time.monotonic())
-        ctx = self.get_context()
-        ctx.get(TimingFeed)
-        ctx.get(SecondFeed)
 
 
 # ---------------------------------------------------------------------------
@@ -275,8 +268,8 @@ def deploy_feed_cls(db_session: Session, engine_types: dict[str, uuid.UUID]):
         feed_id = deploy_feed(
             feed_cls,
             db_session,
-            provider_id=engine_types["provider_id"],
-            instrument_type_id=engine_types["instrument_type_id"],
+            provider=engine_types["provider_id"],
+            instrument_type=engine_types["instrument_type_id"],
         )
         db_session.commit()
         return feed_id
@@ -292,7 +285,7 @@ def deploy_strategy_cls(db_session: Session, engine_types: dict[str, uuid.UUID])
         strategy_id = deploy_strategy(
             strategy_cls,
             db_session,
-            portfolio_id=engine_types["portfolio_id"],
+            portfolio=engine_types["portfolio_id"],
         )
         db_session.commit()
         return strategy_id
@@ -313,7 +306,7 @@ def database_url(test_env) -> str:
 
 @contextmanager
 def run_engine_threads(
-    *specs: tuple[callable, uuid.UUID],
+    *specs: tuple[callable, uuid.UUID] | tuple[callable, uuid.UUID, dict],
     database_url: str,
     redis_url: str,
     wait_seconds: float = 3.0,
@@ -321,7 +314,10 @@ def run_engine_threads(
     """Start engine threads, wait, yield for assertions, shutdown.
 
     Args:
-        *specs: Tuples of (engine_function, entity_id).
+        *specs: Tuples of ``(engine_function, entity_id)`` or
+            ``(engine_function, entity_id, extra_kwargs)``.
+            Extra kwargs are forwarded to the engine function (e.g.
+            ``feed_cls`` or ``strategy_cls``).
         database_url: Test DB connection string.
         redis_url: Test Redis connection string.
         wait_seconds: Seconds to wait before yielding for assertions.
@@ -336,7 +332,7 @@ def run_engine_threads(
     threads: list[threading.Thread] = []
     errors: list[Exception] = []
 
-    def _wrapper(fn, entity_id):
+    def _wrapper(fn, entity_id, extra_kwargs):
         """Run engine function, capture exceptions for test visibility."""
         try:
             fn(
@@ -344,6 +340,7 @@ def run_engine_threads(
                 database_url=database_url,
                 redis_url=redis_url,
                 shutdown_event=shutdown,
+                **extra_kwargs,
             )
         except Exception as exc:
             errors.append(exc)
@@ -351,10 +348,15 @@ def run_engine_threads(
 
             traceback.print_exc()
 
-    for fn, entity_id in specs:
+    for spec in specs:
+        if len(spec) == 3:
+            fn, entity_id, extra_kwargs = spec
+        else:
+            fn, entity_id = spec
+            extra_kwargs = {}
         t = threading.Thread(
             target=_wrapper,
-            args=(fn, entity_id),
+            args=(fn, entity_id, extra_kwargs),
             daemon=True,
         )
         threads.append(t)

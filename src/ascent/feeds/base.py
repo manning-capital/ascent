@@ -128,10 +128,13 @@ class Feed(ABC):
     #: Provider name or UUID.  Resolved to a UUID at deploy time.
     provider: ClassVar[str | None] = None
 
-    #: Instrument type name or UUID.  Mutually exclusive with ``composite_type``.
+    #: Instrument type name or UUID.  Exactly one of ``instrument_type`` or
+    #: ``composite_type`` must be set — feeds must be scoped to a specific
+    #: entity type.
     instrument_type: ClassVar[str | None] = None
 
-    #: Composite type name or UUID.  Mutually exclusive with ``instrument_type``.
+    #: Composite type name or UUID.  Exactly one of ``instrument_type`` or
+    #: ``composite_type`` must be set.
     composite_type: ClassVar[str | None] = None
 
     #: Seconds to wait before reconnecting a streaming feed after disconnect.
@@ -322,8 +325,24 @@ class Feed(ABC):
         return re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", cls.__name__)
 
     # ------------------------------------------------------------------
-    # Mode detection
+    # Scope & mode detection
     # ------------------------------------------------------------------
+
+    @classmethod
+    def validate_scope(cls) -> None:
+        """Validate that exactly one of ``instrument_type`` or ``composite_type`` is set.
+
+        Called at deploy time by the Runner. Raises ``ValueError`` if both are
+        set or neither is set.
+        """
+        has_instrument = cls.instrument_type is not None
+        has_composite = cls.composite_type is not None
+        if has_instrument == has_composite:
+            raise ValueError(
+                f"Feed {cls.__name__} must set exactly one of 'instrument_type' or "
+                f"'composite_type'. Got instrument_type={cls.instrument_type!r}, "
+                f"composite_type={cls.composite_type!r}."
+            )
 
     @classmethod
     def is_streaming(cls) -> bool:

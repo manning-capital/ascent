@@ -27,10 +27,9 @@ def test_feed_output_table():
 
 
 def test_feed_ref():
-    """ref() returns 'module:ClassName' format."""
+    """ref() returns UPPER_SNAKE_CASE name."""
     ref = TimingFeed.ref()
-    assert ref.endswith(":TimingFeed")
-    assert "." in ref
+    assert ref == "TIMING_FEED"
 
 
 def test_feed_get_display_name():
@@ -53,7 +52,7 @@ def test_feed_get_display_name_fallback():
         def fetch(self):
             return None
 
-    assert NoNameFeed.get_display_name() == "NoNameFeed"
+    assert NoNameFeed.get_display_name() == "No Name Feed"
 
 
 def test_feed_is_streaming_false():

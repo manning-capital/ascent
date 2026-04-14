@@ -17,8 +17,8 @@ def test_triggered_feed_fires_on_parent(deploy_feed_cls, database_url, redis_url
     triggered_id = deploy_feed_cls(DAGTriggeredFeed)
 
     with run_engine_threads(
-        (run_scheduled_feed, parent_id),
-        (run_triggered_feed, triggered_id),
+        (run_scheduled_feed, parent_id, {"feed_cls": TimingFeed}),
+        (run_triggered_feed, triggered_id, {"feed_cls": DAGTriggeredFeed}),
         database_url=database_url,
         redis_url=redis_url,
         wait_seconds=4.0,
@@ -41,9 +41,9 @@ def test_full_dag_chain_flow(deploy_feed_cls, deploy_strategy_cls, database_url,
     strategy_id = deploy_strategy_cls(DAGStrategy)
 
     with run_engine_threads(
-        (run_scheduled_feed, parent_id),
-        (run_triggered_feed, triggered_id),
-        (run_strategy, strategy_id),
+        (run_scheduled_feed, parent_id, {"feed_cls": TimingFeed}),
+        (run_triggered_feed, triggered_id, {"feed_cls": DAGTriggeredFeed}),
+        (run_strategy, strategy_id, {"strategy_cls": DAGStrategy}),
         database_url=database_url,
         redis_url=redis_url,
         wait_seconds=5.0,
@@ -61,9 +61,9 @@ def test_dag_chain_latency(deploy_feed_cls, deploy_strategy_cls, database_url, r
     strategy_id = deploy_strategy_cls(DAGStrategy)
 
     with run_engine_threads(
-        (run_scheduled_feed, parent_id),
-        (run_triggered_feed, triggered_id),
-        (run_strategy, strategy_id),
+        (run_scheduled_feed, parent_id, {"feed_cls": TimingFeed}),
+        (run_triggered_feed, triggered_id, {"feed_cls": DAGTriggeredFeed}),
+        (run_strategy, strategy_id, {"strategy_cls": DAGStrategy}),
         database_url=database_url,
         redis_url=redis_url,
         wait_seconds=6.0,

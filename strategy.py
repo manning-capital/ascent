@@ -3,12 +3,11 @@ from __future__ import annotations
 import os
 import uuid
 
+import pandas as pd
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
 from ascent.strategies.base import Strategy
-
-ATTR_CLOSE = 1
 
 
 class MomentumStrategy(Strategy):
@@ -26,61 +25,56 @@ class MomentumStrategy(Strategy):
 
     _prev_prices: dict[uuid.UUID, float] = {}
 
-    def evaluate(self) -> None:
-        ctx = self.get_context()
+    def evaluate(self, ctx: pd.DataFrame) -> None:
         log = self.get_logger()
-        data = ctx.get("MARKET_DATA_FEED")
 
-        if data is None or data.empty:
+        if ctx.empty:
             return
 
-        # Build current price map from feed data
-        closes = data[data["attribute_id"] == ATTR_CLOSE]
-        current_prices: dict[uuid.UUID, float] = {}
-        for _, row in closes.iterrows():
-            inst_id = row["instrument_id"]
-            if isinstance(inst_id, str):
-                inst_id = uuid.UUID(inst_id)
-            current_prices[inst_id] = float(row["attribute_value"])
-
         # --- Phase 1: Check open trades for take-profit / stop-loss ---
-        open_trades = self.get_open_trades()
-        for trade in open_trades:
-            for leg in trade["legs"]:
-                inst_id = uuid.UUID(leg["instrument_id"])
-                entry_price = leg["entry_price"]
-                if entry_price is None or inst_id not in current_prices:
-                    continue
+        open_trades = ctx[ctx[("trade", "status")] == "OPEN"]
+        for _inst_id, row in open_trades.iterrows():
+            entry_price = row[("trade", "entry_price")]
+            direction = row[("trade", "direction")]
+            current_price = row[("market_data_feed", "close")]
 
-                price = current_prices[inst_id]
-                if leg["direction"] == "LONG":
-                    pnl_pct = (price - entry_price) / entry_price * 100
-                else:
-                    pnl_pct = (entry_price - price) / entry_price * 100
+            if entry_price is None or pd.isna(entry_price) or pd.isna(current_price):
+                continue
 
-                if pnl_pct >= self.parameters.take_profit_pct:
-                    log.info(
-                        "TAKE PROFIT  trade=%s  %s pnl=%+.3f%%",
-                        trade["trade_id"][:8],
-                        leg["direction"],
-                        pnl_pct,
-                    )
-                    result = self.close_trade(trade["trade_id"], close_reason="TAKE_PROFIT")
-                    log.info("  status=%s  pnl=%s", result["status"], result.get("total_pnl"))
-                    break
-                elif pnl_pct <= -self.parameters.stop_loss_pct:
-                    log.info(
-                        "STOP LOSS  trade=%s  %s pnl=%+.3f%%",
-                        trade["trade_id"][:8],
-                        leg["direction"],
-                        pnl_pct,
-                    )
-                    result = self.close_trade(trade["trade_id"], close_reason="STOP_LOSS")
-                    log.info("  status=%s  pnl=%s", result["status"], result.get("total_pnl"))
-                    break
+            if direction == "LONG":
+                pnl_pct = (current_price - entry_price) / entry_price * 100
+            else:
+                pnl_pct = (entry_price - current_price) / entry_price * 100
+
+            if pnl_pct >= self.parameters.take_profit_pct:
+                log.info(
+                    "TAKE PROFIT  trade=%s  %s pnl=%+.3f%%",
+                    str(row[("trade", "trade_id")])[:8],
+                    direction,
+                    pnl_pct,
+                )
+                result = self.close_trade(row[("trade", "trade_id")], close_reason="TAKE_PROFIT")
+                log.info("  status=%s  pnl=%s", result["status"], result.get("total_pnl"))
+            elif pnl_pct <= -self.parameters.stop_loss_pct:
+                log.info(
+                    "STOP LOSS  trade=%s  %s pnl=%+.3f%%",
+                    str(row[("trade", "trade_id")])[:8],
+                    direction,
+                    pnl_pct,
+                )
+                result = self.close_trade(row[("trade", "trade_id")], close_reason="STOP_LOSS")
+                log.info("  status=%s  pnl=%s", result["status"], result.get("total_pnl"))
 
         # --- Phase 2: Open new trades on momentum signals ---
-        for inst_id, price in current_prices.items():
+        waiting = ctx[ctx[("trade", "status")] == "WAITING"]
+        if waiting.empty:
+            return
+
+        for inst_id, row in waiting.iterrows():
+            price = row[("market_data_feed", "close")]
+            if pd.isna(price):
+                continue
+
             prev = self._prev_prices.get(inst_id)
             self._prev_prices[inst_id] = price
 

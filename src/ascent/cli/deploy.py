@@ -161,16 +161,11 @@ def deploy_strategy(
 ):
     """Deploy a strategy to Ascent by registering it.
 
-    Supports both decorator-based strategies (``@strategy``) and class-based
-    strategies (subclasses of ``Strategy``). Uses colon syntax for decorator-based
-    (``module:function``) and dot syntax for class-based (``module.Class``).
-
     Parameters
     ----------
     strategy_ref
-        Importable reference, e.g.
-        ``ascent.strategies.examples.pairs:pairs_strategy`` (decorator) or
-        ``ascent.strategies.examples.pairs.PairsStrategy`` (class).
+        Importable reference to a Strategy subclass, e.g.
+        ``ascent.strategies.examples.momentum.MomentumStrategy``.
     name
         Display name for the strategy. Defaults to the strategy's display_name.
     portfolio_id
@@ -184,8 +179,7 @@ def deploy_strategy(
     from sqlalchemy.orm import Session
 
     from ascent.database.models import Strategy as StrategyModel
-    from ascent.database.models.feeds import StrategyFeed
-    from ascent.strategies.decorator import StrategyDef
+    from ascent.strategies.base import Strategy as StrategyBase
 
     try:
         obj = _import_ref(strategy_ref)
@@ -193,28 +187,15 @@ def deploy_strategy(
         print(f"Error: Could not import '{strategy_ref}': {e}")
         return
 
-    # Handle decorator-based strategies
-    if isinstance(obj, StrategyDef):
-        canonical_ref = f"{obj.evaluate_fn.__module__}:{obj.evaluate_fn.__name__}"
-        display_name = name or obj.display_name
-        description = obj.description
-        param_schema = obj.parameter_schema()
-        defaults = obj._parameters_model().model_dump()
-    else:
-        # Handle class-based strategies (backwards compat)
-        from ascent.strategies.base import Strategy as StrategyBase
+    if not (isinstance(obj, type) and issubclass(obj, StrategyBase) and obj is not StrategyBase):
+        print(f"Error: '{strategy_ref}' is not a Strategy subclass.")
+        return
 
-        if not (
-            isinstance(obj, type) and issubclass(obj, StrategyBase) and obj is not StrategyBase
-        ):
-            print(f"Error: '{strategy_ref}' is not a @strategy function or Strategy subclass.")
-            return
-
-        canonical_ref = strategy_ref
-        display_name = name or obj.get_display_name()
-        description = obj.description
-        param_schema = obj.parameter_schema()
-        defaults = obj.Parameters().model_dump()
+    canonical_ref = strategy_ref
+    display_name = name or obj.get_display_name()
+    description = obj.description
+    param_schema = obj.parameter_schema()
+    defaults = obj.Parameters().model_dump()
 
     engine = create_engine(database_url)
     with Session(engine) as db:
@@ -253,41 +234,6 @@ def deploy_strategy(
             db.commit()
             db.refresh(strat)
             print(f"Deployed strategy '{strat.name}' (id={strat.id})")
-
-        # Auto-create StrategyFeed records for decorator-based strategies
-        if isinstance(obj, StrategyDef) and obj.feeds:
-            from ascent.database.models.feeds import Feed as FeedModel
-
-            for order, feed_obj in enumerate(obj.feeds):
-                feed_ref_str = feed_obj.ref
-                feed_record = (
-                    db.execute(select(FeedModel).where(FeedModel.feed_ref == feed_ref_str))
-                    .scalars()
-                    .first()
-                )
-                if feed_record:
-                    existing_sf = (
-                        db.execute(
-                            select(StrategyFeed).where(
-                                StrategyFeed.strategy_id == strat.id,
-                                StrategyFeed.feed_id == feed_record.id,
-                            )
-                        )
-                        .scalars()
-                        .first()
-                    )
-                    if not existing_sf:
-                        sf = StrategyFeed(
-                            strategy_id=strat.id,
-                            feed_id=feed_record.id,
-                            is_required=True,
-                            order=order,
-                        )
-                        db.add(sf)
-                        db.commit()
-                        print(f"  Linked feed: {feed_ref_str} (id={feed_record.id})")
-                else:
-                    print(f"  Warning: Feed '{feed_ref_str}' not found. Deploy it first.")
 
         print(f"  Strategy: {canonical_ref}")
         print(f"  Parameters: {len(param_schema.get('properties', {}))} fields")

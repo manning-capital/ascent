@@ -11,6 +11,7 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
+from ascent.database.models.descriptors import Attribute
 from ascent.database.models.types import OrderStatusType, OrderType, TradeStatusType
 
 logger = logging.getLogger(__name__)
@@ -23,6 +24,7 @@ class TypeCache:
         self._order_types: dict[str, uuid.UUID] = {}
         self._order_status_types: dict[str, uuid.UUID] = {}
         self._trade_status_types: dict[str, uuid.UUID] = {}
+        self._attributes: dict[uuid.UUID, str] = {}
         self._load(session_factory)
 
     def _load(self, session_factory: sessionmaker) -> None:
@@ -33,12 +35,15 @@ class TypeCache:
                 self._order_status_types[row.name] = row.id
             for row in db.execute(select(TradeStatusType)).scalars():
                 self._trade_status_types[row.name] = row.id
+            for row in db.execute(select(Attribute)).scalars():
+                self._attributes[row.id] = row.name.lower()
 
         logger.debug(
-            "TypeCache loaded: %d order types, %d order status types, %d trade status types",
+            "TypeCache loaded: %d order types, %d order status types, %d trade status types, %d attributes",
             len(self._order_types),
             len(self._order_status_types),
             len(self._trade_status_types),
+            len(self._attributes),
         )
 
     def order_type_id(self, name: str) -> uuid.UUID:
@@ -70,4 +75,14 @@ class TypeCache:
             raise ValueError(
                 f"TradeStatusType '{name}' not found. "
                 f"Available: {', '.join(self._trade_status_types)}."
+            ) from None
+
+    def attribute_name(self, attr_id: uuid.UUID) -> str:
+        """Look up an Attribute name by UUID (e.g. uuid → 'close')."""
+        try:
+            return self._attributes[attr_id]
+        except KeyError:
+            raise ValueError(
+                f"Attribute with id '{attr_id}' not found. "
+                f"Run 'ascent seed run --drop --profile base' to create attribute records."
             ) from None

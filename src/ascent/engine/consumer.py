@@ -2,7 +2,7 @@
 
 Subscribes to Redis pub/sub channels for the strategy's declared feeds. On each
 feed event, reads the latest data from Redis, checks trigger logic, builds a
-StrategyContext, and invokes the strategy function.
+consolidated context DataFrame, and passes it to ``strategy.evaluate(ctx)``.
 """
 
 from __future__ import annotations
@@ -11,8 +11,8 @@ import logging
 import signal
 import threading
 import uuid
-from typing import TYPE_CHECKING
 
+import numpy as np
 import pandas as pd
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -24,15 +24,29 @@ from ascent.database.models.strategy import Strategy as StrategyModel
 from ascent.database.models.strategy import StrategyExchange, StrategyRun
 from ascent.database.models.strategy_run_feeds import StrategyRunFeedRun
 from ascent.engine.cache import EngineCache
-from ascent.engine.context import StrategyContext, _current_context, _current_logger
+from ascent.engine.context import _current_logger
 from ascent.engine.tracker import RunTracker
 from ascent.engine.trade_router import TradeRouter
 from ascent.engine.trigger import should_evaluate
-
-if TYPE_CHECKING:
-    pass
+from ascent.engine.type_cache import TypeCache
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Trade column names (used in the MultiIndex column level 1)
+# ---------------------------------------------------------------------------
+
+_TRADE_FIELDS = [
+    "status",
+    "trade_id",
+    "direction",
+    "entry_price",
+    "quantity",
+    "unrealized_pnl",
+    "entry_at",
+    "order_status",
+    "filled_quantity",
+]
 
 
 def _import_strategy(strategy_ref: str):
@@ -44,57 +58,376 @@ def _import_strategy(strategy_ref: str):
     return getattr(module, obj_name)
 
 
-def _build_strategy_context(
+# ---------------------------------------------------------------------------
+# Context DataFrame builder
+# ---------------------------------------------------------------------------
+
+
+def _build_context_dataframe(
     strategy_feeds: list[StrategyFeed],
     latest_data: dict[uuid.UUID, pd.DataFrame],
-    cache: EngineCache,
+    feed_records: dict[uuid.UUID, FeedModel],
+    feed_ref_map: dict[uuid.UUID, str],
+    type_cache: TypeCache,
+    session_factory: sessionmaker,
     strategy_id: uuid.UUID,
-    feed_ref_map: dict[uuid.UUID, str] | None = None,
-) -> StrategyContext:
-    """Build a StrategyContext from cached feed data and instrument state.
+) -> pd.DataFrame:
+    """Build a consolidated context DataFrame for strategy evaluation.
 
-    Args:
-        strategy_feeds: The strategy's feed associations.
-        latest_data: Map of feed_id → latest DataFrame from Redis.
-        cache: The engine cache for instrument state.
-        strategy_id: The strategy's database ID.
-        feed_ref_map: Map of feed_id → feed_ref string for ref-keyed lookups.
+    The returned DataFrame has:
+    - **Index**: ``instrument_id`` (instrument strategies) or
+      ``(composite_id, instrument_id)`` MultiIndex (composite strategies).
+    - **Columns**: Two-level MultiIndex. Level 0 = group name
+      (``'trade'`` or a feed name like ``'market_data'``),
+      level 1 = field name (``'status'``, ``'close'``, etc.).
 
-    Returns:
-        A fully populated StrategyContext.
+    Trade columns come from DB queries on active trades.
+    Feed columns are pivoted from EAV format using the attribute name cache.
     """
-    # Build feed frames dict keyed by feed ref string
-    feed_frames: dict[str, pd.DataFrame] = {}
+    # ----- 1. Determine scope and collect entity IDs from feed data -----
+    is_composite = False
+    instrument_ids: set = set()
+    composite_ids: set = set()
+
+    for sf in strategy_feeds:
+        feed_record = feed_records.get(sf.feed_id)
+        df = latest_data.get(sf.feed_id)
+
+        # Determine scope from DB model
+        if feed_record and feed_record.composite_type_id is not None:
+            is_composite = True
+            if df is not None and not df.empty and "composite_id" in df.columns:
+                composite_ids.update(df["composite_id"].unique())
+        elif df is not None and not df.empty and "instrument_id" in df.columns:
+            instrument_ids.update(df["instrument_id"].unique())
+
+    # ----- 2. For composite scope, look up member instruments -----
+    composite_members: dict = {}  # composite_id → [instrument_id, ...]
+    if is_composite and composite_ids:
+        from ascent.database.models.composites import CompositeMember
+
+        with Session(bind=session_factory.kw["bind"]) as db:
+            members = (
+                db.execute(
+                    select(CompositeMember)
+                    .where(CompositeMember.composite_id.in_(list(composite_ids)))
+                    .order_by(CompositeMember.composite_id, CompositeMember.order)
+                )
+                .scalars()
+                .all()
+            )
+            for m in members:
+                composite_members.setdefault(m.composite_id, []).append(m.instrument_id)
+                instrument_ids.add(m.instrument_id)
+
+    # ----- 3. Build the index -----
+    if is_composite:
+        index_tuples = []
+        for comp_id in sorted(composite_ids):
+            for inst_id in composite_members.get(comp_id, []):
+                index_tuples.append((comp_id, inst_id))
+        if not index_tuples:
+            return pd.DataFrame()
+        index = pd.MultiIndex.from_tuples(index_tuples, names=["composite_id", "instrument_id"])
+    else:
+        if not instrument_ids:
+            return pd.DataFrame()
+        index = pd.Index(sorted(instrument_ids), name="instrument_id")
+
+    # ----- 4. Build trade columns -----
+    trade_df = _build_trade_columns(
+        index, is_composite, composite_members, strategy_id, type_cache, session_factory
+    )
+
+    # ----- 5. Build feed columns (pivot EAV → wide) -----
+    feed_dfs: list[pd.DataFrame] = []
     for sf in strategy_feeds:
         df = latest_data.get(sf.feed_id)
-        if df is not None:
-            ref = feed_ref_map.get(sf.feed_id, str(sf.feed_id)) if feed_ref_map else str(sf.feed_id)
-            feed_frames[ref] = df
+        if df is None or df.empty:
+            continue
 
-    # Load instrument and composite state from Redis
-    cached_state = cache.get_strategy_state(strategy_id)
+        feed_record = feed_records.get(sf.feed_id)
+        ref = feed_ref_map.get(sf.feed_id, str(sf.feed_id))
+        feed_name = ref.lower()
+        is_feed_composite = feed_record is not None and feed_record.composite_type_id is not None
 
-    if cached_state and "instruments" in cached_state:
-        instruments_data = cached_state["instruments"]
-        instruments_df = pd.DataFrame.from_dict(instruments_data, orient="index")
-        instruments_df.index = instruments_df.index.astype(int)
-        instruments_df.index.name = "instrument_id"
-    else:
-        instruments_df = pd.DataFrame(columns=["state", "trade_id"])
-        instruments_df.index.name = "instrument_id"
+        feed_df = _pivot_feed(df, feed_name, index, is_composite, is_feed_composite, type_cache)
+        if feed_df is not None and not feed_df.empty:
+            feed_dfs.append(feed_df)
 
-    if cached_state and "composites" in cached_state:
-        composites_data = cached_state["composites"]
-        composites_df = pd.DataFrame.from_dict(composites_data, orient="index")
-        composites_df.index = composites_df.index.astype(int)
-        composites_df.index.name = "composite_id"
-    else:
-        composites_df = pd.DataFrame(columns=["state", "trade_id", "member_instrument_ids"])
-        composites_df.index.name = "composite_id"
+    # ----- 6. Join trade + feed columns -----
+    parts = [trade_df] + feed_dfs
+    return pd.concat(parts, axis=1)
 
-    return StrategyContext(
-        instruments=instruments_df, composites=composites_df, feed_frames=feed_frames
+
+def _build_trade_columns(
+    index: pd.Index | pd.MultiIndex,
+    is_composite: bool,
+    composite_members: dict,
+    strategy_id: uuid.UUID,
+    type_cache: TypeCache,
+    session_factory: sessionmaker,
+) -> pd.DataFrame:
+    """Build trade/order state columns for each instrument in the index."""
+    from ascent.database.models.orders import Order, OrderStatus
+    from ascent.database.models.trades import Trade, TradeLeg
+
+    # Create MultiIndex columns under the 'trade' namespace
+    pd.MultiIndex.from_tuples(
+        [("trade", f) for f in _TRADE_FIELDS], names=["group", "field"]
     )
+
+    # Initialize all rows as WAITING
+    n = len(index)
+    data = pd.DataFrame(
+        {
+            ("trade", "status"): ["WAITING"] * n,
+            ("trade", "trade_id"): [None] * n,
+            ("trade", "direction"): [None] * n,
+            ("trade", "entry_price"): [np.nan] * n,
+            ("trade", "quantity"): [np.nan] * n,
+            ("trade", "unrealized_pnl"): [np.nan] * n,
+            ("trade", "entry_at"): pd.array([pd.NaT] * n, dtype="datetime64[ns]"),
+            ("trade", "order_status"): [None] * n,
+            ("trade", "filled_quantity"): [np.nan] * n,
+        },
+        index=index,
+    )
+    data.columns = pd.MultiIndex.from_tuples(data.columns.tolist())
+
+    # Build reverse status maps
+    status_name_map = {v: k for k, v in type_cache._trade_status_types.items()}
+    order_status_name_map = {v: k for k, v in type_cache._order_status_types.items()}
+
+    # Terminal statuses to exclude
+    terminal_names = {"CLOSED", "CANCELLED"}
+    terminal_ids = [
+        type_cache._trade_status_types[n]
+        for n in terminal_names
+        if n in type_cache._trade_status_types
+    ]
+
+    with Session(bind=session_factory.kw["bind"]) as db:
+        # Query all non-terminal trades for this strategy
+        stmt = select(Trade).where(Trade.strategy_id == strategy_id)
+        if terminal_ids:
+            stmt = stmt.where(Trade.current_status_type_id.notin_(terminal_ids))
+        trades = db.execute(stmt).scalars().all()
+
+        if not trades:
+            return data
+
+        # For composite scope, build reverse mapping: frozenset(inst_ids) → composite_id
+        if is_composite:
+            comp_member_sets: dict[frozenset, object] = {}
+            for comp_id, inst_ids in composite_members.items():
+                comp_member_sets[frozenset(inst_ids)] = comp_id
+
+        for trade in trades:
+            trade_status = status_name_map.get(trade.current_status_type_id, "UNKNOWN")
+            trade_id_str = str(trade.id)
+            entry_at = trade.entry_at
+
+            legs = db.execute(select(TradeLeg).where(TradeLeg.trade_id == trade.id)).scalars().all()
+            if not legs:
+                continue
+
+            # Get order status for each leg
+            leg_order_status: dict[uuid.UUID, str] = {}
+            for leg in legs:
+                if leg.entry_order_id:
+                    order = db.get(Order, leg.entry_order_id)
+                    if order:
+                        # Get latest order status
+                        latest_os = (
+                            db.execute(
+                                select(OrderStatus)
+                                .where(OrderStatus.order_id == order.id)
+                                .order_by(OrderStatus.timestamp.desc())
+                                .limit(1)
+                            )
+                            .scalars()
+                            .first()
+                        )
+                        if latest_os:
+                            leg_order_status[leg.id] = order_status_name_map.get(
+                                latest_os.order_status_type_id, "UNKNOWN"
+                            )
+
+            if is_composite:
+                # Match trade legs to a composite by comparing instrument sets
+                # Normalize to strings for comparison since index may use str UUIDs
+                leg_inst_strs = frozenset(str(leg.instrument_id) for leg in legs)
+                # Also try matching against string-keyed composite member sets
+                matched_comp_id = None
+                for member_set, comp_id in comp_member_sets.items():
+                    if frozenset(str(m) for m in member_set) == leg_inst_strs:
+                        matched_comp_id = comp_id
+                        break
+                if matched_comp_id is None:
+                    continue
+
+                for leg in legs:
+                    # Normalize instrument_id to match the index type
+                    leg_inst = str(leg.instrument_id)
+                    idx_key = (str(matched_comp_id), leg_inst)
+                    if idx_key not in index:
+                        idx_key = (matched_comp_id, leg.instrument_id)
+                        if idx_key not in index:
+                            continue
+                    data.loc[idx_key, ("trade", "status")] = trade_status
+                    data.loc[idx_key, ("trade", "trade_id")] = trade_id_str
+                    data.loc[idx_key, ("trade", "direction")] = leg.direction
+                    data.loc[idx_key, ("trade", "entry_price")] = (
+                        leg.entry_price if leg.entry_price is not None else np.nan
+                    )
+                    data.loc[idx_key, ("trade", "quantity")] = (
+                        leg.quantity if leg.quantity is not None else np.nan
+                    )
+                    data.loc[idx_key, ("trade", "entry_at")] = entry_at
+                    data.loc[idx_key, ("trade", "order_status")] = leg_order_status.get(leg.id)
+                    data.loc[idx_key, ("trade", "filled_quantity")] = np.nan
+                    if leg.entry_order_id:
+                        order = db.get(Order, leg.entry_order_id)
+                        if order and order.filled_quantity is not None:
+                            data.loc[idx_key, ("trade", "filled_quantity")] = order.filled_quantity
+            else:
+                # Instrument scope — each leg maps to one instrument row
+                # Normalize instrument_id to match the index type (feed data may use strings)
+                for leg in legs:
+                    inst_id = str(leg.instrument_id)
+                    if inst_id not in index:
+                        # Try native UUID in case index uses UUID objects
+                        inst_id = leg.instrument_id
+                        if inst_id not in index:
+                            continue
+                    data.loc[inst_id, ("trade", "status")] = trade_status
+                    data.loc[inst_id, ("trade", "trade_id")] = trade_id_str
+                    data.loc[inst_id, ("trade", "direction")] = leg.direction
+                    data.loc[inst_id, ("trade", "entry_price")] = (
+                        leg.entry_price if leg.entry_price is not None else np.nan
+                    )
+                    data.loc[inst_id, ("trade", "quantity")] = (
+                        leg.quantity if leg.quantity is not None else np.nan
+                    )
+                    data.loc[inst_id, ("trade", "entry_at")] = entry_at
+                    data.loc[inst_id, ("trade", "order_status")] = leg_order_status.get(leg.id)
+                    if leg.entry_order_id:
+                        order = db.get(Order, leg.entry_order_id)
+                        if order and order.filled_quantity is not None:
+                            data.loc[inst_id, ("trade", "filled_quantity")] = order.filled_quantity
+
+    return data
+
+
+def _pivot_feed(
+    df: pd.DataFrame,
+    feed_name: str,
+    index: pd.Index | pd.MultiIndex,
+    is_composite: bool,
+    is_feed_composite: bool,
+    type_cache: TypeCache,
+) -> pd.DataFrame | None:
+    """Pivot a feed DataFrame from EAV to wide format and align to the context index.
+
+    Args:
+        df: Raw EAV feed data (timestamp, instrument_id/composite_id, attribute_id, attribute_value).
+        feed_name: Lowercase feed name for column namespace (e.g. ``'market_data'``).
+        index: The context index to align to.
+        is_composite: Whether the strategy context uses composite MultiIndex.
+        is_feed_composite: Whether this specific feed is composite-scoped.
+        type_cache: For attribute_id → name lookups.
+
+    Returns:
+        A DataFrame with MultiIndex columns ``(feed_name, attr_name)`` aligned to the context index,
+        or None if the feed has no usable data.
+    """
+    if "attribute_id" not in df.columns or "attribute_value" not in df.columns:
+        return None
+
+    # Determine the entity column
+    if is_feed_composite and "composite_id" in df.columns:
+        entity_col = "composite_id"
+    elif "instrument_id" in df.columns:
+        entity_col = "instrument_id"
+    else:
+        return None
+
+    # Map attribute_id → name
+    # Feed data may contain UUIDs (correct), UUID strings (after Redis JSON round-trip),
+    # or integers (legacy placeholder). Handle all cases.
+    working = df.copy()
+
+    def _resolve_attr_name(aid):
+        # Direct UUID lookup
+        if aid in type_cache._attributes:
+            return type_cache._attributes[aid]
+        # Try parsing as UUID string (common after Redis JSON serialization)
+        if isinstance(aid, str):
+            try:
+                parsed = uuid.UUID(aid)
+                if parsed in type_cache._attributes:
+                    return type_cache._attributes[parsed]
+            except ValueError:
+                pass
+        # Fallback: use string representation
+        return str(aid)
+
+    working["attribute_name"] = working["attribute_id"].map(_resolve_attr_name)
+    logger.debug(
+        "Feed %s: attribute_id types=%s, sample=%s, resolved=%s",
+        feed_name,
+        type(working["attribute_id"].iloc[0]).__name__ if len(working) > 0 else "empty",
+        list(working["attribute_id"].unique()[:5]),
+        list(working["attribute_name"].unique()[:10]),
+    )
+
+    # Take the latest value per entity per attribute (in case of multiple timestamps)
+    if "timestamp" in working.columns:
+        working = working.sort_values("timestamp").drop_duplicates(
+            subset=[entity_col, "attribute_name"], keep="last"
+        )
+
+    # Pivot: rows = entity_id, columns = attribute_name, values = attribute_value
+    pivoted = working.pivot_table(
+        index=entity_col,
+        columns="attribute_name",
+        values="attribute_value",
+        aggfunc="last",
+    )
+
+    if pivoted.empty:
+        return None
+
+    # Add feed namespace to columns → MultiIndex
+    pivoted.columns = pd.MultiIndex.from_tuples([(feed_name, col) for col in pivoted.columns])
+
+    # Align to the context index
+    if is_composite:
+        if is_feed_composite:
+            # Composite-scoped feed → join on composite_id (level 0), repeat for members
+            pivoted.index.name = "composite_id"
+            # Reindex to match composite_id level, then broadcast to all member rows
+            comp_ids = index.get_level_values("composite_id")
+            result = pivoted.reindex(comp_ids)
+            result.index = index
+        else:
+            # Instrument-scoped feed → join on instrument_id (level 1)
+            pivoted.index.name = "instrument_id"
+            inst_ids = index.get_level_values("instrument_id")
+            result = pivoted.reindex(inst_ids)
+            result.index = index
+    else:
+        # Simple instrument index
+        pivoted.index.name = "instrument_id"
+        result = pivoted.reindex(index)
+
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 
 def _cold_start_feeds(
@@ -151,6 +484,11 @@ def _record_feed_run_links(
         session.close()
 
 
+# ---------------------------------------------------------------------------
+# Main consumer loop
+# ---------------------------------------------------------------------------
+
+
 def run_strategy(
     strategy_id: uuid.UUID,
     *,
@@ -169,6 +507,9 @@ def run_strategy(
     engine = create_engine(database_url)
     session_factory = sessionmaker(bind=engine)
     cache = EngineCache(redis_url)
+
+    # Always create TypeCache (needed for attribute name lookups in context builder)
+    type_cache = TypeCache(session_factory)
 
     # Load strategy and feed associations from DB
     with Session(engine) as db:
@@ -193,7 +534,7 @@ def run_strategy(
         if not strategy_feeds:
             raise ValueError(f"Strategy {strategy_id} has no linked feeds")
 
-        # Load feed records for channel subscription
+        # Load feed records for channel subscription and scope detection
         feed_records: dict[uuid.UUID, FeedModel] = {}
         channels: list[str] = []
         for sf in strategy_feeds:
@@ -231,9 +572,6 @@ def run_strategy(
 
     # Wire up trade router if exchanges are configured
     if exchange_map:
-        from ascent.engine.type_cache import TypeCache
-
-        type_cache = TypeCache(session_factory)
         strategy_instance._trade_router = TradeRouter(
             cache=cache,
             strategy_id=strategy_id,
@@ -328,32 +666,26 @@ def run_strategy(
 
             token_logger = _current_logger.set(run_logger)
             try:
-                # Build vectorized context
-                ctx = _build_strategy_context(
-                    strategy_feeds, latest_data, cache, strategy_id, feed_ref_map
+                # Build consolidated context DataFrame
+                ctx = _build_context_dataframe(
+                    strategy_feeds,
+                    latest_data,
+                    feed_records,
+                    feed_ref_map,
+                    type_cache,
+                    session_factory,
+                    strategy_id,
                 )
-                token_ctx = _current_context.set(ctx)
 
-                try:
-                    run_logger.info(
-                        "Evaluating strategy %s (trigger: feed %s)",
-                        strategy_ref,
-                        updated_feed_id,
-                    )
-                    strategy_instance.evaluate()
+                run_logger.info(
+                    "Evaluating strategy %s (trigger: feed %s, rows: %d)",
+                    strategy_ref,
+                    updated_feed_id,
+                    len(ctx),
+                )
+                strategy_instance.evaluate(ctx)
 
-                    # Persist updated instrument and composite states to Redis
-                    state_data: dict = {}
-                    if not ctx.instruments.empty:
-                        state_data["instruments"] = ctx.instruments.to_dict(orient="index")
-                    if not ctx.composites.empty:
-                        state_data["composites"] = ctx.composites.to_dict(orient="index")
-                    if state_data:
-                        cache.set_strategy_state(strategy_id, state_data)
-
-                    run_logger.info("Strategy %s evaluation complete", strategy_ref)
-                finally:
-                    _current_context.reset(token_ctx)
+                run_logger.info("Strategy %s evaluation complete", strategy_ref)
             finally:
                 _current_logger.reset(token_logger)
 

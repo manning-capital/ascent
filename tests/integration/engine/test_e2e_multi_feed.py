@@ -19,9 +19,9 @@ def test_strategy_waits_for_all_required_feeds(
     strategy_id = deploy_strategy_cls(MultiDepStrategy)
 
     with run_engine_threads(
-        (run_scheduled_feed, feed1_id),
-        (run_scheduled_feed, feed2_id),
-        (run_strategy, strategy_id),
+        (run_scheduled_feed, feed1_id, {"feed_cls": TimingFeed}),
+        (run_scheduled_feed, feed2_id, {"feed_cls": SecondFeed}),
+        (run_strategy, strategy_id, {"strategy_cls": MultiDepStrategy}),
         database_url=database_url,
         redis_url=redis_url,
         wait_seconds=4.0,
@@ -42,9 +42,9 @@ def test_and_trigger_fires_on_complete_pair(
     strategy_id = deploy_strategy_cls(MultiDepStrategy)
 
     with run_engine_threads(
-        (run_scheduled_feed, feed1_id),
-        (run_scheduled_feed, feed2_id),
-        (run_strategy, strategy_id),
+        (run_scheduled_feed, feed1_id, {"feed_cls": TimingFeed}),
+        (run_scheduled_feed, feed2_id, {"feed_cls": SecondFeed}),
+        (run_strategy, strategy_id, {"strategy_cls": MultiDepStrategy}),
         database_url=database_url,
         redis_url=redis_url,
         wait_seconds=5.0,

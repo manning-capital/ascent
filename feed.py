@@ -17,12 +17,6 @@ from ascent.feeds.base import Feed
 from ascent.feeds.output import InstrumentAttributes
 from ascent.feeds.schedule import Schedule
 
-# Attribute IDs — these must match the DB attribute records.
-# For the sample we use integers as placeholders; a real feed
-# would query the attribute table.
-ATTR_CLOSE = 1
-ATTR_VOLUME = 2
-
 # Base prices for simulation keyed by asset symbol
 BASE_PRICES: dict[str, float] = {
     "BTC": 67500.0,
@@ -50,6 +44,18 @@ def _load_instruments(database_url: str) -> dict[uuid.UUID, str]:
     return instruments
 
 
+def _load_attribute_ids(database_url: str) -> dict[str, uuid.UUID]:
+    """Load attribute name → UUID mapping from the DB."""
+    from ascent.database.models.descriptors import Attribute
+
+    engine = create_engine(database_url)
+    attrs: dict[str, uuid.UUID] = {}
+    with Session(engine) as db:
+        for row in db.execute(select(Attribute)).scalars():
+            attrs[row.name] = row.id
+    return attrs
+
+
 class MarketDataFeed(Feed):
     """Emits fake OHLCV market data for instruments found in the database."""
 
@@ -64,11 +70,15 @@ class MarketDataFeed(Feed):
     # Populated at startup from the database
     _instruments: ClassVar[dict[uuid.UUID, str]] = {}
     _prices: ClassVar[dict[uuid.UUID, float]] = {}
+    _attr_ids: ClassVar[dict[str, uuid.UUID]] = {}
 
     def fetch(self) -> DataFrame[InstrumentAttributes]:
         now = pd.Timestamp.now(tz="UTC")
         vol = self.parameters.volatility
         rows = []
+
+        attr_close = self._attr_ids.get("CLOSE")
+        attr_volume = self._attr_ids.get("VOLUME")
 
         for inst_id, symbol in self._instruments.items():
             base_price = BASE_PRICES.get(symbol, 100.0)
@@ -77,22 +87,24 @@ class MarketDataFeed(Feed):
             self._prices[inst_id] *= 1 + random.gauss(0, vol)
             price = self._prices[inst_id]
 
-            rows.append(
-                {
-                    "timestamp": now,
-                    "instrument_id": str(inst_id),
-                    "attribute_id": ATTR_CLOSE,
-                    "attribute_value": round(price, 6),
-                }
-            )
-            rows.append(
-                {
-                    "timestamp": now,
-                    "instrument_id": str(inst_id),
-                    "attribute_id": ATTR_VOLUME,
-                    "attribute_value": round(random.uniform(100, 10000), 2),
-                }
-            )
+            if attr_close is not None:
+                rows.append(
+                    {
+                        "timestamp": now,
+                        "instrument_id": str(inst_id),
+                        "attribute_id": str(attr_close),
+                        "attribute_value": round(price, 6),
+                    }
+                )
+            if attr_volume is not None:
+                rows.append(
+                    {
+                        "timestamp": now,
+                        "instrument_id": str(inst_id),
+                        "attribute_id": str(attr_volume),
+                        "attribute_value": round(random.uniform(100, 10000), 2),
+                    }
+                )
 
         return pd.DataFrame(rows)
 
@@ -107,6 +119,10 @@ if __name__ == "__main__":
         print("No instruments found in DB. Run 'ascent seed run --drop --profile base' first.")
         raise SystemExit(1)
     print(f"Loaded {len(MarketDataFeed._instruments)} instruments")
+
+    # Load attribute UUIDs from the database
+    MarketDataFeed._attr_ids = _load_attribute_ids(db_url)
+    print(f"Loaded {len(MarketDataFeed._attr_ids)} attribute types")
 
     MarketDataFeed.run(
         redis_url=os.environ["ASCENT_REDIS_URL"],

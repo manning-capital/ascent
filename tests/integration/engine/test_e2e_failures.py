@@ -18,7 +18,7 @@ def test_feed_error_calls_on_error(deploy_feed_cls, database_url, redis_url):
     feed_id = deploy_feed_cls(ErrorFeed)
 
     with run_engine_threads(
-        (run_scheduled_feed, feed_id),
+        (run_scheduled_feed, feed_id, {"feed_cls": ErrorFeed}),
         database_url=database_url,
         redis_url=redis_url,
         wait_seconds=5.0,
@@ -37,7 +37,7 @@ def test_failed_partition_status(deploy_feed_cls, database_url, redis_url, db_se
     feed_id = deploy_feed_cls(ErrorFeed)
 
     with run_engine_threads(
-        (run_scheduled_feed, feed_id),
+        (run_scheduled_feed, feed_id, {"feed_cls": ErrorFeed}),
         database_url=database_url,
         redis_url=redis_url,
         wait_seconds=5.0,
@@ -61,7 +61,7 @@ def test_feed_recovers_after_error(deploy_feed_cls, database_url, redis_url, db_
     feed_id = deploy_feed_cls(ErrorFeed)
 
     with run_engine_threads(
-        (run_scheduled_feed, feed_id),
+        (run_scheduled_feed, feed_id, {"feed_cls": ErrorFeed}),
         database_url=database_url,
         redis_url=redis_url,
         wait_seconds=5.0,
@@ -94,7 +94,7 @@ def test_empty_dataframe_published(deploy_feed_cls, database_url, redis_url, eng
     feed_id = deploy_feed_cls(EmptyFeed)
 
     with run_engine_threads(
-        (run_scheduled_feed, feed_id),
+        (run_scheduled_feed, feed_id, {"feed_cls": EmptyFeed}),
         database_url=database_url,
         redis_url=redis_url,
         wait_seconds=3.0,
@@ -109,7 +109,7 @@ def test_lifecycle_hooks_order(deploy_feed_cls, database_url, redis_url):
     feed_id = deploy_feed_cls(HookTrackingFeed)
 
     with run_engine_threads(
-        (run_scheduled_feed, feed_id),
+        (run_scheduled_feed, feed_id, {"feed_cls": HookTrackingFeed}),
         database_url=database_url,
         redis_url=redis_url,
         wait_seconds=3.0,
