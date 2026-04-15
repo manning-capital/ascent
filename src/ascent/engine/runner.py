@@ -288,6 +288,20 @@ class Runner:
             )
             threads.append(t)
 
+        if self._exchanges:
+            from ascent.engine.fill_handler import run_fill_handler
+
+            t = threading.Thread(
+                target=run_fill_handler,
+                kwargs={
+                    "database_url": self._database_url,
+                    "redis_url": self._redis_url,
+                    "shutdown_event": shutdown_event,
+                },
+                name="fill-handler",
+            )
+            threads.append(t)
+
         # Start all threads
         for t in threads:
             t.start()

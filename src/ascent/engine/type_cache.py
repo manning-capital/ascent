@@ -77,6 +77,13 @@ class TypeCache:
                 f"Available: {', '.join(self._trade_status_types)}."
             ) from None
 
+    def trade_status_name(self, status_id: uuid.UUID) -> str | None:
+        """Reverse-lookup: TradeStatusType UUID → name."""
+        for name, uid in self._trade_status_types.items():
+            if uid == status_id:
+                return name
+        return None
+
     def attribute_name(self, attr_id: uuid.UUID) -> str:
         """Look up an Attribute name by UUID (e.g. uuid → 'close')."""
         try:

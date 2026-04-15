@@ -33,7 +33,9 @@ Example
 from __future__ import annotations
 
 import re
+import threading
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
 from typing import ClassVar
 
 from pydantic import BaseModel
@@ -70,6 +72,15 @@ class OrderStatusResponse(BaseModel):
     filled_quantity: float = 0.0
     average_fill_price: float | None = None
     error_message: str | None = None
+
+
+class OrderEvent(BaseModel):
+    """A real-time order status change pushed by an event-driven exchange."""
+
+    exchange_order_id: str
+    status: str
+    filled_quantity: float = 0.0
+    average_fill_price: float | None = None
 
 
 class BalanceEntry(BaseModel):
@@ -111,8 +122,15 @@ class BaseExchange(ABC):
     #: Optional description.
     description: ClassVar[str | None] = None
 
+    #: Seconds between polls when using ``get_open_orders``.
+    poll_interval: ClassVar[float] = 1.0
+
     def __init__(self, config: dict | None = None) -> None:
         self.config = config or {}
+
+    # ------------------------------------------------------------------
+    # Core order lifecycle (required)
+    # ------------------------------------------------------------------
 
     @abstractmethod
     def submit_order(self, request: OrderRequest) -> OrderResponse:
@@ -129,6 +147,41 @@ class BaseExchange(ABC):
     @abstractmethod
     def get_balances(self) -> list[BalanceEntry]:
         """Return current account balances on the exchange."""
+
+    # ------------------------------------------------------------------
+    # Order monitoring (override one or both)
+    # ------------------------------------------------------------------
+
+    def get_open_orders(self) -> list[OrderStatusResponse]:
+        """Return current status of all open (non-terminal) orders.
+
+        Override this for **polling-based** order monitoring.  The runner
+        calls this method at ``poll_interval`` and publishes any state
+        changes back via Redis.
+        """
+        raise NotImplementedError
+
+    def connect_order_stream(self, shutdown_event: threading.Event) -> Iterator[OrderEvent]:
+        """Yield real-time order events (fills, cancellations, etc.).
+
+        Override this for **event-driven** order monitoring (WebSocket,
+        SSE, etc.).  The generator must respect *shutdown_event* and stop
+        yielding when it is set.
+        """
+        raise NotImplementedError
+
+    # ------------------------------------------------------------------
+    # Reconciliation
+    # ------------------------------------------------------------------
+
+    def get_order_by_client_id(self, client_order_id: str) -> OrderStatusResponse | None:
+        """Look up an order using the client-assigned ID.
+
+        Used during reconciliation to find orders where the initial ack
+        (containing the exchange-assigned ID) was lost.  Returns ``None``
+        if the exchange has no record of the order.
+        """
+        raise NotImplementedError
 
     # ------------------------------------------------------------------
     # Name / ref helpers

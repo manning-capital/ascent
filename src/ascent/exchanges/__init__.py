@@ -1,6 +1,7 @@
 from ascent.exchanges.base import (
     BalanceEntry,
     BaseExchange,
+    OrderEvent,
     OrderRequest,
     OrderResponse,
     OrderStatusResponse,
@@ -11,6 +12,7 @@ from ascent.exchanges.paper import PaperExchange
 
 __all__ = [
     "BaseExchange",
+    "OrderEvent",
     "OrderRequest",
     "OrderResponse",
     "OrderStatusResponse",

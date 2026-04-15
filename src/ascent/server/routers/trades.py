@@ -1,10 +1,14 @@
+import asyncio
 import datetime
+import json
 import uuid
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
+from starlette.responses import StreamingResponse
 
-from ascent.server.dependencies import get_db
+from ascent.engine.cache import EngineCache
+from ascent.server.dependencies import engine as db_engine, get_cache, get_db
 from ascent.server.schemas.common import PaginatedResponse
 from ascent.server.schemas.trades import (
     TradeConditionCreate,
@@ -57,6 +61,51 @@ def list_trades(
         page=page,
         page_size=page_size,
         total_pages=total_pages,
+    )
+
+
+@router.get("/stream")
+async def stream_trades(cache: EngineCache = Depends(get_cache)):
+    """SSE endpoint that streams real-time trade updates.
+
+    Subscribes to the ``ascent.trades.updates`` Redis channel and
+    streams enriched ``TradeListItem`` payloads as they change.
+    """
+
+    async def event_generator():
+        pubsub = cache.subscribe(["ascent.trades.updates"])
+        try:
+            while True:
+                msg = await asyncio.to_thread(cache.poll, pubsub, 5.0)
+                if msg is None:
+                    yield ": keepalive\n\n"
+                    continue
+                trade_id_str = msg.get("trade_id")
+                if not trade_id_str:
+                    continue
+                try:
+                    tid = uuid.UUID(trade_id_str)
+                except ValueError:
+                    continue
+                with Session(db_engine) as db:
+                    item = trade_service.get_trade_list_item_by_id(db, tid)
+                if item is None:
+                    continue
+                payload = json.dumps(
+                    item.model_dump(mode="json"),
+                    default=str,
+                )
+                yield f"event: trade_update\ndata: {payload}\n\n"
+        finally:
+            pubsub.close()
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 

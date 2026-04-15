@@ -51,6 +51,44 @@ class TradeRouter:
             "is deployed, active, and linked to the strategy."
         )
 
+    def _await_acks(
+        self, channel: str, order_records: list, timeout_seconds: float = 5.0
+    ) -> dict[str, dict]:
+        """Wait for initial exchange acknowledgements (SUBMITTED responses).
+
+        Returns a dict mapping ``order_id`` → response payload for each
+        order that was acknowledged within the timeout.
+        """
+        response_channel = f"{channel}.responses"
+        response_pubsub = self._cache.subscribe([response_channel])
+        pending = {str(o.id) for o in order_records}
+        acks: dict[str, dict] = {}
+        timeout_at = datetime.datetime.now(tz=datetime.UTC) + datetime.timedelta(
+            seconds=timeout_seconds
+        )
+
+        while pending and datetime.datetime.now(tz=datetime.UTC) < timeout_at:
+            resp = self._cache.poll(response_pubsub, timeout=0.5)
+            if resp is None:
+                continue
+            if resp.get("action") != "order_response":
+                continue
+            resp_order_id = resp.get("order_id")
+            if resp_order_id in pending:
+                pending.discard(resp_order_id)
+                acks[resp_order_id] = resp.get("response", {})
+
+        response_pubsub.close()
+
+        if pending:
+            logger.warning(
+                "Timed out waiting for exchange ack on %d order(s): %s",
+                len(pending),
+                pending,
+            )
+
+        return acks
+
     def _resolve_legs(
         self,
         target_id: uuid.UUID,
@@ -265,101 +303,45 @@ class TradeRouter:
             }
             self._cache.publish(channel, order_payload)
 
-        # Wait for exchange responses
-        response_channel = f"{channel}.responses"
-        response_pubsub = self._cache.subscribe([response_channel])
-        pending_order_ids = {str(o.id) for o in order_records}
-        filled_orders: dict[str, dict] = {}
-        timeout_at = datetime.datetime.now(tz=datetime.UTC) + datetime.timedelta(seconds=5)
+        # Wait for initial exchange acknowledgements to capture exchange_order_id.
+        # The exchange returns SUBMITTED immediately; actual fills arrive later
+        # via the fill handler.
+        ack_orders = self._await_acks(channel, order_records)
 
-        while pending_order_ids and datetime.datetime.now(tz=datetime.UTC) < timeout_at:
-            resp = self._cache.poll(response_pubsub, timeout=0.5)
-            if resp is None:
-                continue
-            resp_order_id = resp.get("order_id")
-            if resp_order_id in pending_order_ids:
-                pending_order_ids.discard(resp_order_id)
-                filled_orders[resp_order_id] = resp.get("response", {})
-
-        response_pubsub.close()
-
-        # Process fills
-        trade_status = "OPENING"
+        # Persist the exchange-assigned order IDs
         with Session(bind=self._session_factory.kw["bind"]) as db:
-            now_fill = datetime.datetime.now(tz=datetime.UTC)
-            all_filled = True
-
-            for leg, order in zip(leg_records, order_records, strict=False):
-                fill = filled_orders.get(str(order.id))
-                if fill and fill.get("status") == "FILLED":
-                    # Update Order
+            for order in order_records:
+                ack = ack_orders.get(str(order.id))
+                if ack:
                     db_order = db.get(Order, order.id)
-                    db_order.filled_quantity = fill.get("filled_quantity", 0.0)
-                    db_order.average_fill_price = fill.get("average_fill_price")
-                    db_order.external_order_id = fill.get("exchange_order_id")
-
-                    db.add(
-                        OrderStatus(
-                            timestamp=now_fill,
-                            order_id=order.id,
-                            order_status_type_id=self._type_cache.order_status_type_id("FILLED"),
+                    if ack.get("exchange_order_id"):
+                        db_order.external_order_id = ack["exchange_order_id"]
+                    # Handle immediate rejection
+                    if ack.get("status") == "REJECTED":
+                        db.add(
+                            OrderStatus(
+                                timestamp=datetime.datetime.now(tz=datetime.UTC),
+                                order_id=order.id,
+                                order_status_type_id=self._type_cache.order_status_type_id(
+                                    "REJECTED"
+                                ),
+                                error_message=ack.get("error_message"),
+                            )
                         )
-                    )
-
-                    # Update TradeLeg
-                    db_leg = db.get(TradeLeg, leg.id)
-                    db_leg.entry_price = fill.get("average_fill_price") or price
-
-                    logger.info(
-                        "Order %s filled: %s qty=%.4f @ %.4f",
-                        order.id,
-                        legs[order_records.index(order)]["side"],
-                        fill.get("filled_quantity", 0.0),
-                        fill.get("average_fill_price", 0.0),
-                    )
-                elif fill and fill.get("status") == "REJECTED":
-                    db.add(
-                        OrderStatus(
-                            timestamp=now_fill,
-                            order_id=order.id,
-                            order_status_type_id=self._type_cache.order_status_type_id("REJECTED"),
-                            error_message=fill.get("error_message"),
+                        logger.warning(
+                            "Order %s rejected: %s", order.id, ack.get("error_message")
                         )
-                    )
-                    all_filled = False
-                    logger.warning("Order %s rejected: %s", order.id, fill.get("error_message"))
-                else:
-                    all_filled = False
-
-            # Update Trade status
-            db_trade = db.get(Trade, trade_id)
-            if all_filled:
-                db_trade.current_status_type_id = self._type_cache.trade_status_type_id("OPEN")
-                db.add(
-                    TradeStatus(
-                        timestamp=now_fill,
-                        trade_id=trade_id,
-                        trade_status_type_id=self._type_cache.trade_status_type_id("OPEN"),
-                    )
-                )
-                trade_status = "OPEN"
-                logger.info("Trade %s is OPEN (%d legs filled)", trade_id, len(leg_records))
-            elif filled_orders:
-                db_trade.current_status_type_id = self._type_cache.trade_status_type_id("ERROR")
-                db.add(
-                    TradeStatus(
-                        timestamp=now_fill,
-                        trade_id=trade_id,
-                        trade_status_type_id=self._type_cache.trade_status_type_id("ERROR"),
-                    )
-                )
-                trade_status = "ERROR"
-
             db.commit()
+
+        # Notify the UI that a new trade exists
+        self._cache.publish(
+            "ascent.trades.updates",
+            {"event": "trade_created", "trade_id": str(trade_id)},
+        )
 
         return {
             "trade_id": str(trade_id),
-            "status": trade_status,
+            "status": "OPENING",
             "legs": leg_details,
         }
 
@@ -513,96 +495,28 @@ class TradeRouter:
                 },
             )
 
-        # Wait for responses
-        response_channel = f"{channel}.responses"
-        response_pubsub = self._cache.subscribe([response_channel])
-        pending = {str(eo["order_id"]) for eo in exit_orders}
-        fills: dict[str, dict] = {}
-        timeout_at = datetime.datetime.now(tz=datetime.UTC) + datetime.timedelta(seconds=5)
+        # Wait for initial exchange acknowledgements to capture exchange_order_id.
+        # Actual fills arrive asynchronously via the fill handler.
+        ack_orders = self._await_acks(channel, [
+            type("_O", (), {"id": eo["order_id"]}) for eo in exit_orders
+        ])
 
-        while pending and datetime.datetime.now(tz=datetime.UTC) < timeout_at:
-            resp = self._cache.poll(response_pubsub, timeout=0.5)
-            if resp is None:
-                continue
-            oid = resp.get("order_id")
-            if oid in pending:
-                pending.discard(oid)
-                fills[oid] = resp.get("response", {})
-
-        response_pubsub.close()
-
-        # Process fills and close trade
-        trade_status = "CLOSING"
+        # Persist exchange-assigned order IDs
         with Session(bind=self._session_factory.kw["bind"]) as db:
-            now_fill = datetime.datetime.now(tz=datetime.UTC)
-            all_filled = True
-            total_pnl = 0.0
-
             for eo in exit_orders:
-                fill = fills.get(str(eo["order_id"]))
-                if fill and fill.get("status") == "FILLED":
+                ack = ack_orders.get(str(eo["order_id"]))
+                if ack and ack.get("exchange_order_id"):
                     db_order = db.get(Order, eo["order_id"])
-                    db_order.filled_quantity = fill.get("filled_quantity", 0.0)
-                    db_order.average_fill_price = fill.get("average_fill_price")
-                    db_order.external_order_id = fill.get("exchange_order_id")
-
-                    db.add(
-                        OrderStatus(
-                            timestamp=now_fill,
-                            order_id=eo["order_id"],
-                            order_status_type_id=self._type_cache.order_status_type_id("FILLED"),
-                        )
-                    )
-
-                    db_leg = db.get(TradeLeg, eo["leg_id"])
-                    exit_price = fill.get("average_fill_price") or price or 0.0
-                    db_leg.exit_price = exit_price
-
-                    # Compute PnL
-                    entry = eo["entry_price"] or 0.0
-                    if eo["direction"] == "LONG":
-                        pnl = (exit_price - entry) * eo["quantity"]
-                    else:
-                        pnl = (entry - exit_price) * eo["quantity"]
-                    db_leg.realized_pnl = round(pnl, 6)
-                    total_pnl += pnl
-
-                    logger.info(
-                        "Exit order %s filled: %s qty=%.4f @ %.4f  pnl=%.4f",
-                        eo["order_id"],
-                        eo["side"],
-                        fill.get("filled_quantity", 0.0),
-                        exit_price,
-                        pnl,
-                    )
-                else:
-                    all_filled = False
-
-            db_trade = db.get(Trade, trade_id)
-            if all_filled:
-                db_trade.current_status_type_id = self._type_cache.trade_status_type_id("CLOSED")
-                db_trade.exit_at = now_fill
-                db_trade.close_reason = close_reason
-                db_trade.total_realized_pnl = round(total_pnl, 6)
-                db.add(
-                    TradeStatus(
-                        timestamp=now_fill,
-                        trade_id=trade_id,
-                        trade_status_type_id=self._type_cache.trade_status_type_id("CLOSED"),
-                    )
-                )
-                trade_status = "CLOSED"
-                logger.info(
-                    "Trade %s CLOSED  pnl=%.4f  reason=%s",
-                    trade_id,
-                    total_pnl,
-                    close_reason,
-                )
-
+                    db_order.external_order_id = ack["exchange_order_id"]
             db.commit()
+
+        # Notify the UI that the trade is closing
+        self._cache.publish(
+            "ascent.trades.updates",
+            {"event": "trade_closing", "trade_id": str(trade_id)},
+        )
 
         return {
             "trade_id": str(trade_id),
-            "status": trade_status,
-            "total_pnl": round(total_pnl, 6) if trade_status == "CLOSED" else None,
+            "status": "CLOSING",
         }

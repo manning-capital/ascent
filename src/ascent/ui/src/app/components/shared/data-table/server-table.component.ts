@@ -14,6 +14,7 @@ import { DatePipe } from '@angular/common';
 import { AgGridAngular } from 'ag-grid-angular';
 import type {
   ColDef,
+  GetRowIdFunc,
   GridApi,
   GridReadyEvent,
   RowClickedEvent,
@@ -95,6 +96,7 @@ import {
           [rowClass]="rowClickRoute() ? 'cursor-pointer' : ''"
           [context]="gridContext()"
           [getRowStyle]="getRowStyle()"
+          [getRowId]="getRowId()"
           (gridReady)="onGridReady($event)"
           (sortChanged)="onSortChanged($event)"
           (rowClicked)="onRowClicked($event)"/>
@@ -142,6 +144,8 @@ export class ServerTableComponent<T = any> {
   gridContext = input<any>(undefined);
   /** AG Grid getRowStyle callback for conditional row styling. */
   getRowStyle = input<((params: any) => any) | undefined>(undefined);
+  /** AG Grid getRowId callback for transaction-based updates. */
+  getRowId = input<GetRowIdFunc | undefined>(undefined);
 
   // ─── Outputs ──────────────────────────────────────────────
   sortChange = output<{ field: string; order: string }>();

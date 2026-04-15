@@ -10,6 +10,7 @@
         [rowHeight]="undefined"
         [headerHeight]="undefined"
         [rowClickRoute]="navigateToTradeRoute"
+        [getRowId]="getRowId"
         emptyMessage="No trades"
         (sortChange)="sortChange.emit($event)"
         (pageSizeChange)="pageSizeChange.emit($event)"

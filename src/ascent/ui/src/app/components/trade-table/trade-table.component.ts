@@ -1,11 +1,13 @@
-import { Component, input, output, inject, computed, signal } from '@angular/core';
+import { Component, input, output, inject, computed, signal, OnInit, OnDestroy, ViewChild } from '@angular/core';
 import { Router } from '@angular/router';
+import { Subscription } from 'rxjs';
 import { AgGridAngular } from 'ag-grid-angular';
 import type { ICellRendererAngularComp } from 'ag-grid-angular';
-import type { ColDef, GridApi, ICellRendererParams, RowClickedEvent } from 'ag-grid-community';
+import type { ColDef, GetRowIdFunc, GetRowIdParams, GridApi, ICellRendererParams, RowClickedEvent } from 'ag-grid-community';
 import { Card } from 'primeng/card';
 import { TradeListItem, TradeLegSummary } from '../../models/trade.model';
 import { TradeService } from '../../services/trade.service';
+import { TradeStreamService } from '../../services/trade-stream.service';
 import type { ServerFetchFn } from '../shared/data-table/data-table.model';
 import { BadgeComponent } from '../shared/badge.component';
 import { StatCardComponent } from '../shared/stat-card.component';
@@ -111,12 +113,15 @@ export class TradePnlCellRenderer implements ICellRendererAngularComp {
   imports: [BadgeComponent, StatCardComponent, AgGridAngular, ServerTableComponent, Card, EmptyStateComponent],
   templateUrl: './trade-table.component.html',
 })
-export class TradeTableComponent {
+export class TradeTableComponent implements OnInit, OnDestroy {
   private router = inject(Router);
   private themeSvc = inject(ThemeService);
+  private streamService = inject(TradeStreamService);
   tradeService = inject(TradeService);
   themeMode = agThemeMode(this.themeSvc);
   theme = AG_GRID_THEME;
+
+  @ViewChild(ServerTableComponent) private serverTable?: ServerTableComponent;
 
   trades = input<TradeListItem[]>([]);
   showStrategy = input(true);
@@ -129,6 +134,7 @@ export class TradeTableComponent {
   showPaginator = input(true);
 
   private gridApi: GridApi | null = null;
+  private streamSub: Subscription | null = null;
 
   // Server-side outputs (delegated to ServerTableComponent)
   sortChange = output<{ field: string; order: string }>();
@@ -142,6 +148,51 @@ export class TradeTableComponent {
 
   /** Route builder for server-table row clicks. */
   navigateToTradeRoute = (trade: TradeListItem) => ['/trades', trade.id];
+
+  /** AG Grid row identity for transaction updates. */
+  getRowId: GetRowIdFunc = (params: GetRowIdParams) => params.data.id;
+
+  ngOnInit(): void {
+    this.streamService.connect();
+    this.streamSub = this.streamService.tradeUpdate$.subscribe(trade => {
+      const api = this.serverTable?.gridApi ?? this.gridApi;
+      if (!api) return;
+      const existing = api.getRowNode(trade.id);
+      if (existing) {
+        api.applyTransactionAsync({ update: [trade] }, res => {
+          this.flashRows(api, res.update);
+        });
+      } else {
+        api.applyTransactionAsync({ add: [trade] }, res => {
+          this.flashRows(api, res.add);
+        });
+      }
+      // Also update mobile card list
+      this._serverRowData.update(rows => {
+        const idx = rows.findIndex(r => r.id === trade.id);
+        if (idx >= 0) {
+          const updated = [...rows];
+          updated[idx] = trade;
+          return updated;
+        }
+        return [trade, ...rows];
+      });
+    });
+  }
+
+  private flashRows(api: GridApi, rowNodes: any[]): void {
+    if (!rowNodes?.length) return;
+    api.flashCells({
+      rowNodes,
+      flashDuration: 300,
+      fadeDuration: 700,
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.streamSub?.unsubscribe();
+    this.streamService.disconnect();
+  }
 
   onDataLoaded(items: TradeListItem[]): void {
     this._serverRowData.set(items);
