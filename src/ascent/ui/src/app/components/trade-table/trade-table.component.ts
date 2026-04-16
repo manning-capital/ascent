@@ -1,5 +1,6 @@
 import { Component, input, output, inject, computed, signal, OnInit, OnDestroy, ViewChild } from '@angular/core';
 import { Router } from '@angular/router';
+import { DatePipe } from '@angular/common';
 import { Subscription } from 'rxjs';
 import { AgGridAngular } from 'ag-grid-angular';
 import type { ICellRendererAngularComp } from 'ag-grid-angular';
@@ -135,6 +136,7 @@ export class TradeTableComponent implements OnInit, OnDestroy {
 
   private gridApi: GridApi | null = null;
   private streamSub: Subscription | null = null;
+  private datePipe = new DatePipe('en-US');
 
   // Server-side outputs (delegated to ServerTableComponent)
   sortChange = output<{ field: string; order: string }>();
@@ -154,28 +156,42 @@ export class TradeTableComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.streamService.connect();
-    this.streamSub = this.streamService.tradeUpdate$.subscribe(trade => {
+    this.streamSub = this.streamService.tradeUpdates$.subscribe(batch => {
       const api = this.serverTable?.gridApi ?? this.gridApi;
       if (!api) return;
-      const existing = api.getRowNode(trade.id);
-      if (existing) {
-        api.applyTransactionAsync({ update: [trade] }, res => {
-          this.flashRows(api, res.update);
-        });
-      } else {
-        api.applyTransactionAsync({ add: [trade] }, res => {
-          this.flashRows(api, res.add);
-        });
-      }
-      // Also update mobile card list
-      this._serverRowData.update(rows => {
-        const idx = rows.findIndex(r => r.id === trade.id);
-        if (idx >= 0) {
-          const updated = [...rows];
-          updated[idx] = trade;
-          return updated;
+
+      const adds: TradeListItem[] = [];
+      const updates: TradeListItem[] = [];
+      for (const trade of batch) {
+        if (api.getRowNode(trade.id)) {
+          updates.push(trade);
+        } else {
+          adds.push(trade);
         }
-        return [trade, ...rows];
+      }
+      // Reverse so the newest-arrived add lands at index 0.
+      adds.reverse();
+
+      if (adds.length || updates.length) {
+        api.applyTransactionAsync(
+          { add: adds, addIndex: adds.length ? 0 : undefined, update: updates },
+          res => {
+            this.flashRows(api, [...(res.add ?? []), ...(res.update ?? [])]);
+            if (adds.length) this.trimToPageSize(api);
+          },
+        );
+      }
+
+      // Also update mobile card list in a single pass
+      this._serverRowData.update(rows => {
+        const byId = new Map(rows.map(r => [r.id, r] as const));
+        for (const trade of batch) {
+          if (byId.has(trade.id)) byId.set(trade.id, trade);
+        }
+        const updated = rows.map(r => byId.get(r.id) ?? r);
+        const next = [...adds, ...updated];
+        const max = this.pageSize();
+        return next.length > max ? next.slice(0, max) : next;
       });
     });
   }
@@ -189,6 +205,20 @@ export class TradeTableComponent implements OnInit, OnDestroy {
     });
   }
 
+  private trimToPageSize(api: GridApi): void {
+    const max = this.pageSize();
+    const total = api.getDisplayedRowCount();
+    if (total <= max) return;
+    const rowsToRemove: any[] = [];
+    for (let i = max; i < total; i++) {
+      const node = api.getDisplayedRowAtIndex(i);
+      if (node?.data) rowsToRemove.push(node.data);
+    }
+    if (rowsToRemove.length) {
+      api.applyTransactionAsync({ remove: rowsToRemove });
+    }
+  }
+
   ngOnDestroy(): void {
     this.streamSub?.unsubscribe();
     this.streamService.disconnect();
@@ -200,6 +230,17 @@ export class TradeTableComponent implements OnInit, OnDestroy {
 
   colDefs = computed<ColDef[]>(() => {
     const cols: ColDef[] = [
+      {
+        headerName: 'Date / Time',
+        field: 'entry_at',
+        pinned: 'left',
+        sortable: true,
+        flex: 0,
+        width: 200,
+        minWidth: 200,
+        valueFormatter: (p) => p.value ? (this.datePipe.transform(p.value, 'MMM d, y, HH:mm:ss') ?? '') : '',
+        cellClass: 'text-sm text-surface-500',
+      },
       { headerName: 'Symbol', field: 'display_symbol', cellRenderer: SymbolCellRenderer, sortable: false, minWidth: 140 },
     ];
     if (this.showStrategy()) {

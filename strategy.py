@@ -54,7 +54,7 @@ class MomentumStrategy(Strategy):
                     pnl_pct,
                 )
                 result = self.close_trade(row[("trade", "trade_id")], close_reason="TAKE_PROFIT")
-                log.info("  status=%s  pnl=%s", result["status"], result.get("total_pnl"))
+                log.info("  status=%s", result.state.value)
             elif pnl_pct <= -self.parameters.stop_loss_pct:
                 log.info(
                     "STOP LOSS  trade=%s  %s pnl=%+.3f%%",
@@ -63,7 +63,7 @@ class MomentumStrategy(Strategy):
                     pnl_pct,
                 )
                 result = self.close_trade(row[("trade", "trade_id")], close_reason="STOP_LOSS")
-                log.info("  status=%s  pnl=%s", result["status"], result.get("total_pnl"))
+                log.info("  status=%s", result.state.value)
 
         # --- Phase 2: Open new trades on momentum signals ---
         waiting = ctx[ctx[("trade", "status")] == "WAITING"]
@@ -86,11 +86,11 @@ class MomentumStrategy(Strategy):
             if pct_change >= self.parameters.entry_threshold_pct:
                 log.info("%s  %+.3f%%  → LONG @ %.4f", str(inst_id)[:8], pct_change, price)
                 result = self.open_trade(inst_id, "LONG", self.parameters.trade_qty, price=price)
-                log.info("  Trade %s  status=%s", result["trade_id"][:8], result["status"])
+                log.info("  Trade %s  status=%s", str(result.trade_id)[:8], result.state.value)
             elif pct_change <= -self.parameters.entry_threshold_pct:
                 log.info("%s  %+.3f%%  → SHORT @ %.4f", str(inst_id)[:8], pct_change, price)
                 result = self.open_trade(inst_id, "SHORT", self.parameters.trade_qty, price=price)
-                log.info("  Trade %s  status=%s", result["trade_id"][:8], result["status"])
+                log.info("  Trade %s  status=%s", str(result.trade_id)[:8], result.state.value)
 
 
 if __name__ == "__main__":

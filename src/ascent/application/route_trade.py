@@ -1,0 +1,338 @@
+"""TradeRouter use case — creates Trade + TradeLeg + Order records and publishes orders.
+
+Replaces the old ``ascent.engine.trade_router.TradeRouter`` with an async-first
+design that takes explicit dependencies. The legacy synchronous ``_await_acks``
+wait-loop is gone; exchange acks arrive asynchronously through the event bus
+and are handled by the fill-processor pipeline.
+"""
+
+from __future__ import annotations
+
+import logging
+import uuid
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Literal
+
+from ascent.domain import Direction, OrderType, TradeState
+from ascent.ports import EventBus, OrderRepository, TradeRepository
+from ascent.ports.trade_repo import NewLegSpec, NewOrderSpec
+
+logger = logging.getLogger(__name__)
+
+UI_CHANNEL = "ascent.trades.updates"
+
+
+@dataclass(frozen=True)
+class ExchangeBinding:
+    exchange_id: uuid.UUID
+    channel: str
+
+
+@dataclass(frozen=True)
+class CompositeSpec:
+    """Resolved composite membership. The evaluate-strategy use case loads these."""
+
+    composite_id: uuid.UUID
+    ordered_instrument_ids: list[uuid.UUID]
+
+
+@dataclass(frozen=True)
+class TradeDraft:
+    trade_id: uuid.UUID
+    state: TradeState
+    leg_summaries: list[dict]
+
+
+@dataclass(frozen=True)
+class _EntryOrder:
+    """Bundles everything we need to publish an exchange order after the
+    Trade/Leg/Order rows are persisted. Keeps the publish loop from having to
+    cross-reference multiple lists by id.
+    """
+
+    leg_id: uuid.UUID
+    order_id: uuid.UUID
+    side: str
+    quantity: float
+    instrument_id: uuid.UUID
+
+
+class TradeRouter:
+    def __init__(
+        self,
+        *,
+        strategy_id: uuid.UUID,
+        portfolio_id: uuid.UUID,
+        trade_repo: TradeRepository,
+        order_repo: OrderRepository,
+        event_bus: EventBus,
+        exchanges: list[ExchangeBinding],
+        is_paper: bool = False,
+    ) -> None:
+        if not exchanges:
+            raise ValueError("TradeRouter requires at least one exchange binding")
+        self._strategy_id = strategy_id
+        self._portfolio_id = portfolio_id
+        self._trades = trade_repo
+        self._orders = order_repo
+        self._bus = event_bus
+        self._exchanges = exchanges
+        self._is_paper = is_paper
+        self._strategy_run_id: uuid.UUID | None = None
+
+    def bind_strategy_run(self, strategy_run_id: uuid.UUID) -> None:
+        """Set the current strategy-run id for trade provenance stamping."""
+        self._strategy_run_id = strategy_run_id
+
+    async def submit(
+        self,
+        *,
+        side: Literal["BUY", "SELL"],
+        target_id: uuid.UUID,
+        scope: Literal["instrument", "composite"] = "instrument",
+        quantity: float,
+        now: datetime,
+        price: float | None = None,
+        order_type: OrderType = OrderType.MARKET,
+        composite: CompositeSpec | None = None,
+    ) -> TradeDraft:
+        """Open a new trade.
+
+        For ``scope='composite'``, ``composite`` must supply the ordered
+        instrument membership; the router creates one leg per instrument.
+        """
+        binding = self._exchanges[0]
+        leg_specs = self._build_leg_specs(
+            side=side,
+            target_id=target_id,
+            scope=scope,
+            quantity=quantity,
+            price=price,
+            exchange_id=binding.exchange_id,
+            composite=composite,
+        )
+
+        trade = await self._trades.create(
+            strategy_id=self._strategy_id,
+            portfolio_id=self._portfolio_id,
+            is_paper=self._is_paper,
+            entry_at=now,
+            strategy_run_id=self._strategy_run_id,
+            legs=leg_specs,
+        )
+
+        entry_orders: list[_EntryOrder] = []
+        for leg, spec in zip(trade.legs, leg_specs, strict=True):
+            order_side = "BUY" if spec.direction == Direction.LONG else "SELL"
+            order = await self._orders.create(
+                NewOrderSpec(
+                    timestamp=now,
+                    order_type=order_type,
+                    side=order_side,
+                    quantity=spec.quantity,
+                    price=price or 0.0,
+                    exchange_id=binding.exchange_id,
+                    portfolio_id=self._portfolio_id,
+                    instrument_id=spec.instrument_id,
+                    trade_leg_id=leg.id,
+                )
+            )
+            await self._trades.set_entry_order(leg.id, order.id)
+            entry_orders.append(
+                _EntryOrder(
+                    leg_id=leg.id,
+                    order_id=order.id,
+                    side=order_side,
+                    quantity=spec.quantity,
+                    instrument_id=spec.instrument_id,
+                )
+            )
+
+        await self._trades.set_state(trade.id, new_state=TradeState.OPENING, at=now)
+
+        for entry in entry_orders:
+            await self._bus.publish(
+                binding.channel,
+                {
+                    "action": "submit_order",
+                    "strategy_id": str(self._strategy_id),
+                    "order_id": str(entry.order_id),
+                    "trade_id": str(trade.id),
+                    "trade_leg_id": str(entry.leg_id),
+                    "order": {
+                        "order_type": order_type.value,
+                        "side": entry.side,
+                        "from_asset_symbol": str(entry.instrument_id),
+                        "to_asset_symbol": "USD",
+                        "quantity": entry.quantity,
+                        "price": price,
+                        "client_order_id": str(entry.order_id),
+                    },
+                },
+            )
+
+        await self._bus.publish(UI_CHANNEL, {"event": "trade_created", "trade_id": str(trade.id)})
+
+        return TradeDraft(
+            trade_id=trade.id,
+            state=TradeState.OPENING,
+            leg_summaries=[
+                {
+                    "trade_leg_id": str(entry.leg_id),
+                    "order_id": str(entry.order_id),
+                    "side": entry.side,
+                }
+                for entry in entry_orders
+            ],
+        )
+
+    async def close(
+        self,
+        *,
+        trade_id: uuid.UUID,
+        now: datetime,
+        price: float | None = None,
+        order_type: OrderType = OrderType.MARKET,
+        close_reason: str | None = None,
+    ) -> TradeDraft:
+        trade = await self._trades.get(trade_id)
+        if trade is None:
+            raise ValueError(f"Trade {trade_id} not found")
+        if trade.state != TradeState.OPEN:
+            raise ValueError(f"Trade {trade_id} is not OPEN (state={trade.state.value})")
+
+        binding = self._exchanges[0]
+        exit_orders: list[_EntryOrder] = []
+        for leg in trade.legs:
+            exit_side = "SELL" if leg.direction == Direction.LONG else "BUY"
+            order = await self._orders.create(
+                NewOrderSpec(
+                    timestamp=now,
+                    order_type=order_type,
+                    side=exit_side,
+                    quantity=leg.quantity,
+                    price=price or 0.0,
+                    exchange_id=binding.exchange_id,
+                    portfolio_id=self._portfolio_id,
+                    instrument_id=leg.instrument_id,
+                    trade_leg_id=leg.id,
+                )
+            )
+            await self._trades.set_exit_order(leg.id, order.id)
+            exit_orders.append(
+                _EntryOrder(
+                    leg_id=leg.id,
+                    order_id=order.id,
+                    side=exit_side,
+                    quantity=leg.quantity,
+                    instrument_id=leg.instrument_id,
+                )
+            )
+
+        await self._trades.set_state(
+            trade_id,
+            new_state=TradeState.CLOSING,
+            at=now,
+            close_reason=close_reason,
+        )
+
+        for exit_ in exit_orders:
+            await self._bus.publish(
+                binding.channel,
+                {
+                    "action": "submit_order",
+                    "strategy_id": str(self._strategy_id),
+                    "order_id": str(exit_.order_id),
+                    "trade_id": str(trade_id),
+                    "trade_leg_id": str(exit_.leg_id),
+                    "order": {
+                        "order_type": order_type.value,
+                        "side": exit_.side,
+                        "from_asset_symbol": str(exit_.instrument_id),
+                        "to_asset_symbol": "USD",
+                        "quantity": exit_.quantity,
+                        "price": price,
+                        "client_order_id": str(exit_.order_id),
+                    },
+                },
+            )
+
+        await self._bus.publish(UI_CHANNEL, {"event": "trade_closing", "trade_id": str(trade_id)})
+
+        return TradeDraft(
+            trade_id=trade_id,
+            state=TradeState.CLOSING,
+            leg_summaries=[
+                {
+                    "trade_leg_id": str(exit_.leg_id),
+                    "order_id": str(exit_.order_id),
+                    "side": exit_.side,
+                }
+                for exit_ in exit_orders
+            ],
+        )
+
+    async def get_open_trades(self) -> list[dict]:
+        trades = await self._trades.list_open_for_strategy(self._strategy_id)
+        return [
+            {
+                "trade_id": str(t.id),
+                "entry_at": t.entry_at.isoformat() if t.entry_at else None,
+                "is_paper": t.is_paper,
+                "legs": [
+                    {
+                        "instrument_id": str(leg.instrument_id),
+                        "direction": leg.direction.value,
+                        "quantity": leg.quantity,
+                        "entry_price": leg.entry_price,
+                    }
+                    for leg in t.legs
+                ],
+            }
+            for t in trades
+        ]
+
+    # ---- internal ----
+
+    def _build_leg_specs(
+        self,
+        *,
+        side: str,
+        target_id: uuid.UUID,
+        scope: str,
+        quantity: float,
+        price: float | None,
+        exchange_id: uuid.UUID,
+        composite: CompositeSpec | None,
+    ) -> list[NewLegSpec]:
+        if scope == "composite":
+            if composite is None:
+                raise ValueError("composite scope requires a CompositeSpec")
+            legs = []
+            for i, instrument_id in enumerate(composite.ordered_instrument_ids):
+                if i == 0:
+                    direction = Direction.LONG if side == "BUY" else Direction.SHORT
+                else:
+                    direction = Direction.SHORT if side == "BUY" else Direction.LONG
+                legs.append(
+                    NewLegSpec(
+                        instrument_id=instrument_id,
+                        direction=direction,
+                        quantity=quantity,
+                        expected_entry_price=price,
+                        exchange_id=exchange_id,
+                    )
+                )
+            return legs
+
+        direction = Direction.LONG if side == "BUY" else Direction.SHORT
+        return [
+            NewLegSpec(
+                instrument_id=target_id,
+                direction=direction,
+                quantity=quantity,
+                expected_entry_price=price,
+                exchange_id=exchange_id,
+            )
+        ]

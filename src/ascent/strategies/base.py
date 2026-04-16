@@ -41,7 +41,7 @@ import pandas as pd
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
-    from ascent.engine.trade_router import TradeRouter
+    from ascent.application.route_trade import TradeDraft, TradeRouter
     from ascent.feeds.base import Feed
 
 
@@ -157,23 +157,14 @@ class Strategy(ABC):
         scope: Literal["instrument", "composite"] = "instrument",
         price: float | None = None,
         order_type: str = "MARKET",
-    ) -> dict:
+    ) -> TradeDraft:
         """Open a new trade on an instrument or composite.
 
-        Args:
-            id: The UUID of the instrument or composite.
-            direction: ``LONG`` or ``SHORT``.
-            quantity: Number of units per leg.
-            scope: ``"instrument"`` for a single-leg trade, or
-                ``"composite"`` for a multi-leg trade (one leg per
-                member — first member follows *direction*, remaining
-                members take the opposite side).
-            price: Limit price. None for market orders.
-            order_type: ``MARKET`` or ``LIMIT``.
-
-        Returns:
-            Dict with ``trade_id``, ``status`` (OPEN/OPENING/ERROR),
-            and ``legs`` (list of per-leg details).
+        Returns a :class:`~ascent.application.route_trade.TradeDraft` dataclass
+        with ``trade_id`` (UUID), ``state`` (:class:`TradeState`), and
+        ``leg_summaries`` (list of per-leg dicts). Fills arrive asynchronously
+        via the fill handler; this return value reflects only what has been
+        submitted — not final status or realized PnL.
         """
         router = self._ensure_router()
         side = "BUY" if direction == "LONG" else "SELL"
@@ -192,17 +183,13 @@ class Strategy(ABC):
         *,
         price: float | None = None,
         close_reason: str = "MODEL_SIGNAL",
-    ) -> dict:
+    ) -> TradeDraft:
         """Close an open trade by submitting exit orders for all legs.
 
-        Args:
-            trade_id: The UUID of the trade to close.
-            price: Exit price (used for all legs). None for market.
-            close_reason: ``MODEL_SIGNAL``, ``STOP_LOSS``, ``TAKE_PROFIT``, etc.
-
-        Returns:
-            Dict with ``trade_id``, ``status`` (CLOSED/CLOSING/ERROR),
-            and ``total_pnl``.
+        Returns a :class:`~ascent.application.route_trade.TradeDraft` with
+        ``state == TradeState.CLOSING``. The final realized PnL is written to
+        the database when exit fills arrive; poll :meth:`get_open_trades` or
+        query the trade record if needed.
         """
         router = self._ensure_router()
         return router.close(

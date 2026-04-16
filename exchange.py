@@ -63,7 +63,7 @@ class KrakenSecurityExchange(BaseExchange):
         # Snap last fill to avoid floating-point drift
         fill_sizes[-1] = quantity - sum(fill_sizes[:-1])
 
-        return list(zip(fill_times, fill_sizes))
+        return list(zip(fill_times, fill_sizes, strict=False))
 
     def _evaluate_fills(self, order: dict[str, Any]) -> None:
         """Update an order's fill state based on elapsed time."""

@@ -110,19 +110,21 @@ TRADE_SORT_COLUMNS = {
 }
 
 
-def get_trade_list_item_by_id(
-    db: Session, trade_id: uuid.UUID
-) -> TradeListItem | None:
+def get_trade_list_item_by_id(db: Session, trade_id: uuid.UUID) -> TradeListItem | None:
     """Load a single trade as a TradeListItem (same shape as the list endpoint)."""
-    trade = db.execute(
-        select(Trade)
-        .options(
-            joinedload(Trade.strategy),
-            joinedload(Trade.current_status_type),
-            selectinload(Trade.legs).joinedload(TradeLeg.instrument),
+    trade = (
+        db.execute(
+            select(Trade)
+            .options(
+                joinedload(Trade.strategy),
+                joinedload(Trade.current_status_type),
+                selectinload(Trade.legs).joinedload(TradeLeg.instrument),
+            )
+            .where(Trade.id == trade_id)
         )
-        .where(Trade.id == trade_id)
-    ).unique().scalar_one_or_none()
+        .unique()
+        .scalar_one_or_none()
+    )
     if trade is None:
         return None
     return _build_trade_list_item(trade)

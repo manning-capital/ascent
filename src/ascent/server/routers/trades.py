@@ -8,7 +8,8 @@ from sqlalchemy.orm import Session
 from starlette.responses import StreamingResponse
 
 from ascent.engine.cache import EngineCache
-from ascent.server.dependencies import engine as db_engine, get_cache, get_db
+from ascent.server.dependencies import engine as db_engine
+from ascent.server.dependencies import get_cache, get_db
 from ascent.server.schemas.common import PaginatedResponse
 from ascent.server.schemas.trades import (
     TradeConditionCreate,
