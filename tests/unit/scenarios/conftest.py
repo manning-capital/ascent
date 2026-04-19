@@ -16,8 +16,10 @@ import pytest
 from ascent.application import FillProcessor, TradeRouter
 from ascent.application.route_trade import ExchangeBinding
 from tests.fakes import (
+    FakeUnitOfWorkFactory,
     InMemoryEventBus,
     InMemoryOrderRepository,
+    InMemoryOutboxPublisher,
     InMemoryTradeRepository,
 )
 
@@ -29,6 +31,8 @@ class Scenario:
     trade_repo: InMemoryTradeRepository
     order_repo: InMemoryOrderRepository
     bus: InMemoryEventBus
+    outbox: InMemoryOutboxPublisher
+    uow_factory: FakeUnitOfWorkFactory
     exchange_id: uuid.UUID
     strategy_id: uuid.UUID
 
@@ -37,11 +41,11 @@ class Scenario:
 def scenario() -> Scenario:
     trade_repo = InMemoryTradeRepository()
     order_repo = InMemoryOrderRepository()
-    # Wire the FK-equivalents so the fakes mirror the real SQL adapter's
-    # cross-table lookups.
     trade_repo.link_order_repo(order_repo)
     order_repo.link_trade_repo(trade_repo)
     bus = InMemoryEventBus()
+    outbox = InMemoryOutboxPublisher()
+    uow_factory = FakeUnitOfWorkFactory()
     exchange_id = uuid.uuid4()
     strategy_id = uuid.uuid4()
     router = TradeRouter(
@@ -50,16 +54,25 @@ def scenario() -> Scenario:
         trade_repo=trade_repo,
         order_repo=order_repo,
         event_bus=bus,
+        outbox=outbox,
+        uow_factory=uow_factory,
         exchanges=[ExchangeBinding(exchange_id=exchange_id, channel=f"ex.{exchange_id}")],
         is_paper=True,
     )
-    processor = FillProcessor(trade_repo=trade_repo, order_repo=order_repo, event_bus=bus)
+    processor = FillProcessor(
+        trade_repo=trade_repo,
+        order_repo=order_repo,
+        event_bus=bus,
+        uow_factory=uow_factory,
+    )
     return Scenario(
         router=router,
         processor=processor,
         trade_repo=trade_repo,
         order_repo=order_repo,
         bus=bus,
+        outbox=outbox,
+        uow_factory=uow_factory,
         exchange_id=exchange_id,
         strategy_id=strategy_id,
     )

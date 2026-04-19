@@ -1,7 +1,7 @@
 """StrategyEvaluator — subscribes to feed channels and evaluates a strategy.
 
 Replaces ``ascent.engine.consumer.run_strategy``. Consumes the event bus,
-rebuilds the context DataFrame via :mod:`ascent.application.context_builder`,
+rebuilds the :class:`Context` via :mod:`ascent.application.context_builder`,
 and invokes ``strategy.evaluate(ctx)``.
 
 The actual strategy class call is delegated back to the caller — the
@@ -19,9 +19,17 @@ from datetime import datetime
 
 import pandas as pd
 
-from ascent.application.context_builder import FeedFrame, Scope, build_context
+from ascent.application.context_builder import Context, FeedFrame, Scope, build_context
 from ascent.application.trigger import StrategyFeedSpec, should_evaluate
-from ascent.ports import Clock, EventBus, LatestFeedStore, RunTrackerPort, TradeRepository
+from ascent.ports import (
+    Clock,
+    EventBus,
+    LatestFeedStore,
+    RunTrackerPort,
+    StrategyUniverseRepository,
+    TradeRepository,
+    UnitOfWorkFactory,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -34,8 +42,8 @@ class FeedBinding:
     is_composite_scoped: bool
 
 
-Evaluator = Callable[[pd.DataFrame, uuid.UUID], Awaitable[None]]
-"""User callback: given a context DataFrame and a strategy_run_id, evaluate the strategy."""
+Evaluator = Callable[[Context, uuid.UUID], Awaitable[None]]
+"""User callback: given a :class:`Context` and a strategy_run_id, evaluate the strategy."""
 
 
 class StrategyEvaluator:
@@ -47,28 +55,26 @@ class StrategyEvaluator:
         scope: Scope,
         composite_members: dict[uuid.UUID, list[uuid.UUID]] | None,
         trade_repo: TradeRepository,
+        universe_repo: StrategyUniverseRepository,
         feed_store: LatestFeedStore,
         event_bus: EventBus,
         run_tracker: RunTrackerPort,
         clock: Clock,
         evaluator: Evaluator,
-        attribute_map: dict[uuid.UUID, str] | None = None,
+        uow_factory: UnitOfWorkFactory,
     ) -> None:
         self._strategy_id = strategy_id
         self._feeds = feeds
         self._scope: Scope = scope
         self._composite_members = composite_members or {}
         self._trades = trade_repo
+        self._universe_repo = universe_repo
         self._store = feed_store
         self._bus = event_bus
         self._tracker = run_tracker
         self._clock = clock
         self._evaluate = evaluator
-        # Look up attribute UUIDs (which arrive as strings through Redis JSON)
-        # to the attribute names the strategy's context DataFrame uses.
-        self._attribute_name_by_str: dict[str, str] = (
-            {str(k): v for k, v in attribute_map.items()} if attribute_map else {}
-        )
+        self._uow_factory = uow_factory
 
     async def run_forever(self) -> None:
         feed_channels = [b.channel for b in self._feeds]
@@ -119,7 +125,7 @@ class StrategyEvaluator:
             ctx = await self._build_context()
             await self._evaluate(ctx, run_id)
 
-    async def _build_context(self) -> pd.DataFrame:
+    async def _build_context(self) -> Context:
         latest = await self._store.get_latest_many([b.spec.feed_id for b in self._feeds])
         frames: list[FeedFrame] = []
         for binding in self._feeds:
@@ -131,29 +137,56 @@ class StrategyEvaluator:
                     feed_id=binding.spec.feed_id,
                     feed_name=binding.feed_ref.lower(),
                     is_composite_scoped=binding.is_composite_scoped,
-                    data=self._resolve_attribute_names(df),
+                    data=df,
                 )
             )
-        trades = await self._trades.list_non_terminal_for_strategy(self._strategy_id)
+        async with self._uow_factory() as uow:
+            trades = await self._trades.list_non_terminal_for_strategy(
+                uow.session, self._strategy_id
+            )
+            universe_ids = await self._universe_repo.get_active_universe(
+                uow.session, self._strategy_id, self._scope
+            )
+
+        open_position_ids = self._derive_open_position_ids(trades)
+
         return build_context(
             scope=self._scope,
             feed_frames=frames,
             trades=trades,
             composite_members=self._composite_members,
+            universe_ids=universe_ids,
+            open_position_ids=open_position_ids,
         )
 
-    def _resolve_attribute_names(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Add an ``attribute_name`` column derived from ``attribute_id``.
+    def _derive_open_position_ids(self, trades) -> set[uuid.UUID]:
+        """Map non-terminal trades to scope-appropriate IDs.
 
-        Redis → JSON round-trips convert UUIDs to strings, so we match on
-        strings and fall back to the raw id for unknown attributes.
+        For instrument scope: the union of leg.instrument_id across all
+        non-terminal trades. For composite scope: the composite IDs whose
+        member-set matches a trade's leg-instrument set (mirrors the
+        reverse-lookup that ``_build_trade_columns`` does).
         """
-        if "attribute_id" not in df.columns:
-            return df
-        out = df.copy()
-        ids_as_str = out["attribute_id"].astype(str)
-        out["attribute_name"] = ids_as_str.map(self._attribute_name_by_str).fillna(ids_as_str)
-        return out
+        if self._scope == "instrument":
+            return {
+                leg.instrument_id
+                for trade in trades
+                if not trade.state.is_terminal
+                for leg in trade.legs
+            }
 
+        comp_reverse: dict[frozenset[uuid.UUID], uuid.UUID] = {
+            frozenset(members): comp_id for comp_id, members in self._composite_members.items()
+        }
+        result: set[uuid.UUID] = set()
+        for trade in trades:
+            if trade.state.is_terminal:
+                continue
+            leg_ids = frozenset(leg.instrument_id for leg in trade.legs)
+            comp_id = comp_reverse.get(leg_ids)
+            if comp_id is not None:
+                result.add(comp_id)
+        return result
 
 _ = datetime  # silence unused-import from re-exports
+_ = pd  # keep the pandas import for backwards-compat type hints

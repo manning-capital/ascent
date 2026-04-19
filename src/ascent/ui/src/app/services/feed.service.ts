@@ -4,7 +4,7 @@ import { switchMap, tap, catchError } from 'rxjs/operators';
 import { ApiService } from './api.service';
 import { FeedListItem, FeedDetail, FeedRunListItem, FeedPartitionItem, PartitionDataResponse, StrategyFeedDAG, StrategyRunListItem } from '../models/feed.model';
 import { PaginatedResponse } from '../models/trade.model';
-import { UniverseItem, UniverseItemCreate } from '../models/asset.model';
+import { ImpactReport, UniverseItem, UniverseItemCreate } from '../models/asset.model';
 import { RunFilter } from '../components/shared/run-viewer.component';
 
 @Injectable({ providedIn: 'root' })
@@ -119,6 +119,14 @@ export class FeedService {
     return this.api.delete(`/feeds/${feedId}/universe/${instrumentId}`);
   }
 
+  getFeedUniverseImpact(feedId: string, instrumentId: string): Observable<ImpactReport> {
+    return this.api.get<ImpactReport>(`/feeds/${feedId}/universe/${instrumentId}/impact`);
+  }
+
+  setFeedUniverseItemActive(feedId: string, instrumentId: string, isActive: boolean): Observable<UniverseItem> {
+    return this.api.patch<UniverseItem>(`/feeds/${feedId}/universe/${instrumentId}`, { is_active: isActive });
+  }
+
   // Composite universe
   loadFeedCompositeUniverse(feedId: string): Observable<any[]> {
     return this.api.get<any[]>(`/feeds/${feedId}/composite-universe`);
@@ -130,5 +138,13 @@ export class FeedService {
 
   removeFeedCompositeUniverseItem(feedId: string, compositeId: string): Observable<any> {
     return this.api.delete(`/feeds/${feedId}/composite-universe/${compositeId}`);
+  }
+
+  getFeedCompositeUniverseImpact(feedId: string, compositeId: string): Observable<ImpactReport> {
+    return this.api.get<ImpactReport>(`/feeds/${feedId}/composite-universe/${compositeId}/impact`);
+  }
+
+  setFeedCompositeUniverseItemActive(feedId: string, compositeId: string, isActive: boolean): Observable<any> {
+    return this.api.patch(`/feeds/${feedId}/composite-universe/${compositeId}`, { is_active: isActive });
   }
 }

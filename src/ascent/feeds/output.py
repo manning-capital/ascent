@@ -1,17 +1,24 @@
 """Pandera DataFrameModel schemas for standardized feed outputs.
 
-Each schema maps directly to an existing EAV attribute table in the database.
-Feeds return ``DataFrame[Schema]`` — Pandera validates columns and types at
-runtime. The ``Config.name`` attribute links the schema to the DB table for
-auto-persist and auto-cold-start.
+Feeds emit **wide** frames: one row per entity (instrument or composite) and
+one column per attribute. Column names must match ``Attribute.name`` rows in
+the database — the persister does the ``name -> attribute_id`` lookup at
+write time and raises on unknown names.
 
-Table mapping:
+Feeds do **not** emit a ``timestamp`` column. The engine stamps every row
+with the current partition's timestamp when it unpivots the wide frame into
+the EAV hypertable. Strategies consume the latest snapshot from Redis — no
+time column exists there either.
+
+Table mapping (via ``Config.name``):
 
 ==============================  =====================================
 Schema                          DB Table
 ==============================  =====================================
 InstrumentAttributes            instrument_attribute
 InstrumentPeriodAttributes      instrument_period_attribute
+CompositeAttributes             composite_attribute
+CompositePeriodAttributes       composite_period_attribute
 ==============================  =====================================
 """
 
@@ -20,10 +27,15 @@ from pandera.typing.pandas import Series
 
 
 class FeedOutput(pa.DataFrameModel):
-    """Base schema for all feed outputs. Subclasses set ``Config.name``."""
+    """Base schema for all feed outputs.
+
+    Subclasses set ``Config.name`` to the target EAV table. They are
+    deliberately non-strict: the attribute columns vary per-feed and are
+    resolved by name at persist time.
+    """
 
     class Config:
-        strict = True
+        strict = False
 
 
 # ---------------------------------------------------------------------------
@@ -32,29 +44,31 @@ class FeedOutput(pa.DataFrameModel):
 
 
 class InstrumentAttributes(FeedOutput):
-    """Maps to ``InstrumentAttribute`` table."""
+    """Wide schema for instrument-scoped feeds.
 
-    timestamp: Series[pa.DateTime] = pa.Field()
-    instrument_id: Series[int] = pa.Field(ge=1)
-    attribute_id: Series[int] = pa.Field(ge=1)
-    attribute_value: Series[float] = pa.Field()
+    Required column: ``instrument_id`` (UUID string). Every other column is
+    an attribute whose name matches an ``Attribute.name`` row in the DB and
+    whose values are floats.
+    """
+
+    instrument_id: Series[str] = pa.Field()
 
     class Config:
-        strict = True
+        strict = False
         name = "instrument_attribute"
 
 
 class InstrumentPeriodAttributes(FeedOutput):
-    """Maps to ``InstrumentPeriodAttribute`` table."""
+    """Wide schema for instrument-period-scoped feeds.
 
-    timestamp: Series[pa.DateTime] = pa.Field()
-    instrument_id: Series[int] = pa.Field(ge=1)
-    period_id: Series[int] = pa.Field(ge=1)
-    attribute_id: Series[int] = pa.Field(ge=1)
-    attribute_value: Series[float] = pa.Field()
+    Required columns: ``instrument_id`` and ``period_id`` (both UUID strings).
+    """
+
+    instrument_id: Series[str] = pa.Field()
+    period_id: Series[str] = pa.Field()
 
     class Config:
-        strict = True
+        strict = False
         name = "instrument_period_attribute"
 
 
@@ -64,27 +78,26 @@ class InstrumentPeriodAttributes(FeedOutput):
 
 
 class CompositeAttributes(FeedOutput):
-    """Maps to ``CompositeAttribute`` table."""
+    """Wide schema for composite-scoped feeds.
 
-    timestamp: Series[pa.DateTime] = pa.Field()
-    composite_id: Series[int] = pa.Field(ge=1)
-    attribute_id: Series[int] = pa.Field(ge=1)
-    attribute_value: Series[float] = pa.Field()
+    Required column: ``composite_id`` (UUID string). Every other column is
+    an attribute whose name matches an ``Attribute.name`` row in the DB and
+    whose values are floats.
+    """
+
+    composite_id: Series[str] = pa.Field()
 
     class Config:
-        strict = True
+        strict = False
         name = "composite_attribute"
 
 
 class CompositePeriodAttributes(FeedOutput):
-    """Maps to ``CompositePeriodAttribute`` table."""
+    """Wide schema for composite-period-scoped feeds."""
 
-    timestamp: Series[pa.DateTime] = pa.Field()
-    composite_id: Series[int] = pa.Field(ge=1)
-    period_id: Series[int] = pa.Field(ge=1)
-    attribute_id: Series[int] = pa.Field(ge=1)
-    attribute_value: Series[float] = pa.Field()
+    composite_id: Series[str] = pa.Field()
+    period_id: Series[str] = pa.Field()
 
     class Config:
-        strict = True
+        strict = False
         name = "composite_period_attribute"

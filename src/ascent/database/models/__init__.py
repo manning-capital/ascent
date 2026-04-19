@@ -27,12 +27,11 @@ from ascent.database.models.composites import (
 # Import descriptors (attributes, periods, metadata)
 from ascent.database.models.descriptors import Attribute, Metadata, Period
 
+# Import event outbox
+from ascent.database.models.event_outbox import EventOutbox
+
 # Import exchanges
-from ascent.database.models.exchanges import (
-    Exchange,
-    ExchangeCompositeScope,
-    ExchangeInstrumentScope,
-)
+from ascent.database.models.exchanges import Exchange
 
 # Import feeds
 from ascent.database.models.feeds import (
@@ -150,10 +149,10 @@ __all__ = [
     "AssetTypeProviderAssetMetadata",
     # Assets
     "Asset",
+    # Event Outbox
+    "EventOutbox",
     # Exchanges
     "Exchange",
-    "ExchangeInstrumentScope",
-    "ExchangeCompositeScope",
     # Providers
     "Provider",
     # Portfolio

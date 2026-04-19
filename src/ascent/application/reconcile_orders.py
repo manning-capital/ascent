@@ -14,7 +14,12 @@ from datetime import datetime
 from ascent.application.process_fill import FillProcessor
 from ascent.domain import FillEvent, OrderState
 from ascent.exchanges.base import OrderStatusResponse
-from ascent.ports import ExchangePort, OrderRepository, TradeRepository
+from ascent.ports import (
+    ExchangePort,
+    OrderRepository,
+    TradeRepository,
+    UnitOfWorkFactory,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,13 +30,13 @@ class OrderReconciler:
         *,
         order_repo: OrderRepository,
         fill_processor: FillProcessor,
+        uow_factory: UnitOfWorkFactory,
         trade_repo: TradeRepository | None = None,
     ) -> None:
         self._orders = order_repo
         self._fills = fill_processor
-        # Optional: used to self-heal legacy trades whose leg.entry_order_id
-        # was never stamped. If provided, the reconciler backfills the
-        # linkage before dispatching the synthetic fill event.
+        self._uow_factory = uow_factory
+        # Optional: self-heal legacy trades with missing entry_order_id linkage.
         self._trades = trade_repo
 
     async def reconcile(
@@ -41,7 +46,10 @@ class OrderReconciler:
         exchange_id: uuid.UUID,
         now: datetime,
     ) -> int:
-        stale = await self._orders.list_for_exchange(exchange_id, only_non_terminal_trades=True)
+        async with self._uow_factory() as uow:
+            stale = await self._orders.list_for_exchange(
+                uow.session, exchange_id, only_non_terminal_trades=True
+            )
         if not stale:
             logger.info("Reconciliation: no stale orders on exchange %s", exchange_id)
             return 0
@@ -71,16 +79,17 @@ class OrderReconciler:
         original submit path left them NULL. Safe to run repeatedly — only
         writes when the slot is empty.
         """
-        trade = await self._trades.get(trade_id)
-        if trade is None:
-            return
-        leg = next((l for l in trade.legs if l.id == leg_id), None)
-        if leg is None:
-            return
-        if leg.entry_order is None:
-            await self._trades.set_entry_order(leg_id, order.id)
-        elif leg.exit_order is None and leg.entry_order.id != order.id:
-            await self._trades.set_exit_order(leg_id, order.id)
+        async with self._uow_factory() as uow:
+            trade = await self._trades.get(uow.session, trade_id)
+            if trade is None:
+                return
+            leg = next((l for l in trade.legs if l.id == leg_id), None)
+            if leg is None:
+                return
+            if leg.entry_order is None:
+                await self._trades.set_entry_order(uow.session, leg_id, order.id)
+            elif leg.exit_order is None and leg.entry_order.id != order.id:
+                await self._trades.set_exit_order(uow.session, leg_id, order.id)
 
     async def _lookup(self, exchange: ExchangePort, order) -> OrderStatusResponse | None:
         if order.external_order_id:
@@ -107,3 +116,6 @@ def _to_fill_event(order_id: uuid.UUID, status: OrderStatusResponse | None) -> F
         external_order_id=status.exchange_order_id,
         error_message=status.error_message,
     )
+
+
+_ = datetime  # re-export anchor

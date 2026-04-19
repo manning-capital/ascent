@@ -18,6 +18,11 @@ import { AG_GRID_THEME, agThemeMode } from '../shared/data-table/ag-grid-theme';
 import { badgeStyles } from '../shared/data-table/cell-renderers';
 import { ServerTableComponent } from '../shared/data-table/server-table.component';
 
+const QTY_FORMATTER = new Intl.NumberFormat('en-US', {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 4,
+});
+
 function tagSeverity(label: string): string {
   switch (label.toUpperCase()) {
     case 'LONG': case 'ENTRY': case 'COMPLETED': case 'BUY': return 'success';
@@ -137,6 +142,9 @@ export class TradeTableComponent implements OnInit, OnDestroy {
   private gridApi: GridApi | null = null;
   private streamSub: Subscription | null = null;
   private datePipe = new DatePipe('en-US');
+  private isScrolling = false;
+  private scrollResetTimer: ReturnType<typeof setTimeout> | null = null;
+  private scrollListenerApi: GridApi | null = null;
 
   // Server-side outputs (delegated to ServerTableComponent)
   sortChange = output<{ field: string; order: string }>();
@@ -159,6 +167,7 @@ export class TradeTableComponent implements OnInit, OnDestroy {
     this.streamSub = this.streamService.tradeUpdates$.subscribe(batch => {
       const api = this.serverTable?.gridApi ?? this.gridApi;
       if (!api) return;
+      this.ensureScrollListener(api);
 
       const adds: TradeListItem[] = [];
       const updates: TradeListItem[] = [];
@@ -197,11 +206,24 @@ export class TradeTableComponent implements OnInit, OnDestroy {
   }
 
   private flashRows(api: GridApi, rowNodes: any[]): void {
-    if (!rowNodes?.length) return;
+    if (!rowNodes?.length || this.isScrolling) return;
     api.flashCells({
       rowNodes,
       flashDuration: 300,
       fadeDuration: 700,
+    });
+  }
+
+  private ensureScrollListener(api: GridApi): void {
+    if (this.scrollListenerApi === api) return;
+    this.scrollListenerApi = api;
+    api.addEventListener('bodyScroll', () => {
+      this.isScrolling = true;
+      if (this.scrollResetTimer) clearTimeout(this.scrollResetTimer);
+      this.scrollResetTimer = setTimeout(() => {
+        this.isScrolling = false;
+        this.scrollResetTimer = null;
+      }, 150);
     });
   }
 
@@ -221,6 +243,7 @@ export class TradeTableComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.streamSub?.unsubscribe();
+    if (this.scrollResetTimer) clearTimeout(this.scrollResetTimer);
     this.streamService.disconnect();
   }
 
@@ -248,7 +271,7 @@ export class TradeTableComponent implements OnInit, OnDestroy {
     }
     cols.push(
       { headerName: 'Type', field: 'tags', cellRenderer: TagsCellRenderer, sortable: false, minWidth: 120 },
-      { headerName: 'Qty', field: 'qty', sortable: false, valueGetter: (p) => { const leg = p.data?.legs?.[0]; return leg?.quantity ?? null; }, valueFormatter: (p) => p.value != null ? new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 4 }).format(p.value) : '', cellClass: 'text-sm' },
+      { headerName: 'Qty', field: 'qty', sortable: false, valueGetter: (p) => { const leg = p.data?.legs?.[0]; return leg?.quantity ?? null; }, valueFormatter: (p) => p.value != null ? QTY_FORMATTER.format(p.value) : '', cellClass: 'text-sm' },
       { headerName: 'Entry Price', field: 'entry', sortable: false, valueGetter: (p) => p.data?.legs?.[0]?.entry_price ?? null, valueFormatter: (p) => this.tradeService.formatCurrency(p.value), cellClass: 'text-sm' },
       { headerName: 'Exit/Current', field: 'exit', sortable: false, valueGetter: (p) => { const leg = p.data?.legs?.[0]; return leg?.exit_price ?? leg?.entry_price ?? null; }, valueFormatter: (p) => this.tradeService.formatCurrency(p.value), cellClass: 'text-sm' },
       { headerName: 'P&L', field: 'total_realized_pnl', cellRenderer: TradePnlCellRenderer, cellRendererParams: { tradeService: this.tradeService } },

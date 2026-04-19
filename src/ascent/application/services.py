@@ -20,10 +20,11 @@ from ascent.application.persist_feed import FeedPersister
 from ascent.application.process_fill import FillProcessor
 from ascent.application.reconcile_orders import OrderReconciler
 from ascent.domain import FillEvent, OrderState, PartitionWindow
-from ascent.exchanges.base import OrderRequest
 from ascent.feeds.schedule import Schedule
 from ascent.ports import (
     Clock,
+    DurableConsumer,
+    DurablePublisher,
     EventBus,
     ExchangePort,
     LatestFeedStore,
@@ -76,6 +77,8 @@ class ScheduledFeedService:
                 fetcher=fetcher,
                 feed_run_id=run_id,
             )
+            if outcome.partition_id is not None:
+                await self.run_tracker.link_feed_run_partition(run_id, outcome.partition_id)
             logger.info(
                 "ScheduledFeed %s produced %d rows (run_id=%s)",
                 self.feed.feed_ref,
@@ -153,13 +156,15 @@ class TriggeredFeedService:
             }
             tick = partition_key or datetime.now(tz=UTC)
             fetcher = self.fetcher_factory(None, context)
-            await self.executor.execute(
+            outcome = await self.executor.execute(
                 feed=executor_feed,
                 tick=tick,
                 fetcher=fetcher,
                 feed_run_id=run_id,
                 extra_context=context,
             )
+            if outcome.partition_id is not None:
+                await self.run_tracker.link_feed_run_partition(run_id, outcome.partition_id)
 
 
 # ---------------------------------------------------------------------------
@@ -169,10 +174,26 @@ class TriggeredFeedService:
 
 @dataclass
 class ExchangeService:
+    """Monitors exchange-side fills and publishes them durably on JetStream.
+
+    The dispatch (submit/cancel) path was moved to :class:`DispatcherService`
+    as part of phase 6 — that consumer reads from JetStream and owns the
+    ``open_orders`` map. This service now only runs the reconciler at
+    startup and then streams/polls the exchange for fill updates.
+
+    Responses publish to ``responses_subject`` via the :class:`DurablePublisher`.
+    FillHandlerService consumes from the same subject through a JetStream
+    durable consumer (phase 7).
+
+    ``open_orders`` here is a secondary copy used by the poll/stream loops
+    so we know which exchange_order_ids to track. It's populated by the
+    DispatcherService on submit and read here on poll/stream.
+    """
+
     exchange_id: uuid.UUID
     exchange: ExchangePort
-    channel: str
-    event_bus: EventBus
+    responses_subject: str
+    responses_publisher: DurablePublisher
     reconciler: OrderReconciler
     clock: Clock
     open_orders: dict[str, dict] = field(default_factory=dict)
@@ -184,11 +205,13 @@ class ExchangeService:
             now=self.clock.now(),
         )
 
-        tasks = [asyncio.create_task(self._dispatch_loop())]
+        tasks: list[asyncio.Task] = []
         if self.exchange.supports_streaming:
             tasks.append(asyncio.create_task(self._stream_loop()))
         elif self.exchange.supports_polling:
             tasks.append(asyncio.create_task(self._poll_loop()))
+        if not tasks:
+            return  # nothing to monitor for this exchange
 
         try:
             await asyncio.gather(*tasks)
@@ -196,42 +219,6 @@ class ExchangeService:
             for t in tasks:
                 t.cancel()
             raise
-
-    async def _dispatch_loop(self) -> None:
-        sub = self.event_bus.subscribe([self.channel])
-        try:
-            async for event in sub:
-                await self._dispatch(event.payload)
-        except asyncio.CancelledError:
-            raise
-        finally:
-            aclose = getattr(sub, "aclose", None)
-            if aclose:
-                await aclose()
-
-    async def _dispatch(self, payload: dict) -> None:
-        action = payload.get("action")
-        try:
-            if action == "submit_order":
-                request = OrderRequest(**payload["order"])
-                response = await self.exchange.submit_order(request)
-                self.open_orders[response.exchange_order_id] = {
-                    "order_id": payload.get("order_id"),
-                    "trade_id": payload.get("trade_id"),
-                    "trade_leg_id": payload.get("trade_leg_id"),
-                    "last_status": None,
-                    "last_filled": 0.0,
-                }
-                await self._publish_response("order_response", payload, response.model_dump())
-            elif action == "cancel_order":
-                eid = payload["exchange_order_id"]
-                response = await self.exchange.cancel_order(eid)
-                meta = self.open_orders.pop(eid, {})
-                await self._publish_response("order_update", meta, response.model_dump())
-            else:
-                logger.warning("Unknown action '%s' on exchange %s", action, self.exchange_id)
-        except Exception:
-            logger.exception("Exchange dispatch error on %s", action)
 
     async def _poll_loop(self) -> None:
         while True:
@@ -276,8 +263,12 @@ class ExchangeService:
                 self.open_orders.pop(event.exchange_order_id, None)
 
     async def _publish_response(self, action: str, meta: dict, response: dict) -> None:
-        await self.event_bus.publish(
-            f"{self.channel}.responses",
+        ex_order_id = response.get("exchange_order_id") or "unknown"
+        status = response.get("status") or "unknown"
+        filled = response.get("filled_quantity") or 0
+        msg_id = f"{self.exchange_id}:{ex_order_id}:{status}:{filled}:{action}"
+        await self.responses_publisher.publish(
+            self.responses_subject,
             {
                 "action": action,
                 "exchange_id": str(self.exchange_id),
@@ -286,6 +277,7 @@ class ExchangeService:
                 "trade_leg_id": meta.get("trade_leg_id"),
                 "response": response,
             },
+            msg_id=msg_id,
         )
 
 
@@ -296,52 +288,69 @@ class ExchangeService:
 
 @dataclass
 class FillHandlerService:
-    response_channels: list[str]
-    event_bus: EventBus
+    """Consumes order-update responses from JetStream and feeds them to the
+    :class:`FillProcessor`.
+
+    Ack strategy:
+    - successful process → ``ack()``
+    - unparseable payload (bad trade_id / unknown status) → ``ack()`` after
+      logging. Retrying won't fix garbage.
+    - FillProcessor raises unexpectedly → ``nak()`` so the broker
+      redelivers after ack-wait. Transient DB errors benefit from retry.
+    """
+
+    consumer: DurableConsumer
     processor: FillProcessor
     clock: Clock
 
     async def run_forever(self) -> None:
-        logger.info("FillHandler subscribing to %d channel(s)", len(self.response_channels))
-        sub = self.event_bus.subscribe(self.response_channels)
+        logger.info("FillHandler starting")
         try:
-            async for event in sub:
-                payload = event.payload
-                if payload.get("action") != "order_update":
-                    continue
-                trade_id = payload.get("trade_id")
-                order_id = payload.get("order_id")
-                response = payload.get("response", {})
-                status = response.get("status")
-                if not (trade_id and order_id and status):
-                    continue
-                try:
-                    state = OrderState(status)
-                except ValueError:
-                    logger.warning("Fill handler: unknown status '%s'", status)
-                    continue
-                fill = FillEvent(
-                    order_id=uuid.UUID(order_id),
-                    state=state,
-                    filled_quantity=response.get("filled_quantity") or 0.0,
-                    average_fill_price=response.get("average_fill_price"),
-                    external_order_id=response.get("exchange_order_id"),
-                    error_message=response.get("error_message"),
-                )
-                try:
-                    await self.processor.process(
-                        trade_id=uuid.UUID(trade_id),
-                        event=fill,
-                        now=self.clock.now(),
-                    )
-                except Exception:
-                    logger.exception("FillProcessor error")
+            async for msg in self.consumer:
+                await self._handle(msg)
         except asyncio.CancelledError:
+            logger.info("FillHandler cancelled")
             raise
         finally:
-            aclose = getattr(sub, "aclose", None)
-            if aclose:
-                await aclose()
+            await self.consumer.aclose()
+
+    async def _handle(self, msg) -> None:
+        payload = msg.payload
+        if payload.get("action") != "order_update":
+            await msg.ack()
+            return
+        trade_id = payload.get("trade_id")
+        order_id = payload.get("order_id")
+        response = payload.get("response", {})
+        status = response.get("status")
+        if not (trade_id and order_id and status):
+            await msg.ack()
+            return
+        try:
+            state = OrderState(status)
+        except ValueError:
+            logger.warning("Fill handler: unknown status '%s'", status)
+            await msg.ack()
+            return
+        fill = FillEvent(
+            order_id=uuid.UUID(order_id),
+            state=state,
+            filled_quantity=response.get("filled_quantity") or 0.0,
+            average_fill_price=response.get("average_fill_price"),
+            external_order_id=response.get("exchange_order_id"),
+            error_message=response.get("error_message"),
+        )
+        try:
+            await self.processor.process(
+                trade_id=uuid.UUID(trade_id),
+                event=fill,
+                now=self.clock.now(),
+            )
+        except Exception:
+            logger.exception("FillProcessor error — naking for redelivery")
+            await msg.nak()
+            return
+        await msg.ack()
 
 
 # ---------------------------------------------------------------------------
@@ -364,8 +373,19 @@ class PersistenceService:
                 output_table = self.feed_id_to_output.get(feed_id) or event.payload.get("schema")
                 if output_table is None:
                     continue
+                ts = self._event_timestamp(event.payload)
+                if ts is None:
+                    logger.warning(
+                        "PersistService: skipping feed %s, event has no partition_key/timestamp",
+                        feed_id,
+                    )
+                    continue
                 try:
-                    await self.persister.persist(feed_id=feed_id, output_table=output_table)
+                    await self.persister.persist(
+                        feed_id=feed_id,
+                        output_table=output_table,
+                        timestamp=ts,
+                    )
                 except Exception:
                     logger.exception("PersistService error for feed %s", feed_id)
         except asyncio.CancelledError:
@@ -374,6 +394,13 @@ class PersistenceService:
             aclose = getattr(sub, "aclose", None)
             if aclose:
                 await aclose()
+
+    @staticmethod
+    def _event_timestamp(payload: dict) -> datetime | None:
+        raw = payload.get("partition_key") or payload.get("timestamp")
+        if not raw:
+            return None
+        return datetime.fromisoformat(raw)
 
 
 # keep a reference so pd import isn't dropped — used only in type hints above

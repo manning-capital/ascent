@@ -1,27 +1,43 @@
-import { Component, computed, inject, OnInit } from '@angular/core';
+import { Component, computed, inject, OnDestroy, OnInit, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { map } from 'rxjs/operators';
+import { FormsModule } from '@angular/forms';
+import { Subscription } from 'rxjs';
+import { auditTime, map } from 'rxjs/operators';
 import { DashboardService } from '../../services/dashboard.service';
 import { StrategyService } from '../../services/strategy.service';
 import { TradeService } from '../../services/trade.service';
+import { TradeStreamService } from '../../services/trade-stream.service';
 import { ApiService } from '../../services/api.service';
 import { PaginatedResponse, TradeListItem } from '../../models/trade.model';
 import type { ServerFetchFn } from '../shared/data-table/data-table.model';
 import { StatCardComponent } from '../shared/stat-card.component';
 import { TradeTableComponent } from '../trade-table/trade-table.component';
-import { CumulativePnlChartComponent } from '../strategies/strategy-detail/charts/cumulative-pnl-chart.component';
+import { CumulativePnlChartComponent, Lookback, LOOKBACK_OPTIONS } from '../strategies/strategy-detail/charts/cumulative-pnl-chart.component';
 import { WinLossChartComponent } from '../strategies/strategy-detail/charts/win-loss-chart.component';
 import { Card } from 'primeng/card';
 import { Skeleton } from 'primeng/skeleton';
+import { SelectButton } from 'primeng/selectbutton';
 import { EmptyStateComponent } from '../shared/empty-state.component';
+
+const CURRENCY_FORMATTER = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  signDisplay: 'always',
+});
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [RouterLink, StatCardComponent, TradeTableComponent, CumulativePnlChartComponent, WinLossChartComponent, Card, Skeleton, EmptyStateComponent],
+  imports: [RouterLink, FormsModule, StatCardComponent, TradeTableComponent, CumulativePnlChartComponent, WinLossChartComponent, Card, Skeleton, SelectButton, EmptyStateComponent],
   templateUrl: './dashboard.component.html',
 })
-export class DashboardComponent implements OnInit {
+export class DashboardComponent implements OnInit, OnDestroy {
+  pnlLookback = signal<Lookback>('all');
+  lookbackOptions = LOOKBACK_OPTIONS;
+  private streamSvc = inject(TradeStreamService);
+  private streamSub: Subscription | null = null;
+  private static readonly REFRESH_AUDIT_MS = 3000;
+
   private api = inject(ApiService);
   dashboardService = inject(DashboardService);
   strategyService = inject(StrategyService);
@@ -39,10 +55,19 @@ export class DashboardComponent implements OnInit {
   ngOnInit(): void {
     this.dashboardService.loadStats();
     this.strategyService.loadStrategies();
+
+    this.streamSvc.connect();
+    this.streamSub = this.streamSvc.tradeUpdates$
+      .pipe(auditTime(DashboardComponent.REFRESH_AUDIT_MS))
+      .subscribe(() => this.dashboardService.refreshStats());
+  }
+
+  ngOnDestroy(): void {
+    this.streamSub?.unsubscribe();
   }
 
   formatCurrency(value: number): string {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', signDisplay: 'always' }).format(value);
+    return CURRENCY_FORMATTER.format(value);
   }
 
   pnlClass(value: number): string {

@@ -1,10 +1,18 @@
-"""Dict-backed in-memory repositories for domain types."""
+"""Dict-backed in-memory repositories for domain types.
+
+Every method accepts a ``session`` parameter (for interface parity with the
+SQL adapter) and ignores it. The fakes have no transaction — they commit
+immediately to their dict store. Tests that want rollback semantics use
+:class:`SqlAlchemyUnitOfWork` against a real DB; these fakes verify only
+the shape of the interactions.
+"""
 
 from __future__ import annotations
 
 import uuid
 from dataclasses import replace
 from datetime import datetime
+from typing import Any
 
 from ascent.domain import (
     Order,
@@ -19,9 +27,41 @@ from ascent.ports import (
     OrderRepository,
     PartitionRepository,
     StrategyRunRepository,
+    StrategyUniverseRepository,
     TradeRepository,
 )
+from ascent.ports.strategy_universe import Scope
 from ascent.ports.trade_repo import NewLegSpec, NewOrderSpec
+
+
+class InMemoryStrategyUniverseRepository(StrategyUniverseRepository):
+    """Returns the configured active universe for each (strategy_id, scope) tuple.
+
+    Tests that don't care about universe filtering can leave this empty — the
+    evaluator will produce an empty context (which is what the trade-only
+    fixtures expect).
+    """
+
+    def __init__(self) -> None:
+        self._instrument_universe: dict[uuid.UUID, set[uuid.UUID]] = {}
+        self._composite_universe: dict[uuid.UUID, set[uuid.UUID]] = {}
+
+    def set_instrument_universe(
+        self, strategy_id: uuid.UUID, instrument_ids: set[uuid.UUID]
+    ) -> None:
+        self._instrument_universe[strategy_id] = set(instrument_ids)
+
+    def set_composite_universe(
+        self, strategy_id: uuid.UUID, composite_ids: set[uuid.UUID]
+    ) -> None:
+        self._composite_universe[strategy_id] = set(composite_ids)
+
+    async def get_active_universe(
+        self, session: Any, strategy_id: uuid.UUID, scope: Scope
+    ) -> set[uuid.UUID]:
+        if scope == "composite":
+            return set(self._composite_universe.get(strategy_id, set()))
+        return set(self._instrument_universe.get(strategy_id, set()))
 
 
 class InMemoryTradeRepository(TradeRepository):
@@ -33,27 +73,23 @@ class InMemoryTradeRepository(TradeRepository):
         self._order_repo: InMemoryOrderRepository | None = None
 
     def link_order_repo(self, order_repo: InMemoryOrderRepository) -> None:
-        """Wire an order repo so ``get()`` can return legs with live order state.
-
-        Mirrors how the SQL adapter dereferences ``TradeLeg.entry_order_id``
-        into the current ``Order`` row. Without this, legs on a fetched trade
-        carry stale placeholder state — fine for simple tests, fatal for
-        scenarios that inspect ``leg.entry_order.state`` mid-lifecycle.
-        """
+        """Wire an order repo so ``get()`` can return legs with live order state."""
         self._order_repo = order_repo
 
-    async def get(self, trade_id: uuid.UUID) -> Trade | None:
+    async def get(self, session: Any, trade_id: uuid.UUID) -> Trade | None:
         trade = self._trades.get(trade_id)
         return None if trade is None else self._materialize(trade)
 
-    async def list_non_terminal_for_strategy(self, strategy_id: uuid.UUID) -> list[Trade]:
+    async def list_non_terminal_for_strategy(
+        self, session: Any, strategy_id: uuid.UUID
+    ) -> list[Trade]:
         return [
             self._materialize(t)
             for t in self._trades.values()
             if t.strategy_id == strategy_id and not t.state.is_terminal
         ]
 
-    async def list_open_for_strategy(self, strategy_id: uuid.UUID) -> list[Trade]:
+    async def list_open_for_strategy(self, session: Any, strategy_id: uuid.UUID) -> list[Trade]:
         return [
             self._materialize(t)
             for t in self._trades.values()
@@ -65,9 +101,6 @@ class InMemoryTradeRepository(TradeRepository):
         for leg in trade.legs:
             entry_order_id = self._entry_order_of.get(leg.id)
             exit_order_id = self._exit_order_of.get(leg.id)
-            # If a linkage was recorded via set_entry_order / set_exit_order,
-            # resolve it to a live Order. Otherwise keep whatever the caller
-            # constructed on the leg directly (``trade_repo.add(...)`` path).
             entry_order = (
                 self._resolve_order(entry_order_id)
                 if entry_order_id is not None
@@ -90,6 +123,7 @@ class InMemoryTradeRepository(TradeRepository):
 
     async def create(
         self,
+        session: Any,
         *,
         strategy_id: uuid.UUID,
         portfolio_id: uuid.UUID,
@@ -123,6 +157,7 @@ class InMemoryTradeRepository(TradeRepository):
 
     async def set_state(
         self,
+        session: Any,
         trade_id: uuid.UUID,
         *,
         new_state: TradeState,
@@ -145,6 +180,7 @@ class InMemoryTradeRepository(TradeRepository):
 
     async def set_leg_prices(
         self,
+        session: Any,
         leg_id: uuid.UUID,
         *,
         entry_price: float | None = None,
@@ -170,10 +206,10 @@ class InMemoryTradeRepository(TradeRepository):
                 self._trades[trade_id] = replace(trade, legs=tuple(new_legs))
                 return
 
-    async def set_entry_order(self, leg_id: uuid.UUID, order_id: uuid.UUID) -> None:
+    async def set_entry_order(self, session: Any, leg_id: uuid.UUID, order_id: uuid.UUID) -> None:
         self._entry_order_of[leg_id] = order_id
 
-    async def set_exit_order(self, leg_id: uuid.UUID, order_id: uuid.UUID) -> None:
+    async def set_exit_order(self, session: Any, leg_id: uuid.UUID, order_id: uuid.UUID) -> None:
         self._exit_order_of[leg_id] = order_id
 
     # Test-only helpers
@@ -200,16 +236,17 @@ class InMemoryOrderRepository(OrderRepository):
         self._trade_repo: InMemoryTradeRepository | None = None
 
     def link_trade_repo(self, trade_repo: InMemoryTradeRepository) -> None:
-        """Let ``list_for_exchange`` resolve trade_id from leg_id via the trade
-        repo — mirrors the SQL adapter's ``TradeLeg.trade_id`` FK traversal.
-        """
         self._trade_repo = trade_repo
 
-    async def get(self, order_id: uuid.UUID) -> Order | None:
+    async def get(self, session: Any, order_id: uuid.UUID) -> Order | None:
         return self._orders.get(order_id)
 
     async def list_for_exchange(
-        self, exchange_id: uuid.UUID, *, only_non_terminal_trades: bool = True
+        self,
+        session: Any,
+        exchange_id: uuid.UUID,
+        *,
+        only_non_terminal_trades: bool = True,
     ) -> list[tuple[Order, uuid.UUID, uuid.UUID]]:
         out: list[tuple[Order, uuid.UUID, uuid.UUID]] = []
         for order_id, order in self._orders.items():
@@ -237,7 +274,7 @@ class InMemoryOrderRepository(OrderRepository):
                     return trade.id
         return None
 
-    async def create(self, spec: NewOrderSpec) -> Order:
+    async def create(self, session: Any, spec: NewOrderSpec) -> Order:
         order = Order(
             id=uuid.uuid4(),
             state=OrderState.SUBMITTED,
@@ -253,6 +290,7 @@ class InMemoryOrderRepository(OrderRepository):
 
     async def record_status(
         self,
+        session: Any,
         order_id: uuid.UUID,
         *,
         new_state: OrderState,
@@ -264,7 +302,9 @@ class InMemoryOrderRepository(OrderRepository):
         order = self._orders[order_id]
         self._orders[order_id] = replace(order, state=new_state, error_message=error_message)
 
-    async def set_external_id(self, order_id: uuid.UUID, external_order_id: str) -> None:
+    async def set_external_id(
+        self, session: Any, order_id: uuid.UUID, external_order_id: str
+    ) -> None:
         order = self._orders[order_id]
         # Idempotent: the exchange-assigned id is immutable once known. Matches
         # the SqlAlchemy adapter's ``if not order.external_order_id`` guard.
@@ -274,6 +314,7 @@ class InMemoryOrderRepository(OrderRepository):
 
     async def set_fill(
         self,
+        session: Any,
         order_id: uuid.UUID,
         *,
         filled_quantity: float,

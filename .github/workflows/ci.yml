@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Fast lane: unit + contract tests. No Docker. Runs on every push/PR.
+  unit:
+    name: Unit + contract tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Sync dependencies
+        run: uv sync --frozen --all-extras
+
+      - name: Ruff lint
+        run: uv run ruff check src tests
+
+      - name: Unit + contract tests
+        run: uv run pytest tests/unit tests/contract -q --no-cov
+
+  # Slow lane: integration tests with real TimescaleDB + Redis + NATS via
+  # the Docker test harness. Runs on every push/PR to catch adapter drift.
+  integration:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    # The TestHarness spins up its own containers via the Docker daemon on
+    # the runner. We don't use GitHub Actions "services:" because the
+    # harness already handles lifecycle, image pinning, and safety checks.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Sync dependencies
+        run: uv sync --frozen --all-extras
+
+      - name: Pull test container images
+        run: |
+          docker pull timescale/timescaledb:latest-pg18
+          docker pull redis:8.6.1
+          docker pull nats:2.10-alpine
+
+      - name: Integration tests
+        run: uv run pytest tests/integration -q --no-cov -m "not slow"
+        timeout-minutes: 10
+
+  # Slow lane optional: harness self-tests (start/stop containers).
+  # Runs on main only to keep PR feedback fast.
+  harness:
+    name: Harness self-tests
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Sync dependencies
+        run: uv sync --frozen --all-extras
+
+      - name: Pull test container images
+        run: |
+          docker pull timescale/timescaledb:latest-pg18
+          docker pull redis:8.6.1
+          docker pull nats:2.10-alpine
+
+      - name: Harness tests
+        run: uv run pytest tests/harness -q --no-cov
+        timeout-minutes: 10

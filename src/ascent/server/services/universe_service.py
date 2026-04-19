@@ -1,31 +1,39 @@
 import uuid
+from dataclasses import dataclass
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
 
 from ascent.database.models import (
-    ExchangeCompositeScope,
-    ExchangeInstrumentScope,
     FeedCompositeScope,
     StrategyCompositeScope,
     StrategyExchange,
     StrategyInstrumentScope,
 )
-from ascent.database.models.composites import CompositeMember
+from ascent.database.models.composites import Composite, CompositeMember
 from ascent.database.models.exchanges import Exchange
-from ascent.database.models.feeds import FeedInstrumentScope
+from ascent.database.models.feeds import Feed, FeedInstrumentScope, StrategyFeed
 from ascent.database.models.instruments import Instrument
-from ascent.server.exceptions import BadRequestError, NotFoundError
+from ascent.database.models.strategy import Strategy as StrategyModel
+from ascent.database.models.trades import Trade as TradeRow
+from ascent.database.models.trades import TradeLeg as TradeLegRow
+from ascent.database.models.types import TradeStatusType
+from ascent.server.exceptions import BadRequestError, ConflictError, NotFoundError
 from ascent.server.schemas.universe import (
+    BlockingScopeItem,
+    BlockingTrade,
     CompositeUniverseBatchAdd,
     CompositeUniverseItemSchema,
+    ImpactReport,
     UniverseBatchAddInstruments,
     UniverseItemCreate,
     UniverseItemSchema,
 )
 
+_TERMINAL_TRADE_STATES: tuple[str, ...] = ("CLOSED", "CANCELLED", "REJECTED")
+
 # ---------------------------------------------------------------------------
-# Tradeability validation
+# Strategy-side validation
 # ---------------------------------------------------------------------------
 
 
@@ -41,14 +49,51 @@ def _get_strategy_tradeable_pairs(
     return {(r[0], r[1]) for r in rows}
 
 
+def _get_strategy_feed_instrument_ids(
+    db: Session, strategy_id: uuid.UUID
+) -> set[uuid.UUID]:
+    """Union of active FeedInstrumentScope.instrument_id across this strategy's feeds."""
+    rows = db.execute(
+        select(FeedInstrumentScope.instrument_id)
+        .join(StrategyFeed, StrategyFeed.feed_id == FeedInstrumentScope.feed_id)
+        .where(StrategyFeed.strategy_id == strategy_id)
+        .where(FeedInstrumentScope.is_active.is_(True))
+    ).all()
+    return {r[0] for r in rows}
+
+
+def _get_strategy_feed_composite_ids(
+    db: Session, strategy_id: uuid.UUID
+) -> set[uuid.UUID]:
+    """Union of active FeedCompositeScope.composite_id across this strategy's feeds."""
+    rows = db.execute(
+        select(FeedCompositeScope.composite_id)
+        .join(StrategyFeed, StrategyFeed.feed_id == FeedCompositeScope.feed_id)
+        .where(StrategyFeed.strategy_id == strategy_id)
+        .where(FeedCompositeScope.is_active.is_(True))
+    ).all()
+    return {r[0] for r in rows}
+
+
 def _validate_instruments_tradeable(
     db: Session, strategy_id: uuid.UUID, instrument_ids: list[uuid.UUID]
 ) -> None:
-    """Raise BadRequestError if any instruments are not tradeable on the strategy's exchanges."""
+    """Raise BadRequestError if any instrument is unreachable for this strategy.
+
+    A strategy universe instrument is valid iff:
+    1. Its (provider_id, instrument_type_id) matches one of the strategy's exchanges, AND
+    2. It appears in at least one of the strategy's feeds' active instrument scope.
+    """
     tradeable_pairs = _get_strategy_tradeable_pairs(db, strategy_id)
     if not tradeable_pairs:
         raise BadRequestError(
             "This strategy has no exchanges configured. Add exchanges before adding instruments to the universe."
+        )
+
+    fed_ids = _get_strategy_feed_instrument_ids(db, strategy_id)
+    if not fed_ids:
+        raise BadRequestError(
+            "This strategy has no feeds covering any instruments. Add an instrument to a linked feed's scope before adding it to the strategy universe."
         )
 
     instruments = db.execute(
@@ -59,6 +104,7 @@ def _validate_instruments_tradeable(
             Instrument.display_name,
         ).where(Instrument.id.in_(instrument_ids))
     ).all()
+
     non_tradeable = [
         str(r.display_name or r.id)
         for r in instruments
@@ -69,18 +115,29 @@ def _validate_instruments_tradeable(
             f"The following instruments are not tradeable on this strategy's exchanges: {', '.join(non_tradeable)}"
         )
 
+    not_fed = [str(r.display_name or r.id) for r in instruments if r.id not in fed_ids]
+    if not_fed:
+        raise BadRequestError(
+            f"The following instruments have no price data from this strategy's feeds: {', '.join(not_fed)}"
+        )
+
 
 def _validate_composites_tradeable(
     db: Session, strategy_id: uuid.UUID, composite_ids: list[uuid.UUID]
 ) -> None:
-    """Raise BadRequestError if any composite has members not tradeable on the strategy's exchanges."""
+    """Raise BadRequestError if any composite is unreachable for this strategy.
+
+    A strategy universe composite is valid iff:
+    1. All its members' (provider_id, instrument_type_id) match one of the strategy's exchanges, AND
+    2. The composite appears in at least one of the strategy's feeds' active composite scope.
+    """
     tradeable_pairs = _get_strategy_tradeable_pairs(db, strategy_id)
     if not tradeable_pairs:
         raise BadRequestError(
             "This strategy has no exchanges configured. Add exchanges before adding composites to the universe."
         )
 
-    from ascent.database.models.composites import Composite
+    fed_composite_ids = _get_strategy_feed_composite_ids(db, strategy_id)
 
     for composite_id in composite_ids:
         members = db.execute(
@@ -104,6 +161,92 @@ def _validate_composites_tradeable(
                 f"Composite '{name}' has members not tradeable on this strategy's exchanges: {', '.join(non_tradeable)}"
             )
 
+        if composite_id not in fed_composite_ids:
+            composite = db.get(Composite, composite_id)
+            name = composite.display_name if composite else str(composite_id)
+            raise BadRequestError(
+                f"Composite '{name}' is not in any of this strategy's composite-scoped feeds. "
+                "Add it to a linked feed's composite scope first."
+            )
+
+
+# ---------------------------------------------------------------------------
+# Feed-side validation
+# ---------------------------------------------------------------------------
+
+
+def _validate_feed_instrument_compatibility(
+    db: Session, feed_id: uuid.UUID, instrument_ids: list[uuid.UUID]
+) -> None:
+    """Raise BadRequestError if any instrument doesn't match the feed's declared type.
+
+    Composite-scoped feeds (composite_type_id set, instrument_type_id NULL) can never
+    accept instruments — those go in FeedCompositeScope.
+    """
+    feed = db.get(Feed, feed_id)
+    if feed is None:
+        raise NotFoundError(f"Feed {feed_id} not found")
+
+    if feed.instrument_type_id is None:
+        raise BadRequestError(
+            f"Feed '{feed.display_name or feed.name}' is composite-scoped and cannot accept instruments. "
+            "Add composites via the composite-universe endpoint instead."
+        )
+
+    rows = db.execute(
+        select(
+            Instrument.id,
+            Instrument.provider_id,
+            Instrument.instrument_type_id,
+            Instrument.display_name,
+        ).where(Instrument.id.in_(instrument_ids))
+    ).all()
+
+    mismatches = [
+        str(r.display_name or r.id)
+        for r in rows
+        if (r.provider_id, r.instrument_type_id) != (feed.provider_id, feed.instrument_type_id)
+    ]
+    if mismatches:
+        raise BadRequestError(
+            f"The following instruments don't match this feed's provider and instrument type: {', '.join(mismatches)}"
+        )
+
+
+def _validate_feed_composite_compatibility(
+    db: Session, feed_id: uuid.UUID, composite_ids: list[uuid.UUID]
+) -> None:
+    """Raise BadRequestError if any composite doesn't match the feed's declared composite type.
+
+    Instrument-scoped feeds (instrument_type_id set, composite_type_id NULL) can never
+    accept composites — those go in FeedInstrumentScope.
+    """
+    feed = db.get(Feed, feed_id)
+    if feed is None:
+        raise NotFoundError(f"Feed {feed_id} not found")
+
+    if feed.composite_type_id is None:
+        raise BadRequestError(
+            f"Feed '{feed.display_name or feed.name}' is instrument-scoped and cannot accept composites. "
+            "Add instruments via the universe endpoint instead."
+        )
+
+    rows = db.execute(
+        select(Composite.id, Composite.composite_type_id, Composite.display_name).where(
+            Composite.id.in_(composite_ids)
+        )
+    ).all()
+
+    mismatches = [
+        str(r.display_name or r.id)
+        for r in rows
+        if r.composite_type_id != feed.composite_type_id
+    ]
+    if mismatches:
+        raise BadRequestError(
+            f"The following composites don't match this feed's composite type: {', '.join(mismatches)}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -117,7 +260,7 @@ def _build_item(scope) -> UniverseItemSchema:
         instrument_name=inst.name if inst else None,
         instrument_display_name=inst.display_name if inst else None,
         instrument_type_id=inst.instrument_type_id if inst else None,
-        is_active=inst.is_active if inst else True,
+        is_active=scope.is_active,
         order=scope.order,
     )
 
@@ -181,8 +324,26 @@ def remove_strategy_universe_item(
     scope = db.get(StrategyInstrumentScope, (strategy_id, instrument_id))
     if not scope:
         raise NotFoundError("Universe item not found")
+    impact = compute_strategy_universe_impact(db, strategy_id, instrument_id)
+    if not impact.can_remove:
+        raise ConflictError(_format_impact_message(impact))
     db.delete(scope)
     db.commit()
+
+
+def set_strategy_universe_item_active(
+    db: Session,
+    strategy_id: uuid.UUID,
+    instrument_id: uuid.UUID,
+    is_active: bool,
+) -> StrategyInstrumentScope:
+    scope = db.get(StrategyInstrumentScope, (strategy_id, instrument_id))
+    if not scope:
+        raise NotFoundError("Universe item not found")
+    scope.is_active = is_active
+    db.commit()
+    db.refresh(scope)
+    return scope
 
 
 # ---------------------------------------------------------------------------
@@ -224,6 +385,7 @@ def get_feed_universe_paginated(
 def add_feed_universe_item(
     db: Session, feed_id: uuid.UUID, data: UniverseItemCreate
 ) -> FeedInstrumentScope:
+    _validate_feed_instrument_compatibility(db, feed_id, [data.instrument_id])
     scope = FeedInstrumentScope(
         feed_id=feed_id,
         instrument_id=data.instrument_id,
@@ -243,8 +405,39 @@ def remove_feed_universe_item(
     scope = db.get(FeedInstrumentScope, (feed_id, instrument_id))
     if not scope:
         raise NotFoundError("Universe item not found")
+    impact = compute_feed_universe_impact(db, feed_id, instrument_id)
+    if not impact.can_remove:
+        raise ConflictError(_format_impact_message(impact))
     db.delete(scope)
     db.commit()
+
+
+def set_feed_universe_item_active(
+    db: Session,
+    feed_id: uuid.UUID,
+    instrument_id: uuid.UUID,
+    is_active: bool,
+) -> FeedInstrumentScope:
+    scope = db.get(FeedInstrumentScope, (feed_id, instrument_id))
+    if not scope:
+        raise NotFoundError("Universe item not found")
+    if not is_active:
+        # Disabling feed-scope items is gated on open trades that need price data.
+        blocking_trades = _trades_blocking_feed_disable(db, feed_id, instrument_id)
+        if blocking_trades:
+            impact = ImpactReport(
+                can_remove=False,
+                reasons=[
+                    f"{len(blocking_trades)} open trade(s) need price data from this feed",
+                ],
+                blocking_trades=blocking_trades,
+                suggested_action="clear_blockers",
+            )
+            raise ConflictError(_format_impact_message(impact))
+    scope.is_active = is_active
+    db.commit()
+    db.refresh(scope)
+    return scope
 
 
 # ---------------------------------------------------------------------------
@@ -255,6 +448,7 @@ def remove_feed_universe_item(
 def batch_add_feed_instruments(
     db: Session, feed_id: uuid.UUID, data: UniverseBatchAddInstruments
 ) -> list[UniverseItemSchema]:
+    _validate_feed_instrument_compatibility(db, feed_id, data.instrument_ids)
     existing = {
         r[0]
         for r in db.execute(
@@ -311,7 +505,7 @@ def _build_composite_item(scope) -> CompositeUniverseItemSchema:
         composite_name=comp.name if comp else None,
         composite_display_name=comp.display_name if comp else None,
         composite_type_id=comp.composite_type_id if comp else None,
-        is_active=comp.is_active if comp else True,
+        is_active=scope.is_active,
         order=scope.order,
     )
 
@@ -357,6 +551,7 @@ def get_feed_composite_universe_paginated(
 def batch_add_feed_composites(
     db: Session, feed_id: uuid.UUID, data: CompositeUniverseBatchAdd
 ) -> list[CompositeUniverseItemSchema]:
+    _validate_feed_composite_compatibility(db, feed_id, data.composite_ids)
     existing = {
         r[0]
         for r in db.execute(
@@ -380,8 +575,35 @@ def remove_feed_composite_universe_item(
     scope = db.get(FeedCompositeScope, (feed_id, composite_id))
     if not scope:
         raise NotFoundError("Composite universe item not found")
+    impact = compute_feed_composite_universe_impact(db, feed_id, composite_id)
+    if not impact.can_remove:
+        raise ConflictError(_format_impact_message(impact))
     db.delete(scope)
     db.commit()
+
+
+def set_feed_composite_universe_item_active(
+    db: Session, feed_id: uuid.UUID, composite_id: uuid.UUID, is_active: bool
+) -> FeedCompositeScope:
+    scope = db.get(FeedCompositeScope, (feed_id, composite_id))
+    if not scope:
+        raise NotFoundError("Composite universe item not found")
+    if not is_active:
+        blocking_trades = _trades_blocking_feed_composite_disable(db, feed_id, composite_id)
+        if blocking_trades:
+            impact = ImpactReport(
+                can_remove=False,
+                reasons=[
+                    f"{len(blocking_trades)} open composite trade(s) need data from this feed",
+                ],
+                blocking_trades=blocking_trades,
+                suggested_action="clear_blockers",
+            )
+            raise ConflictError(_format_impact_message(impact))
+    scope.is_active = is_active
+    db.commit()
+    db.refresh(scope)
+    return scope
 
 
 # ---------------------------------------------------------------------------
@@ -453,165 +675,584 @@ def remove_strategy_composite_universe_item(
     scope = db.get(StrategyCompositeScope, (strategy_id, composite_id))
     if not scope:
         raise NotFoundError("Composite universe item not found")
+    impact = compute_strategy_composite_impact(db, strategy_id, composite_id)
+    if not impact.can_remove:
+        raise ConflictError(_format_impact_message(impact))
     db.delete(scope)
     db.commit()
 
 
-# ---------------------------------------------------------------------------
-# Exchange Universe
-# ---------------------------------------------------------------------------
-
-
-def get_exchange_universe(db: Session, exchange_id: uuid.UUID) -> list[UniverseItemSchema]:
-    query = (
-        select(ExchangeInstrumentScope)
-        .where(ExchangeInstrumentScope.exchange_id == exchange_id)
-        .options(joinedload(ExchangeInstrumentScope.instrument))
-        .order_by(ExchangeInstrumentScope.order)
-    )
-    scopes = db.execute(query).unique().scalars().all()
-    return [_build_item(s) for s in scopes]
-
-
-def get_exchange_universe_paginated(
-    db: Session,
-    exchange_id: uuid.UUID,
-    page: int = 1,
-    page_size: int = 25,
-    sort_field: str = "order",
-    sort_order: str = "asc",
-) -> tuple[list[UniverseItemSchema], int]:
-    base = select(ExchangeInstrumentScope).where(ExchangeInstrumentScope.exchange_id == exchange_id)
-    total = db.execute(select(func.count()).select_from(base.subquery())).scalar_one()
-    query = (
-        base.options(joinedload(ExchangeInstrumentScope.instrument))
-        .order_by(ExchangeInstrumentScope.order.asc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-    )
-    scopes = db.execute(query).unique().scalars().all()
-    return [_build_item(s) for s in scopes], total
-
-
-def add_exchange_universe_item(
-    db: Session, exchange_id: uuid.UUID, data: UniverseItemCreate
-) -> ExchangeInstrumentScope:
-    scope = ExchangeInstrumentScope(
-        exchange_id=exchange_id,
-        instrument_id=data.instrument_id,
-        order=data.order,
-    )
-    db.add(scope)
+def set_strategy_composite_universe_item_active(
+    db: Session, strategy_id: uuid.UUID, composite_id: uuid.UUID, is_active: bool
+) -> StrategyCompositeScope:
+    scope = db.get(StrategyCompositeScope, (strategy_id, composite_id))
+    if not scope:
+        raise NotFoundError("Composite universe item not found")
+    scope.is_active = is_active
     db.commit()
     db.refresh(scope)
     return scope
 
 
-def remove_exchange_universe_item(
+# ---------------------------------------------------------------------------
+# Impact computation
+# ---------------------------------------------------------------------------
+
+
+def _format_impact_message(impact: ImpactReport) -> str:
+    if impact.reasons:
+        return "; ".join(impact.reasons)
+    return "Cannot remove: dependent records exist."
+
+
+def _non_terminal_trades_for_strategy_instrument(
+    db: Session, strategy_id: uuid.UUID, instrument_id: uuid.UUID
+) -> list[BlockingTrade]:
+    rows = db.execute(
+        select(
+            TradeRow.id,
+            TradeRow.entry_at,
+            TradeStatusType.name,
+            TradeLegRow.direction,
+            TradeLegRow.quantity,
+        )
+        .join(TradeLegRow, TradeLegRow.trade_id == TradeRow.id)
+        .join(TradeStatusType, TradeStatusType.id == TradeRow.current_status_type_id)
+        .where(TradeRow.strategy_id == strategy_id)
+        .where(TradeLegRow.instrument_id == instrument_id)
+        .where(TradeStatusType.name.notin_(_TERMINAL_TRADE_STATES))
+    ).all()
+    return [
+        BlockingTrade(
+            trade_id=trade_id,
+            state=state,
+            instrument_id=instrument_id,
+            direction=direction,
+            quantity=quantity,
+            entry_at=entry_at.isoformat() if entry_at else None,
+        )
+        for trade_id, entry_at, state, direction, quantity in rows
+    ]
+
+
+def _non_terminal_trades_for_strategy_composite(
+    db: Session, strategy_id: uuid.UUID, composite_id: uuid.UUID
+) -> list[BlockingTrade]:
+    """A composite trade is one whose leg-instrument-set exactly matches
+    the composite's member-set. Mirrors :func:`_build_trade_columns`.
+    """
+    member_ids = set(
+        db.execute(
+            select(CompositeMember.instrument_id).where(
+                CompositeMember.composite_id == composite_id
+            )
+        ).scalars()
+    )
+    if not member_ids:
+        return []
+
+    candidate_rows = db.execute(
+        select(TradeRow.id, TradeRow.entry_at, TradeStatusType.name)
+        .join(TradeStatusType, TradeStatusType.id == TradeRow.current_status_type_id)
+        .where(TradeRow.strategy_id == strategy_id)
+        .where(TradeStatusType.name.notin_(_TERMINAL_TRADE_STATES))
+    ).all()
+
+    result: list[BlockingTrade] = []
+    for trade_id, entry_at, state in candidate_rows:
+        leg_ids = set(
+            db.execute(
+                select(TradeLegRow.instrument_id).where(TradeLegRow.trade_id == trade_id)
+            ).scalars()
+        )
+        if leg_ids == member_ids:
+            result.append(
+                BlockingTrade(
+                    trade_id=trade_id,
+                    state=state,
+                    composite_id=composite_id,
+                    entry_at=entry_at.isoformat() if entry_at else None,
+                )
+            )
+    return result
+
+
+def _non_terminal_trades_for_exchange_assignment(
+    db: Session, strategy_id: uuid.UUID, exchange_id: uuid.UUID
+) -> list[BlockingTrade]:
+    rows = db.execute(
+        select(
+            TradeRow.id,
+            TradeRow.entry_at,
+            TradeStatusType.name,
+            TradeLegRow.instrument_id,
+            TradeLegRow.direction,
+            TradeLegRow.quantity,
+        )
+        .join(TradeLegRow, TradeLegRow.trade_id == TradeRow.id)
+        .join(TradeStatusType, TradeStatusType.id == TradeRow.current_status_type_id)
+        .where(TradeRow.strategy_id == strategy_id)
+        .where(TradeLegRow.exchange_id == exchange_id)
+        .where(TradeStatusType.name.notin_(_TERMINAL_TRADE_STATES))
+    ).all()
+    return [
+        BlockingTrade(
+            trade_id=trade_id,
+            state=state,
+            instrument_id=inst_id,
+            direction=direction,
+            quantity=quantity,
+            entry_at=entry_at.isoformat() if entry_at else None,
+        )
+        for trade_id, entry_at, state, inst_id, direction, quantity in rows
+    ]
+
+
+def _trades_blocking_feed_disable(
+    db: Session, feed_id: uuid.UUID, instrument_id: uuid.UUID
+) -> list[BlockingTrade]:
+    """Open trades on this instrument from any strategy that uses this feed."""
+    rows = db.execute(
+        select(
+            TradeRow.id,
+            TradeRow.entry_at,
+            TradeRow.strategy_id,
+            TradeStatusType.name,
+            TradeLegRow.direction,
+            TradeLegRow.quantity,
+        )
+        .join(TradeLegRow, TradeLegRow.trade_id == TradeRow.id)
+        .join(TradeStatusType, TradeStatusType.id == TradeRow.current_status_type_id)
+        .join(StrategyFeed, StrategyFeed.strategy_id == TradeRow.strategy_id)
+        .where(StrategyFeed.feed_id == feed_id)
+        .where(TradeLegRow.instrument_id == instrument_id)
+        .where(TradeStatusType.name.notin_(_TERMINAL_TRADE_STATES))
+    ).all()
+    return [
+        BlockingTrade(
+            trade_id=trade_id,
+            state=state,
+            instrument_id=instrument_id,
+            direction=direction,
+            quantity=quantity,
+            entry_at=entry_at.isoformat() if entry_at else None,
+        )
+        for trade_id, entry_at, _strategy_id, state, direction, quantity in rows
+    ]
+
+
+def _trades_blocking_feed_composite_disable(
+    db: Session, feed_id: uuid.UUID, composite_id: uuid.UUID
+) -> list[BlockingTrade]:
+    """Open composite trades from any strategy that uses this feed."""
+    member_ids = set(
+        db.execute(
+            select(CompositeMember.instrument_id).where(
+                CompositeMember.composite_id == composite_id
+            )
+        ).scalars()
+    )
+    if not member_ids:
+        return []
+
+    strategy_ids = set(
+        db.execute(
+            select(StrategyFeed.strategy_id).where(StrategyFeed.feed_id == feed_id)
+        ).scalars()
+    )
+    if not strategy_ids:
+        return []
+
+    candidate_rows = db.execute(
+        select(TradeRow.id, TradeRow.entry_at, TradeStatusType.name)
+        .join(TradeStatusType, TradeStatusType.id == TradeRow.current_status_type_id)
+        .where(TradeRow.strategy_id.in_(strategy_ids))
+        .where(TradeStatusType.name.notin_(_TERMINAL_TRADE_STATES))
+    ).all()
+
+    result: list[BlockingTrade] = []
+    for trade_id, entry_at, state in candidate_rows:
+        leg_ids = set(
+            db.execute(
+                select(TradeLegRow.instrument_id).where(TradeLegRow.trade_id == trade_id)
+            ).scalars()
+        )
+        if leg_ids == member_ids:
+            result.append(
+                BlockingTrade(
+                    trade_id=trade_id,
+                    state=state,
+                    composite_id=composite_id,
+                    entry_at=entry_at.isoformat() if entry_at else None,
+                )
+            )
+    return result
+
+
+def _orphaned_universe_items_if_remove_exchange(
+    db: Session, strategy_id: uuid.UUID, exchange_id: uuid.UUID
+) -> list[BlockingScopeItem]:
+    """Active strategy universe items that would be unreachable if this
+    exchange were removed (no other strategy exchange covers their type).
+    """
+    exchange = db.get(Exchange, exchange_id)
+    if exchange is None:
+        return []
+
+    other_pairs = set(
+        db.execute(
+            select(Exchange.provider_id, Exchange.instrument_type_id)
+            .join(StrategyExchange, StrategyExchange.exchange_id == Exchange.id)
+            .where(StrategyExchange.strategy_id == strategy_id)
+            .where(StrategyExchange.exchange_id != exchange_id)
+            .where(StrategyExchange.is_active.is_(True))
+        ).all()
+    )
+    if (exchange.provider_id, exchange.instrument_type_id) in other_pairs:
+        return []
+
+    rows = db.execute(
+        select(StrategyInstrumentScope.instrument_id, Instrument.display_name)
+        .join(Instrument, Instrument.id == StrategyInstrumentScope.instrument_id)
+        .where(StrategyInstrumentScope.strategy_id == strategy_id)
+        .where(StrategyInstrumentScope.is_active.is_(True))
+        .where(Instrument.provider_id == exchange.provider_id)
+        .where(Instrument.instrument_type_id == exchange.instrument_type_id)
+    ).all()
+
+    return [
+        BlockingScopeItem(
+            scope_type="strategy_universe",
+            strategy_id=strategy_id,
+            instrument_id=inst_id,
+            display_name=name,
+        )
+        for inst_id, name in rows
+    ]
+
+
+def compute_strategy_universe_impact(
+    db: Session, strategy_id: uuid.UUID, instrument_id: uuid.UUID
+) -> ImpactReport:
+    blockers = _non_terminal_trades_for_strategy_instrument(db, strategy_id, instrument_id)
+    if not blockers:
+        return ImpactReport(can_remove=True)
+    return ImpactReport(
+        can_remove=False,
+        reasons=[f"{len(blockers)} open trade(s) reference this instrument"],
+        blocking_trades=blockers,
+        suggested_action="disable",
+    )
+
+
+def compute_strategy_composite_impact(
+    db: Session, strategy_id: uuid.UUID, composite_id: uuid.UUID
+) -> ImpactReport:
+    blockers = _non_terminal_trades_for_strategy_composite(db, strategy_id, composite_id)
+    if not blockers:
+        return ImpactReport(can_remove=True)
+    return ImpactReport(
+        can_remove=False,
+        reasons=[f"{len(blockers)} open trade(s) reference this composite"],
+        blocking_trades=blockers,
+        suggested_action="disable",
+    )
+
+
+def compute_strategy_exchange_impact(
+    db: Session, strategy_id: uuid.UUID, exchange_id: uuid.UUID
+) -> ImpactReport:
+    blocking_trades = _non_terminal_trades_for_exchange_assignment(db, strategy_id, exchange_id)
+    blocking_scope = _orphaned_universe_items_if_remove_exchange(db, strategy_id, exchange_id)
+    if not blocking_trades and not blocking_scope:
+        return ImpactReport(can_remove=True)
+
+    reasons: list[str] = []
+    if blocking_trades:
+        reasons.append(f"{len(blocking_trades)} open trade(s) routed via this exchange")
+    if blocking_scope:
+        reasons.append(
+            f"{len(blocking_scope)} active universe item(s) would be left without a tradeable exchange"
+        )
+    suggestion = "disable" if blocking_trades and not blocking_scope else "clear_blockers"
+    return ImpactReport(
+        can_remove=False,
+        reasons=reasons,
+        blocking_trades=blocking_trades,
+        blocking_scope_items=blocking_scope,
+        suggested_action=suggestion,
+    )
+
+
+def compute_feed_universe_impact(
+    db: Session, feed_id: uuid.UUID, instrument_id: uuid.UUID
+) -> ImpactReport:
+    blocking_trades = _trades_blocking_feed_disable(db, feed_id, instrument_id)
+    blocking_scope = _strategy_universe_items_depending_on_feed(
+        db, feed_id, instrument_id, scope_type="strategy_universe"
+    )
+    if not blocking_trades and not blocking_scope:
+        return ImpactReport(can_remove=True)
+
+    reasons: list[str] = []
+    if blocking_trades:
+        reasons.append(f"{len(blocking_trades)} open trade(s) need price data from this feed")
+    if blocking_scope:
+        reasons.append(
+            f"{len(blocking_scope)} strategy universe item(s) depend on this feed coverage"
+        )
+    return ImpactReport(
+        can_remove=False,
+        reasons=reasons,
+        blocking_trades=blocking_trades,
+        blocking_scope_items=blocking_scope,
+        suggested_action="clear_blockers",
+    )
+
+
+def compute_feed_composite_universe_impact(
+    db: Session, feed_id: uuid.UUID, composite_id: uuid.UUID
+) -> ImpactReport:
+    blocking_trades = _trades_blocking_feed_composite_disable(db, feed_id, composite_id)
+    blocking_scope = _strategy_universe_items_depending_on_feed(
+        db, feed_id, composite_id, scope_type="strategy_composite_universe"
+    )
+    if not blocking_trades and not blocking_scope:
+        return ImpactReport(can_remove=True)
+
+    reasons: list[str] = []
+    if blocking_trades:
+        reasons.append(
+            f"{len(blocking_trades)} open composite trade(s) need data from this feed"
+        )
+    if blocking_scope:
+        reasons.append(
+            f"{len(blocking_scope)} strategy composite universe item(s) depend on this feed"
+        )
+    return ImpactReport(
+        can_remove=False,
+        reasons=reasons,
+        blocking_trades=blocking_trades,
+        blocking_scope_items=blocking_scope,
+        suggested_action="clear_blockers",
+    )
+
+
+def _strategy_universe_items_depending_on_feed(
     db: Session,
-    exchange_id: uuid.UUID,
-    instrument_id: uuid.UUID,
-) -> None:
-    scope = db.get(ExchangeInstrumentScope, (exchange_id, instrument_id))
+    feed_id: uuid.UUID,
+    target_id: uuid.UUID,
+    *,
+    scope_type: str,
+) -> list[BlockingScopeItem]:
+    """Active strategy universe items pointing at ``target_id`` whose strategy
+    uses this feed (and has no other feed covering the same target).
+    """
+    strategy_ids = set(
+        db.execute(
+            select(StrategyFeed.strategy_id).where(StrategyFeed.feed_id == feed_id)
+        ).scalars()
+    )
+    if not strategy_ids:
+        return []
+
+    if scope_type == "strategy_composite_universe":
+        rows = db.execute(
+            select(StrategyCompositeScope.strategy_id, StrategyCompositeScope.composite_id)
+            .where(StrategyCompositeScope.strategy_id.in_(strategy_ids))
+            .where(StrategyCompositeScope.composite_id == target_id)
+            .where(StrategyCompositeScope.is_active.is_(True))
+        ).all()
+        return [
+            BlockingScopeItem(
+                scope_type="strategy_composite_universe",
+                strategy_id=sid,
+                composite_id=cid,
+            )
+            for sid, cid in rows
+        ]
+
+    rows = db.execute(
+        select(StrategyInstrumentScope.strategy_id, StrategyInstrumentScope.instrument_id)
+        .where(StrategyInstrumentScope.strategy_id.in_(strategy_ids))
+        .where(StrategyInstrumentScope.instrument_id == target_id)
+        .where(StrategyInstrumentScope.is_active.is_(True))
+    ).all()
+    return [
+        BlockingScopeItem(
+            scope_type="strategy_universe",
+            strategy_id=sid,
+            instrument_id=iid,
+        )
+        for sid, iid in rows
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Strategy-exchange disable / remove
+# ---------------------------------------------------------------------------
+
+
+def set_strategy_exchange_active(
+    db: Session, strategy_id: uuid.UUID, exchange_id: uuid.UUID, is_active: bool
+) -> StrategyExchange:
+    scope = db.get(StrategyExchange, (strategy_id, exchange_id))
     if not scope:
-        raise NotFoundError("Universe item not found")
+        raise NotFoundError("Strategy-exchange link not found")
+    scope.is_active = is_active
+    db.commit()
+    db.refresh(scope)
+    return scope
+
+
+def remove_strategy_exchange_with_impact_check(
+    db: Session, strategy_id: uuid.UUID, exchange_id: uuid.UUID
+) -> None:
+    """Drop-in replacement for :func:`strategy_service.remove_strategy_exchange`
+    that raises :class:`ConflictError` when blocked.
+    """
+    scope = db.get(StrategyExchange, (strategy_id, exchange_id))
+    if not scope:
+        raise NotFoundError("Strategy-exchange link not found")
+    impact = compute_strategy_exchange_impact(db, strategy_id, exchange_id)
+    if not impact.can_remove:
+        raise ConflictError(_format_impact_message(impact))
     db.delete(scope)
     db.commit()
 
 
-def batch_add_exchange_instruments(
-    db: Session, exchange_id: uuid.UUID, data: UniverseBatchAddInstruments
-) -> list[UniverseItemSchema]:
-    existing = {
-        r[0]
-        for r in db.execute(
-            select(ExchangeInstrumentScope.instrument_id).where(
-                ExchangeInstrumentScope.exchange_id == exchange_id
-            )
-        ).all()
-    }
-    order = data.start_order
-    for instrument_id in data.instrument_ids:
-        if instrument_id in existing:
-            continue
-        existing.add(instrument_id)
-        db.add(
-            ExchangeInstrumentScope(
-                exchange_id=exchange_id, instrument_id=instrument_id, order=order
-            )
-        )
-        order += 1
-    db.commit()
-    return get_exchange_universe(db, exchange_id)
-
-
 # ---------------------------------------------------------------------------
-# Exchange Composite Universe
+# Strategy pause
 # ---------------------------------------------------------------------------
 
 
-def get_exchange_composite_universe(
-    db: Session, exchange_id: uuid.UUID
-) -> list[CompositeUniverseItemSchema]:
-    query = (
-        select(ExchangeCompositeScope)
-        .where(ExchangeCompositeScope.exchange_id == exchange_id)
-        .options(joinedload(ExchangeCompositeScope.composite))
-        .order_by(ExchangeCompositeScope.order)
-    )
-    scopes = db.execute(query).unique().scalars().all()
-    return [_build_composite_item(s) for s in scopes]
+def set_strategy_paused(db: Session, strategy_id: uuid.UUID, is_paused: bool) -> StrategyModel:
+    """Pausing is always allowed; resume is too. Per the design, this never
+    blocks — open trades exit normally regardless.
+    """
+    strategy = db.get(StrategyModel, strategy_id)
+    if not strategy:
+        raise NotFoundError(f"Strategy {strategy_id} not found")
+    strategy.is_paused = is_paused
+    db.commit()
+    db.refresh(strategy)
+    return strategy
 
 
-def get_exchange_composite_universe_paginated(
-    db: Session,
-    exchange_id: uuid.UUID,
-    page: int = 1,
-    page_size: int = 25,
-    sort_field: str = "order",
-    sort_order: str = "asc",
-) -> tuple[list[CompositeUniverseItemSchema], int]:
-    base = select(ExchangeCompositeScope).where(ExchangeCompositeScope.exchange_id == exchange_id)
-    total = db.execute(select(func.count()).select_from(base.subquery())).scalar_one()
-    query = (
-        base.options(joinedload(ExchangeCompositeScope.composite))
-        .order_by(ExchangeCompositeScope.order.asc())
-        .offset((page - 1) * page_size)
-        .limit(page_size)
-    )
-    scopes = db.execute(query).unique().scalars().all()
-    return [_build_composite_item(s) for s in scopes], total
+# ---------------------------------------------------------------------------
+# Startup reconciliation
+# ---------------------------------------------------------------------------
 
 
-def batch_add_exchange_composites(
-    db: Session, exchange_id: uuid.UUID, data: CompositeUniverseBatchAdd
-) -> list[CompositeUniverseItemSchema]:
-    existing = {
-        r[0]
-        for r in db.execute(
-            select(ExchangeCompositeScope.composite_id).where(
-                ExchangeCompositeScope.exchange_id == exchange_id
-            )
-        ).all()
-    }
-    order = data.start_order
-    for composite_id in data.composite_ids:
-        if composite_id in existing:
-            continue
-        existing.add(composite_id)
-        db.add(
-            ExchangeCompositeScope(exchange_id=exchange_id, composite_id=composite_id, order=order)
+@dataclass(frozen=True)
+class _DriftItem:
+    scope_type: str  # "strategy_universe" | "strategy_composite_universe"
+    strategy_id: uuid.UUID
+    item_id: uuid.UUID
+    reason: str
+
+
+def reconcile_strategy_universe(
+    db: Session, strategy_id: uuid.UUID
+) -> list[_DriftItem]:
+    """Detect drifted active scope rows and disable them.
+
+    A strategy universe item has drifted iff it's ``is_active=True`` but:
+      - instrument's ``(provider_id, instrument_type_id)`` doesn't match any
+        of the strategy's active exchanges, OR
+      - instrument isn't covered by any of the strategy's feeds' active scope.
+
+    A composite universe item has drifted iff it's ``is_active=True`` but:
+      - any member fails the exchange-pair check above, OR
+      - the composite isn't in any of the strategy's feeds' active composite scope.
+
+    Each drifted row is flipped to ``is_active=False`` and returned for logging.
+    Removed rows are committed as a single transaction at the end.
+    """
+    drift: list[_DriftItem] = []
+
+    tradeable_pairs = _get_strategy_tradeable_pairs(db, strategy_id)
+    fed_instrument_ids = _get_strategy_feed_instrument_ids(db, strategy_id)
+    fed_composite_ids = _get_strategy_feed_composite_ids(db, strategy_id)
+
+    instrument_scopes = (
+        db.execute(
+            select(StrategyInstrumentScope)
+            .where(StrategyInstrumentScope.strategy_id == strategy_id)
+            .where(StrategyInstrumentScope.is_active.is_(True))
+            .options(joinedload(StrategyInstrumentScope.instrument))
         )
-        order += 1
-    db.commit()
-    return get_exchange_composite_universe(db, exchange_id)
+        .unique()
+        .scalars()
+        .all()
+    )
+    for scope in instrument_scopes:
+        inst = scope.instrument
+        if inst is None:
+            continue
+        reason: str | None = None
+        if (inst.provider_id, inst.instrument_type_id) not in tradeable_pairs:
+            reason = "no strategy exchange matches (provider, type)"
+        elif inst.id not in fed_instrument_ids:
+            reason = "instrument not in any strategy feed's active scope"
+        if reason is not None:
+            scope.is_active = False
+            drift.append(
+                _DriftItem(
+                    scope_type="strategy_universe",
+                    strategy_id=strategy_id,
+                    item_id=inst.id,
+                    reason=reason,
+                )
+            )
+
+    composite_scopes = (
+        db.execute(
+            select(StrategyCompositeScope)
+            .where(StrategyCompositeScope.strategy_id == strategy_id)
+            .where(StrategyCompositeScope.is_active.is_(True))
+            .options(joinedload(StrategyCompositeScope.composite))
+        )
+        .unique()
+        .scalars()
+        .all()
+    )
+    for scope in composite_scopes:
+        comp_id = scope.composite_id
+        reason = None
+        members = (
+            db.execute(
+                select(
+                    Instrument.id, Instrument.provider_id, Instrument.instrument_type_id
+                )
+                .join(CompositeMember, CompositeMember.instrument_id == Instrument.id)
+                .where(CompositeMember.composite_id == comp_id)
+            )
+            .all()
+        )
+        if not members:
+            reason = "composite has no members"
+        else:
+            untradeable = [
+                m for m in members if (m.provider_id, m.instrument_type_id) not in tradeable_pairs
+            ]
+            if untradeable:
+                reason = "composite has member(s) not tradeable on any strategy exchange"
+            elif comp_id not in fed_composite_ids:
+                reason = "composite not in any strategy feed's active composite scope"
+        if reason is not None:
+            scope.is_active = False
+            drift.append(
+                _DriftItem(
+                    scope_type="strategy_composite_universe",
+                    strategy_id=strategy_id,
+                    item_id=comp_id,
+                    reason=reason,
+                )
+            )
+
+    if drift:
+        db.commit()
+    return drift
 
 
-def remove_exchange_composite_universe_item(
-    db: Session, exchange_id: uuid.UUID, composite_id: uuid.UUID
-) -> None:
-    scope = db.get(ExchangeCompositeScope, (exchange_id, composite_id))
-    if not scope:
-        raise NotFoundError("Composite universe item not found")
-    db.delete(scope)
-    db.commit()

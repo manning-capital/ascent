@@ -28,6 +28,7 @@ class TypeCache:
         self._trade_state_to_id: dict[TradeState, uuid.UUID] = {}
         self._id_to_trade_state: dict[uuid.UUID, TradeState] = {}
         self._attribute_name: dict[uuid.UUID, str] = {}
+        self._attribute_id_by_name: dict[str, uuid.UUID] = {}
         self._load(session_factory)
 
     def _load(self, session_factory: sessionmaker) -> None:
@@ -53,6 +54,7 @@ class TypeCache:
                 self._id_to_trade_state[row.id] = state
             for row in db.execute(select(Attribute)).scalars():
                 self._attribute_name[row.id] = row.name.lower()
+                self._attribute_id_by_name[row.name] = row.id
 
     def order_type_id(self, order_type: OrderTypeEnum) -> uuid.UUID:
         return self._order_type_to_id[order_type]
@@ -76,6 +78,13 @@ class TypeCache:
     def attribute_name(self, attribute_id: uuid.UUID) -> str | None:
         return self._attribute_name.get(attribute_id)
 
+    def attribute_id_for_name(self, name: str) -> uuid.UUID | None:
+        return self._attribute_id_by_name.get(name)
+
     @property
     def attribute_map(self) -> dict[uuid.UUID, str]:
         return dict(self._attribute_name)
+
+    @property
+    def attribute_id_by_name(self) -> dict[str, uuid.UUID]:
+        return dict(self._attribute_id_by_name)

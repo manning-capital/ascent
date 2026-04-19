@@ -12,6 +12,7 @@ from __future__ import annotations
 import pytest
 
 from tests.fakes import (
+    FakeUnitOfWorkFactory,
     InMemoryEventBus,
     InMemoryFeedStore,
     InMemoryHeartbeat,
@@ -63,3 +64,21 @@ def heartbeat(request):
         yield InMemoryHeartbeat()
         return
     raise NotImplementedError(f"Unknown backend: {request.param}")
+
+
+@pytest.fixture(params=["fake"])
+def uow_factory(request):
+    """Yields a :class:`UnitOfWorkFactory`. Each call to the factory
+    produces a fresh UoW."""
+    if request.param == "fake":
+        yield FakeUnitOfWorkFactory()
+        return
+    raise NotImplementedError(f"Unknown backend: {request.param}")
+
+
+@pytest.fixture
+def session():
+    """Opaque session token passed to repository methods. Fakes ignore it;
+    the SA adapter gets its session from a UoW. This fixture exists so
+    contract tests can call ``repo.method(session, ...)`` uniformly."""
+    return object()

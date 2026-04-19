@@ -24,6 +24,8 @@ from ascent.server.schemas.feeds import (
 from ascent.server.schemas.universe import (
     CompositeUniverseBatchAdd,
     CompositeUniverseItemSchema,
+    ImpactReport,
+    ToggleActiveRequest,
     UniverseBatchAddInstruments,
     UniverseItemCreate,
     UniverseItemSchema,
@@ -223,6 +225,32 @@ def remove_feed_universe_item(
     universe_service.remove_feed_universe_item(db, feed_id, instrument_id)
 
 
+@router.get(
+    "/{feed_id}/universe/{instrument_id}/impact",
+    response_model=ImpactReport,
+)
+def get_feed_universe_impact(
+    feed_id: uuid.UUID, instrument_id: uuid.UUID, db: Session = Depends(get_db)
+):
+    return universe_service.compute_feed_universe_impact(db, feed_id, instrument_id)
+
+
+@router.patch(
+    "/{feed_id}/universe/{instrument_id}",
+    response_model=UniverseItemSchema,
+)
+def patch_feed_universe_item(
+    feed_id: uuid.UUID,
+    instrument_id: uuid.UUID,
+    data: ToggleActiveRequest,
+    db: Session = Depends(get_db),
+):
+    scope = universe_service.set_feed_universe_item_active(
+        db, feed_id, instrument_id, data.is_active
+    )
+    return universe_service._build_item(scope)
+
+
 @router.post("/{feed_id}/universe/batch", response_model=list[UniverseItemSchema])
 def batch_add_feed_instruments(
     feed_id: uuid.UUID, data: UniverseBatchAddInstruments, db: Session = Depends(get_db)
@@ -271,6 +299,32 @@ def remove_feed_composite_universe_item(
     feed_id: uuid.UUID, composite_id: uuid.UUID, db: Session = Depends(get_db)
 ):
     universe_service.remove_feed_composite_universe_item(db, feed_id, composite_id)
+
+
+@router.get(
+    "/{feed_id}/composite-universe/{composite_id}/impact",
+    response_model=ImpactReport,
+)
+def get_feed_composite_universe_impact(
+    feed_id: uuid.UUID, composite_id: uuid.UUID, db: Session = Depends(get_db)
+):
+    return universe_service.compute_feed_composite_universe_impact(db, feed_id, composite_id)
+
+
+@router.patch(
+    "/{feed_id}/composite-universe/{composite_id}",
+    response_model=CompositeUniverseItemSchema,
+)
+def patch_feed_composite_universe_item(
+    feed_id: uuid.UUID,
+    composite_id: uuid.UUID,
+    data: ToggleActiveRequest,
+    db: Session = Depends(get_db),
+):
+    scope = universe_service.set_feed_composite_universe_item_active(
+        db, feed_id, composite_id, data.is_active
+    )
+    return universe_service._build_composite_item(scope)
 
 
 @router.get("/{feed_id}/dependencies", response_model=list[FeedDependencySchema])

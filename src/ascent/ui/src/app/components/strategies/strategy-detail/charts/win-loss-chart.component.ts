@@ -38,6 +38,7 @@ export class WinLossChartComponent {
   chartOptions: ChartOptions<'doughnut'> = {
     responsive: true,
     maintainAspectRatio: false,
+    animation: false,
     cutout: '65%',
     plugins: {
       legend: {

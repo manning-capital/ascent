@@ -29,6 +29,11 @@ class SqlAlchemyRunTracker(RunTrackerPort):
     ) -> AbstractAsyncContextManager[uuid.UUID]:
         return self._feed_ctx(feed_id, partition_id)
 
+    async def link_feed_run_partition(
+        self, run_id: uuid.UUID, partition_id: uuid.UUID
+    ) -> None:
+        await self._feeds.link_partition(run_id, partition_id)
+
     def track_strategy_run(self, strategy_id: uuid.UUID) -> AbstractAsyncContextManager[uuid.UUID]:
         return self._strategy_ctx(strategy_id)
 

@@ -19,6 +19,7 @@ from ascent.domain import (
     TradeState,
 )
 from tests.fakes import (
+    FakeUnitOfWorkFactory,
     InMemoryEventBus,
     InMemoryOrderRepository,
     InMemoryTradeRepository,
@@ -32,7 +33,13 @@ def wiring():
     trade_repo = InMemoryTradeRepository()
     order_repo = InMemoryOrderRepository()
     bus = InMemoryEventBus()
-    processor = FillProcessor(trade_repo=trade_repo, order_repo=order_repo, event_bus=bus)
+    uow_factory = FakeUnitOfWorkFactory()
+    processor = FillProcessor(
+        trade_repo=trade_repo,
+        order_repo=order_repo,
+        event_bus=bus,
+        uow_factory=uow_factory,
+    )
     return trade_repo, order_repo, bus, processor
 
 
@@ -83,11 +90,11 @@ class TestProcessFill:
             now=NOW,
         )
 
-        updated = await trade_repo.get(trade.id)
+        updated = await trade_repo.get(None, trade.id)
         assert updated.state == TradeState.OPEN
         assert updated.legs[0].entry_price == 105.0
 
-        stored_order = await order_repo.get(entry_order.id)
+        stored_order = await order_repo.get(None, entry_order.id)
         assert stored_order.state == OrderState.FILLED
         assert stored_order.filled_quantity == 1.0
         assert stored_order.average_fill_price == 105.0
@@ -110,9 +117,9 @@ class TestProcessFill:
             ),
             now=NOW,
         )
-        updated = await trade_repo.get(trade.id)
+        updated = await trade_repo.get(None, trade.id)
         assert updated.state == TradeState.OPENING
-        assert updated.legs[0].entry_price is None  # only FILLED persists entry price
+        assert updated.legs[0].entry_price is None
 
     @pytest.mark.asyncio
     async def test_unknown_trade_is_dropped(self, wiring):

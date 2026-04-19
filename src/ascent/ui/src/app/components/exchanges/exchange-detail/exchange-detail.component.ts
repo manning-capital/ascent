@@ -18,6 +18,13 @@ import { FieldPanelComponent, PanelField } from '../../shared/field-panel.compon
 import { ServerTableComponent } from '../../shared/data-table/server-table.component';
 import type { DataTableColumn, ServerFetchFn } from '../../shared/data-table/data-table.model';
 
+const CURRENCY_FORMATTER = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  signDisplay: 'always',
+});
+const NUMBER_FORMATTER = new Intl.NumberFormat('en-US', { maximumFractionDigits: 4 });
+
 @Component({
   selector: 'app-exchange-detail',
   standalone: true,
@@ -146,12 +153,12 @@ export class ExchangeDetailComponent implements OnInit {
 
   formatCurrency(value: number | null): string {
     if (value === null || value === undefined) return '\u2014';
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', signDisplay: 'always' }).format(value);
+    return CURRENCY_FORMATTER.format(value);
   }
 
   formatNumber(value: number | null): string {
     if (value === null || value === undefined) return '\u2014';
-    return new Intl.NumberFormat('en-US', { maximumFractionDigits: 4 }).format(value);
+    return NUMBER_FORMATTER.format(value);
   }
 
   pnlClass(value: number | null): string {

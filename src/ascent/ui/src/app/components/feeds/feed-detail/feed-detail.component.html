@@ -194,7 +194,9 @@
           (addInstruments)="onAddInstruments($event)"
           (addComposites)="onAddComposites($event)"
           (removeInstrument)="removeUniverseItem($event)"
-          (removeComposite)="removeCompositeItem($event)"/>
+          (removeComposite)="removeCompositeItem($event)"
+          (toggleInstrumentActive)="onToggleInstrumentActive($event)"
+          (toggleCompositeActive)="onToggleCompositeActive($event)"/>
       }
 
       <!-- Configuration Tab -->
@@ -249,5 +251,14 @@
 
     </div>
   </div>
+
+  <app-universe-impact-dialog
+    [(visible)]="impactDialogVisible"
+    [entityLabel]="impactEntityLabel()"
+    [entityName]="impactEntityName()"
+    [impact]="impactReport()"
+    [supportsDisable]="impactSupportsDisable()"
+    [busy]="impactBusy()"
+    (decision)="onImpactDecision($event)"/>
   }
 }

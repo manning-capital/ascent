@@ -8,6 +8,7 @@ import { DataTableComponent } from '../shared/data-table/data-table.component';
 import type { DataTableColumn } from '../shared/data-table/data-table.model';
 import { DatePipe, JsonPipe } from '@angular/common';
 import { Skeleton } from 'primeng/skeleton';
+import { formatCloseReason } from '../shared/close-reason.util';
 
 const directionSeverity: Record<string, string> = {
   LONG: 'success',
@@ -39,6 +40,7 @@ export class TradeDetailComponent implements OnInit {
   tradeService = inject(TradeService);
 
   String = String;
+  formatCloseReason = formatCloseReason;
 
   legColumns: DataTableColumn[] = [
     { field: 'instrument_name', header: 'Instrument' },

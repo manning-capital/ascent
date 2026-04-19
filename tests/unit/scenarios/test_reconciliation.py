@@ -1,9 +1,4 @@
-"""Startup reconciliation scenarios.
-
-When the engine restarts, it asks the exchange what happened to each stale
-order and feeds the answer back through :class:`FillProcessor`. The point:
-one code path drives both live fills and reconciliation.
-"""
+"""Startup reconciliation scenarios."""
 
 from __future__ import annotations
 
@@ -22,12 +17,10 @@ NOW = datetime(2026, 4, 16, 12, 0, tzinfo=UTC)
 
 @pytest.mark.asyncio
 async def test_reconciliation_applies_filled_status_from_exchange(scenario):
-    # Submit opens trade; the reconciler will later see the exchange has filled it.
     draft = await scenario.router.submit(side="BUY", target_id=uuid.uuid4(), quantity=1.0, now=NOW)
-    entry_order = (await scenario.trade_repo.get(draft.trade_id)).legs[0].entry_order
-    # The tracker usually stamps external_order_id after ack; simulate that here.
+    entry_order = (await scenario.trade_repo.get(None, draft.trade_id)).legs[0].entry_order
     external_id = "EX-123"
-    await scenario.order_repo.set_external_id(entry_order.id, external_id)
+    await scenario.order_repo.set_external_id(None, entry_order.id, external_id)
 
     exchange = FakeExchange()
     exchange.open_orders.append(
@@ -39,11 +32,15 @@ async def test_reconciliation_applies_filled_status_from_exchange(scenario):
         )
     )
 
-    reconciler = OrderReconciler(order_repo=scenario.order_repo, fill_processor=scenario.processor)
+    reconciler = OrderReconciler(
+        order_repo=scenario.order_repo,
+        fill_processor=scenario.processor,
+        uow_factory=scenario.uow_factory,
+    )
     count = await reconciler.reconcile(exchange=exchange, exchange_id=scenario.exchange_id, now=NOW)
     assert count == 1
 
-    trade = await scenario.trade_repo.get(draft.trade_id)
+    trade = await scenario.trade_repo.get(None, draft.trade_id)
     assert trade.state == TradeState.OPEN
     assert trade.legs[0].entry_price == 99.75
 
@@ -51,21 +48,29 @@ async def test_reconciliation_applies_filled_status_from_exchange(scenario):
 @pytest.mark.asyncio
 async def test_reconciliation_cancels_orders_exchange_has_no_record_of(scenario):
     draft = await scenario.router.submit(side="BUY", target_id=uuid.uuid4(), quantity=1.0, now=NOW)
-    entry_order = (await scenario.trade_repo.get(draft.trade_id)).legs[0].entry_order
-    await scenario.order_repo.set_external_id(entry_order.id, "EX-MISSING")
+    entry_order = (await scenario.trade_repo.get(None, draft.trade_id)).legs[0].entry_order
+    await scenario.order_repo.set_external_id(None, entry_order.id, "EX-MISSING")
 
-    exchange = FakeExchange()  # open_orders is empty → get_order_status returns NOT_FOUND
+    exchange = FakeExchange()
 
-    reconciler = OrderReconciler(order_repo=scenario.order_repo, fill_processor=scenario.processor)
+    reconciler = OrderReconciler(
+        order_repo=scenario.order_repo,
+        fill_processor=scenario.processor,
+        uow_factory=scenario.uow_factory,
+    )
     count = await reconciler.reconcile(exchange=exchange, exchange_id=scenario.exchange_id, now=NOW)
     assert count == 1
-    trade = await scenario.trade_repo.get(draft.trade_id)
+    trade = await scenario.trade_repo.get(None, draft.trade_id)
     assert trade.state == TradeState.CANCELLED
 
 
 @pytest.mark.asyncio
 async def test_reconciliation_no_stale_orders_is_noop(scenario):
     exchange = FakeExchange()
-    reconciler = OrderReconciler(order_repo=scenario.order_repo, fill_processor=scenario.processor)
+    reconciler = OrderReconciler(
+        order_repo=scenario.order_repo,
+        fill_processor=scenario.processor,
+        uow_factory=scenario.uow_factory,
+    )
     count = await reconciler.reconcile(exchange=exchange, exchange_id=scenario.exchange_id, now=NOW)
     assert count == 0

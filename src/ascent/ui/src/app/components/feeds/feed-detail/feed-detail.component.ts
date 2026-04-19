@@ -4,8 +4,9 @@ import { DatePipe, JsonPipe } from '@angular/common';
 import { FeedService } from '../../../services/feed.service';
 import { ToastService } from '../../../services/toast.service';
 import { FeedRunListItem } from '../../../models/feed.model';
-import { UniverseItem } from '../../../models/asset.model';
+import { ImpactReport, UniverseItem } from '../../../models/asset.model';
 import { UniversePanelComponent } from '../../shared/universe-panel.component';
+import { UniverseImpactDialogComponent, ImpactDialogChoice } from '../../shared/universe-impact-dialog.component';
 import { PartitionTimelineComponent, PartitionCell } from '../../shared/partition-timeline.component';
 import { Tabs, TabList, Tab } from 'primeng/tabs';
 import { SchemaFormComponent } from '../../shared/schema-form.component';
@@ -31,6 +32,7 @@ import { Button } from 'primeng/button';
     Skeleton,
     Button,
     UniversePanelComponent,
+    UniverseImpactDialogComponent,
     PartitionTimelineComponent,
     DataTableComponent,
     FeedRunsTabComponent,
@@ -294,9 +296,11 @@ export class FeedDetailComponent implements OnInit {
   }
 
   removeUniverseItem(instrumentId: string): void {
-    this.feedService.removeFeedUniverseItem(this.feedId, instrumentId).subscribe({
-      next: () => this.toast.success('Instrument removed from universe'),
-      error: () => this.toast.error('Failed to remove instrument'),
+    this.openImpactDialog({
+      label: 'Instrument',
+      load: this.feedService.getFeedUniverseImpact(this.feedId, instrumentId),
+      remove: () => this.feedService.removeFeedUniverseItem(this.feedId, instrumentId),
+      disable: () => this.feedService.setFeedUniverseItemActive(this.feedId, instrumentId, false),
     });
   }
 
@@ -308,9 +312,94 @@ export class FeedDetailComponent implements OnInit {
   }
 
   removeCompositeItem(compositeId: string): void {
-    this.feedService.removeFeedCompositeUniverseItem(this.feedId, compositeId).subscribe({
-      next: () => this.toast.success('Composite removed from universe'),
-      error: () => this.toast.error('Failed to remove composite'),
+    this.openImpactDialog({
+      label: 'Composite',
+      load: this.feedService.getFeedCompositeUniverseImpact(this.feedId, compositeId),
+      remove: () => this.feedService.removeFeedCompositeUniverseItem(this.feedId, compositeId),
+      disable: () => this.feedService.setFeedCompositeUniverseItemActive(this.feedId, compositeId, false),
+    });
+  }
+
+  onToggleInstrumentActive(event: { id: string; isActive: boolean }): void {
+    this.feedService.setFeedUniverseItemActive(this.feedId, event.id, event.isActive).subscribe({
+      next: () => this.toast.success(event.isActive ? 'Instrument enabled' : 'Instrument disabled'),
+      error: (err) => this.toast.error(err?.error?.message ?? 'Failed to update instrument'),
+    });
+  }
+
+  onToggleCompositeActive(event: { id: string; isActive: boolean }): void {
+    this.feedService.setFeedCompositeUniverseItemActive(this.feedId, event.id, event.isActive).subscribe({
+      next: () => this.toast.success(event.isActive ? 'Composite enabled' : 'Composite disabled'),
+      error: (err) => this.toast.error(err?.error?.message ?? 'Failed to update composite'),
+    });
+  }
+
+  // --- Impact dialog plumbing ---
+
+  impactDialogVisible = signal(false);
+  impactReport = signal<ImpactReport | null>(null);
+  impactBusy = signal(false);
+  impactEntityLabel = signal('Item');
+  impactEntityName = signal<string | null>(null);
+  impactSupportsDisable = signal(true);
+
+  private impactCurrent: {
+    remove: () => import('rxjs').Observable<any>;
+    disable: () => import('rxjs').Observable<any>;
+    successMessage: string;
+    disableMessage: string;
+  } | null = null;
+
+  private openImpactDialog(opts: {
+    label: string;
+    load: import('rxjs').Observable<ImpactReport>;
+    remove: () => import('rxjs').Observable<any>;
+    disable: () => import('rxjs').Observable<any>;
+  }): void {
+    this.impactCurrent = {
+      remove: opts.remove,
+      disable: opts.disable,
+      successMessage: `${opts.label} removed`,
+      disableMessage: `${opts.label} disabled`,
+    };
+    this.impactEntityLabel.set(opts.label);
+    this.impactEntityName.set(null);
+    this.impactReport.set(null);
+    this.impactBusy.set(false);
+    this.impactSupportsDisable.set(true);
+    this.impactDialogVisible.set(true);
+
+    opts.load.subscribe({
+      next: (report) => this.impactReport.set(report),
+      error: () => {
+        this.toast.error('Failed to compute impact');
+        this.impactDialogVisible.set(false);
+      },
+    });
+  }
+
+  onImpactDecision(choice: ImpactDialogChoice): void {
+    if (choice === 'cancel') {
+      this.impactDialogVisible.set(false);
+      this.impactCurrent = null;
+      return;
+    }
+    const op = this.impactCurrent;
+    if (!op) return;
+    this.impactBusy.set(true);
+    const stream = choice === 'remove' ? op.remove() : op.disable();
+    stream.subscribe({
+      next: () => {
+        this.toast.success(choice === 'remove' ? op.successMessage : op.disableMessage);
+        this.impactBusy.set(false);
+        this.impactDialogVisible.set(false);
+        this.impactCurrent = null;
+      },
+      error: (err) => {
+        this.impactBusy.set(false);
+        const msg = err?.error?.message ?? `Failed to ${choice} item`;
+        this.toast.error(msg);
+      },
     });
   }
 }

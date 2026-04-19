@@ -1,0 +1,39 @@
+# Production compose override.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# What this override changes vs. the base compose:
+#   1. exchange/feed/strategy build from their dedicated Dockerfile
+#      targets (which COPY the script in), NOT the generic `runtime`
+#      target with a bind mount. A deployed container is byte-identical
+#      to what we built — no mutable host files.
+#   2. The `command:` override is removed so the target's baked-in CMD
+#      runs (prod CMD is defined in the Dockerfile).
+#   3. The bind-mount volumes are cleared.
+#
+# Nothing here duplicates infra services (db/redis/nats) — they come
+# from the base compose unchanged.
+
+services:
+  exchange:
+    build:
+      context: .
+      target: exchange
+    # Override the dev command; let the target's CMD run the baked-in script.
+    command: null
+    volumes: []
+
+  feed:
+    build:
+      context: .
+      target: feed
+    command: null
+    volumes: []
+
+  strategy:
+    build:
+      context: .
+      target: strategy
+    command: null
+    volumes: []

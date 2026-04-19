@@ -469,7 +469,7 @@ Full designs pending.
 1. **Audit log**: separate immutable `event_audit` table, or rely on JetStream stream + 90-day outbox retention? Decide based on regulatory/forensic requirements.
 2. **Multi-replica consumers**: single-process engine today; when we scale out, consumer framework needs leader election or partition-by-key for exclusive consumers (dispatcher), and broadcast for non-exclusive (UI, audit).
 3. **Strategy and Feed contracts**: not yet refined. Same exercise as `BaseExchange` pending.
-4. **Kraken sandbox validation**: before first live money flow, run the three-test probe for `cl_ord_id` behavior (duplicate, lifetime, REST parity).
+4. **Kraken sandbox validation**: before first live money flow, run the three-test probe for `cl_ord_id` behavior (duplicate, lifetime, REST parity). See [kraken-api-integration.md](./kraken-api-integration.md) for the full research brief and manual test plan (§5.C.6, §5.C.10, §5.C.11, §5.D.7 are the probes that resolve this question).
 5. **Credentials management**: today `config` JSONB on Exchange record holds API keys; rotation / env-var fallback not yet designed.
 
 ---

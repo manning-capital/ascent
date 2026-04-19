@@ -137,7 +137,24 @@
       <span class="text-surface-300">|</span>
       <h1 class="text-lg font-bold truncate">{{ strategy.display_name }}</h1>
       <p-tag [value]="strategy.is_active ? 'Active' : 'Inactive'" [severity]="strategy.is_active ? 'success' : 'secondary'" [rounded]="true"/>
+      @if (strategy.is_paused) {
+        <p-tag value="Paused" severity="warn" [rounded]="true"/>
+      }
+      <div class="flex-1"></div>
+      <p-button
+        size="small"
+        [outlined]="true"
+        [severity]="strategy.is_paused ? 'success' : 'warn'"
+        [label]="strategy.is_paused ? 'Resume' : 'Pause'"
+        [loading]="pauseBusy()"
+        (onClick)="togglePause(strategy.is_paused)"/>
     </div>
+
+    @if (strategy.is_paused) {
+      <div class="px-4 py-2 bg-yellow-500/10 border-b border-yellow-500/20 text-xs text-yellow-300 shrink-0">
+        Strategy is paused — new trades blocked. Open trades can still be managed and exited normally.
+      </div>
+    }
 
     <!-- Tab Bar -->
     <p-tabs class="shrink-0" [value]="activeTab()" (valueChange)="onTabChange($any($event))">
@@ -198,9 +215,21 @@
           } @else if (stats(); as s) {
             <!-- Charts -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 px-6 pt-6">
-              <p-card header="Cumulative P&L">
+              <p-card>
+                <ng-template #header>
+                  <div class="flex items-center justify-between gap-3 p-5 pb-0">
+                    <h3 class="font-semibold text-base">Cumulative P&L</h3>
+                    <p-selectButton
+                      [(ngModel)]="pnlLookback"
+                      [options]="lookbackOptions"
+                      optionLabel="label"
+                      optionValue="value"
+                      [allowEmpty]="false"
+                      size="small"/>
+                  </div>
+                </ng-template>
                 <div class="h-64">
-                  <app-cumulative-pnl-chart [data]="cumulativePnlData()"/>
+                  <app-cumulative-pnl-chart [data]="cumulativePnlData()" [(lookback)]="pnlLookback"/>
                 </div>
               </p-card>
               <p-card header="PnL Distribution">
@@ -398,7 +427,9 @@
           (addInstruments)="onAddInstruments($event)"
           (addComposites)="onAddComposites($event)"
           (removeInstrument)="removeUniverseItem($event)"
-          (removeComposite)="removeCompositeItem($event)"/>
+          (removeComposite)="removeCompositeItem($event)"
+          (toggleInstrumentActive)="onToggleInstrumentActive($event)"
+          (toggleCompositeActive)="onToggleCompositeActive($event)"/>
       }
 
       <!-- Exchanges Tab -->
@@ -508,5 +539,15 @@
 
     </div>
   </div>
+
+  <!-- Impact dialog: covers universe-instrument, composite-universe, and strategy-exchange remove flows -->
+  <app-universe-impact-dialog
+    [(visible)]="impactDialogVisible"
+    [entityLabel]="impactEntityLabel()"
+    [entityName]="impactEntityName()"
+    [impact]="impactReport()"
+    [supportsDisable]="impactSupportsDisable()"
+    [busy]="impactBusy()"
+    (decision)="onImpactDecision($event)"/>
   }
 }

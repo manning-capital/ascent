@@ -17,6 +17,7 @@ class StrategyListItem(BaseModel):
     parameters: dict | list | str | int | float | bool | None = None
     portfolio_id: uuid.UUID
     is_active: bool
+    is_paused: bool = False
     connection_status: str = "disconnected"
     # Computed stats
     total_trades: int = 0
@@ -46,6 +47,12 @@ class StrategyUpdate(BaseModel):
     strategy_ref: str | None = None
     parameters: dict | list | str | int | float | bool | None = None
     is_active: bool | None = None
+
+
+class PauseStrategyRequest(BaseModel):
+    """PATCH body for /strategies/{id}/pause."""
+
+    is_paused: bool
 
 
 class StrategyDetail(StrategyListItem):

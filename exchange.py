@@ -15,8 +15,6 @@ import random
 import time
 from typing import Any
 
-from dotenv import load_dotenv
-
 from ascent.exchanges.base import (
     BalanceEntry,
     BaseExchange,
@@ -32,7 +30,7 @@ class KrakenSecurityExchange(BaseExchange):
     """Paper exchange that simulates Kraken security trades."""
 
     provider = "KRAKEN"
-    instrument_type = "SECURITY"
+    instrument_type = "SPOT_INSTRUMENT"
     poll_interval = 1.0
 
     def __init__(self, config: dict | None = None) -> None:
@@ -66,15 +64,25 @@ class KrakenSecurityExchange(BaseExchange):
         return list(zip(fill_times, fill_sizes, strict=False))
 
     def _evaluate_fills(self, order: dict[str, Any]) -> None:
-        """Update an order's fill state based on elapsed time."""
-        elapsed = time.monotonic() - order["start_time"]
-        filled = sum(size for t, size in order["schedule"] if elapsed >= t)
+        """Update an order's fill state based on elapsed time.
 
+        When every scheduled fill has passed, snap directly to the order's
+        total quantity — re-summing the schedule fragments here would
+        re-introduce the float drift that ``_build_schedule`` already
+        snapped out, leaving orders stuck on PARTIALLY_FILLED with
+        ``filled_quantity=0.00999...`` forever.
+        """
+        elapsed = time.monotonic() - order["start_time"]
+        schedule = order["schedule"]
         total = order["request"].quantity
-        if filled >= total:
+
+        if schedule and elapsed >= schedule[-1][0]:
             order["filled_quantity"] = total
             order["status"] = "FILLED"
-        elif filled > 0:
+            return
+
+        filled = sum(size for t, size in schedule if elapsed >= t)
+        if filled > 0:
             order["filled_quantity"] = filled
             order["status"] = "PARTIALLY_FILLED"
 
@@ -196,7 +204,6 @@ class KrakenSecurityExchange(BaseExchange):
 
 
 if __name__ == "__main__":
-    load_dotenv()
     KrakenSecurityExchange.run(
         redis_url=os.environ["ASCENT_REDIS_URL"],
         database_url=os.environ["ASCENT_DATABASE_URL"],

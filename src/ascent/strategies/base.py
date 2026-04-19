@@ -22,9 +22,10 @@ Example
 
         feeds = [MarketData]
 
-        def evaluate(self, ctx: pd.DataFrame) -> None:
-            prices = ctx[('market_data', 'close')]
-            ...
+        def evaluate(self, ctx: Context) -> None:
+            for inst_id in ctx.universe:
+                price = ctx.df.loc[inst_id, ('market_data', 'close')]
+                ...
 
     if __name__ == "__main__":
         PairsStrategy.run()
@@ -37,10 +38,10 @@ import uuid
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, ClassVar, Literal
 
-import pandas as pd
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
+    from ascent.application.context_builder import Context
     from ascent.application.route_trade import TradeDraft, TradeRouter
     from ascent.feeds.base import Feed
 
@@ -100,16 +101,26 @@ class Strategy(ABC):
     # ------------------------------------------------------------------
 
     @abstractmethod
-    def evaluate(self, ctx: pd.DataFrame) -> None:
-        """Called on each execution tick with the consolidated context DataFrame.
+    def evaluate(self, ctx: Context) -> None:
+        """Called on each execution tick with the consolidated context.
 
-        The ``ctx`` DataFrame has a two-level :class:`~pandas.MultiIndex` on
-        columns.  Level 0 groups data by source (``'trade'`` for trade/order
-        state, or a feed name like ``'market_data'``).  Level 1 holds the
-        individual fields (``'status'``, ``'close'``, etc.).
+        ``ctx`` is a :class:`~ascent.application.context_builder.Context`
+        dataclass with three fields:
 
-        **Index** — ``instrument_id`` for instrument strategies, or a
-        ``(composite_id, instrument_id)`` MultiIndex for composite strategies.
+        - ``ctx.df``: the consolidated DataFrame. Columns are a two-level
+          :class:`~pandas.MultiIndex`: level 0 groups by source (``'trade'``
+          for trade/order state, or a feed name like ``'market_data'``);
+          level 1 holds the individual fields (``'status'``, ``'close'``,
+          etc.). Index is ``instrument_id`` for instrument strategies or a
+          ``(composite_id, instrument_id)`` MultiIndex for composite
+          strategies.
+        - ``ctx.universe``: ``frozenset[str]`` of active scope IDs the
+          strategy may **open new trades** on. Stringified for ``df.index``
+          parity.
+        - ``ctx.open_only``: ``frozenset[str]`` of IDs that appear in
+          ``df`` only because of a non-terminal trade — exit-only set,
+          covers disabled scope rows and instruments whose scope row was
+          removed while a position was still open.
 
         Trade columns (under ``('trade', ...)``):
             ``status``, ``trade_id``, ``direction``, ``entry_price``,

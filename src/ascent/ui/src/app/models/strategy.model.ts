@@ -7,6 +7,7 @@ export interface StrategyListItem {
   parameters: any;
   portfolio_id: string;
   is_active: boolean;
+  is_paused: boolean;
   total_trades: number;
   open_trades: number;
   win_rate: number;

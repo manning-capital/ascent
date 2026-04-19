@@ -1,17 +1,4 @@
-"""Regression tests for legacy trades with NULL ``leg.entry_order_id``.
-
-Before ``TradeRouter.submit`` linked the leg back to its entry order, trades
-could be persisted where the forward FK (``Order.trade_leg_id`` → leg) was
-set but the reverse FK (``TradeLeg.entry_order_id`` → order) was NULL. When
-those trades arrived at the fill path, the state machine couldn't find the
-order on the trade and raised ``ValueError`` — which crashed the service
-task. These tests pin down two defences:
-
-1. ``FillProcessor.process`` logs and drops on location failure rather than
-   propagating — one bad event never tears down the whole loop.
-2. ``OrderReconciler`` actively heals the linkage when ``trade_repo`` is
-   wired in — legacy trades self-fix on the first reconciliation pass.
-"""
+"""Regression tests for legacy trades with NULL ``leg.entry_order_id``."""
 
 from __future__ import annotations
 
@@ -34,6 +21,7 @@ from ascent.domain import (
 from ascent.exchanges.base import OrderStatusResponse
 from tests.fakes import (
     FakeExchange,
+    FakeUnitOfWorkFactory,
     InMemoryEventBus,
     InMemoryOrderRepository,
     InMemoryTradeRepository,
@@ -47,16 +35,13 @@ def _legacy_trade_with_unlinked_leg(
     order_repo: InMemoryOrderRepository,
     exchange_id: uuid.UUID,
 ) -> tuple[Trade, Order, uuid.UUID]:
-    """Build a trade that matches the legacy on-disk shape: Order has
-    ``trade_leg_id`` set but ``TradeLeg.entry_order`` is None.
-    """
     leg_id = uuid.uuid4()
     leg = TradeLeg(
         id=leg_id,
         instrument_id=uuid.uuid4(),
         direction=Direction.LONG,
         quantity=1.0,
-        entry_order=None,  # <-- the legacy state we're guarding against
+        entry_order=None,
     )
     trade = Trade(
         id=uuid.uuid4(),
@@ -77,7 +62,6 @@ def _legacy_trade_with_unlinked_leg(
         quantity=1.0,
         price=100.0,
     )
-    # Mirror SQL adapter: order row carries the forward link to the leg.
     order_repo.add(order, trade_id=trade.id, leg_id=leg_id, exchange_id=exchange_id)
     return trade, order, leg_id
 
@@ -89,21 +73,25 @@ async def test_fill_processor_drops_event_when_order_not_on_trade():
     trade_repo.link_order_repo(order_repo)
     order_repo.link_trade_repo(trade_repo)
     bus = InMemoryEventBus()
+    uow_factory = FakeUnitOfWorkFactory()
     trade, order, _ = _legacy_trade_with_unlinked_leg(
         trade_repo, order_repo, exchange_id=uuid.uuid4()
     )
 
-    processor = FillProcessor(trade_repo=trade_repo, order_repo=order_repo, event_bus=bus)
+    processor = FillProcessor(
+        trade_repo=trade_repo,
+        order_repo=order_repo,
+        event_bus=bus,
+        uow_factory=uow_factory,
+    )
 
-    # Must not raise — the service loop above depends on this staying alive.
     await processor.process(
         trade_id=trade.id,
         event=FillEvent(order_id=order.id, state=OrderState.FILLED),
         now=NOW,
     )
 
-    # Trade stays untouched (no state change, no UI notification).
-    assert (await trade_repo.get(trade.id)).state == TradeState.OPENING
+    assert (await trade_repo.get(None, trade.id)).state == TradeState.OPENING
     assert bus.published == []
 
 
@@ -114,12 +102,12 @@ async def test_reconciler_heals_missing_entry_order_linkage():
     trade_repo.link_order_repo(order_repo)
     order_repo.link_trade_repo(trade_repo)
     bus = InMemoryEventBus()
+    uow_factory = FakeUnitOfWorkFactory()
     exchange_id = uuid.uuid4()
     trade, order, leg_id = _legacy_trade_with_unlinked_leg(
         trade_repo, order_repo, exchange_id=exchange_id
     )
-    # Give the order an external id so the reconciler can fetch its status.
-    await order_repo.set_external_id(order.id, "EX-LEGACY")
+    await order_repo.set_external_id(None, order.id, "EX-LEGACY")
 
     exchange = FakeExchange()
     exchange.open_orders.append(
@@ -131,37 +119,39 @@ async def test_reconciler_heals_missing_entry_order_linkage():
         )
     )
 
-    processor = FillProcessor(trade_repo=trade_repo, order_repo=order_repo, event_bus=bus)
+    processor = FillProcessor(
+        trade_repo=trade_repo,
+        order_repo=order_repo,
+        event_bus=bus,
+        uow_factory=uow_factory,
+    )
     reconciler = OrderReconciler(
         order_repo=order_repo,
         fill_processor=processor,
         trade_repo=trade_repo,
+        uow_factory=uow_factory,
     )
 
     count = await reconciler.reconcile(exchange=exchange, exchange_id=exchange_id, now=NOW)
     assert count == 1
 
-    healed = await trade_repo.get(trade.id)
-    # The linkage was backfilled …
+    healed = await trade_repo.get(None, trade.id)
     assert healed.legs[0].entry_order is not None
     assert healed.legs[0].entry_order.id == order.id
-    # … and the fill then landed cleanly, flipping the trade to OPEN.
     assert healed.state == TradeState.OPEN
 
 
 @pytest.mark.asyncio
 async def test_reconciler_without_trade_repo_does_not_heal_but_still_drops_safely():
-    """Belt-and-suspenders: even if the Runner forgot to pass trade_repo to
-    the reconciler, the service must not crash on legacy trades.
-    """
     trade_repo = InMemoryTradeRepository()
     order_repo = InMemoryOrderRepository()
     trade_repo.link_order_repo(order_repo)
     order_repo.link_trade_repo(trade_repo)
     bus = InMemoryEventBus()
+    uow_factory = FakeUnitOfWorkFactory()
     exchange_id = uuid.uuid4()
     _, order, _ = _legacy_trade_with_unlinked_leg(trade_repo, order_repo, exchange_id=exchange_id)
-    await order_repo.set_external_id(order.id, "EX-LEGACY")
+    await order_repo.set_external_id(None, order.id, "EX-LEGACY")
 
     exchange = FakeExchange()
     exchange.open_orders.append(
@@ -173,8 +163,16 @@ async def test_reconciler_without_trade_repo_does_not_heal_but_still_drops_safel
         )
     )
 
-    processor = FillProcessor(trade_repo=trade_repo, order_repo=order_repo, event_bus=bus)
-    # No trade_repo → no healing. Must still return normally.
-    reconciler = OrderReconciler(order_repo=order_repo, fill_processor=processor)
+    processor = FillProcessor(
+        trade_repo=trade_repo,
+        order_repo=order_repo,
+        event_bus=bus,
+        uow_factory=uow_factory,
+    )
+    reconciler = OrderReconciler(
+        order_repo=order_repo,
+        fill_processor=processor,
+        uow_factory=uow_factory,
+    )
     count = await reconciler.reconcile(exchange=exchange, exchange_id=exchange_id, now=NOW)
-    assert count == 1  # event was dispatched, even if dropped downstream
+    assert count == 1

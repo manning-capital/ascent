@@ -19,6 +19,15 @@ class RunTrackerPort(Protocol):
         self, feed_id: uuid.UUID, *, partition_id: uuid.UUID | None = None
     ) -> AbstractAsyncContextManager[uuid.UUID]: ...
 
+    async def link_feed_run_partition(
+        self, run_id: uuid.UUID, partition_id: uuid.UUID
+    ) -> None:
+        """Backfill ``FeedRun.partition_id`` once the executor has created the
+        partition. Scheduled and triggered runs only learn their partition mid-
+        execute, so the run row is created without one and linked after.
+        """
+        ...
+
     def track_strategy_run(
         self, strategy_id: uuid.UUID
     ) -> AbstractAsyncContextManager[uuid.UUID]: ...

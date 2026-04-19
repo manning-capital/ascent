@@ -37,12 +37,13 @@ from ascent.server.schemas.trades import (
 )
 
 TRADE_STATUS_TRANSITIONS: dict[str, set[str]] = {
-    "PENDING": {"OPENING", "CANCELLED"},
+    "PENDING": {"OPENING", "CANCELLED", "REJECTED"},
     "OPENING": {"OPEN", "CANCELLED", "ERROR"},
     "OPEN": {"CLOSING", "ERROR"},
     "CLOSING": {"CLOSED", "ERROR"},
     "CLOSED": set(),
     "CANCELLED": set(),
+    "REJECTED": set(),
     "ERROR": {"PENDING", "CANCELLED"},
 }
 

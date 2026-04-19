@@ -16,6 +16,7 @@ import pandas as pd
 import redis.asyncio as aioredis
 
 from ascent.ports import Event, EventBus, HeartbeatStore, LatestFeedStore, StateStore
+from ascent.ports.durable_publisher import DurablePublisher
 
 
 class _RedisBase:
@@ -170,3 +171,28 @@ class RedisHeartbeat(_RedisBase, HeartbeatStore):
 def create_redis_client(redis_url: str) -> aioredis.Redis:
     """Factory — keeps ``decode_responses=True`` consistent across adapters."""
     return aioredis.from_url(redis_url, decode_responses=True)
+
+
+# ---------------------------------------------------------------------------
+# DurablePublisher (Redis pub/sub shim)
+# ---------------------------------------------------------------------------
+
+
+class RedisDurablePublisher(DurablePublisher):
+    """Temporary phase-4 shim. Forwards outbox rows to the Redis event bus
+    so existing subscribers keep working until the JetStream stack lands.
+
+    Redis pub/sub has no dedup — if the relay re-publishes after a crash,
+    downstream consumers will see the event twice. This is **not** a
+    production-safe durable publisher; it only exists to let us wire and
+    test the outbox → relay flow before introducing NATS.
+    """
+
+    def __init__(self, event_bus: EventBus) -> None:
+        self._bus = event_bus
+
+    async def publish(self, subject: str, payload: dict[str, Any], *, msg_id: str) -> None:
+        # msg_id is discarded — the shim has no dedup. Real impl (JetStream)
+        # uses ``Nats-Msg-Id`` for 2-minute dedup windows.
+        del msg_id
+        await self._bus.publish(subject, payload)

@@ -46,6 +46,12 @@ def redis_url(test_env):
 
 
 @pytest.fixture(scope="session")
+def nats_url(test_env):
+    """NATS URL for the test NATS JetStream container."""
+    return test_env.nats_url
+
+
+@pytest.fixture(scope="session")
 def engine_cache(redis_url):
     """Real EngineCache instance connected to the test Redis container."""
     return EngineCache(redis_url)

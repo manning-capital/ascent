@@ -3,6 +3,11 @@
 Resolves which exchange should handle a given instrument within a strategy's
 configured exchange set. Used when creating trades to automatically determine
 the execution venue for each trade leg.
+
+Resolution is purely type-based: an exchange handles an instrument iff its
+``(provider_id, instrument_type_id)`` matches the instrument's pair. When more
+than one strategy exchange matches, the highest-priority one (lowest
+``StrategyExchange.order``) wins.
 """
 
 import uuid
@@ -10,8 +15,10 @@ import uuid
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ascent.database.models import ExchangeInstrumentScope, StrategyExchange
+from ascent.database.models import StrategyExchange
 from ascent.database.models.composites import CompositeMember
+from ascent.database.models.exchanges import Exchange
+from ascent.database.models.instruments import Instrument
 from ascent.server.exceptions import BadRequestError
 
 
@@ -22,23 +29,21 @@ def resolve_exchange_for_instrument(
 ) -> uuid.UUID:
     """Find the exchange that should handle a given instrument for a strategy.
 
-    Resolution logic:
-    1. Get all exchanges that have this instrument in their universe (ExchangeInstrumentScope)
-    2. Get all exchanges this strategy is configured to use (StrategyExchange)
-    3. Return the intersection, ordered by the StrategyExchange.order (priority)
+    Picks the highest-priority strategy exchange whose
+    ``(provider_id, instrument_type_id)`` matches the instrument.
 
     Raises BadRequestError if no matching exchange is found.
     """
-    # Exchanges that have this instrument in their universe
-    instrument_exchanges = select(ExchangeInstrumentScope.exchange_id).where(
-        ExchangeInstrumentScope.instrument_id == instrument_id
-    )
+    instrument = db.get(Instrument, instrument_id)
+    if instrument is None:
+        raise BadRequestError(f"Instrument {instrument_id} not found")
 
-    # Intersect with strategy's configured exchanges, ordered by priority
     query = (
         select(StrategyExchange.exchange_id)
+        .join(Exchange, Exchange.id == StrategyExchange.exchange_id)
         .where(StrategyExchange.strategy_id == strategy_id)
-        .where(StrategyExchange.exchange_id.in_(instrument_exchanges))
+        .where(Exchange.provider_id == instrument.provider_id)
+        .where(Exchange.instrument_type_id == instrument.instrument_type_id)
         .order_by(StrategyExchange.order.asc())
         .limit(1)
     )
@@ -47,7 +52,7 @@ def resolve_exchange_for_instrument(
     if result is None:
         raise BadRequestError(
             f"No exchange configured for instrument {instrument_id} on strategy {strategy_id}. "
-            "Ensure the instrument is in an exchange's universe and that exchange is linked to this strategy."
+            "Add an exchange to this strategy whose provider and instrument type match the instrument."
         )
 
     return result

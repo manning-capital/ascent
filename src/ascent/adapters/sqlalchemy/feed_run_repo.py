@@ -31,6 +31,17 @@ class SqlAlchemyFeedRunRepository(FeedRunRepository):
     async def fail(self, run_id: uuid.UUID, *, at: datetime, error_message: str) -> None:
         await asyncio.to_thread(self._update_sync, run_id, "FAILED", at, error_message)
 
+    async def link_partition(self, run_id: uuid.UUID, partition_id: uuid.UUID) -> None:
+        await asyncio.to_thread(self._link_partition_sync, run_id, partition_id)
+
+    def _link_partition_sync(self, run_id: uuid.UUID, partition_id: uuid.UUID) -> None:
+        with Session(bind=self._sf.kw["bind"]) as db:
+            row = db.get(FeedRun, run_id)
+            if row is None:
+                return
+            row.partition_id = partition_id
+            db.commit()
+
     def _create_sync(
         self,
         feed_id: uuid.UUID,

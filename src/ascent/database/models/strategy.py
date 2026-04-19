@@ -2,7 +2,7 @@ import datetime
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, String, Uuid, func
+from sqlalchemy import Boolean, ForeignKey, String, Uuid, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -36,6 +36,9 @@ class Strategy(NamedEntityMixin, Base):
     )
     portfolio: Mapped["Portfolio"] = relationship("Portfolio")
     parameter_schema: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    is_paused: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
 
     # Relationships
     runs: Mapped[list["StrategyRun"]] = relationship(
@@ -91,6 +94,9 @@ class StrategyInstrumentScope(Base):
     )
     instrument: Mapped["Instrument"] = relationship("Instrument")
     order: Mapped[int] = mapped_column(nullable=False)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
     created_at: Mapped[datetime.datetime] = mapped_column(
         nullable=False,
         server_default=func.now(),
@@ -118,6 +124,9 @@ class StrategyCompositeScope(Base):
     )
     composite: Mapped["Composite"] = relationship("Composite")
     order: Mapped[int] = mapped_column(nullable=False)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
     created_at: Mapped[datetime.datetime] = mapped_column(
         nullable=False,
         server_default=func.now(),
@@ -147,6 +156,9 @@ class StrategyExchange(Base):
     )
     exchange: Mapped["Exchange"] = relationship("Exchange")
     order: Mapped[int] = mapped_column(nullable=False)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
     created_at: Mapped[datetime.datetime] = mapped_column(
         nullable=False,
         server_default=func.now(),

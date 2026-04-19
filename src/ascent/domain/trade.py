@@ -50,7 +50,7 @@ _ORDER_ACTIVE = frozenset({OrderState.SUBMITTED, OrderState.PARTIALLY_FILLED})
 
 
 class TradeState(str, enum.Enum):
-    """Trade lifecycle. Terminal: CLOSED, CANCELLED."""
+    """Trade lifecycle. Terminal: CLOSED, CANCELLED, REJECTED."""
 
     PENDING = "PENDING"
     OPENING = "OPENING"
@@ -58,6 +58,7 @@ class TradeState(str, enum.Enum):
     CLOSING = "CLOSING"
     CLOSED = "CLOSED"
     CANCELLED = "CANCELLED"
+    REJECTED = "REJECTED"
     ERROR = "ERROR"
 
     @property
@@ -65,7 +66,7 @@ class TradeState(str, enum.Enum):
         return self in _TRADE_TERMINAL
 
 
-_TRADE_TERMINAL = frozenset({TradeState.CLOSED, TradeState.CANCELLED})
+_TRADE_TERMINAL = frozenset({TradeState.CLOSED, TradeState.CANCELLED, TradeState.REJECTED})
 
 
 @dataclass(frozen=True)

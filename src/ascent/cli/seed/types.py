@@ -265,6 +265,7 @@ def seed_types(client: Any, ctx: dict) -> None:
         ("CLOSING", "Closing", "Exit orders have been submitted"),
         ("CLOSED", "Closed", "Trade has been closed"),
         ("CANCELLED", "Cancelled", "Trade was cancelled"),
+        ("REJECTED", "Rejected", "Trade was rejected before any orders were placed"),
         ("ERROR", "Error", "Trade encountered an error"),
     ]:
         client.create_trade_status_type(name=name, display_name=display_name, description=desc)

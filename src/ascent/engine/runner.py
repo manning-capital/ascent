@@ -27,16 +27,23 @@ from ascent.adapters import (
     RedisStateStore,
     SqlAlchemyFeedRunRepository,
     SqlAlchemyOrderRepository,
+    SqlAlchemyOutboxPublisher,
+    SqlAlchemyOutboxReader,
     SqlAlchemyPartitionRepository,
+    SqlAlchemyRouteGate,
     SqlAlchemyRunTracker,
     SqlAlchemyStrategyRunRepository,
+    SqlAlchemyStrategyUniverseRepository,
     SqlAlchemyTradeRepository,
+    SqlAlchemyUnitOfWorkFactory,
     SystemClock,
     TimescaleFeedStore,
     TypeCache,
 )
+from ascent.adapters.nats import NatsJetStreamPublisher, connect_nats, ensure_stream
 from ascent.adapters.redis_asyncio import create_redis_client
 from ascent.application import (
+    DispatcherService,
     ExchangeService,
     FeedBinding,
     FeedContext,
@@ -47,6 +54,8 @@ from ascent.application import (
     FillProcessor,
     HeartbeatService,
     OrderReconciler,
+    OutboxRelay,
+    PeriodicReconciliationService,
     PersistenceService,
     ScheduledFeedService,
     StrategyEvaluator,
@@ -54,7 +63,13 @@ from ascent.application import (
     TriggeredFeedService,
 )
 from ascent.domain import OrderType
-from ascent.engine.context import PartitionInfo, _current_feeds, _current_logger, _current_partition
+from ascent.engine.context import (
+    PartitionInfo,
+    _current_feeds,
+    _current_logger,
+    _current_partition,
+    _current_universe,
+)
 from ascent.engine.deploy import deploy_exchange, deploy_feed, deploy_strategy
 from ascent.feeds.schedule import Schedule
 from ascent.server.config import Settings
@@ -107,12 +122,14 @@ class Runner:
         *,
         database_url: str | None = None,
         redis_url: str | None = None,
+        nats_url: str | None = None,
         include_writer: bool = False,
         log_level: str = "INFO",
     ) -> None:
         settings = Settings()
         self._database_url = database_url or settings.database_url
         self._redis_url = redis_url or settings.redis_url
+        self._nats_url = nats_url or settings.nats_url
         self._include_writer = include_writer
         self._log_level = log_level
         self._feeds: list[type[Feed]] = []
@@ -154,6 +171,18 @@ class Runner:
         await redis.ping()
         logger.info("Connected to Redis at %s", self._redis_url)
 
+        nc = await connect_nats(self._nats_url, name="ascent-engine")
+        logger.info("Connected to NATS at %s", self._nats_url)
+        # Provision the dispatch + fill-response stream. Subject taxonomy:
+        # - ascent.exchange.<exchange-id>            — dispatch
+        # - ascent.exchange.<exchange-id>.responses  — fills (phase 7)
+        # Both live on one stream; consumers use filter_subject to split.
+        await ensure_stream(
+            nc,
+            stream_name="ASCENT_EXCHANGE",
+            subjects=["ascent.exchange.>"],
+        )
+
         event_bus = RedisEventBus(redis)
         feed_cache = RedisFeedCache(redis)
         RedisStateStore(redis)
@@ -162,8 +191,14 @@ class Runner:
         type_cache = TypeCache(session_factory)
         mappers = OrmMappers(type_cache)
 
-        trade_repo = SqlAlchemyTradeRepository(session_factory, type_cache, mappers)
-        order_repo = SqlAlchemyOrderRepository(session_factory, type_cache, mappers)
+        trade_repo = SqlAlchemyTradeRepository(type_cache, mappers)
+        order_repo = SqlAlchemyOrderRepository(type_cache, mappers)
+        universe_repo = SqlAlchemyStrategyUniverseRepository()
+        route_gate = SqlAlchemyRouteGate()
+        uow_factory = SqlAlchemyUnitOfWorkFactory(session_factory)
+        outbox_publisher = SqlAlchemyOutboxPublisher()
+        outbox_reader = SqlAlchemyOutboxReader()
+        durable_publisher = NatsJetStreamPublisher(nc)
         feed_run_repo = SqlAlchemyFeedRunRepository(session_factory)
         strategy_run_repo = SqlAlchemyStrategyRunRepository(session_factory)
         partition_repo = SqlAlchemyPartitionRepository(session_factory)
@@ -181,16 +216,25 @@ class Runner:
 
         deployment = await asyncio.to_thread(self._deploy_all, engine)
         feed_records = await asyncio.to_thread(self._load_feed_records, session_factory, deployment)
+        await asyncio.to_thread(self._reconcile_strategy_universes, session_factory, deployment)
 
         fill_processor = FillProcessor(
-            trade_repo=trade_repo, order_repo=order_repo, event_bus=event_bus
+            trade_repo=trade_repo,
+            order_repo=order_repo,
+            event_bus=event_bus,
+            uow_factory=uow_factory,
         )
         reconciler = OrderReconciler(
             order_repo=order_repo,
             fill_processor=fill_processor,
             trade_repo=trade_repo,
+            uow_factory=uow_factory,
         )
-        persister = FeedPersister(latest_store=feed_cache, historical_store=historical)
+        persister = FeedPersister(
+            latest_store=feed_cache,
+            historical_store=historical,
+            attribute_resolver=type_cache,
+        )
 
         shutdown = asyncio.Event()
         self._install_signal_handlers(shutdown)
@@ -213,6 +257,7 @@ class Runner:
                         event_bus,
                         feed_cache,
                         clock,
+                        session_factory,
                     )
                 for strategy_cls in self._strategies:
                     await self._start_strategy(
@@ -224,10 +269,25 @@ class Runner:
                         feed_cache=feed_cache,
                         trade_repo=trade_repo,
                         order_repo=order_repo,
+                        universe_repo=universe_repo,
+                        route_gate=route_gate,
+                        outbox=outbox_publisher,
+                        uow_factory=uow_factory,
                         run_tracker=run_tracker,
                         clock=clock,
                         type_cache=type_cache,
                     )
+                # Outbox relay: forwards durable events to the broker. In
+                # phase-4 this shims to Redis pub/sub so existing ExchangeService
+                # subscribers keep working. Phase 5 swaps the publisher for
+                # NATS JetStream with no other changes.
+                relay = OutboxRelay(
+                    uow_factory=uow_factory,
+                    reader=outbox_reader,
+                    publisher=durable_publisher,
+                    clock=clock,
+                )
+                tg.create_task(relay.run_forever(), name="outbox-relay")
                 for exchange_cls in self._exchanges:
                     self._start_exchange(
                         tg=tg,
@@ -237,10 +297,12 @@ class Runner:
                         event_bus=event_bus,
                         reconciler=reconciler,
                         clock=clock,
+                        nc=nc,
+                        durable_publisher=durable_publisher,
                     )
                 if self._exchanges:
                     tg.create_task(
-                        self._start_fill_handler(session_factory, event_bus, fill_processor, clock),
+                        self._start_fill_handler(nc, fill_processor, clock),
                         name="fill-handler",
                     )
                 if self._include_writer:
@@ -256,6 +318,10 @@ class Runner:
             pass
         finally:
             await redis.aclose()
+            try:
+                await nc.close()
+            except Exception:
+                logger.exception("Error closing NATS connection")
             logger.info("Runner shut down cleanly")
 
     # ------------------------------------------------------------------
@@ -301,6 +367,30 @@ class Runner:
                 }
         return records
 
+    def _reconcile_strategy_universes(
+        self, session_factory: sessionmaker, deployment: _Deployment
+    ) -> None:
+        """Auto-disable drifted strategy universe items.
+
+        For each strategy, walk active instrument/composite scope rows and
+        flip ``is_active=False`` on any row that no longer has a tradeable
+        exchange or a covering feed scope. Logs one line per drifted item so
+        the operator can see what was disabled on boot.
+        """
+        from ascent.server.services.universe_service import reconcile_strategy_universe
+
+        with Session(bind=session_factory.kw["bind"]) as db:
+            for sid in deployment.strategy_ids.values():
+                drift = reconcile_strategy_universe(db, sid)
+                for item in drift:
+                    logger.warning(
+                        "Auto-disabled drifted %s item %s on strategy %s: %s",
+                        item.scope_type,
+                        item.item_id,
+                        item.strategy_id,
+                        item.reason,
+                    )
+
     def _heartbeat_targets(self, deployment: _Deployment) -> list[tuple[str, uuid.UUID]]:
         targets: list[tuple[str, uuid.UUID]] = []
         for fid in deployment.feed_ids.values():
@@ -325,9 +415,11 @@ class Runner:
         event_bus,
         feed_cache,
         clock,
+        session_factory,
     ) -> None:
         fid = next(k for k, v in feed_records.items() if v["cls"] is feed_cls)
         record = feed_records[fid]["model"]
+        is_composite_scoped = feed_records[fid]["is_composite_scoped"]
         feed_ctx = FeedContext(
             feed_id=fid,
             feed_ref=record.feed_ref,
@@ -340,13 +432,21 @@ class Runner:
             logger.warning("Streaming feed %s not yet supported, skipping", feed_cls.ref())
             return
 
+        factory = _fetcher_factory(
+            feed_cls,
+            record.parameters or {},
+            feed_id=fid,
+            is_composite_scoped=is_composite_scoped,
+            session_factory=session_factory,
+        )
+
         if feed_cls.schedule is not None:
             service = ScheduledFeedService(
                 feed=feed_ctx,
                 executor=executor,
                 run_tracker=run_tracker,
                 clock=clock,
-                fetcher_factory=_fetcher_factory(feed_cls, record.parameters or {}),
+                fetcher_factory=factory,
             )
             tg.create_task(service.run_forever(), name=f"feed-{feed_cls.__name__}")
             return
@@ -368,7 +468,7 @@ class Runner:
                 run_tracker=run_tracker,
                 event_bus=event_bus,
                 feed_store=feed_cache,
-                fetcher_factory=_fetcher_factory(feed_cls, record.parameters or {}),
+                fetcher_factory=factory,
             )
             tg.create_task(service.run_forever(), name=f"feed-{feed_cls.__name__}")
             return
@@ -390,6 +490,10 @@ class Runner:
         feed_cache,
         trade_repo,
         order_repo,
+        universe_repo,
+        route_gate,
+        outbox,
+        uow_factory,
         run_tracker,
         clock,
         type_cache: TypeCache,
@@ -417,6 +521,11 @@ class Runner:
             if feed_spec["is_composite_scoped"]:
                 scope = "composite"
 
+        if scope == "composite":
+            composite_members = await asyncio.to_thread(
+                self._load_composite_members, session_factory
+            )
+
         strategy_instance = strategy_cls(strategy_info["parameters"])
         router: TradeRouter | None = None
         if strategy_info["exchanges"]:
@@ -426,10 +535,13 @@ class Runner:
                 trade_repo=trade_repo,
                 order_repo=order_repo,
                 event_bus=event_bus,
+                outbox=outbox,
+                uow_factory=uow_factory,
                 exchanges=[
                     ExchangeBinding(exchange_id=eid, channel=f"ascent.exchange.{eid}")
                     for eid in strategy_info["exchanges"]
                 ],
+                route_gate=route_gate,
             )
             strategy_instance._trade_router = _SyncRouterProxy(router, asyncio.get_running_loop())
 
@@ -448,14 +560,37 @@ class Runner:
             scope=scope,
             composite_members=composite_members,
             trade_repo=trade_repo,
+            universe_repo=universe_repo,
             feed_store=feed_cache,
             event_bus=event_bus,
             run_tracker=run_tracker,
             clock=clock,
             evaluator=evaluator,
-            attribute_map=type_cache.attribute_map,
+            uow_factory=uow_factory,
         )
         tg.create_task(evaluator_service.run_forever(), name=f"strategy-{strategy_cls.__name__}")
+
+    def _load_composite_members(
+        self, session_factory
+    ) -> dict[uuid.UUID, list[uuid.UUID]]:
+        """Load every composite's ordered instrument members.
+
+        Composite-scoped strategies need this mapping to build the
+        ``(composite_id, instrument_id)`` MultiIndex that backs ``ctx.df``.
+        Returned list is ordered by ``CompositeMember.order``.
+        """
+        from ascent.database.models.composites import CompositeMember
+
+        members: dict[uuid.UUID, list[uuid.UUID]] = {}
+        with Session(bind=session_factory.kw["bind"]) as db:
+            rows = (
+                db.query(CompositeMember)
+                .order_by(CompositeMember.composite_id, CompositeMember.order)
+                .all()
+            )
+            for row in rows:
+                members.setdefault(row.composite_id, []).append(row.instrument_id)
+        return members
 
     def _load_strategy_info(self, session_factory, strategy_id: uuid.UUID) -> dict:
         from ascent.database.models.exchanges import Exchange as ExchangeModel
@@ -520,7 +655,10 @@ class Runner:
         event_bus,
         reconciler,
         clock,
+        nc,
+        durable_publisher,
     ) -> None:
+        from ascent.adapters.nats import NatsJetStreamConsumer
         from ascent.database.models.exchanges import Exchange as ExchangeModel
 
         eid = deployment.exchange_ids[exchange_cls.ref()]
@@ -529,31 +667,70 @@ class Runner:
         config = record.config if record else {}
         exchange_instance = exchange_cls(config)
         adapter = ExchangeAdapter(exchange_instance)
-        service = ExchangeService(
+        dispatch_channel = f"ascent.exchange.{eid}"
+        responses_channel = f"{dispatch_channel}.responses"
+
+        # Dispatcher consumes dispatch intents from JetStream and forwards to
+        # the exchange. Durable consumer name is per-exchange so restart
+        # resumes the cursor.
+        consumer = NatsJetStreamConsumer(
+            nc,
+            stream="ASCENT_EXCHANGE",
+            subject_filter=dispatch_channel,
+            durable_name=f"dispatcher-{eid}",
+        )
+        # The dispatcher and exchange-fill loop both publish responses to
+        # JetStream via the same durable publisher (msg_id keyed on
+        # exchange_order_id + status dedups redeliveries).
+        dispatcher = DispatcherService(
             exchange_id=eid,
             exchange=adapter,
-            channel=f"ascent.exchange.{eid}",
-            event_bus=event_bus,
-            reconciler=reconciler,
+            consumer=consumer,
+            responses_subject=responses_channel,
+            responses_publisher=durable_publisher,
             clock=clock,
         )
-        tg.create_task(service.run_forever(), name=f"exchange-{exchange_cls.__name__}")
+        tg.create_task(dispatcher.run_forever(), name=f"dispatcher-{exchange_cls.__name__}")
 
-    async def _start_fill_handler(self, session_factory, event_bus, fill_processor, clock) -> None:
-        from ascent.database.models.exchanges import Exchange as ExchangeModel
+        fill_service = ExchangeService(
+            exchange_id=eid,
+            exchange=adapter,
+            responses_subject=responses_channel,
+            responses_publisher=durable_publisher,
+            reconciler=reconciler,
+            clock=clock,
+            open_orders=dispatcher.open_orders,
+        )
+        tg.create_task(fill_service.run_forever(), name=f"exchange-{exchange_cls.__name__}")
 
-        def _load_channels() -> list[str]:
-            with Session(bind=session_factory.kw["bind"]) as db:
-                rows = db.query(ExchangeModel).filter(ExchangeModel.is_active.is_(True)).all()
-                return [f"ascent.exchange.{ex.id}.responses" for ex in rows]
+        # Layer-2 stuck-trade defense: re-run the reconciler every 5 minutes.
+        # Catches any fill that slipped past the live stream/poll path.
+        reconcile_service = PeriodicReconciliationService(
+            reconciler=reconciler,
+            exchange=adapter,
+            exchange_id=eid,
+            clock=clock,
+            interval_seconds=300.0,
+        )
+        tg.create_task(
+            reconcile_service.run_forever(),
+            name=f"reconcile-{exchange_cls.__name__}",
+        )
 
-        channels = await asyncio.to_thread(_load_channels)
-        if not channels:
-            logger.warning("FillHandler: no active exchanges; skipping")
-            return
+    async def _start_fill_handler(self, nc, fill_processor, clock) -> None:
+        from ascent.adapters.nats import NatsJetStreamConsumer
+
+        # One durable consumer across all exchanges. The filter_subject
+        # ``ascent.exchange.*.responses`` matches every exchange's fill
+        # channel. The ``*`` matches one token (the exchange UUID).
+        consumer = NatsJetStreamConsumer(
+            nc,
+            stream="ASCENT_EXCHANGE",
+            subject_filter="ascent.exchange.*.responses",
+            durable_name="fill-handler",
+        )
         service = FillHandlerService(
-            response_channels=channels,
-            event_bus=event_bus,
+            consumer=consumer,
             processor=fill_processor,
             clock=clock,
         )
@@ -617,7 +794,14 @@ class Runner:
 # ---------------------------------------------------------------------------
 
 
-def _fetcher_factory(feed_cls: type, parameters: dict) -> Any:
+def _fetcher_factory(
+    feed_cls: type,
+    parameters: dict,
+    *,
+    feed_id: uuid.UUID,
+    is_composite_scoped: bool,
+    session_factory,
+) -> Any:
     """Return a factory that builds a FeedFetcher for one execution tick.
 
     The factory is given the partition window and parent-feed context; it
@@ -626,19 +810,38 @@ def _fetcher_factory(feed_cls: type, parameters: dict) -> Any:
     """
 
     def factory(partition, context):  # noqa: ANN001
-        return _FeedFetcherBridge(feed_cls=feed_cls, parameters=parameters)
+        return _FeedFetcherBridge(
+            feed_cls=feed_cls,
+            parameters=parameters,
+            feed_id=feed_id,
+            is_composite_scoped=is_composite_scoped,
+            session_factory=session_factory,
+        )
 
     return factory
 
 
 class _FeedFetcherBridge(FeedFetcher):
-    def __init__(self, feed_cls: type, parameters: dict) -> None:
+    def __init__(
+        self,
+        feed_cls: type,
+        parameters: dict,
+        *,
+        feed_id: uuid.UUID,
+        is_composite_scoped: bool,
+        session_factory,
+    ) -> None:
         self._feed_cls = feed_cls
         self._parameters = parameters
+        self._feed_id = feed_id
+        self._is_composite_scoped = is_composite_scoped
+        self._session_factory = session_factory
         self._instance = feed_cls(parameters)
 
     async def fetch(self, partition, context):  # noqa: ANN001
         def _call() -> Any:
+            universe = self._load_universe()
+            token_universe = _current_universe.set(universe)
             token_feeds = _current_feeds.set(context) if context else None
             token_partition = (
                 _current_partition.set(
@@ -660,8 +863,31 @@ class _FeedFetcherBridge(FeedFetcher):
                     _current_partition.reset(token_partition)
                 if token_feeds is not None:
                     _current_feeds.reset(token_feeds)
+                _current_universe.reset(token_universe)
 
         return await asyncio.to_thread(_call)
+
+    def _load_universe(self) -> list[uuid.UUID]:
+        from sqlalchemy import select
+
+        from ascent.database.models.feeds import FeedCompositeScope, FeedInstrumentScope
+
+        with self._session_factory() as db:
+            if self._is_composite_scoped:
+                rows = db.execute(
+                    select(FeedCompositeScope.composite_id)
+                    .where(FeedCompositeScope.feed_id == self._feed_id)
+                    .where(FeedCompositeScope.is_active.is_(True))
+                    .order_by(FeedCompositeScope.order)
+                ).all()
+            else:
+                rows = db.execute(
+                    select(FeedInstrumentScope.instrument_id)
+                    .where(FeedInstrumentScope.feed_id == self._feed_id)
+                    .where(FeedInstrumentScope.is_active.is_(True))
+                    .order_by(FeedInstrumentScope.order)
+                ).all()
+        return [r[0] for r in rows]
 
     async def on_error(self, error: BaseException) -> None:
         await asyncio.to_thread(self._instance.on_error, error)

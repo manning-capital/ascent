@@ -1,11 +1,4 @@
-"""End-to-end regression: submit → fill must not raise "Order not on trade".
-
-The bug: ``TradeRouter.submit`` created Order rows and set ``Order.trade_leg_id``
-pointing at the leg, but never linked the reverse side (``TradeLeg.entry_order_id``).
-So when ``FillProcessor.process`` reloaded the trade and the state machine
-searched ``leg.entry_order`` for the fill's order id, nothing matched and every
-entry fill raised ``ValueError: Order X is not on trade Y``.
-"""
+"""End-to-end regression: submit → fill must not raise "Order not on trade"."""
 
 from __future__ import annotations
 
@@ -18,43 +11,53 @@ from ascent.application import FillProcessor, TradeRouter
 from ascent.application.route_trade import ExchangeBinding
 from ascent.domain import FillEvent, OrderState, TradeState
 from tests.fakes import (
+    FakeUnitOfWorkFactory,
     InMemoryEventBus,
     InMemoryOrderRepository,
+    InMemoryOutboxPublisher,
     InMemoryTradeRepository,
 )
 
 NOW = datetime(2026, 4, 16, 12, 0, tzinfo=UTC)
 
 
-@pytest.mark.asyncio
-async def test_submit_then_fill_entry_closes_trade_to_open():
+def _wire():
     trade_repo = InMemoryTradeRepository()
     order_repo = InMemoryOrderRepository()
     bus = InMemoryEventBus()
+    outbox = InMemoryOutboxPublisher()
+    uow_factory = FakeUnitOfWorkFactory()
     router = TradeRouter(
         strategy_id=uuid.uuid4(),
         portfolio_id=uuid.uuid4(),
         trade_repo=trade_repo,
         order_repo=order_repo,
         event_bus=bus,
+        outbox=outbox,
+        uow_factory=uow_factory,
         exchanges=[ExchangeBinding(exchange_id=uuid.uuid4(), channel="ex.test")],
         is_paper=True,
     )
-    processor = FillProcessor(trade_repo=trade_repo, order_repo=order_repo, event_bus=bus)
+    processor = FillProcessor(
+        trade_repo=trade_repo,
+        order_repo=order_repo,
+        event_bus=bus,
+        uow_factory=uow_factory,
+    )
+    return router, trade_repo, order_repo, bus, processor
+
+
+@pytest.mark.asyncio
+async def test_submit_then_fill_entry_closes_trade_to_open():
+    router, trade_repo, _, _, processor = _wire()
 
     draft = await router.submit(side="BUY", target_id=uuid.uuid4(), quantity=1.0, now=NOW)
 
-    # After submit, the leg must carry a reference to the entry order.
-    trade = await trade_repo.get(draft.trade_id)
+    trade = await trade_repo.get(None, draft.trade_id)
     assert len(trade.legs) == 1
-    assert trade.legs[0].entry_order is not None, (
-        "TradeLeg.entry_order was not linked after router.submit — "
-        "fill lookup will fail with 'Order not on trade'."
-    )
+    assert trade.legs[0].entry_order is not None
     order_id = trade.legs[0].entry_order.id
 
-    # Now simulate the fill arriving from the exchange. This was the path that
-    # raised ValueError before the fix.
     await processor.process(
         trade_id=draft.trade_id,
         event=FillEvent(
@@ -66,7 +69,7 @@ async def test_submit_then_fill_entry_closes_trade_to_open():
         now=NOW,
     )
 
-    updated = await trade_repo.get(draft.trade_id)
+    updated = await trade_repo.get(None, draft.trade_id)
     assert updated.state == TradeState.OPEN
     assert updated.legs[0].entry_price == 100.0
 
@@ -74,25 +77,12 @@ async def test_submit_then_fill_entry_closes_trade_to_open():
 @pytest.mark.asyncio
 async def test_submit_then_close_then_fill_exit_closes_trade():
     """Full happy-path lifecycle: submit → entry fill → close → exit fill."""
-    trade_repo = InMemoryTradeRepository()
-    order_repo = InMemoryOrderRepository()
-    bus = InMemoryEventBus()
-    router = TradeRouter(
-        strategy_id=uuid.uuid4(),
-        portfolio_id=uuid.uuid4(),
-        trade_repo=trade_repo,
-        order_repo=order_repo,
-        event_bus=bus,
-        exchanges=[ExchangeBinding(exchange_id=uuid.uuid4(), channel="ex.test")],
-        is_paper=True,
-    )
-    processor = FillProcessor(trade_repo=trade_repo, order_repo=order_repo, event_bus=bus)
+    router, trade_repo, _, _, processor = _wire()
 
     draft = await router.submit(side="BUY", target_id=uuid.uuid4(), quantity=1.0, now=NOW)
-    trade = await trade_repo.get(draft.trade_id)
+    trade = await trade_repo.get(None, draft.trade_id)
     entry_order_id = trade.legs[0].entry_order.id
 
-    # Entry fill → OPEN.
     await processor.process(
         trade_id=draft.trade_id,
         event=FillEvent(
@@ -103,16 +93,14 @@ async def test_submit_then_close_then_fill_exit_closes_trade():
         ),
         now=NOW,
     )
-    assert (await trade_repo.get(draft.trade_id)).state == TradeState.OPEN
+    assert (await trade_repo.get(None, draft.trade_id)).state == TradeState.OPEN
 
-    # Close → CLOSING, exit order created and linked.
     await router.close(trade_id=draft.trade_id, now=NOW, close_reason="TAKE_PROFIT")
-    trade = await trade_repo.get(draft.trade_id)
+    trade = await trade_repo.get(None, draft.trade_id)
     assert trade.state == TradeState.CLOSING
     assert trade.legs[0].exit_order is not None
     exit_order_id = trade.legs[0].exit_order.id
 
-    # Exit fill → CLOSED with PnL.
     await processor.process(
         trade_id=draft.trade_id,
         event=FillEvent(
@@ -123,6 +111,6 @@ async def test_submit_then_close_then_fill_exit_closes_trade():
         ),
         now=NOW,
     )
-    final = await trade_repo.get(draft.trade_id)
+    final = await trade_repo.get(None, draft.trade_id)
     assert final.state == TradeState.CLOSED
-    assert final.total_realized_pnl == 10.0  # (110 - 100) * 1
+    assert final.total_realized_pnl == 10.0

@@ -4,6 +4,12 @@ import { switchMap, tap, catchError } from 'rxjs/operators';
 import { ApiService } from './api.service';
 import { TradeListItem, TradeDetail, PaginatedResponse } from '../models/trade.model';
 
+const CURRENCY_FORMATTER = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  signDisplay: 'always',
+});
+
 @Injectable({ providedIn: 'root' })
 export class TradeService {
   private api = inject(ApiService);
@@ -61,7 +67,7 @@ export class TradeService {
 
   formatCurrency(value: number | null | undefined): string {
     if (value == null) return '—';
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', signDisplay: 'always' }).format(value);
+    return CURRENCY_FORMATTER.format(value);
   }
 
   formatPercent(pnl: number | null | undefined, entryPrice: number | null | undefined, quantity: number | null | undefined): string {

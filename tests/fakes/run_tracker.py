@@ -21,11 +21,17 @@ class _Trace:
 class FakeRunTracker(RunTrackerPort):
     def __init__(self) -> None:
         self.traces: list[_Trace] = []
+        self.linked_partitions: dict[uuid.UUID, uuid.UUID] = {}
 
     def track_feed_run(
         self, feed_id: uuid.UUID, *, partition_id: uuid.UUID | None = None
     ) -> AbstractAsyncContextManager[uuid.UUID]:
         return self._ctx(kind="feed", entity_id=feed_id)
+
+    async def link_feed_run_partition(
+        self, run_id: uuid.UUID, partition_id: uuid.UUID
+    ) -> None:
+        self.linked_partitions[run_id] = partition_id
 
     def track_strategy_run(self, strategy_id: uuid.UUID) -> AbstractAsyncContextManager[uuid.UUID]:
         return self._ctx(kind="strategy", entity_id=strategy_id)

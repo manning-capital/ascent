@@ -40,10 +40,22 @@
     @let s = dashboardService.stats();
     @if (s) {
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
-        <p-card header="Cumulative P&L" styleClass="lg:col-span-2">
+        <p-card styleClass="lg:col-span-2">
+          <ng-template #header>
+            <div class="flex items-center justify-between gap-3 p-5 pb-0">
+              <h3 class="font-semibold text-base">Cumulative P&L</h3>
+              <p-selectButton
+                [(ngModel)]="pnlLookback"
+                [options]="lookbackOptions"
+                optionLabel="label"
+                optionValue="value"
+                [allowEmpty]="false"
+                size="small"/>
+            </div>
+          </ng-template>
           @if (cumulativePnlData().length > 0) {
             <div class="h-72">
-              <app-cumulative-pnl-chart [data]="cumulativePnlData()"/>
+              <app-cumulative-pnl-chart [data]="cumulativePnlData()" [(lookback)]="pnlLookback"/>
             </div>
           } @else {
             <div class="h-72 flex items-center justify-center text-surface-400">No trade data available</div>

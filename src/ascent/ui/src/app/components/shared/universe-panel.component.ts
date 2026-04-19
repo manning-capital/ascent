@@ -77,6 +77,31 @@ export class RemoveCellRenderer implements ICellRendererAngularComp {
   }
 }
 
+// ─── Enable/Disable toggle cell renderer ────────────────────
+@Component({
+  selector: 'ag-toggle-active-cell',
+  standalone: true,
+  template: `
+    <button
+      (click)="onClick($event)"
+      [class]="active ? 'text-xs text-yellow-500 hover:underline' : 'text-xs text-green-500 hover:underline'">
+      {{ active ? 'Disable' : 'Enable' }}
+    </button>
+  `,
+  host: { style: 'display:flex;align-items:center;justify-content:flex-end;height:100%;width:100%' },
+})
+export class ToggleActiveCellRenderer implements ICellRendererAngularComp {
+  active = true;
+  private params!: any;
+  agInit(params: ICellRendererParams): void { this.params = params; this.active = !!params.data?.is_active; }
+  refresh(params: ICellRendererParams): boolean { this.params = params; this.active = !!params.data?.is_active; return true; }
+  onClick(e: Event): void {
+    e.stopPropagation();
+    const id = this.params.data?.instrument_id ?? this.params.data?.composite_id ?? this.params.data?.exchange_id;
+    this.params.context?.onToggleActive?.(id, !this.active);
+  }
+}
+
 @Component({
   selector: 'app-universe-panel',
   standalone: true,
@@ -132,6 +157,7 @@ export class RemoveCellRenderer implements ICellRendererAngularComp {
             [fetchPage]="instrumentUniverseFetchFn()"
             [pageSize]="25"
             [gridContext]="universeContext"
+            [getRowStyle]="getUniverseRowStyle"
             emptyMessage="No instruments in universe."/>
         } @else {
           <app-server-table class="flex-1 min-h-0"
@@ -139,6 +165,7 @@ export class RemoveCellRenderer implements ICellRendererAngularComp {
             [fetchPage]="compositeUniverseFetchFn()"
             [pageSize]="25"
             [gridContext]="universeContext"
+            [getRowStyle]="getUniverseRowStyle"
             emptyMessage="No composites in universe."/>
         }
       } @else {
@@ -247,6 +274,8 @@ export class UniversePanelComponent implements OnInit {
   @Output() addComposites = new EventEmitter<{ compositeIds: string[]; startOrder: number }>();
   @Output() removeInstrument = new EventEmitter<string>();
   @Output() removeComposite = new EventEmitter<string>();
+  @Output() toggleInstrumentActive = new EventEmitter<{ id: string; isActive: boolean }>();
+  @Output() toggleCompositeActive = new EventEmitter<{ id: string; isActive: boolean }>();
 
   // ─── State ────────────────────────────────────────────────
   mode = signal<'instruments' | 'composites'>('instruments');
@@ -277,15 +306,17 @@ export class UniversePanelComponent implements OnInit {
   instrumentUniverseColumns: DataTableColumn[] = [
     { field: 'instrument_display_name', header: 'Instrument', sortable: false },
     { field: 'instrument_name', header: 'Name', sortable: false, cellClass: 'font-mono text-surface-500' },
-    { field: 'is_active', header: 'Status', sortable: false, cellType: 'tag', tagMapper: (v: boolean) => ({ label: v ? 'Active' : 'Inactive', severity: v ? 'success' : 'secondary' }) },
-    { field: '', header: '', sortable: false, cellType: 'custom', cellRenderer: RemoveCellRenderer, width: 80 },
+    { field: 'is_active', header: 'Status', sortable: false, cellType: 'tag', tagMapper: (v: boolean) => ({ label: v ? 'Active' : 'Disabled', severity: v ? 'success' : 'secondary' }) },
+    { field: 'toggle', header: '', sortable: false, cellType: 'custom', cellRenderer: ToggleActiveCellRenderer, width: 90 },
+    { field: 'remove', header: '', sortable: false, cellType: 'custom', cellRenderer: RemoveCellRenderer, width: 80 },
   ];
 
   compositeUniverseColumns: DataTableColumn[] = [
     { field: 'composite_display_name', header: 'Composite', sortable: false },
     { field: 'composite_name', header: 'Name', sortable: false, cellClass: 'font-mono text-surface-500' },
-    { field: 'is_active', header: 'Status', sortable: false, cellType: 'tag', tagMapper: (v: boolean) => ({ label: v ? 'Active' : 'Inactive', severity: v ? 'success' : 'secondary' }) },
-    { field: '', header: '', sortable: false, cellType: 'custom', cellRenderer: RemoveCellRenderer, width: 80 },
+    { field: 'is_active', header: 'Status', sortable: false, cellType: 'tag', tagMapper: (v: boolean) => ({ label: v ? 'Active' : 'Disabled', severity: v ? 'success' : 'secondary' }) },
+    { field: 'toggle', header: '', sortable: false, cellType: 'custom', cellRenderer: ToggleActiveCellRenderer, width: 90 },
+    { field: 'remove', header: '', sortable: false, cellType: 'custom', cellRenderer: RemoveCellRenderer, width: 80 },
   ];
 
   // ─── Picker columns ──────────────────────────────────────
@@ -315,6 +346,20 @@ export class UniversePanelComponent implements OnInit {
         this.removeComposite.emit(id);
       }
     },
+    onToggleActive: (id: string, isActive: boolean) => {
+      if (this.mode() === 'instruments') {
+        this.toggleInstrumentActive.emit({ id, isActive });
+      } else {
+        this.toggleCompositeActive.emit({ id, isActive });
+      }
+    },
+  };
+
+  getUniverseRowStyle = (params: any) => {
+    if (params.data && params.data.is_active === false) {
+      return { opacity: '0.55' };
+    }
+    return undefined;
   };
 
   pickerContext = {

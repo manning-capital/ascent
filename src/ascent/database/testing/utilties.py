@@ -25,6 +25,7 @@ TEST_DB_SIZE_THRESHOLD_MB = 1000
 # Docker image defaults (overridable via environment variables)
 DEFAULT_TIMESCALEDB_IMAGE = "timescale/timescaledb:latest-pg18"
 DEFAULT_REDIS_IMAGE = "redis:8.6.1"
+DEFAULT_NATS_IMAGE = "nats:2.10-alpine"
 
 
 @dataclass
@@ -34,6 +35,7 @@ class AscentTestEnvironment:
     engine: Engine
     redis_url: str
     database_url: str
+    nats_url: str
 
 
 def _validate_test_database_connection(engine: Engine):
@@ -131,12 +133,17 @@ def clear_redis(redis_url: str):
 def _cleanup_old_test_containers():
     """
     Clean up any old test containers that may have been left behind.
-    Removes containers matching ascent-test-postgres-* and ascent-test-redis-*.
+    Removes containers matching ascent-test-postgres-*, ascent-test-redis-*,
+    and ascent-test-nats-*.
     """
     try:
         client = docker.from_env()
 
-        for pattern in ["ascent-test-postgres-*", "ascent-test-redis-*"]:
+        for pattern in [
+            "ascent-test-postgres-*",
+            "ascent-test-redis-*",
+            "ascent-test-nats-*",
+        ]:
             test_containers = client.containers.list(
                 all=True,
                 filters={"name": pattern},
@@ -247,6 +254,27 @@ def _wait_for_redis(redis_url: str, timeout: int = 10):
     raise TimeoutError(f"Redis did not become ready within {timeout} seconds")
 
 
+def _wait_for_nats(nats_host: str, nats_port: int, timeout: int = 15) -> bool:
+    """Wait for NATS JetStream to be ready by probing its TCP port.
+
+    A simple socket connect is enough — NATS opens the listener early, and
+    the first async client we spin up will fail loudly if the server isn't
+    really responding. Keeps this utility synchronous (all other waits are).
+    """
+    LOGGER.info(f"Waiting for NATS to be ready on {nats_host}:{nats_port}...")
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(1.0)
+            try:
+                sock.connect((nats_host, nats_port))
+                LOGGER.info("NATS is ready!")
+                return True
+            except (ConnectionRefusedError, TimeoutError, OSError):
+                time.sleep(0.3)
+    raise TimeoutError(f"NATS did not become ready within {timeout} seconds")
+
+
 @contextmanager
 def ascent_test_harness() -> Generator[AscentTestEnvironment, None, None]:
     """
@@ -284,6 +312,7 @@ def ascent_test_harness() -> Generator[AscentTestEnvironment, None, None]:
     # Resolve Docker images (environment overrides take precedence)
     timescaledb_image = os.environ.get("ASCENT_TEST_TIMESCALEDB_IMAGE", DEFAULT_TIMESCALEDB_IMAGE)
     redis_image = os.environ.get("ASCENT_TEST_REDIS_IMAGE", DEFAULT_REDIS_IMAGE)
+    nats_image = os.environ.get("ASCENT_TEST_NATS_IMAGE", DEFAULT_NATS_IMAGE)
 
     # Clean up any old test containers and volumes first
     LOGGER.info("Cleaning up any old test containers and volumes...")
@@ -302,6 +331,10 @@ def ascent_test_harness() -> Generator[AscentTestEnvironment, None, None]:
     redis_container_name = f"ascent-test-redis-{unique_id}"
     redis_port = _find_free_port()
 
+    # --- NATS configuration ---
+    nats_container_name = f"ascent-test-nats-{unique_id}"
+    nats_port = _find_free_port()
+
     # Database configuration
     db_user = TEST_DB_USER
     db_password = TEST_DB_PASSWORD
@@ -309,6 +342,7 @@ def ascent_test_harness() -> Generator[AscentTestEnvironment, None, None]:
 
     LOGGER.info(f"Using port {pg_port} for PostgreSQL container")
     LOGGER.info(f"Using port {redis_port} for Redis container")
+    LOGGER.info(f"Using port {nats_port} for NATS container")
 
     # Initialize Docker client
     try:
@@ -324,6 +358,7 @@ def ascent_test_harness() -> Generator[AscentTestEnvironment, None, None]:
 
     pg_container = None
     redis_container = None
+    nats_container = None
     pg_volume = None
     engine = None
 
@@ -359,11 +394,27 @@ def ascent_test_harness() -> Generator[AscentTestEnvironment, None, None]:
             remove=False,
         )
 
-        # --- Wait for both services to be ready ---
+        # --- Start NATS container with JetStream enabled ---
+        LOGGER.info(f"Starting NATS container '{nats_container_name}' with image {nats_image}...")
+        nats_container = client.containers.run(
+            nats_image,
+            name=nats_container_name,
+            ports={4222: nats_port},
+            # -js enables JetStream; -sd sets the storage dir inside the container
+            # (ephemeral — the container is removed on teardown so no cleanup).
+            command=["-js", "-sd", "/tmp/nats"],
+            detach=True,
+            remove=False,
+        )
+
+        # --- Wait for all services to be ready ---
         _wait_for_postgres("localhost", pg_port, db_user, db_password, db_name)
 
         redis_url = f"redis://localhost:{redis_port}/0"
         _wait_for_redis(redis_url)
+
+        nats_url = f"nats://localhost:{nats_port}"
+        _wait_for_nats("localhost", nats_port)
 
         # --- Verify PostgreSQL container identity ---
         LOGGER.info("Verifying PostgreSQL container is our test instance...")
@@ -421,6 +472,7 @@ def ascent_test_harness() -> Generator[AscentTestEnvironment, None, None]:
             engine=engine,
             redis_url=redis_url,
             database_url=database_url,
+            nats_url=nats_url,
         )
 
     finally:
@@ -431,6 +483,16 @@ def ascent_test_harness() -> Generator[AscentTestEnvironment, None, None]:
                 models.Base.metadata.drop_all(engine)
             except Exception as e:
                 LOGGER.warning(f"Error dropping tables: {e}")
+
+        # Clean up the NATS container
+        if nats_container:
+            try:
+                LOGGER.info(f"Stopping NATS container '{nats_container_name}'...")
+                nats_container.stop(timeout=5)
+                LOGGER.info(f"Removing NATS container '{nats_container_name}'...")
+                nats_container.remove()
+            except Exception as e:
+                LOGGER.warning(f"Error cleaning up NATS container: {e}")
 
         # Clean up the Redis container
         if redis_container:

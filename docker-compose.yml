@@ -15,42 +15,149 @@ services:
       timeout: 3s
       retries: 5
 
-  redis-init:
-    image: busybox:latest
-    command: ["sh", "-c", "chown -R 65532:65532 /data"]
-    volumes:
-      - redisdata:/data
-
   redis:
-    image: dhi.io/redis:8.6.1-debian13
+    image: redis:8.6.1
     command: redis-server --appendonly yes --protected-mode no
-    ports:
-      - "6379:6379"
+    # No host port mapping — Redis is only reachable from inside the compose
+    # network. The browser and external processes must go through FastAPI.
+    expose:
+      - "6379"
     volumes:
       - redisdata:/data
-    depends_on:
-      redis-init:
-        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 5
 
+  nats:
+    image: nats:2.10-alpine
+    # -js enables JetStream; -sd is the storage directory inside the container.
+    command: ["-js", "-sd", "/data", "-m", "8222"]
+    # Client port (4222) stays network-internal — the browser never talks to
+    # NATS directly. Monitoring port (8222) is exposed on localhost only for
+    # operator tools (nats-top, HTTP /healthz). Remove the 127.0.0.1 prefix
+    # if you need it reachable from other hosts.
+    expose:
+      - "4222"
+    ports:
+      - "127.0.0.1:8222:8222"
+    volumes:
+      - natsdata:/data
+    healthcheck:
+      # /healthz is exposed on the monitoring port when -m is set.
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8222/healthz || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   server:
-    build: .
+    build:
+      context: .
+      target: server
     ports:
       - "8000:8000"
     environment:
       ASCENT_DATABASE_URL: postgresql://ascent:ascent@db:5432/ascent
       ASCENT_REDIS_URL: redis://redis:6379/0
+      ASCENT_NATS_URL: nats://nats:4222
       ASCENT_DEBUG: "true"
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
+      nats:
+        condition: service_healthy
+
+  # ------------------------------------------------------------------
+  # Trading services (dev mode)
+  # ------------------------------------------------------------------
+  # Each is a long-running process that registers itself in the DB on
+  # startup then joins the engine runtime (feed → dispatcher → fill
+  # handler pipeline wired via NATS JetStream + Redis).
+  #
+  # Prerequisites before first start:
+  #   docker compose run --rm server uv run ascent seed run --profile base
+  # (The feed/strategy/exchange scripts read instrument and attribute
+  # rows from the DB; without seeding, feed.py exits immediately.)
+  #
+  # In dev mode (this file) we bind-mount the root-level script onto the
+  # thin `runtime` image so edits take effect on container restart
+  # without a rebuild. The prod override (docker-compose.prod.yml)
+  # switches to per-service Dockerfile targets that bake the script in.
+  # ------------------------------------------------------------------
+
+  exchange:
+    build:
+      context: .
+      target: runtime
+    command: ["uv", "run", "python", "/app/user/exchange.py"]
+    environment:
+      ASCENT_DATABASE_URL: postgresql://ascent:ascent@db:5432/ascent
+      ASCENT_REDIS_URL: redis://redis:6379/0
+      ASCENT_NATS_URL: nats://nats:4222
+    volumes:
+      - ./exchange.py:/app/user/exchange.py:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    restart: unless-stopped
+
+  feed:
+    build:
+      context: .
+      target: runtime
+    command: ["uv", "run", "python", "/app/user/feed.py"]
+    environment:
+      ASCENT_DATABASE_URL: postgresql://ascent:ascent@db:5432/ascent
+      ASCENT_REDIS_URL: redis://redis:6379/0
+      ASCENT_NATS_URL: nats://nats:4222
+    volumes:
+      - ./feed.py:/app/user/feed.py:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    restart: unless-stopped
+
+  strategy:
+    build:
+      context: .
+      target: runtime
+    command: ["uv", "run", "python", "/app/user/strategy.py"]
+    environment:
+      ASCENT_DATABASE_URL: postgresql://ascent:ascent@db:5432/ascent
+      ASCENT_REDIS_URL: redis://redis:6379/0
+      ASCENT_NATS_URL: nats://nats:4222
+    volumes:
+      - ./strategy.py:/app/user/strategy.py:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+      # Strategy references the exchange + feed by name, so wait for their
+      # containers to start before attempting to run. service_started is a
+      # soft gate (no healthcheck on trading services) — the engine handles
+      # the case where the referenced records aren't yet in the DB by
+      # retrying on startup.
+      exchange:
+        condition: service_started
+      feed:
+        condition: service_started
+    restart: unless-stopped
 
 volumes:
   pgdata:
   redisdata:
+  natsdata:

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import contextvars
 import logging
+import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -46,6 +47,9 @@ _current_feeds: contextvars.ContextVar[dict[str, pd.DataFrame]] = contextvars.Co
 )
 _current_partition: contextvars.ContextVar[PartitionInfo] = contextvars.ContextVar(
     "ascent_partition"
+)
+_current_universe: contextvars.ContextVar[list[uuid.UUID]] = contextvars.ContextVar(
+    "ascent_universe"
 )
 
 

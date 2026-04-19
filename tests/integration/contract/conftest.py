@@ -183,10 +183,17 @@ def sql_mappers(sql_type_cache) -> OrmMappers:
 
 
 @pytest.fixture(scope="function")
-def sql_trade_repo(sql_session_factory, sql_type_cache, sql_mappers):
-    return SqlAlchemyTradeRepository(sql_session_factory, sql_type_cache, sql_mappers)
+def sql_trade_repo(sql_type_cache, sql_mappers):
+    return SqlAlchemyTradeRepository(sql_type_cache, sql_mappers)
 
 
 @pytest.fixture(scope="function")
-def sql_order_repo(sql_session_factory, sql_type_cache, sql_mappers):
-    return SqlAlchemyOrderRepository(sql_session_factory, sql_type_cache, sql_mappers)
+def sql_order_repo(sql_type_cache, sql_mappers):
+    return SqlAlchemyOrderRepository(sql_type_cache, sql_mappers)
+
+
+@pytest.fixture(scope="function")
+def sql_uow_factory(sql_session_factory):
+    from ascent.adapters import SqlAlchemyUnitOfWorkFactory
+
+    return SqlAlchemyUnitOfWorkFactory(sql_session_factory)

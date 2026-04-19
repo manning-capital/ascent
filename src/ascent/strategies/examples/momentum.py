@@ -2,11 +2,10 @@
 
 from typing import Literal
 
-import pandas as pd
 from pydantic import BaseModel, Field
 
 from ascent.feeds.examples.market import MarketData
-from ascent.strategies import Strategy
+from ascent.strategies import Context, Strategy
 
 
 class MomentumStrategy(Strategy):
@@ -29,15 +28,15 @@ class MomentumStrategy(Strategy):
     display_name = "Momentum"
     description = "Enters when fast MA crosses above slow MA, exits on reverse cross."
 
-    def evaluate(self, ctx: pd.DataFrame) -> None:
+    def evaluate(self, ctx: Context) -> None:
         logger = self.get_logger()
 
-        if ctx.empty:
+        if ctx.df.empty:
             return
 
-        # Signal generation using the consolidated context DataFrame
-        waiting = ctx[ctx[("trade", "status")] == "WAITING"]
-        in_trade = ctx[ctx[("trade", "status")] == "OPEN"]
+        df = ctx.df
+        waiting = df[df[("trade", "status")] == "WAITING"]
+        in_trade = df[df[("trade", "status")] == "OPEN"]
 
         logger.info("Waiting: %d, In trade: %d", len(waiting), len(in_trade))
 

@@ -17,9 +17,11 @@ import { Tabs, TabList, Tab } from 'primeng/tabs';
 import { SchemaFormComponent } from '../../shared/schema-form.component';
 import { TradeTableComponent } from '../../trade-table/trade-table.component';
 import { StrategyRunsTabComponent } from './strategy-runs-tab.component';
-import { CumulativePnlChartComponent, CumulativePnlPoint } from './charts/cumulative-pnl-chart.component';
+import { CumulativePnlChartComponent, CumulativePnlPoint, Lookback, LOOKBACK_OPTIONS } from './charts/cumulative-pnl-chart.component';
 import { PnlDistributionChartComponent } from './charts/pnl-distribution-chart.component';
 import { Button } from 'primeng/button';
+import { SelectButton } from 'primeng/selectbutton';
+import { FormsModule } from '@angular/forms';
 
 import { Tag } from 'primeng/tag';
 import { Card } from 'primeng/card';
@@ -28,7 +30,15 @@ import { Skeleton } from 'primeng/skeleton';
 import { ServerTableComponent } from '../../shared/data-table/server-table.component';
 import type { DataTableColumn, ServerFetchFn } from '../../shared/data-table/data-table.model';
 import { StageCellRenderer, StatusBadgeCellRenderer, RemoveCellRenderer } from '../../shared/universe-panel.component';
+import { UniverseImpactDialogComponent, ImpactDialogChoice } from '../../shared/universe-impact-dialog.component';
+import { ImpactReport } from '../../../models/asset.model';
 import type { ColDef } from 'ag-grid-community';
+
+const CURRENCY_FORMATTER = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  signDisplay: 'always',
+});
 
 @Component({
   selector: 'app-strategy-detail',
@@ -37,16 +47,19 @@ import type { ColDef } from 'ag-grid-community';
     RouterLink,
     DatePipe,
     JsonPipe,
+    FormsModule,
     Tabs, TabList, Tab,
     SchemaFormComponent,
     TradeTableComponent,
     CumulativePnlChartComponent,
     PnlDistributionChartComponent,
     Button,
+    SelectButton,
     Tag,
     Card,
     Skeleton,
     UniversePanelComponent,
+    UniverseImpactDialogComponent,
     ServerTableComponent,
     StrategyRunsTabComponent,
   ],
@@ -179,6 +192,8 @@ export class StrategyDetailComponent implements OnInit {
 
   // Chart data from stats
   cumulativePnlData = computed<CumulativePnlPoint[]>(() => this.stats()?.cumulative_pnl ?? []);
+  pnlLookback = signal<Lookback>('all');
+  lookbackOptions = LOOKBACK_OPTIONS;
   pnlDistributionData = computed<number[]>(() => {
     const bins = this.stats()?.pnl_distribution ?? [];
     // Expand histogram bins back into individual values for the chart component
@@ -293,7 +308,7 @@ export class StrategyDetailComponent implements OnInit {
   }
 
   formatCurrency(value: number): string {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', signDisplay: 'always' }).format(value);
+    return CURRENCY_FORMATTER.format(value);
   }
 
   pnlClass(value: number): string {
@@ -335,11 +350,13 @@ export class StrategyDetailComponent implements OnInit {
   }
 
   removeUniverseItem(instrumentId: string): void {
-    this.strategyService.removeUniverseItem(this.strategyId, instrumentId).subscribe({
-      next: () => {
-        this.toast.success('Instrument removed from universe');
-      },
-      error: () => this.toast.error('Failed to remove instrument'),
+    this.openImpactDialog({
+      kind: 'instrument',
+      id: instrumentId,
+      label: 'Instrument',
+      load: this.strategyService.getUniverseItemImpact(this.strategyId, instrumentId),
+      remove: () => this.strategyService.removeUniverseItem(this.strategyId, instrumentId),
+      disable: () => this.strategyService.setUniverseItemActive(this.strategyId, instrumentId, false),
     });
   }
 
@@ -353,11 +370,27 @@ export class StrategyDetailComponent implements OnInit {
   }
 
   removeCompositeItem(compositeId: string): void {
-    this.strategyService.removeCompositeUniverseItem(this.strategyId, compositeId).subscribe({
-      next: () => {
-        this.toast.success('Composite removed from universe');
-      },
-      error: () => this.toast.error('Failed to remove composite'),
+    this.openImpactDialog({
+      kind: 'composite',
+      id: compositeId,
+      label: 'Composite',
+      load: this.strategyService.getCompositeUniverseItemImpact(this.strategyId, compositeId),
+      remove: () => this.strategyService.removeCompositeUniverseItem(this.strategyId, compositeId),
+      disable: () => this.strategyService.setCompositeUniverseItemActive(this.strategyId, compositeId, false),
+    });
+  }
+
+  onToggleInstrumentActive(event: { id: string; isActive: boolean }): void {
+    this.strategyService.setUniverseItemActive(this.strategyId, event.id, event.isActive).subscribe({
+      next: () => this.toast.success(event.isActive ? 'Instrument enabled' : 'Instrument disabled'),
+      error: (err) => this.toast.error(err?.error?.message ?? 'Failed to update instrument'),
+    });
+  }
+
+  onToggleCompositeActive(event: { id: string; isActive: boolean }): void {
+    this.strategyService.setCompositeUniverseItemActive(this.strategyId, event.id, event.isActive).subscribe({
+      next: () => this.toast.success(event.isActive ? 'Composite enabled' : 'Composite disabled'),
+      error: (err) => this.toast.error(err?.error?.message ?? 'Failed to update composite'),
     });
   }
 
@@ -399,9 +432,105 @@ export class StrategyDetailComponent implements OnInit {
   }
 
   removeExchange(exchangeId: string): void {
-    this.strategyService.removeExchange(this.strategyId, exchangeId).subscribe({
-      next: () => this.toast.success('Exchange removed'),
-      error: () => this.toast.error('Failed to remove exchange'),
+    this.openImpactDialog({
+      kind: 'exchange',
+      id: exchangeId,
+      label: 'Exchange',
+      load: this.strategyService.getExchangeImpact(this.strategyId, exchangeId),
+      remove: () => this.strategyService.removeExchange(this.strategyId, exchangeId),
+      disable: () => this.strategyService.setExchangeActive(this.strategyId, exchangeId, false),
+    });
+  }
+
+  // --- Impact dialog plumbing ---
+
+  impactDialogVisible = signal(false);
+  impactReport = signal<ImpactReport | null>(null);
+  impactBusy = signal(false);
+  impactEntityLabel = signal('Item');
+  impactEntityName = signal<string | null>(null);
+  impactSupportsDisable = signal(true);
+
+  private impactCurrent: {
+    remove: () => import('rxjs').Observable<any>;
+    disable: () => import('rxjs').Observable<any>;
+    successMessage: string;
+    disableMessage: string;
+  } | null = null;
+
+  private openImpactDialog(opts: {
+    kind: 'instrument' | 'composite' | 'exchange';
+    id: string;
+    label: string;
+    load: import('rxjs').Observable<ImpactReport>;
+    remove: () => import('rxjs').Observable<any>;
+    disable: () => import('rxjs').Observable<any>;
+  }): void {
+    this.impactCurrent = {
+      remove: opts.remove,
+      disable: opts.disable,
+      successMessage: `${opts.label} removed`,
+      disableMessage: `${opts.label} disabled`,
+    };
+    this.impactEntityLabel.set(opts.label);
+    this.impactEntityName.set(null);
+    this.impactReport.set(null);
+    this.impactBusy.set(false);
+    this.impactSupportsDisable.set(true);
+    this.impactDialogVisible.set(true);
+
+    opts.load.subscribe({
+      next: (report) => this.impactReport.set(report),
+      error: () => {
+        this.toast.error('Failed to compute impact');
+        this.impactDialogVisible.set(false);
+      },
+    });
+  }
+
+  onImpactDecision(choice: ImpactDialogChoice): void {
+    if (choice === 'cancel') {
+      this.impactDialogVisible.set(false);
+      this.impactCurrent = null;
+      return;
+    }
+    const op = this.impactCurrent;
+    if (!op) return;
+    this.impactBusy.set(true);
+    const stream = choice === 'remove' ? op.remove() : op.disable();
+    stream.subscribe({
+      next: () => {
+        this.toast.success(choice === 'remove' ? op.successMessage : op.disableMessage);
+        this.impactBusy.set(false);
+        this.impactDialogVisible.set(false);
+        this.impactCurrent = null;
+        // Reload strategy detail so signals like is_paused or table contents refresh.
+        this.strategyService.loadStrategyDetail(this.strategyId, true);
+      },
+      error: (err) => {
+        this.impactBusy.set(false);
+        const msg = err?.error?.message ?? `Failed to ${choice} item`;
+        this.toast.error(msg);
+      },
+    });
+  }
+
+  // --- Pause / resume ---
+
+  pauseBusy = signal(false);
+
+  togglePause(currentlyPaused: boolean): void {
+    this.pauseBusy.set(true);
+    this.strategyService.pauseStrategy(this.strategyId, !currentlyPaused).subscribe({
+      next: () => {
+        this.pauseBusy.set(false);
+        this.toast.success(currentlyPaused ? 'Strategy resumed' : 'Strategy paused');
+        this.strategyService.loadStrategyDetail(this.strategyId, true);
+      },
+      error: () => {
+        this.pauseBusy.set(false);
+        this.toast.error('Failed to update pause state');
+      },
     });
   }
 

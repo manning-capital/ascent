@@ -1,130 +1,27 @@
+"""Entry point that runs the example feeds shipped with Ascent.
+
+The OU-driven simulator lives in ``ascent.feeds.examples.market``; the
+composite market + OU-params feeds live in ``ascent.feeds.examples``.
+This script just wires them into a Runner.
+"""
+
 from __future__ import annotations
 
 import os
-import random
-import uuid
-from datetime import datetime
-from typing import ClassVar
 
-import pandas as pd
-from dotenv import load_dotenv
-from pandera.typing.pandas import DataFrame
-from pydantic import BaseModel, Field
-from sqlalchemy import create_engine, select
-from sqlalchemy.orm import Session
-
-from ascent.feeds.base import Feed
-from ascent.feeds.output import InstrumentAttributes
-from ascent.feeds.schedule import Schedule
-
-# Base prices for simulation keyed by asset symbol
-BASE_PRICES: dict[str, float] = {
-    "BTC": 67500.0,
-    "ETH": 3400.0,
-    "SOL": 145.0,
-    "ADA": 0.45,
-    "XRP": 0.52,
-}
-
-
-def _load_instruments(database_url: str) -> dict[uuid.UUID, str]:
-    """Load instrument UUIDs and their base-asset symbols from the DB."""
-    from ascent.database.models.assets import Asset
-    from ascent.database.models.instruments import Instrument
-
-    engine = create_engine(database_url)
-    instruments: dict[uuid.UUID, str] = {}
-    with Session(engine) as db:
-        rows = db.execute(
-            select(Instrument.id, Asset.name).join(Asset, Instrument.from_asset_id == Asset.id)
-        ).all()
-        for inst_id, asset_name in rows:
-            if asset_name in BASE_PRICES:
-                instruments[inst_id] = asset_name
-    return instruments
-
-
-def _load_attribute_ids(database_url: str) -> dict[str, uuid.UUID]:
-    """Load attribute name → UUID mapping from the DB."""
-    from ascent.database.models.descriptors import Attribute
-
-    engine = create_engine(database_url)
-    attrs: dict[str, uuid.UUID] = {}
-    with Session(engine) as db:
-        for row in db.execute(select(Attribute)).scalars():
-            attrs[row.name] = row.id
-    return attrs
-
-
-class MarketDataFeed(Feed):
-    """Emits fake OHLCV market data for instruments found in the database."""
-
-    class Parameters(BaseModel):
-        volatility: float = Field(0.002, description="Per-tick price volatility (std dev)")
-
-    schedule = Schedule(interval=15, start_date=datetime(2024, 1, 1))
-    output = InstrumentAttributes
-    provider = "KRAKEN"
-    instrument_type = "SECURITY"
-
-    # Populated at startup from the database
-    _instruments: ClassVar[dict[uuid.UUID, str]] = {}
-    _prices: ClassVar[dict[uuid.UUID, float]] = {}
-    _attr_ids: ClassVar[dict[str, uuid.UUID]] = {}
-
-    def fetch(self) -> DataFrame[InstrumentAttributes]:
-        now = pd.Timestamp.now(tz="UTC")
-        vol = self.parameters.volatility
-        rows = []
-
-        attr_close = self._attr_ids.get("CLOSE")
-        attr_volume = self._attr_ids.get("VOLUME")
-
-        for inst_id, symbol in self._instruments.items():
-            base_price = BASE_PRICES.get(symbol, 100.0)
-            if inst_id not in self._prices:
-                self._prices[inst_id] = base_price
-            self._prices[inst_id] *= 1 + random.gauss(0, vol)
-            price = self._prices[inst_id]
-
-            if attr_close is not None:
-                rows.append(
-                    {
-                        "timestamp": now,
-                        "instrument_id": str(inst_id),
-                        "attribute_id": str(attr_close),
-                        "attribute_value": round(price, 6),
-                    }
-                )
-            if attr_volume is not None:
-                rows.append(
-                    {
-                        "timestamp": now,
-                        "instrument_id": str(inst_id),
-                        "attribute_id": str(attr_volume),
-                        "attribute_value": round(random.uniform(100, 10000), 2),
-                    }
-                )
-
-        return pd.DataFrame(rows)
+from ascent.engine.runner import Runner
+from ascent.feeds.examples.composite_market import CompositeMarketData
+from ascent.feeds.examples.market import MarketData
+from ascent.feeds.examples.ou_params import OUParams
 
 
 if __name__ == "__main__":
-    load_dotenv()
-    db_url = os.environ["ASCENT_DATABASE_URL"]
-
-    # Load real instrument UUIDs from the database
-    MarketDataFeed._instruments = _load_instruments(db_url)
-    if not MarketDataFeed._instruments:
-        print("No instruments found in DB. Run 'ascent seed run --drop --profile base' first.")
-        raise SystemExit(1)
-    print(f"Loaded {len(MarketDataFeed._instruments)} instruments")
-
-    # Load attribute UUIDs from the database
-    MarketDataFeed._attr_ids = _load_attribute_ids(db_url)
-    print(f"Loaded {len(MarketDataFeed._attr_ids)} attribute types")
-
-    MarketDataFeed.run(
+    runner = Runner(
+        database_url=os.environ["ASCENT_DATABASE_URL"],
         redis_url=os.environ["ASCENT_REDIS_URL"],
-        database_url=db_url,
+        include_writer=True,
     )
+    runner.add(MarketData)
+    runner.add(CompositeMarketData)
+    runner.add(OUParams)
+    runner.run()

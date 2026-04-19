@@ -1,4 +1,4 @@
-"""StrategyEvaluator tests — cover attribute resolution + end-to-end evaluate flow."""
+"""StrategyEvaluator tests — cover the wide-format feed frame flow."""
 
 from __future__ import annotations
 
@@ -8,59 +8,47 @@ from datetime import UTC, datetime
 import pandas as pd
 import pytest
 
+from ascent.application.context_builder import Context
 from ascent.application.evaluate_strategy import FeedBinding, StrategyEvaluator
 from ascent.application.trigger import StrategyFeedSpec
 from ascent.ports import Event
 from tests.fakes import (
     FakeClock,
     FakeRunTracker,
+    FakeUnitOfWorkFactory,
     InMemoryEventBus,
     InMemoryFeedStore,
+    InMemoryStrategyUniverseRepository,
     InMemoryTradeRepository,
 )
 
 NOW = datetime(2026, 4, 16, 12, 0, tzinfo=UTC)
 
 
-def _eav_rows(instrument_id: uuid.UUID, close_attr: uuid.UUID, price: float) -> pd.DataFrame:
-    """Build a feed DataFrame in the shape the feed publisher emits."""
-    return pd.DataFrame(
-        [
-            {
-                "timestamp": NOW.isoformat(),
-                "instrument_id": str(instrument_id),
-                # This is the bug path — attribute_id arrives as a STRING UUID after Redis round-trip.
-                "attribute_id": str(close_attr),
-                "attribute_value": price,
-            }
-        ]
-    )
+def _wide_rows(instrument_id: uuid.UUID, price: float) -> pd.DataFrame:
+    return pd.DataFrame([{"instrument_id": str(instrument_id), "CLOSE": price}])
 
 
-class TestAttributeNameResolution:
-    """Regression tests: the strategy context must resolve attribute_id → name.
-
-    Bug: previously the context builder required ``attribute_name`` to exist
-    but nothing was populating it, producing ``KeyError('market_data_feed',
-    'close')`` inside the strategy's ``evaluate`` body.
-    """
-
+class TestFeedFrameProjection:
     @pytest.mark.asyncio
-    async def test_attribute_id_strings_resolve_to_names(self):
+    async def test_wide_frame_projects_into_context(self):
         feed_id = uuid.uuid4()
-        close_attr = uuid.uuid4()
         instrument_id = uuid.uuid4()
+        strategy_id = uuid.uuid4()
 
         store = InMemoryFeedStore()
-        await store.put_latest(feed_id, _eav_rows(instrument_id, close_attr, 107.5), NOW)
+        await store.put_latest(feed_id, _wide_rows(instrument_id, 107.5), NOW)
 
-        captured: list[pd.DataFrame] = []
+        universe_repo = InMemoryStrategyUniverseRepository()
+        universe_repo.set_instrument_universe(strategy_id, {instrument_id})
 
-        async def evaluator(ctx: pd.DataFrame, run_id: uuid.UUID) -> None:
+        captured: list[Context] = []
+
+        async def evaluator(ctx: Context, run_id: uuid.UUID) -> None:
             captured.append(ctx)
 
         service = StrategyEvaluator(
-            strategy_id=uuid.uuid4(),
+            strategy_id=strategy_id,
             feeds=[
                 FeedBinding(
                     spec=StrategyFeedSpec(feed_id=feed_id, is_required=True),
@@ -72,12 +60,13 @@ class TestAttributeNameResolution:
             scope="instrument",
             composite_members=None,
             trade_repo=InMemoryTradeRepository(),
+            universe_repo=universe_repo,
             feed_store=store,
             event_bus=InMemoryEventBus(),
             run_tracker=FakeRunTracker(),
             clock=FakeClock(NOW),
             evaluator=evaluator,
-            attribute_map={close_attr: "close"},
+            uow_factory=FakeUnitOfWorkFactory(),
         )
 
         await service._handle_event(
@@ -94,63 +83,12 @@ class TestAttributeNameResolution:
 
         assert len(captured) == 1
         ctx = captured[0]
-        # This is the exact column access that was breaking in the real strategy.
-        assert ctx.loc[str(instrument_id), ("market_data_feed", "close")] == 107.5
-
-    @pytest.mark.asyncio
-    async def test_unknown_attribute_falls_back_to_id_string(self):
-        """An attribute id missing from the map should survive as its string
-        id — it just ends up under a column named after the id.
-        """
-        feed_id = uuid.uuid4()
-        unknown_attr = uuid.uuid4()
-        instrument_id = uuid.uuid4()
-        store = InMemoryFeedStore()
-        await store.put_latest(feed_id, _eav_rows(instrument_id, unknown_attr, 1.0), NOW)
-
-        captured: list[pd.DataFrame] = []
-
-        async def evaluator(ctx, run_id):
-            captured.append(ctx)
-
-        service = StrategyEvaluator(
-            strategy_id=uuid.uuid4(),
-            feeds=[
-                FeedBinding(
-                    spec=StrategyFeedSpec(feed_id=feed_id, is_required=True),
-                    feed_ref="MD",
-                    channel="ascent.feed.md",
-                    is_composite_scoped=False,
-                )
-            ],
-            scope="instrument",
-            composite_members=None,
-            trade_repo=InMemoryTradeRepository(),
-            feed_store=store,
-            event_bus=InMemoryEventBus(),
-            run_tracker=FakeRunTracker(),
-            clock=FakeClock(NOW),
-            evaluator=evaluator,
-            attribute_map={},  # empty — everything is unknown
-        )
-
-        await service._handle_event(
-            Event(
-                channel="ascent.feed.md",
-                payload={"feed_id": str(feed_id)},
-            ),
-            satisfied=set(),
-            latest_run_ids={},
-        )
-
-        ctx = captured[0]
-        # Unknown attribute survives as its id string rather than crashing.
-        assert ("md", str(unknown_attr)) in ctx.columns
+        assert ctx.df.loc[str(instrument_id), ("market_data_feed", "CLOSE")] == 107.5
+        assert ctx.universe == frozenset({str(instrument_id)})
+        assert ctx.open_only == frozenset()
 
 
 class TestNoopEvaluation:
-    """If no required feed has data yet, evaluate should not fire."""
-
     @pytest.mark.asyncio
     async def test_required_feed_missing_does_not_evaluate(self):
         feed_id = uuid.uuid4()
@@ -172,14 +110,15 @@ class TestNoopEvaluation:
             scope="instrument",
             composite_members=None,
             trade_repo=InMemoryTradeRepository(),
+            universe_repo=InMemoryStrategyUniverseRepository(),
             feed_store=InMemoryFeedStore(),
             event_bus=InMemoryEventBus(),
             run_tracker=FakeRunTracker(),
             clock=FakeClock(NOW),
             evaluator=evaluator,
+            uow_factory=FakeUnitOfWorkFactory(),
         )
 
-        # Fire an event for an UNRELATED feed id — required feed not satisfied.
         await service._handle_event(
             Event(channel="ascent.feed.other", payload={"feed_id": str(uuid.uuid4())}),
             satisfied=set(),

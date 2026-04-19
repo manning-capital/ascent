@@ -148,7 +148,7 @@
             @if (trade.close_reason) {
               <div class="flex justify-between text-sm">
                 <span class="text-surface-500">Close Reason</span>
-                <span>{{ trade.close_reason }}</span>
+                <span>{{ formatCloseReason(trade.close_reason) }}</span>
               </div>
             }
           </div>

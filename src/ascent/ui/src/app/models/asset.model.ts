@@ -280,3 +280,42 @@ export interface UniverseItemCreate {
   instrument_id: string;
   order: number;
 }
+
+// ─── Impact / disable types ─────────────────────────────────────────────
+
+export type SuggestedAction = 'remove' | 'disable' | 'clear_blockers';
+
+export type ScopeType =
+  | 'strategy_universe'
+  | 'strategy_composite_universe'
+  | 'feed_universe'
+  | 'feed_composite_universe'
+  | 'strategy_exchange';
+
+export interface BlockingTrade {
+  trade_id: string;
+  state: string;
+  instrument_id: string | null;
+  composite_id: string | null;
+  direction: string | null;
+  quantity: number | null;
+  entry_at: string | null;
+}
+
+export interface BlockingScopeItem {
+  scope_type: ScopeType;
+  strategy_id: string | null;
+  feed_id: string | null;
+  exchange_id: string | null;
+  instrument_id: string | null;
+  composite_id: string | null;
+  display_name: string | null;
+}
+
+export interface ImpactReport {
+  can_remove: boolean;
+  reasons: string[];
+  blocking_trades: BlockingTrade[];
+  blocking_scope_items: BlockingScopeItem[];
+  suggested_action: SuggestedAction;
+}

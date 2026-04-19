@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from ascent.domain import (
     Direction,
@@ -23,14 +23,22 @@ from ascent.domain import (
 
 @runtime_checkable
 class TradeRepository(Protocol):
-    async def get(self, trade_id: uuid.UUID) -> Trade | None: ...
+    """Every method takes ``session`` as its first positional arg — the
+    opaque transactional handle from :class:`UnitOfWork.session`. Repos do
+    not commit; the enclosing UoW does.
+    """
 
-    async def list_non_terminal_for_strategy(self, strategy_id: uuid.UUID) -> list[Trade]: ...
+    async def get(self, session: Any, trade_id: uuid.UUID) -> Trade | None: ...
 
-    async def list_open_for_strategy(self, strategy_id: uuid.UUID) -> list[Trade]: ...
+    async def list_non_terminal_for_strategy(
+        self, session: Any, strategy_id: uuid.UUID
+    ) -> list[Trade]: ...
+
+    async def list_open_for_strategy(self, session: Any, strategy_id: uuid.UUID) -> list[Trade]: ...
 
     async def create(
         self,
+        session: Any,
         *,
         strategy_id: uuid.UUID,
         portfolio_id: uuid.UUID,
@@ -42,6 +50,7 @@ class TradeRepository(Protocol):
 
     async def set_state(
         self,
+        session: Any,
         trade_id: uuid.UUID,
         *,
         new_state: TradeState,
@@ -53,6 +62,7 @@ class TradeRepository(Protocol):
 
     async def set_leg_prices(
         self,
+        session: Any,
         leg_id: uuid.UUID,
         *,
         entry_price: float | None = None,
@@ -60,25 +70,36 @@ class TradeRepository(Protocol):
         realized_pnl: float | None = None,
     ) -> None: ...
 
-    async def set_entry_order(self, leg_id: uuid.UUID, order_id: uuid.UUID) -> None: ...
+    async def set_entry_order(
+        self, session: Any, leg_id: uuid.UUID, order_id: uuid.UUID
+    ) -> None: ...
 
-    async def set_exit_order(self, leg_id: uuid.UUID, order_id: uuid.UUID) -> None: ...
+    async def set_exit_order(
+        self, session: Any, leg_id: uuid.UUID, order_id: uuid.UUID
+    ) -> None: ...
 
 
 @runtime_checkable
 class OrderRepository(Protocol):
-    async def get(self, order_id: uuid.UUID) -> Order | None: ...
+    """Every method takes ``session`` — see :class:`TradeRepository`."""
+
+    async def get(self, session: Any, order_id: uuid.UUID) -> Order | None: ...
 
     async def list_for_exchange(
-        self, exchange_id: uuid.UUID, *, only_non_terminal_trades: bool = True
+        self,
+        session: Any,
+        exchange_id: uuid.UUID,
+        *,
+        only_non_terminal_trades: bool = True,
     ) -> list[tuple[Order, uuid.UUID, uuid.UUID]]:
         """Returns tuples of (order, leg_id, trade_id) for reconciliation."""
         ...
 
-    async def create(self, spec: NewOrderSpec) -> Order: ...
+    async def create(self, session: Any, spec: NewOrderSpec) -> Order: ...
 
     async def record_status(
         self,
+        session: Any,
         order_id: uuid.UUID,
         *,
         new_state: OrderState,
@@ -87,10 +108,13 @@ class OrderRepository(Protocol):
         error_code: str | None = None,
     ) -> None: ...
 
-    async def set_external_id(self, order_id: uuid.UUID, external_order_id: str) -> None: ...
+    async def set_external_id(
+        self, session: Any, order_id: uuid.UUID, external_order_id: str
+    ) -> None: ...
 
     async def set_fill(
         self,
+        session: Any,
         order_id: uuid.UUID,
         *,
         filled_quantity: float,
@@ -111,6 +135,8 @@ class FeedRunRepository(Protocol):
     async def complete(self, run_id: uuid.UUID, *, at: datetime) -> None: ...
 
     async def fail(self, run_id: uuid.UUID, *, at: datetime, error_message: str) -> None: ...
+
+    async def link_partition(self, run_id: uuid.UUID, partition_id: uuid.UUID) -> None: ...
 
 
 @runtime_checkable

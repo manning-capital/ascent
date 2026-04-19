@@ -9,6 +9,7 @@ from ascent.server.schemas.common import PaginatedResponse
 from ascent.server.schemas.feeds import StrategyFeedItem
 from ascent.server.schemas.orders import OrderSchema
 from ascent.server.schemas.strategies import (
+    PauseStrategyRequest,
     StrategyCreate,
     StrategyDetail,
     StrategyExchangeBatchAdd,
@@ -25,6 +26,8 @@ from ascent.server.schemas.trades import TradeListItem
 from ascent.server.schemas.universe import (
     CompositeUniverseBatchAdd,
     CompositeUniverseItemSchema,
+    ImpactReport,
+    ToggleActiveRequest,
     UniverseBatchAddInstruments,
     UniverseItemCreate,
     UniverseItemSchema,
@@ -83,6 +86,15 @@ def update_strategy(strategy_id: uuid.UUID, data: StrategyUpdate, db: Session = 
 @router.delete("/{strategy_id}", status_code=204)
 def delete_strategy(strategy_id: uuid.UUID, db: Session = Depends(get_db)):
     strategy_service.delete_strategy(db, strategy_id)
+
+
+@router.patch("/{strategy_id}/pause")
+def pause_strategy(
+    strategy_id: uuid.UUID, data: PauseStrategyRequest, db: Session = Depends(get_db)
+):
+    """Pause or resume a strategy. Always allowed; open trades exit normally."""
+    strategy = universe_service.set_strategy_paused(db, strategy_id, data.is_paused)
+    return {"id": str(strategy.id), "is_paused": strategy.is_paused}
 
 
 @router.get("/{strategy_id}/stats", response_model=StrategyStats)
@@ -202,6 +214,32 @@ def remove_strategy_universe_item(
     universe_service.remove_strategy_universe_item(db, strategy_id, instrument_id)
 
 
+@router.get(
+    "/{strategy_id}/universe/{instrument_id}/impact",
+    response_model=ImpactReport,
+)
+def get_strategy_universe_impact(
+    strategy_id: uuid.UUID, instrument_id: uuid.UUID, db: Session = Depends(get_db)
+):
+    return universe_service.compute_strategy_universe_impact(db, strategy_id, instrument_id)
+
+
+@router.patch(
+    "/{strategy_id}/universe/{instrument_id}",
+    response_model=UniverseItemSchema,
+)
+def patch_strategy_universe_item(
+    strategy_id: uuid.UUID,
+    instrument_id: uuid.UUID,
+    data: ToggleActiveRequest,
+    db: Session = Depends(get_db),
+):
+    scope = universe_service.set_strategy_universe_item_active(
+        db, strategy_id, instrument_id, data.is_active
+    )
+    return universe_service._build_item(scope)
+
+
 @router.post("/{strategy_id}/universe/batch", response_model=list[UniverseItemSchema])
 def batch_add_strategy_instruments(
     strategy_id: uuid.UUID, data: UniverseBatchAddInstruments, db: Session = Depends(get_db)
@@ -252,6 +290,32 @@ def remove_strategy_composite_universe_item(
     universe_service.remove_strategy_composite_universe_item(db, strategy_id, composite_id)
 
 
+@router.get(
+    "/{strategy_id}/composite-universe/{composite_id}/impact",
+    response_model=ImpactReport,
+)
+def get_strategy_composite_universe_impact(
+    strategy_id: uuid.UUID, composite_id: uuid.UUID, db: Session = Depends(get_db)
+):
+    return universe_service.compute_strategy_composite_impact(db, strategy_id, composite_id)
+
+
+@router.patch(
+    "/{strategy_id}/composite-universe/{composite_id}",
+    response_model=CompositeUniverseItemSchema,
+)
+def patch_strategy_composite_universe_item(
+    strategy_id: uuid.UUID,
+    composite_id: uuid.UUID,
+    data: ToggleActiveRequest,
+    db: Session = Depends(get_db),
+):
+    scope = universe_service.set_strategy_composite_universe_item_active(
+        db, strategy_id, composite_id, data.is_active
+    )
+    return universe_service._build_composite_item(scope)
+
+
 # ---- Strategy Exchanges ----
 
 
@@ -297,7 +361,36 @@ def batch_add_strategy_exchanges(
 def remove_strategy_exchange(
     strategy_id: uuid.UUID, exchange_id: uuid.UUID, db: Session = Depends(get_db)
 ):
-    strategy_service.remove_strategy_exchange(db, strategy_id, exchange_id)
+    universe_service.remove_strategy_exchange_with_impact_check(db, strategy_id, exchange_id)
+
+
+@router.get(
+    "/{strategy_id}/exchanges/{exchange_id}/impact",
+    response_model=ImpactReport,
+)
+def get_strategy_exchange_impact(
+    strategy_id: uuid.UUID, exchange_id: uuid.UUID, db: Session = Depends(get_db)
+):
+    return universe_service.compute_strategy_exchange_impact(db, strategy_id, exchange_id)
+
+
+@router.patch(
+    "/{strategy_id}/exchanges/{exchange_id}",
+    response_model=StrategyExchangeSchema,
+)
+def patch_strategy_exchange(
+    strategy_id: uuid.UUID,
+    exchange_id: uuid.UUID,
+    data: ToggleActiveRequest,
+    db: Session = Depends(get_db),
+):
+    universe_service.set_strategy_exchange_active(
+        db, strategy_id, exchange_id, data.is_active
+    )
+    # Re-fetch via the existing service to get the joined display fields
+    return next(
+        s for s in strategy_service.get_strategy_exchanges(db, strategy_id) if s.exchange_id == exchange_id
+    )
 
 
 @router.get("/{strategy_id}/runs/{run_id}", response_model=StrategyRunListItem)

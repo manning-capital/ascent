@@ -61,6 +61,7 @@ Triggered feed::
 from __future__ import annotations
 
 import logging
+import uuid
 from abc import ABC
 from collections.abc import Iterator
 from typing import TYPE_CHECKING, ClassVar
@@ -247,6 +248,27 @@ class Feed(ABC):
             return _current_partition.get()
         except LookupError:
             raise RuntimeError("get_partition() called outside of a feed run context.") from None
+
+    def get_universe(self) -> list[uuid.UUID]:
+        """Get the active scope IDs the engine resolved for this feed tick.
+
+        For instrument-scoped feeds this is a list of ``instrument_id``;
+        for composite-scoped feeds it's a list of ``composite_id``. The list
+        reflects only active rows (``FeedInstrumentScope.is_active=True`` /
+        ``FeedCompositeScope.is_active=True``) and is re-queried on every tick
+        so disable/enable changes apply without an engine restart.
+
+        Returns an empty list if the feed has no scope configured — the feed
+        still runs but is expected to fetch nothing.
+        """
+        from ascent.engine.context import _current_universe
+
+        try:
+            return _current_universe.get()
+        except LookupError:
+            raise RuntimeError(
+                "get_universe() called outside of a feed run context."
+            ) from None
 
     def get_feed(self, feed_cls: type[Feed]) -> pd.DataFrame:
         """Get a parent feed's latest data inside a triggered feed.

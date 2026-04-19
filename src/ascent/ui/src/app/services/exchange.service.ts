@@ -3,7 +3,6 @@ import { Subject, EMPTY, Observable } from 'rxjs';
 import { switchMap, tap, catchError } from 'rxjs/operators';
 import { ApiService } from './api.service';
 import { ExchangeListItem, ExchangeStats } from '../models/exchange.model';
-import { UniverseItem } from '../models/asset.model';
 import { PaginatedResponse } from '../models/trade.model';
 
 @Injectable({ providedIn: 'root' })
@@ -76,22 +75,5 @@ export class ExchangeService {
 
   loadExchangeStats(exchangeId: string): void {
     this.loadStats$.next(exchangeId);
-  }
-
-  // Universe methods
-  batchAddInstruments(exchangeId: string, instrumentIds: string[], startOrder: number): Observable<UniverseItem[]> {
-    return this.api.post<UniverseItem[]>(`/exchanges/${exchangeId}/universe/batch`, { instrument_ids: instrumentIds, start_order: startOrder });
-  }
-
-  removeUniverseItem(exchangeId: string, instrumentId: string): Observable<any> {
-    return this.api.delete(`/exchanges/${exchangeId}/universe/${instrumentId}`);
-  }
-
-  batchAddComposites(exchangeId: string, compositeIds: string[], startOrder: number): Observable<any[]> {
-    return this.api.post<any[]>(`/exchanges/${exchangeId}/composite-universe/batch`, { composite_ids: compositeIds, start_order: startOrder });
-  }
-
-  removeCompositeUniverseItem(exchangeId: string, compositeId: string): Observable<any> {
-    return this.api.delete(`/exchanges/${exchangeId}/composite-universe/${compositeId}`);
   }
 }

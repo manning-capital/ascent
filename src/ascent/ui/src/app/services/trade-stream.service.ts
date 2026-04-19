@@ -19,7 +19,7 @@ export class TradeStreamService {
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
   private buffer = new Map<string, TradeListItem>();
 
-  private static readonly FLUSH_INTERVAL_MS = 100;
+  private static readonly FLUSH_INTERVAL_MS = 300;
 
   /** Observable of batched real-time trade updates (deduped by id). */
   tradeUpdates$: Observable<TradeListItem[]> = this._tradeUpdates$.asObservable();

@@ -5,7 +5,7 @@ import { ApiService } from './api.service';
 import { StrategyListItem, StrategyDetail, StrategyStats } from '../models/strategy.model';
 import { TradeListItem, PaginatedResponse } from '../models/trade.model';
 import { OrderListItem } from '../models/order.model';
-import { UniverseItem, UniverseItemCreate } from '../models/asset.model';
+import { ImpactReport, UniverseItem, UniverseItemCreate } from '../models/asset.model';
 import { StrategyExchangeItem } from '../models/exchange.model';
 
 @Injectable({ providedIn: 'root' })
@@ -143,6 +143,14 @@ export class StrategyService {
     return this.api.delete(`/strategies/${strategyId}/universe/${instrumentId}`);
   }
 
+  getUniverseItemImpact(strategyId: string, instrumentId: string): Observable<ImpactReport> {
+    return this.api.get<ImpactReport>(`/strategies/${strategyId}/universe/${instrumentId}/impact`);
+  }
+
+  setUniverseItemActive(strategyId: string, instrumentId: string, isActive: boolean): Observable<UniverseItem> {
+    return this.api.patch<UniverseItem>(`/strategies/${strategyId}/universe/${instrumentId}`, { is_active: isActive });
+  }
+
   // Composite universe
   loadCompositeUniverse(strategyId: string): Observable<any[]> {
     return this.api.get<any[]>(`/strategies/${strategyId}/composite-universe`);
@@ -156,6 +164,14 @@ export class StrategyService {
     return this.api.delete(`/strategies/${strategyId}/composite-universe/${compositeId}`);
   }
 
+  getCompositeUniverseItemImpact(strategyId: string, compositeId: string): Observable<ImpactReport> {
+    return this.api.get<ImpactReport>(`/strategies/${strategyId}/composite-universe/${compositeId}/impact`);
+  }
+
+  setCompositeUniverseItemActive(strategyId: string, compositeId: string, isActive: boolean): Observable<any> {
+    return this.api.patch(`/strategies/${strategyId}/composite-universe/${compositeId}`, { is_active: isActive });
+  }
+
   // Strategy exchanges
   batchAddExchanges(strategyId: string, exchangeIds: string[], startOrder: number): Observable<StrategyExchangeItem[]> {
     return this.api.post<StrategyExchangeItem[]>(`/strategies/${strategyId}/exchanges/batch`, { exchange_ids: exchangeIds, start_order: startOrder });
@@ -163,5 +179,18 @@ export class StrategyService {
 
   removeExchange(strategyId: string, exchangeId: string): Observable<any> {
     return this.api.delete(`/strategies/${strategyId}/exchanges/${exchangeId}`);
+  }
+
+  getExchangeImpact(strategyId: string, exchangeId: string): Observable<ImpactReport> {
+    return this.api.get<ImpactReport>(`/strategies/${strategyId}/exchanges/${exchangeId}/impact`);
+  }
+
+  setExchangeActive(strategyId: string, exchangeId: string, isActive: boolean): Observable<StrategyExchangeItem> {
+    return this.api.patch<StrategyExchangeItem>(`/strategies/${strategyId}/exchanges/${exchangeId}`, { is_active: isActive });
+  }
+
+  // Pause / resume
+  pauseStrategy(strategyId: string, isPaused: boolean): Observable<{ id: string; is_paused: boolean }> {
+    return this.api.patch<{ id: string; is_paused: boolean }>(`/strategies/${strategyId}/pause`, { is_paused: isPaused });
   }
 }

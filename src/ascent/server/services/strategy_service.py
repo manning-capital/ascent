@@ -292,14 +292,23 @@ def get_strategy_stats(db: Session, strategy_id: uuid.UUID) -> StrategyStats:
             cur_win = 0
             cur_loss = 0
 
-    # ── Chart data: cumulative PnL ──
+    # ── Chart data: cumulative PnL (ordered by exit_at — when PnL is realized) ──
+    chart_rows = db.execute(
+        select(Trade.exit_at, Trade.total_realized_pnl)
+        .join(Trade.current_status_type)
+        .where(Trade.strategy_id == strategy_id)
+        .where(TradeStatusType.name == "CLOSED")
+        .where(Trade.total_realized_pnl.is_not(None))
+        .where(Trade.exit_at.is_not(None))
+        .order_by(Trade.exit_at.asc())
+    ).all()
     cumulative_pnl_points: list[CumulativePnlPoint] = []
     cum = 0.0
-    for r in pnl_rows:
+    for r in chart_rows:
         cum += float(r.total_realized_pnl)
         cumulative_pnl_points.append(
             CumulativePnlPoint(
-                date=r.entry_at.isoformat() if r.entry_at else "",
+                date=r.exit_at.isoformat(),
                 value=round(cum, 2),
                 symbol="",
             )

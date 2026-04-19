@@ -169,9 +169,9 @@ class TimingStrategy(Strategy):
     evaluated_at: ClassVar[list[float]] = []
     received_data: ClassVar[list[pd.DataFrame]] = []
 
-    def evaluate(self, ctx: pd.DataFrame) -> None:
+    def evaluate(self, ctx) -> None:
         TimingStrategy.evaluated_at.append(time.monotonic())
-        TimingStrategy.received_data.append(ctx.copy())
+        TimingStrategy.received_data.append(ctx.df.copy())
 
 
 class DAGStrategy(Strategy):
@@ -182,7 +182,7 @@ class DAGStrategy(Strategy):
 
     evaluated_at: ClassVar[list[float]] = []
 
-    def evaluate(self, ctx: pd.DataFrame) -> None:
+    def evaluate(self, ctx) -> None:
         DAGStrategy.evaluated_at.append(time.monotonic())
 
 
@@ -194,7 +194,7 @@ class MultiDepStrategy(Strategy):
 
     evaluated_at: ClassVar[list[float]] = []
 
-    def evaluate(self, ctx: pd.DataFrame) -> None:
+    def evaluate(self, ctx) -> None:
         MultiDepStrategy.evaluated_at.append(time.monotonic())
 
 
