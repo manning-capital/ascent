@@ -21,9 +21,11 @@ class SqlAlchemyFeedRunRepository(FeedRunRepository):
         *,
         feed_id: uuid.UUID,
         started_at: datetime,
-        partition_id: uuid.UUID | None = None,
+        snapshot_timestamp: datetime,
     ) -> uuid.UUID:
-        return await asyncio.to_thread(self._create_sync, feed_id, started_at, partition_id)
+        return await asyncio.to_thread(
+            self._create_sync, feed_id, started_at, snapshot_timestamp
+        )
 
     async def complete(self, run_id: uuid.UUID, *, at: datetime) -> None:
         await asyncio.to_thread(self._update_sync, run_id, "COMPLETED", at, None)
@@ -31,27 +33,16 @@ class SqlAlchemyFeedRunRepository(FeedRunRepository):
     async def fail(self, run_id: uuid.UUID, *, at: datetime, error_message: str) -> None:
         await asyncio.to_thread(self._update_sync, run_id, "FAILED", at, error_message)
 
-    async def link_partition(self, run_id: uuid.UUID, partition_id: uuid.UUID) -> None:
-        await asyncio.to_thread(self._link_partition_sync, run_id, partition_id)
-
-    def _link_partition_sync(self, run_id: uuid.UUID, partition_id: uuid.UUID) -> None:
-        with Session(bind=self._sf.kw["bind"]) as db:
-            row = db.get(FeedRun, run_id)
-            if row is None:
-                return
-            row.partition_id = partition_id
-            db.commit()
-
     def _create_sync(
         self,
         feed_id: uuid.UUID,
         started_at: datetime,
-        partition_id: uuid.UUID | None,
+        snapshot_timestamp: datetime,
     ) -> uuid.UUID:
         with Session(bind=self._sf.kw["bind"]) as db:
             row = FeedRun(
                 feed_id=feed_id,
-                partition_id=partition_id,
+                snapshot_timestamp=snapshot_timestamp,
                 status="RUNNING",
                 started_at=started_at,
             )

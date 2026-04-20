@@ -20,7 +20,6 @@ from ascent.adapters.sqlalchemy.outbox import (
     SqlAlchemyOutboxPublisher,
     SqlAlchemyOutboxReader,
 )
-from ascent.adapters.sqlalchemy.partition_repo import SqlAlchemyPartitionRepository
 from ascent.adapters.sqlalchemy.route_gate import SqlAlchemyRouteGate
 from ascent.adapters.sqlalchemy.run_tracker import SqlAlchemyRunTracker
 from ascent.adapters.sqlalchemy.strategy_run_repo import SqlAlchemyStrategyRunRepository
@@ -47,7 +46,6 @@ __all__ = [
     "SqlAlchemyOrderRepository",
     "SqlAlchemyOutboxPublisher",
     "SqlAlchemyOutboxReader",
-    "SqlAlchemyPartitionRepository",
     "SqlAlchemyRouteGate",
     "SqlAlchemyRunTracker",
     "SqlAlchemyStrategyRunRepository",

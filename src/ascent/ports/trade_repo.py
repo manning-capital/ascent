@@ -129,14 +129,12 @@ class FeedRunRepository(Protocol):
         *,
         feed_id: uuid.UUID,
         started_at: datetime,
-        partition_id: uuid.UUID | None = None,
+        snapshot_timestamp: datetime,
     ) -> uuid.UUID: ...
 
     async def complete(self, run_id: uuid.UUID, *, at: datetime) -> None: ...
 
     async def fail(self, run_id: uuid.UUID, *, at: datetime, error_message: str) -> None: ...
-
-    async def link_partition(self, run_id: uuid.UUID, partition_id: uuid.UUID) -> None: ...
 
 
 @runtime_checkable
@@ -154,20 +152,6 @@ class StrategyRunRepository(Protocol):
         feed_run_ids: dict[uuid.UUID, uuid.UUID],
         trigger_feed_id: uuid.UUID,
     ) -> None: ...
-
-
-@runtime_checkable
-class PartitionRepository(Protocol):
-    async def find_or_create(
-        self,
-        *,
-        feed_id: uuid.UUID,
-        key: datetime,
-        window_start: datetime,
-        window_end: datetime,
-    ) -> uuid.UUID: ...
-
-    async def set_status(self, partition_id: uuid.UUID, status: str) -> None: ...
 
 
 # ---------------------------------------------------------------------------

@@ -31,8 +31,7 @@ export interface FeedDetail extends FeedListItem {
 export interface FeedRunListItem {
   id: string;
   feed_id: string;
-  partition_id: string | null;
-  partition_key: string | null;
+  snapshot_timestamp: string;
   status: string;
   records_fetched: number | null;
   started_at: string;
@@ -40,21 +39,31 @@ export interface FeedRunListItem {
   error_message: string | null;
 }
 
-export interface FeedPartitionItem {
-  id: string | null;
-  partition_key: string;
-  window_start: string;
-  window_end: string;
-  status: string;
-  latest_run: FeedRunListItem | null;
-}
-
-export interface PartitionDataResponse {
+export interface RunDataResponse {
   items: Record<string, any>[];
   total: number;
   page: number;
   page_size: number;
   total_pages: number;
+}
+
+export interface FeedRunTradeItem {
+  trade_id: string;
+  strategy_id: string;
+  strategy_run_id: string;
+  status: string;
+  entry_at: string | null;
+  created_at: string;
+}
+
+export interface TradeFeedRunItem {
+  feed_run_id: string;
+  feed_id: string;
+  feed_name: string;
+  feed_display_name: string;
+  snapshot_timestamp: string;
+  status: string;
+  is_trigger: boolean;
 }
 
 export interface StrategyFeedNode {

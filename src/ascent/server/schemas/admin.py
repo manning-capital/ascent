@@ -4,28 +4,9 @@ import uuid
 from pydantic import BaseModel, ConfigDict
 
 
-class FeedPartitionCreate(BaseModel):
-    feed_id: uuid.UUID
-    partition_key: datetime.datetime
-    window_start: datetime.datetime
-    window_end: datetime.datetime
-    status: str = "PENDING"
-
-
-class FeedPartitionSchema(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID
-    feed_id: uuid.UUID
-    partition_key: datetime.datetime
-    window_start: datetime.datetime
-    window_end: datetime.datetime
-    status: str
-
-
 class FeedRunCreate(BaseModel):
     feed_id: uuid.UUID
-    partition_id: uuid.UUID | None = None
+    snapshot_timestamp: datetime.datetime
     status: str
     records_fetched: int | None = None
     started_at: datetime.datetime
@@ -38,7 +19,7 @@ class FeedRunSchema(BaseModel):
 
     id: uuid.UUID
     feed_id: uuid.UUID
-    partition_id: uuid.UUID | None = None
+    snapshot_timestamp: datetime.datetime
     status: str
     records_fetched: int | None = None
     started_at: datetime.datetime

@@ -25,7 +25,6 @@ from ascent.domain import (
 from ascent.ports import (
     FeedRunRepository,
     OrderRepository,
-    PartitionRepository,
     StrategyRunRepository,
     StrategyUniverseRepository,
     TradeRepository,
@@ -346,12 +345,12 @@ class InMemoryFeedRunRepository(FeedRunRepository):
         *,
         feed_id: uuid.UUID,
         started_at: datetime,
-        partition_id: uuid.UUID | None = None,
+        snapshot_timestamp: datetime,
     ) -> uuid.UUID:
         run_id = uuid.uuid4()
         self.runs[run_id] = {
             "feed_id": feed_id,
-            "partition_id": partition_id,
+            "snapshot_timestamp": snapshot_timestamp,
             "started_at": started_at,
             "status": "RUNNING",
         }
@@ -400,32 +399,3 @@ class InMemoryStrategyRunRepository(StrategyRunRepository):
         self.links.append((strategy_run_id, dict(feed_run_ids), trigger_feed_id))
 
 
-class InMemoryPartitionRepository(PartitionRepository):
-    def __init__(self) -> None:
-        self.partitions: dict[tuple[uuid.UUID, datetime], dict] = {}
-
-    async def find_or_create(
-        self,
-        *,
-        feed_id: uuid.UUID,
-        key: datetime,
-        window_start: datetime,
-        window_end: datetime,
-    ) -> uuid.UUID:
-        existing = self.partitions.get((feed_id, key))
-        if existing is not None:
-            return existing["id"]
-        partition_id = uuid.uuid4()
-        self.partitions[(feed_id, key)] = {
-            "id": partition_id,
-            "window_start": window_start,
-            "window_end": window_end,
-            "status": "PENDING",
-        }
-        return partition_id
-
-    async def set_status(self, partition_id: uuid.UUID, status: str) -> None:
-        for entry in self.partitions.values():
-            if entry["id"] == partition_id:
-                entry["status"] = status
-                return

@@ -5,7 +5,7 @@ here is a pure Python value type or a pure function. Adapter code maps these
 types to/from SQLAlchemy models, Redis payloads, exchange APIs, etc.
 """
 
-from ascent.domain.feed import FeedTick, PartitionWindow
+from ascent.domain.feed import FeedTick
 from ascent.domain.state_machine import (
     LegUpdate,
     OrderUpdate,
@@ -35,7 +35,6 @@ __all__ = [
     "OrderState",
     "OrderType",
     "OrderUpdate",
-    "PartitionWindow",
     "Trade",
     "TradeLeg",
     "TradeState",

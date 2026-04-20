@@ -1,4 +1,4 @@
-"""Feed domain types — partition windows and ticks. No I/O."""
+"""Feed domain types. No I/O."""
 
 from __future__ import annotations
 
@@ -9,31 +9,16 @@ from typing import Any
 
 
 @dataclass(frozen=True)
-class PartitionWindow:
-    """A discrete time window that anchors one feed execution.
-
-    Identical semantics to the existing ``PartitionInfo`` from the engine's
-    contextvars module, but decoupled from Pydantic / framework imports so
-    the domain layer stays pure.
-    """
-
-    key: datetime
-    window_start: datetime
-    window_end: datetime
-
-
-@dataclass(frozen=True)
 class FeedTick:
     """A single materialized feed observation.
 
-    ``data`` is payload-shaped: the canonical EAV columns are
-    ``timestamp``, ``instrument_id`` or ``composite_id``, ``attribute_id``,
-    ``attribute_value``. We keep it open so the store can round-trip it
-    without the domain knowing the wire format.
+    ``snapshot_timestamp`` is the canonical point-in-time the run represents
+    — strategies and persistence use this as the join key against the output
+    table's ``timestamp`` column.
     """
 
     feed_id: uuid.UUID
     feed_run_id: uuid.UUID | None
-    partition_key: datetime | None
+    snapshot_timestamp: datetime
     produced_at: datetime
     data: Any

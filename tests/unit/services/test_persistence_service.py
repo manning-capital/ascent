@@ -90,7 +90,7 @@ async def test_feed_event_triggers_upsert():
             {
                 "feed_id": str(feed_id),
                 "schema": output_table,
-                "partition_key": partition_ts,
+                "snapshot_timestamp": partition_ts,
             },
         )
         await _wait(lambda: len(store.upserts) == 1)
@@ -144,7 +144,7 @@ async def test_upsert_uses_schema_from_event_when_no_override():
             {
                 "feed_id": str(feed_id),
                 "schema": "composite_attribute",
-                "partition_key": partition_ts,
+                "snapshot_timestamp": partition_ts,
             },
         )
         await _wait(lambda: len(store.upserts) == 1)

@@ -2,7 +2,7 @@ import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { map } from 'rxjs/operators';
 import { FeedService } from '../../../services/feed.service';
-import { FeedRunListItem } from '../../../models/feed.model';
+import { FeedRunListItem, FeedRunTradeItem } from '../../../models/feed.model';
 import type { ServerFetchFn } from '../../shared/data-table/data-table.model';
 import { RunDetailCardComponent, RunDetailField } from '../../shared/run-detail-card.component';
 import { ServerTableComponent } from '../../shared/data-table/server-table.component';
@@ -30,30 +30,35 @@ export class FeedRunDetailComponent implements OnInit {
   private router = inject(Router);
   private feedService = inject(FeedService);
 
-  tabs = ['Overview', 'Partition'];
+  // "Partition" kept as a query-string alias for backwards-compat with
+  // bookmarked URLs — resolves to the Data tab in code.
+  private tabAliases: Record<string, string> = { Partition: 'Data' };
+  tabs = ['Overview', 'Data', 'Trades'];
 
   feedId = '';
   runId = '';
 
   run = signal<FeedRunListItem | null>(null);
+  trades = signal<FeedRunTradeItem[]>([]);
+  tradesLoading = signal(false);
   loading = signal(true);
   activeTab = signal('Overview');
 
-  // Partition data via infinite row model
-  partitionFetchPage = computed<ServerFetchFn<Record<string, any>> | null>(() => {
+  // Run data via infinite row model — joins on run.snapshot_timestamp
+  runDataFetchPage = computed<ServerFetchFn<Record<string, any>> | null>(() => {
     const r = this.run();
-    if (!r?.partition_id) return null;
+    if (!r) return null;
     const feedId = this.feedId;
-    const partitionId = r.partition_id;
+    const runId = this.runId;
     return (page: number, pageSize: number, _sort?: { field: string; order: string }) =>
-      this.feedService.loadPartitionData(feedId, partitionId, page, pageSize).pipe(
+      this.feedService.loadRunData(feedId, runId, page, pageSize).pipe(
         map(res => ({ items: res.items, total: res.total })),
       );
   });
 
   extraFields: RunDetailField[] = [
     { label: 'Records Fetched', key: 'records_fetched' },
-    { label: 'Partition Key', key: 'partition_key' },
+    { label: 'Snapshot Timestamp', key: 'snapshot_timestamp' },
   ];
 
   ngOnInit(): void {
@@ -62,7 +67,8 @@ export class FeedRunDetailComponent implements OnInit {
       this.runId = params.get('runId')!;
 
       const qp = this.route.snapshot.queryParamMap;
-      const tab = qp.get('tab');
+      const rawTab = qp.get('tab');
+      const tab = rawTab && this.tabAliases[rawTab] ? this.tabAliases[rawTab] : rawTab;
       if (tab && this.tabs.includes(tab)) {
         this.activeTab.set(tab);
       } else {
@@ -71,6 +77,7 @@ export class FeedRunDetailComponent implements OnInit {
 
       this.loading.set(true);
       this.run.set(null);
+      this.trades.set([]);
 
       this.feedService.loadFeedDetail(this.feedId);
 
@@ -78,6 +85,9 @@ export class FeedRunDetailComponent implements OnInit {
         next: run => {
           this.run.set(run);
           this.loading.set(false);
+          if (this.activeTab() === 'Trades') {
+            this.loadTrades();
+          }
         },
         error: () => this.loading.set(false),
       });
@@ -92,15 +102,34 @@ export class FeedRunDetailComponent implements OnInit {
       queryParamsHandling: 'merge',
       replaceUrl: true,
     });
-    // Partition tab data loads automatically via infinite row model
+    if (tab === 'Trades' && this.trades().length === 0) {
+      this.loadTrades();
+    }
+  }
+
+  loadTrades(): void {
+    this.tradesLoading.set(true);
+    this.feedService.loadRunTrades(this.feedId, this.runId).subscribe({
+      next: trades => {
+        this.trades.set(trades);
+        this.tradesLoading.set(false);
+      },
+      error: () => this.tradesLoading.set(false),
+    });
   }
 
   statusSeverity(status: string): 'success' | 'danger' | 'warn' | 'secondary' | 'info' {
     switch (status) {
-      case 'COMPLETED': return 'success';
-      case 'FAILED': return 'danger';
-      case 'RUNNING': return 'warn';
-      case 'PENDING': return 'secondary';
+      case 'COMPLETED':
+      case 'OPEN':
+      case 'CLOSED': return 'success';
+      case 'FAILED':
+      case 'ERROR': return 'danger';
+      case 'RUNNING':
+      case 'OPENING':
+      case 'CLOSING': return 'warn';
+      case 'PENDING':
+      case 'WAITING': return 'secondary';
       default: return 'secondary';
     }
   }

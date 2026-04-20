@@ -47,7 +47,7 @@ export class FeedRunsTabComponent {
     { field: 'id', header: 'Run ID', cellType: 'monospace', sortable: false },
     { field: 'started_at', header: 'Started', cellType: 'date' },
     { field: 'duration', header: 'Duration', sortable: false, valueGetter: (p: any) => this.durationLabel(p.data) },
-    { field: 'partition_key', header: 'Partition Key', cellType: 'date', sortable: false },
+    { field: 'snapshot_timestamp', header: 'Snapshot', cellType: 'date', sortable: false },
     { field: 'records_fetched', header: 'Records', valueFormatter: (p: any) => p.value ?? '-' },
     { field: 'error_message', header: 'Error', sortable: false, valueFormatter: (p: any) => p.value ?? '-', cellClass: (p: any) => p.value ? 'text-red-500' : '' },
   ];

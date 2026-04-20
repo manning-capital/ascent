@@ -1,9 +1,13 @@
 """FeedExecutor — runs a single feed tick end-to-end.
 
-Supersedes the duplicated ``run_scheduled_feed`` / ``run_triggered_feed``
-in ``ascent.engine.producer``. The executor is trigger-agnostic: the caller
-(the async Runner) decides *when* to invoke it; the executor handles partition
-creation, run tracking, publishing, and persistence enqueue.
+The executor is trigger-agnostic: the caller (the async Runner) decides *when*
+to invoke it. The executor computes the canonical ``snapshot_timestamp`` from
+the feed's schedule, runs the user fetcher, writes latest to Redis, and
+publishes the feed event.
+
+``snapshot_timestamp`` replaces the prior ``FeedPartition`` concept. There's
+no partition table, no grid, no MATERIALIZED/FAILED partition state — just a
+timestamp that downstream code (strategies, persister, UI) uses to align data.
 """
 
 from __future__ import annotations
@@ -16,20 +20,17 @@ from typing import Any, Protocol
 
 import pandas as pd
 
-from ascent.domain import PartitionWindow
-from ascent.feeds.partition import partition_key_for, partition_window
 from ascent.feeds.schedule import Schedule
-from ascent.ports import EventBus, LatestFeedStore, PartitionRepository
+from ascent.feeds.snapshot import snapshot_timestamp_for
+from ascent.ports import EventBus, LatestFeedStore
 
 logger = logging.getLogger(__name__)
 
 
 class FeedFetcher(Protocol):
-    """Thin abstraction over a user feed class. Keeps the executor free of
-    SQLAlchemy-model dependencies.
-    """
+    """Thin abstraction over a user feed class."""
 
-    async def fetch(self, partition: PartitionWindow, context: dict[str, Any]) -> pd.DataFrame: ...
+    async def fetch(self, snapshot_timestamp: datetime, context: dict[str, Any]) -> pd.DataFrame: ...
     async def on_error(self, error: BaseException) -> None: ...
 
 
@@ -45,8 +46,7 @@ class FeedContext:
 @dataclass(frozen=True)
 class FeedRunOutcome:
     feed_run_id: uuid.UUID
-    partition_id: uuid.UUID | None
-    partition_key: datetime | None
+    snapshot_timestamp: datetime
     rows: int
     produced_at: datetime
 
@@ -57,28 +57,33 @@ class FeedExecutor:
         *,
         feed_store: LatestFeedStore,
         event_bus: EventBus,
-        partition_repo: PartitionRepository,
     ) -> None:
         self._store = feed_store
         self._bus = event_bus
-        self._partitions = partition_repo
+
+    @staticmethod
+    def resolve_snapshot(feed: FeedContext, tick: datetime) -> datetime:
+        """Schedule-aligned snapshot timestamp for ``tick``, or ``tick`` itself
+        if the feed has no schedule (triggered feeds inherit the parent's
+        snapshot, which is passed in as ``tick``).
+        """
+        if feed.schedule is None:
+            return tick
+        return snapshot_timestamp_for(feed.schedule, tick)
 
     async def execute(
         self,
         *,
         feed: FeedContext,
         tick: datetime,
+        snapshot_timestamp: datetime,
         fetcher: FeedFetcher,
         feed_run_id: uuid.UUID,
         extra_context: dict[str, Any] | None = None,
     ) -> FeedRunOutcome:
-        partition_id, partition_info = await self._ensure_partition(feed, tick)
-
         try:
-            df = await fetcher.fetch(partition_info, extra_context or {})
+            df = await fetcher.fetch(snapshot_timestamp, extra_context or {})
         except BaseException as exc:
-            if partition_id is not None:
-                await self._partitions.set_status(partition_id, "FAILED")
             await fetcher.on_error(exc)
             raise
 
@@ -89,37 +94,15 @@ class FeedExecutor:
             {
                 "feed_id": str(feed.feed_id),
                 "feed_ref": feed.feed_ref,
-                "timestamp": tick.isoformat(),
+                "snapshot_timestamp": snapshot_timestamp.isoformat(),
                 "schema": feed.output_table,
                 "feed_run_id": str(feed_run_id),
-                "partition_key": (
-                    partition_info.key.isoformat() if partition_info is not None else None
-                ),
             },
         )
 
-        if partition_id is not None:
-            await self._partitions.set_status(partition_id, "MATERIALIZED")
-
         return FeedRunOutcome(
             feed_run_id=feed_run_id,
-            partition_id=partition_id,
-            partition_key=partition_info.key if partition_info else None,
+            snapshot_timestamp=snapshot_timestamp,
             rows=len(df),
             produced_at=tick,
         )
-
-    async def _ensure_partition(
-        self, feed: FeedContext, tick: datetime
-    ) -> tuple[uuid.UUID | None, PartitionWindow | None]:
-        if feed.schedule is None:
-            return None, None
-        key = partition_key_for(feed.schedule, tick)
-        w_start, w_end = partition_window(feed.schedule, key)
-        partition_id = await self._partitions.find_or_create(
-            feed_id=feed.feed_id,
-            key=key,
-            window_start=w_start,
-            window_end=w_end,
-        )
-        return partition_id, PartitionWindow(key=key, window_start=w_start, window_end=w_end)

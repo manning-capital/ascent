@@ -1,6 +1,8 @@
-import { Component, inject, OnInit } from '@angular/core';
+import { Component, inject, OnInit, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { Card } from 'primeng/card';
+import { Tag } from 'primeng/tag';
+import { FeedService } from '../../services/feed.service';
 import { TradeService } from '../../services/trade.service';
 import { BadgeComponent } from '../shared/badge.component';
 import { StatCardComponent } from '../shared/stat-card.component';
@@ -9,6 +11,7 @@ import type { DataTableColumn } from '../shared/data-table/data-table.model';
 import { DatePipe, JsonPipe } from '@angular/common';
 import { Skeleton } from 'primeng/skeleton';
 import { formatCloseReason } from '../shared/close-reason.util';
+import { TradeFeedRunItem } from '../../models/feed.model';
 
 const directionSeverity: Record<string, string> = {
   LONG: 'success',
@@ -32,15 +35,19 @@ const orderStatusSeverity: Record<string, string> = {
 @Component({
   selector: 'app-trade-detail',
   standalone: true,
-  imports: [RouterLink, BadgeComponent, StatCardComponent, DatePipe, JsonPipe, Card, Skeleton, DataTableComponent],
+  imports: [RouterLink, BadgeComponent, StatCardComponent, DatePipe, JsonPipe, Card, Tag, Skeleton, DataTableComponent],
   templateUrl: './trade-detail.component.html',
 })
 export class TradeDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
   tradeService = inject(TradeService);
+  private feedService = inject(FeedService);
 
   String = String;
   formatCloseReason = formatCloseReason;
+
+  sourceFeedRuns = signal<TradeFeedRunItem[]>([]);
+  sourceFeedRunsLoading = signal(false);
 
   legColumns: DataTableColumn[] = [
     { field: 'instrument_name', header: 'Instrument' },
@@ -124,9 +131,33 @@ export class TradeDetailComponent implements OnInit {
     { field: 'timestamp', header: 'Timestamp', cellType: 'date' },
   ];
 
+  statusSeverity(status: string): 'success' | 'danger' | 'warn' | 'secondary' | 'info' {
+    switch (status) {
+      case 'COMPLETED': return 'success';
+      case 'FAILED': return 'danger';
+      case 'RUNNING': return 'warn';
+      case 'PENDING': return 'secondary';
+      default: return 'secondary';
+    }
+  }
+
   ngOnInit(): void {
     this.route.paramMap.subscribe(params => {
-      this.tradeService.loadTradeDetail(params.get('tradeId')!);
+      const tradeId = params.get('tradeId')!;
+      this.tradeService.loadTradeDetail(tradeId);
+      this.loadSourceFeedRuns(tradeId);
+    });
+  }
+
+  private loadSourceFeedRuns(tradeId: string): void {
+    this.sourceFeedRuns.set([]);
+    this.sourceFeedRunsLoading.set(true);
+    this.feedService.loadTradeFeedRuns(tradeId).subscribe({
+      next: runs => {
+        this.sourceFeedRuns.set(runs);
+        this.sourceFeedRunsLoading.set(false);
+      },
+      error: () => this.sourceFeedRunsLoading.set(false),
     });
   }
 }

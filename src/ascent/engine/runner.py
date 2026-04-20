@@ -29,7 +29,6 @@ from ascent.adapters import (
     SqlAlchemyOrderRepository,
     SqlAlchemyOutboxPublisher,
     SqlAlchemyOutboxReader,
-    SqlAlchemyPartitionRepository,
     SqlAlchemyRouteGate,
     SqlAlchemyRunTracker,
     SqlAlchemyStrategyRunRepository,
@@ -64,10 +63,9 @@ from ascent.application import (
 )
 from ascent.domain import OrderType
 from ascent.engine.context import (
-    PartitionInfo,
     _current_feeds,
     _current_logger,
-    _current_partition,
+    _current_snapshot,
     _current_universe,
 )
 from ascent.engine.deploy import deploy_exchange, deploy_feed, deploy_strategy
@@ -201,7 +199,6 @@ class Runner:
         durable_publisher = NatsJetStreamPublisher(nc)
         feed_run_repo = SqlAlchemyFeedRunRepository(session_factory)
         strategy_run_repo = SqlAlchemyStrategyRunRepository(session_factory)
-        partition_repo = SqlAlchemyPartitionRepository(session_factory)
         run_tracker = SqlAlchemyRunTracker(
             feed_run_repo=feed_run_repo, strategy_run_repo=strategy_run_repo
         )
@@ -210,9 +207,7 @@ class Runner:
         feed_store = CompositeFeedStore(latest=feed_cache, historical=historical)
 
         clock = SystemClock()
-        executor = FeedExecutor(
-            feed_store=feed_store, event_bus=event_bus, partition_repo=partition_repo
-        )
+        executor = FeedExecutor(feed_store=feed_store, event_bus=event_bus)
 
         deployment = await asyncio.to_thread(self._deploy_all, engine)
         feed_records = await asyncio.to_thread(self._load_feed_records, session_factory, deployment)
@@ -274,6 +269,7 @@ class Runner:
                         outbox=outbox_publisher,
                         uow_factory=uow_factory,
                         run_tracker=run_tracker,
+                        strategy_run_repo=strategy_run_repo,
                         clock=clock,
                         type_cache=type_cache,
                     )
@@ -495,6 +491,7 @@ class Runner:
         outbox,
         uow_factory,
         run_tracker,
+        strategy_run_repo,
         clock,
         type_cache: TypeCache,
     ) -> None:
@@ -564,6 +561,7 @@ class Runner:
             feed_store=feed_cache,
             event_bus=event_bus,
             run_tracker=run_tracker,
+            strategy_run_repo=strategy_run_repo,
             clock=clock,
             evaluator=evaluator,
             uow_factory=uow_factory,
@@ -804,12 +802,12 @@ def _fetcher_factory(
 ) -> Any:
     """Return a factory that builds a FeedFetcher for one execution tick.
 
-    The factory is given the partition window and parent-feed context; it
+    The factory is given the snapshot timestamp and parent-feed context; it
     returns a ``FeedFetcher`` whose ``fetch`` method runs user code on a
     threadpool and sets the Ascent contextvars before the call.
     """
 
-    def factory(partition, context):  # noqa: ANN001
+    def factory(snapshot_timestamp, context):  # noqa: ANN001
         return _FeedFetcherBridge(
             feed_cls=feed_cls,
             parameters=parameters,
@@ -838,29 +836,18 @@ class _FeedFetcherBridge(FeedFetcher):
         self._session_factory = session_factory
         self._instance = feed_cls(parameters)
 
-    async def fetch(self, partition, context):  # noqa: ANN001
+    async def fetch(self, snapshot_timestamp, context):  # noqa: ANN001
         def _call() -> Any:
             universe = self._load_universe()
             token_universe = _current_universe.set(universe)
             token_feeds = _current_feeds.set(context) if context else None
-            token_partition = (
-                _current_partition.set(
-                    PartitionInfo(
-                        key=partition.key,
-                        window_start=partition.window_start,
-                        window_end=partition.window_end,
-                    )
-                )
-                if partition is not None
-                else None
-            )
+            token_snapshot = _current_snapshot.set(snapshot_timestamp)
             token_logger = _current_logger.set(logger)
             try:
                 return self._instance.fetch()
             finally:
                 _current_logger.reset(token_logger)
-                if token_partition is not None:
-                    _current_partition.reset(token_partition)
+                _current_snapshot.reset(token_snapshot)
                 if token_feeds is not None:
                     _current_feeds.reset(token_feeds)
                 _current_universe.reset(token_universe)

@@ -23,7 +23,8 @@ from ascent.server.schemas.trades import (
     TradeStatusCreate,
     TradeUpdate,
 )
-from ascent.server.services import trade_service
+from ascent.server.schemas.feeds import TradeFeedRunItem
+from ascent.server.services import feed_service, trade_service
 
 router = APIRouter(prefix="/trades", tags=["trades"])
 
@@ -118,6 +119,17 @@ def create_trade(data: TradeCreate, db: Session = Depends(get_db)):
 @router.get("/{trade_id}", response_model=TradeDetail)
 def get_trade(trade_id: uuid.UUID, db: Session = Depends(get_db)):
     return trade_service.get_trade_detail(db, trade_id)
+
+
+@router.get("/{trade_id}/feed-runs", response_model=list[TradeFeedRunItem])
+def get_trade_feed_runs(trade_id: uuid.UUID, db: Session = Depends(get_db)):
+    """Return the feed runs consulted by the strategy run that created this trade.
+
+    Answers "what data was the engine looking at when this trade was made?".
+    Empty list if the trade predates provenance wiring or no strategy run is
+    attached.
+    """
+    return feed_service.get_trade_feed_runs(db, trade_id)
 
 
 @router.put("/{trade_id}")

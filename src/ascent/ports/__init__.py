@@ -20,7 +20,6 @@ from ascent.ports.strategy_universe import StrategyUniverseRepository
 from ascent.ports.trade_repo import (
     FeedRunRepository,
     OrderRepository,
-    PartitionRepository,
     StrategyRunRepository,
     TradeRepository,
 )
@@ -41,7 +40,6 @@ __all__ = [
     "LatestFeedStore",
     "OrderRepository",
     "OutboxPublisher",
-    "PartitionRepository",
     "RouteGate",
     "RunTrackerPort",
     "StateStore",

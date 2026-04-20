@@ -39,7 +39,6 @@ from ascent.database.models.feeds import (
     FeedCompositeScope,
     FeedDependency,
     FeedInstrumentScope,
-    FeedPartition,
     FeedRun,
     StrategyFeed,
 )
@@ -198,7 +197,6 @@ __all__ = [
     "FeedInstrumentScope",
     "FeedCompositeScope",
     "FeedDependency",
-    "FeedPartition",
     "FeedRun",
     "StrategyFeed",
     # Strategies

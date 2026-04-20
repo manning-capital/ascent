@@ -1,8 +1,8 @@
 """Runtime tests for :class:`ScheduledFeedService`.
 
-Covers the tick loop end-to-end: clock fires → fetcher invoked → partition
-created + marked MATERIALIZED → event published → run tracker stamps
-COMPLETED. Catches the silent-non-firing failure mode we hit earlier.
+Covers the tick loop end-to-end: clock fires → snapshot resolved → fetcher
+invoked → event published → run tracker stamps COMPLETED with the right
+snapshot_timestamp. Catches the silent-non-firing failure mode we hit earlier.
 """
 
 from __future__ import annotations
@@ -18,14 +18,12 @@ import pytest_asyncio
 
 from ascent.application import FeedExecutor, ScheduledFeedService
 from ascent.application.execute_feed import FeedContext
-from ascent.domain import PartitionWindow
 from ascent.feeds.schedule import Schedule
 from tests.fakes import (
     FakeClock,
     FakeRunTracker,
     InMemoryEventBus,
     InMemoryFeedStore,
-    InMemoryPartitionRepository,
 )
 
 
@@ -35,7 +33,7 @@ class _StubFetcher:
         self.calls = 0
         self.errors: list[BaseException] = []
 
-    async def fetch(self, partition: PartitionWindow, context: dict[str, Any]) -> pd.DataFrame:
+    async def fetch(self, snapshot_timestamp: datetime, context: dict[str, Any]) -> pd.DataFrame:
         self.calls += 1
         return self._df
 
@@ -47,7 +45,7 @@ class _RaisingFetcher:
     def __init__(self) -> None:
         self.errors: list[BaseException] = []
 
-    async def fetch(self, partition, context):
+    async def fetch(self, snapshot_timestamp, context):
         raise RuntimeError("fetcher boom")
 
     async def on_error(self, error: BaseException) -> None:
@@ -58,8 +56,7 @@ class _RaisingFetcher:
 async def wiring():
     store = InMemoryFeedStore()
     bus = InMemoryEventBus()
-    partitions = InMemoryPartitionRepository()
-    executor = FeedExecutor(feed_store=store, event_bus=bus, partition_repo=partitions)
+    executor = FeedExecutor(feed_store=store, event_bus=bus)
     tracker = FakeRunTracker()
     clock = FakeClock(datetime(2026, 4, 16, 12, 0, tzinfo=UTC))
     ctx = FeedContext(
@@ -69,12 +66,12 @@ async def wiring():
         output_table="instrument_attribute",
         schedule=Schedule(interval=15, start_date=datetime(2026, 1, 1, tzinfo=UTC)),
     )
-    yield store, bus, partitions, executor, tracker, clock, ctx
+    yield store, bus, executor, tracker, clock, ctx
 
 
 @pytest.mark.asyncio
 async def test_service_fires_on_each_clock_tick(wiring):
-    store, bus, partitions, executor, tracker, clock, ctx = wiring
+    store, bus, executor, tracker, clock, ctx = wiring
     df = pd.DataFrame({"attribute_value": [1, 2, 3]})
     fetcher = _StubFetcher(df)
 
@@ -83,7 +80,7 @@ async def test_service_fires_on_each_clock_tick(wiring):
         executor=executor,
         run_tracker=tracker,
         clock=clock,
-        fetcher_factory=lambda partition, context: fetcher,
+        fetcher_factory=lambda snapshot, context: fetcher,
     )
 
     task = asyncio.create_task(service.run_forever())
@@ -100,24 +97,27 @@ async def test_service_fires_on_each_clock_tick(wiring):
         pass
 
     assert fetcher.calls >= 3
-    # Each tick: one feed event, one partition, one tracker trace.
     feed_events = [e for e in bus.published if e.channel == ctx.channel]
     assert len(feed_events) >= 3
-    assert all(e["status"] == "MATERIALIZED" for e in partitions.partitions.values())
-    assert len(tracker.traces) >= 3
-    assert all(t.outcome == "COMPLETED" for t in tracker.traces[:3])
+    # Every feed event carries the schedule-aligned snapshot timestamp.
+    assert all(e.payload.get("snapshot_timestamp") for e in feed_events)
+    # Every tracked run records the snapshot at create time — no post-hoc link.
+    feed_traces = [t for t in tracker.traces if t.kind == "feed"]
+    assert len(feed_traces) >= 3
+    assert all(t.snapshot_timestamp is not None for t in feed_traces[:3])
+    assert all(t.outcome == "COMPLETED" for t in feed_traces[:3])
 
 
 @pytest.mark.asyncio
-async def test_fetcher_exception_marks_partition_failed_and_service_continues(wiring):
-    store, bus, partitions, executor, tracker, clock, ctx = wiring
+async def test_fetcher_exception_fails_run_and_service_continues(wiring):
+    store, bus, executor, tracker, clock, ctx = wiring
     fetcher = _RaisingFetcher()
     service = ScheduledFeedService(
         feed=ctx,
         executor=executor,
         run_tracker=tracker,
         clock=clock,
-        fetcher_factory=lambda partition, context: fetcher,
+        fetcher_factory=lambda snapshot, context: fetcher,
     )
     task = asyncio.create_task(service.run_forever())
     # Wait until either on_error fires OR the tracker records a FAILED trace.
@@ -129,10 +129,8 @@ async def test_fetcher_exception_marks_partition_failed_and_service_continues(wi
     try:
         await task
     except (asyncio.CancelledError, Exception):
-        # The service may or may not propagate depending on error-handling; we
-        # assert on observable side effects below.
         pass
 
     assert fetcher.errors, "fetcher.on_error was never called"
-    # A partition row must exist and be FAILED.
-    assert any(p["status"] == "FAILED" for p in partitions.partitions.values())
+    feed_traces = [t for t in tracker.traces if t.kind == "feed"]
+    assert feed_traces and any(t.outcome == "FAILED" for t in feed_traces)

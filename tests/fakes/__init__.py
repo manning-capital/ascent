@@ -19,7 +19,6 @@ from tests.fakes.outbox import (
 from tests.fakes.repositories import (
     InMemoryFeedRunRepository,
     InMemoryOrderRepository,
-    InMemoryPartitionRepository,
     InMemoryStrategyRunRepository,
     InMemoryStrategyUniverseRepository,
     InMemoryTradeRepository,
@@ -43,7 +42,6 @@ __all__ = [
     "InMemoryOrderRepository",
     "InMemoryOutboxPublisher",
     "InMemoryOutboxReader",
-    "InMemoryPartitionRepository",
     "InMemoryStateStore",
     "InMemoryStrategyRunRepository",
     "InMemoryStrategyUniverseRepository",

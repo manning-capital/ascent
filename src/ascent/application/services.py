@@ -19,7 +19,7 @@ from ascent.application.execute_feed import FeedContext, FeedExecutor, FeedFetch
 from ascent.application.persist_feed import FeedPersister
 from ascent.application.process_fill import FillProcessor
 from ascent.application.reconcile_orders import OrderReconciler
-from ascent.domain import FillEvent, OrderState, PartitionWindow
+from ascent.domain import FillEvent, OrderState
 from ascent.feeds.schedule import Schedule
 from ascent.ports import (
     Clock,
@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 class FetcherFactory(Protocol):
     def __call__(
         self,
-        partition: PartitionWindow | None,
+        snapshot_timestamp: datetime,
         context: dict[str, Any],
     ) -> FeedFetcher: ...
 
@@ -68,17 +68,24 @@ class ScheduledFeedService:
             raise
 
     async def _run_once(self, tick: datetime) -> None:
-        logger.info("ScheduledFeed %s tick at %s", self.feed.feed_ref, tick.isoformat())
-        async with self.run_tracker.track_feed_run(self.feed.feed_id) as run_id:
-            fetcher = self.fetcher_factory(None, {})
+        snapshot = self.executor.resolve_snapshot(self.feed, tick)
+        logger.info(
+            "ScheduledFeed %s tick at %s snapshot=%s",
+            self.feed.feed_ref,
+            tick.isoformat(),
+            snapshot.isoformat(),
+        )
+        async with self.run_tracker.track_feed_run(
+            self.feed.feed_id, snapshot_timestamp=snapshot
+        ) as run_id:
+            fetcher = self.fetcher_factory(snapshot, {})
             outcome = await self.executor.execute(
                 feed=self.feed,
                 tick=tick,
+                snapshot_timestamp=snapshot,
                 fetcher=fetcher,
                 feed_run_id=run_id,
             )
-            if outcome.partition_id is not None:
-                await self.run_tracker.link_feed_run_partition(run_id, outcome.partition_id)
             logger.info(
                 "ScheduledFeed %s produced %d rows (run_id=%s)",
                 self.feed.feed_ref,
@@ -108,7 +115,8 @@ class TriggeredFeedService:
         logger.info("TriggeredFeed %s starting", self.feed.feed_ref)
         parent_ids = set(self.parent_refs.keys())
         satisfied: set[uuid.UUID] = set()
-        latest_partition_key: datetime | None = None
+        latest_snapshot: datetime | None = None
+        latest_parent_run_ids: dict[uuid.UUID, uuid.UUID] = {}
 
         # Schedule overrides for the executor — parents drive tick cadence.
         executor_feed = (
@@ -130,14 +138,17 @@ class TriggeredFeedService:
                 if parent_id not in parent_ids:
                     continue
                 satisfied.add(parent_id)
-                pk_raw = event.payload.get("partition_key")
-                if pk_raw:
-                    latest_partition_key = datetime.fromisoformat(pk_raw)
+                ts_raw = event.payload.get("snapshot_timestamp")
+                if ts_raw:
+                    latest_snapshot = datetime.fromisoformat(ts_raw)
+                run_id_raw = event.payload.get("feed_run_id")
+                if run_id_raw:
+                    latest_parent_run_ids[parent_id] = uuid.UUID(run_id_raw)
 
                 if not parent_ids.issubset(satisfied):
                     continue
 
-                await self._fire(executor_feed, latest_partition_key)
+                await self._fire(executor_feed, latest_snapshot)
                 satisfied.clear()
         except asyncio.CancelledError:
             logger.info("TriggeredFeed %s cancelled", self.feed.feed_ref)
@@ -147,24 +158,32 @@ class TriggeredFeedService:
             if aclose:
                 await aclose()
 
-    async def _fire(self, executor_feed: FeedContext, partition_key: datetime | None) -> None:
-        async with self.run_tracker.track_feed_run(self.feed.feed_id) as run_id:
+    async def _fire(
+        self, executor_feed: FeedContext, parent_snapshot: datetime | None
+    ) -> None:
+        # Triggered feeds inherit the parent's snapshot. If the parent didn't
+        # carry one (shouldn't happen once scheduled feeds always publish it),
+        # fall back to wall-clock — the executor will resolve it against the
+        # effective schedule if one is set.
+        tick = parent_snapshot or datetime.now(tz=UTC)
+        snapshot = self.executor.resolve_snapshot(executor_feed, tick)
+        async with self.run_tracker.track_feed_run(
+            self.feed.feed_id, snapshot_timestamp=snapshot
+        ) as run_id:
             # Load parent data snapshots so the fetcher can use get_feed().
             parent_data = await self.feed_store.get_latest_many(list(self.parent_refs.keys()))
             context = {
                 self.parent_refs[pid]: df for pid, df in parent_data.items() if df is not None
             }
-            tick = partition_key or datetime.now(tz=UTC)
-            fetcher = self.fetcher_factory(None, context)
-            outcome = await self.executor.execute(
+            fetcher = self.fetcher_factory(snapshot, context)
+            await self.executor.execute(
                 feed=executor_feed,
                 tick=tick,
+                snapshot_timestamp=snapshot,
                 fetcher=fetcher,
                 feed_run_id=run_id,
                 extra_context=context,
             )
-            if outcome.partition_id is not None:
-                await self.run_tracker.link_feed_run_partition(run_id, outcome.partition_id)
 
 
 # ---------------------------------------------------------------------------
@@ -376,7 +395,7 @@ class PersistenceService:
                 ts = self._event_timestamp(event.payload)
                 if ts is None:
                     logger.warning(
-                        "PersistService: skipping feed %s, event has no partition_key/timestamp",
+                        "PersistService: skipping feed %s, event has no snapshot_timestamp",
                         feed_id,
                     )
                     continue
@@ -397,7 +416,7 @@ class PersistenceService:
 
     @staticmethod
     def _event_timestamp(payload: dict) -> datetime | None:
-        raw = payload.get("partition_key") or payload.get("timestamp")
+        raw = payload.get("snapshot_timestamp")
         if not raw:
             return None
         return datetime.fromisoformat(raw)

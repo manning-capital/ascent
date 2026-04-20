@@ -188,6 +188,39 @@
             </div>
           </p-card>
         }
+
+        <!-- Source Data: feed runs the strategy consulted when creating this trade. -->
+        <p-card header="Source Data">
+          @if (sourceFeedRunsLoading()) {
+            <p-skeleton width="100%" height="2rem"/>
+          } @else if (sourceFeedRuns().length === 0) {
+            <div class="text-xs text-surface-500 py-2">
+              No feed-run provenance recorded. Older trades predate provenance
+              wiring; new trades should populate this list automatically.
+            </div>
+          } @else {
+            <div class="space-y-2">
+              @for (fr of sourceFeedRuns(); track fr.feed_run_id) {
+                <div class="flex items-center justify-between gap-2 text-sm">
+                  <div class="flex items-center gap-2 min-w-0">
+                    <a [routerLink]="['/feeds', fr.feed_id, 'runs', fr.feed_run_id]"
+                       class="text-primary hover:underline truncate"
+                       [title]="fr.feed_display_name">
+                      {{ fr.feed_display_name }}
+                    </a>
+                    @if (fr.is_trigger) {
+                      <p-tag value="trigger" severity="info" [rounded]="true"/>
+                    }
+                  </div>
+                  <div class="flex items-center gap-2 shrink-0">
+                    <p-tag [value]="fr.status" [severity]="statusSeverity(fr.status)" [rounded]="true"/>
+                    <span class="text-xs text-surface-500">{{ fr.snapshot_timestamp | date:'HH:mm:ss' }}</span>
+                  </div>
+                </div>
+              }
+            </div>
+          }
+        </p-card>
       </div>
     </div>
   </div>

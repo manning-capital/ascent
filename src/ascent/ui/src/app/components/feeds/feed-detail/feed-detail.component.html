@@ -66,8 +66,8 @@
               <div class="text-2xl font-bold">{{ f?.total_runs ?? 0 }}</div>
             </div>
             <div class="border border-surface rounded-lg p-4">
-              <div class="text-xs text-muted-color uppercase tracking-wider mb-1">Materialized</div>
-              <div class="text-2xl font-bold text-green-500">{{ overviewStats().materialized }}</div>
+              <div class="text-xs text-muted-color uppercase tracking-wider mb-1">Completed</div>
+              <div class="text-2xl font-bold text-green-500">{{ overviewStats().completed }}</div>
             </div>
             <div class="border border-surface rounded-lg p-4">
               <div class="text-xs text-muted-color uppercase tracking-wider mb-1">Failed</div>
@@ -101,30 +101,30 @@
             </div>
           </div>
 
-          <!-- Partition Timeline -->
+          <!-- Recent runs pill strip — clickable, color-coded by status. -->
           <p-card>
-            <div class="flex items-center justify-between mb-4">
-              <span class="font-semibold">Run History</span>
-              <div class="flex items-center gap-2">
-                <span class="text-xs text-muted-color">{{ timelineRangeLabel() }}</span>
-                <p-button icon="pi pi-chevron-left" [text]="true" [rounded]="true" size="small"
-                  [disabled]="timelinePage() >= timelineTotalPages()"
-                  (onClick)="timelineOlder()"
-                  pTooltip="Older" tooltipPosition="top"/>
-                <span class="text-xs text-muted-color">{{ timelinePage() }}/{{ timelineTotalPages() }}</span>
-                <p-button icon="pi pi-chevron-right" [text]="true" [rounded]="true" size="small"
-                  [disabled]="timelinePage() <= 1"
-                  (onClick)="timelineNewer()"
-                  pTooltip="Newer" tooltipPosition="top"/>
-              </div>
+            <div class="flex items-center justify-between mb-3">
+              <span class="font-semibold">Recent Runs</span>
+              <span class="text-xs text-muted-color">Showing {{ recentRuns().length }} most-recent</span>
             </div>
-            @if (partitionsLoading()) {
+            @if (runsLoading()) {
               <div class="space-y-3">
                 <p-skeleton width="12rem" height="0.75rem"/>
                 <p-skeleton width="100%" height="3rem"/>
               </div>
-            } @else if (partitionCells().length > 0) {
-              <app-partition-timeline [partitions]="partitionCells()" (cellClick)="onPartitionClick($event)"/>
+            } @else if (recentRuns().length > 0) {
+              <div class="flex flex-wrap gap-1">
+                @for (r of recentRuns(); track r.id) {
+                  <button
+                    type="button"
+                    class="w-5 h-5 rounded-sm transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
+                    [class]="pillClass(r.status)"
+                    [pTooltip]="r.status + ' @ ' + (r.snapshot_timestamp | date:'MMM d, HH:mm:ss')"
+                    tooltipPosition="top"
+                    (click)="onPillClick(r.id)">
+                  </button>
+                }
+              </div>
             } @else {
               <div class="text-sm text-muted-color py-4 text-center">
                 No runs yet. This feed may be triggered externally or has not run.

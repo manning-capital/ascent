@@ -376,12 +376,12 @@ def seed_feeds(client: Any, ctx: dict) -> None:
         client.create_feed_dependency(uuid.UUID(child_id), depends_on_feed_id=uuid.UUID(parent_id))
 
     # -----------------------------------------------------------------
-    # Feed runs & partitions — runs spaced at each feed's actual
-    # schedule interval, capped at 200 runs per feed.
+    # Feed runs — one per schedule-aligned snapshot, spaced at each
+    # feed's actual interval, capped at 500 runs per feed.
     # -----------------------------------------------------------------
 
-    from ascent.feeds.partition import partition_key_for, partition_window
     from ascent.feeds.schedule import Schedule
+    from ascent.feeds.snapshot import snapshot_timestamp_for
 
     MAX_RUNS_PER_FEED = 500
 
@@ -410,7 +410,6 @@ def seed_feeds(client: Any, ctx: dict) -> None:
         sched = f.get("schedule")
         feed_schedules[f["id"]] = Schedule(**sched) if sched else None
 
-    partition_cache: dict = {}
     feed_runs_by_feed: dict[str, list] = {f["id"]: [] for f in all_feeds}
 
     progress = ctx.get("progress")
@@ -426,8 +425,6 @@ def seed_feeds(client: Any, ctx: dict) -> None:
             secs_ago = i * interval_secs
             started = now - datetime.timedelta(seconds=secs_ago)
 
-            # Most recent run may be RUNNING; the rest mostly COMPLETED
-            # with ~5% failure rate
             if i == 0:
                 status = random.choice(["COMPLETED"] * 8 + ["RUNNING"] * 2)
             else:
@@ -439,32 +436,14 @@ def seed_feeds(client: Any, ctx: dict) -> None:
                 else None
             )
 
-            partition_id = None
             if schedule_obj is not None:
-                p_key = partition_key_for(schedule_obj, started)
-                cache_key = (feed_obj["id"], p_key.isoformat())
-                if cache_key not in partition_cache:
-                    w_start, w_end = partition_window(schedule_obj, p_key)
-                    p_status = (
-                        "MATERIALIZED"
-                        if status == "COMPLETED"
-                        else ("FAILED" if status == "FAILED" else "PENDING")
-                    )
-                    partition = client.create_feed_partition(
-                        feed_id=uuid.UUID(feed_obj["id"]),
-                        partition_key=p_key,
-                        window_start=w_start,
-                        window_end=w_end,
-                        status=p_status,
-                    )
-                    partition_cache[cache_key] = partition
-                else:
-                    partition = partition_cache[cache_key]
-                partition_id = uuid.UUID(partition["id"])
+                snapshot_ts = snapshot_timestamp_for(schedule_obj, started)
+            else:
+                snapshot_ts = started
 
             run = client.create_feed_run(
                 feed_id=uuid.UUID(feed_obj["id"]),
-                partition_id=partition_id,
+                snapshot_timestamp=snapshot_ts,
                 status=status,
                 records_fetched=random.randint(50, 500) if status == "COMPLETED" else None,
                 started_at=started,

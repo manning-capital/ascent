@@ -76,8 +76,7 @@ class FeedRunListItem(BaseModel):
 
     id: uuid.UUID
     feed_id: uuid.UUID
-    partition_id: uuid.UUID | None = None
-    partition_key: datetime.datetime | None = None
+    snapshot_timestamp: datetime.datetime
     status: str
     records_fetched: int | None = None
     started_at: datetime.datetime
@@ -94,17 +93,6 @@ class StrategyFeedItem(BaseModel):
     order: int
 
 
-class FeedPartitionItem(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
-
-    id: uuid.UUID | None = None
-    partition_key: datetime.datetime
-    window_start: datetime.datetime
-    window_end: datetime.datetime
-    status: str
-    latest_run: FeedRunListItem | None = None
-
-
 class FeedDependencyCreate(BaseModel):
     depends_on_feed_id: uuid.UUID
 
@@ -118,12 +106,38 @@ class FeedDependencySchema(BaseModel):
 
 class FeedPublishRequest(BaseModel):
     records: list[dict]
-    partition_key: datetime.datetime | None = None
+    snapshot_timestamp: datetime.datetime | None = None
 
 
 class FeedPublishResponse(BaseModel):
     feed_run_id: uuid.UUID
-    partition_id: uuid.UUID | None = None
-    partition_key: datetime.datetime | None = None
+    snapshot_timestamp: datetime.datetime
     records_count: int
     timestamp: str
+
+
+class FeedRunTradeItem(BaseModel):
+    """A trade caused by a strategy run that consumed this feed run's output."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    trade_id: uuid.UUID
+    strategy_id: uuid.UUID
+    strategy_run_id: uuid.UUID
+    status: str
+    entry_at: datetime.datetime | None = None
+    created_at: datetime.datetime
+
+
+class TradeFeedRunItem(BaseModel):
+    """A feed run consulted by the strategy run that created this trade."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    feed_run_id: uuid.UUID
+    feed_id: uuid.UUID
+    feed_name: str
+    feed_display_name: str
+    snapshot_timestamp: datetime.datetime
+    status: str
+    is_trigger: bool

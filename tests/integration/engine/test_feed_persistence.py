@@ -6,14 +6,18 @@ hypertables (``instrument_attribute`` or ``composite_attribute``).
 
 Covered scenarios:
 
-* multi-tick: several consecutive ticks each persist with a distinct partition
+* multi-tick: several consecutive ticks each persist with a distinct snapshot
   timestamp (catches "only the first tick writes" and "upsert overwrites
   history" bugs).
 * multi-entity + multi-attribute: universe of several instruments emitting
   several attributes, every ``(entity, attribute)`` combination lands.
 * composite-scoped feed: rows route to ``composite_attribute``.
 * triggered chain (``depends_on``): parent scheduled feed fires child
-  triggered feed; both outputs persist.
+  triggered feed; both outputs persist with the parent's snapshot.
+* run-data endpoint: the UI's ``/feeds/{id}/runs/{run_id}/data`` query returns
+  the pivoted rows that were persisted.
+* run→snapshot linkage: every FeedRun row carries a non-null
+  ``snapshot_timestamp`` equal to the timestamp on its EAV rows.
 """
 
 from __future__ import annotations
@@ -42,7 +46,7 @@ from ascent.database.models import (
     Provider,
     ProviderType,
 )
-from ascent.database.models.feeds import FeedCompositeScope, FeedInstrumentScope, FeedPartition
+from ascent.database.models.feeds import FeedCompositeScope, FeedInstrumentScope
 from ascent.engine.deploy import deploy_feed
 from ascent.engine.runner import Runner
 from ascent.feeds.base import Feed
@@ -191,7 +195,7 @@ def _row_count(engine, table: str, entity_col: str, entity_id: uuid.UUID) -> int
 
 
 # ---------------------------------------------------------------------------
-# Test 1 — multi-tick persistence produces distinct partition timestamps
+# Test 1 — multi-tick persistence produces distinct snapshot timestamps
 # ---------------------------------------------------------------------------
 
 
@@ -213,7 +217,7 @@ class _MultiTickFeed(Feed):
 
 
 @pytest.mark.asyncio
-async def test_multiple_ticks_produce_distinct_partition_timestamps(
+async def test_multiple_ticks_produce_distinct_snapshot_timestamps(
     postgres_engine, redis_url, nats_url, database_url, db_session, seeded
 ):
     instrument_id = seeded["btc_usd"].id
@@ -247,9 +251,10 @@ async def test_multiple_ticks_produce_distinct_partition_timestamps(
             ),
             {"iid": instrument_id},
         ).scalars().all()
-    # 3 ticks at 1s interval must have 3 distinct partition times; boundaries
-    # must be in increasing order (the engine stamps the partition key, not wall
-    # clock) — dedupe sanity-checks the ON CONFLICT path didn't collapse them.
+    # 3 ticks at 1s interval must have 3 distinct snapshot timestamps; they
+    # must sort ascending because the engine stamps the schedule-aligned
+    # boundary, not wall clock. Dedupe sanity-checks the ON CONFLICT path
+    # didn't collapse them.
     assert len(timestamps) >= 3
     assert timestamps == sorted(timestamps)
 
@@ -337,8 +342,6 @@ async def test_multi_entity_multi_attribute_persists_every_combination(
             {"btc": btc_id, "eth": eth_id},
         ).all()
     values_by_pair = {(iid, aid): val for iid, aid, val in rows}
-    # Every combination of the 2 instruments × 2 attributes must be present
-    # and carry the configured parameter value.
     assert values_by_pair[(btc_id, close_id)] == 100.0
     assert values_by_pair[(btc_id, volume_id)] == 500.0
     assert values_by_pair[(eth_id, close_id)] == 100.0
@@ -449,8 +452,7 @@ class _ChildFeed(Feed):
         parent = self.get_feed(_ParentFeed)
         if parent.empty:
             return pd.DataFrame(columns=["instrument_id", "VOLUME"])
-        # Emit a derived attribute (VOLUME = CLOSE * 2) against the parent's
-        # row set — proves triggered fetch actually consumes the parent frame.
+        # VOLUME = CLOSE * 2 proves the child fetch consumed the parent frame.
         return pd.DataFrame(
             [
                 {"instrument_id": row["instrument_id"], "VOLUME": float(row["CLOSE"]) * 2}
@@ -467,7 +469,6 @@ async def test_triggered_feed_chain_persists_both_parent_and_child(
     close_id = seeded["close_attr"].id
     volume_id = seeded["volume_attr"].id
 
-    # Deploy parent first — the child's FeedDependency row needs the parent id.
     parent_id = deploy_feed(_ParentFeed, db_session)
     db_session.add(
         FeedInstrumentScope(feed_id=parent_id, instrument_id=instrument_id, order=1)
@@ -530,11 +531,11 @@ async def test_triggered_feed_chain_persists_both_parent_and_child(
 
 
 # ---------------------------------------------------------------------------
-# Test 5 — /feeds/{id}/partitions/{id}/data returns the persisted row
+# Test 5 — /feeds/{id}/runs/{run_id}/data returns the persisted row
 # ---------------------------------------------------------------------------
 
 
-class _PartitionVisibleFeed(Feed):
+class _RunDataFeed(Feed):
     class Parameters(BaseModel):
         value: float = 55.5
 
@@ -542,7 +543,7 @@ class _PartitionVisibleFeed(Feed):
     output = InstrumentAttributes
     provider = "KRAKEN"
     instrument_type = "SPOT_PAIR"
-    display_name = "Partition Visible Feed"
+    display_name = "Run Data Feed"
 
     def fetch(self) -> DataFrame[InstrumentAttributes]:
         ids = self.get_universe()
@@ -552,23 +553,21 @@ class _PartitionVisibleFeed(Feed):
 
 
 @pytest.mark.asyncio
-async def test_ui_partition_data_endpoint_sees_persisted_rows(
+async def test_ui_run_data_endpoint_sees_persisted_rows(
     postgres_engine, redis_url, nats_url, database_url, db_session, seeded
 ):
-    """Guards the partition-window / persist-timestamp alignment the UI depends on.
+    """Guards the snapshot-timestamp / persist-timestamp alignment the UI depends on.
 
-    The UI's ``GET /feeds/{id}/partitions/{id}/data`` page filters the EAV
-    hypertable by ``timestamp >= partition.window_start AND timestamp <
-    partition.window_end``. Since the persister stamps
-    ``timestamp = partition.key`` (``= window_start``), a naive ``>`` instead
-    of ``>=`` — or any timezone / precision drift — would make the UI show an
-    empty Partition tab even though rows *are* in the DB. That's the exact
-    failure mode reported in production.
+    The UI's ``GET /feeds/{id}/runs/{run_id}/data`` query filters the EAV
+    hypertable by ``timestamp = run.snapshot_timestamp``. Any precision drift
+    or timezone skew — or a persister that stamps wall-clock ``now()`` instead
+    of the snapshot — would make the page show zero rows while rows *are* in
+    the DB. Reproduce and block that regression here.
     """
     instrument_id = seeded["btc_usd"].id
-    close_id = seeded["close_attr"].id
+    close_display = seeded["close_attr"].display_name
 
-    feed_id = deploy_feed(_PartitionVisibleFeed, db_session)
+    feed_id = deploy_feed(_RunDataFeed, db_session)
     db_session.add(FeedInstrumentScope(feed_id=feed_id, instrument_id=instrument_id, order=1))
     db_session.commit()
 
@@ -579,7 +578,7 @@ async def test_ui_partition_data_endpoint_sees_persisted_rows(
         include_writer=True,
         log_level="WARNING",
     )
-    runner.add(_PartitionVisibleFeed)
+    runner.add(_RunDataFeed)
 
     await _run_with_runner(
         runner,
@@ -590,43 +589,35 @@ async def test_ui_partition_data_endpoint_sees_persisted_rows(
         timeout=10.0,
     )
 
-    # Pick any MATERIALIZED partition for this feed and ask the UI endpoint
-    # what it has — exactly the query the "Partition" tab runs.
     with Session(postgres_engine) as db:
-        partition = db.execute(
+        run_id = db.execute(
             text(
-                "SELECT id FROM feed_partition "
-                "WHERE feed_id = :fid AND status = 'MATERIALIZED' "
-                "ORDER BY partition_key LIMIT 1"
+                "SELECT id FROM feed_run "
+                "WHERE feed_id = :fid AND status = 'COMPLETED' "
+                "ORDER BY snapshot_timestamp DESC LIMIT 1"
             ),
             {"fid": feed_id},
         ).scalar_one_or_none()
-    assert partition is not None, "feed ran but no partition was marked MATERIALIZED"
+    assert run_id is not None, "feed ran but no run was marked COMPLETED"
 
     with Session(postgres_engine) as db:
-        response = feed_service.get_partition_data(
-            db, feed_id, partition, page=1, page_size=50
-        )
+        response = feed_service.get_run_data(db, feed_id, run_id, page=1, page_size=50)
 
     assert response.total >= 1, (
-        f"UI partition-data query returned 0 rows for partition {partition} "
-        f"even though the table has rows — persist timestamp does not align "
-        f"with partition.window_start/window_end"
+        f"UI run-data query returned 0 rows for run {run_id} even though the "
+        f"hypertable has rows — persist timestamp does not match run.snapshot_timestamp"
     )
-    # Pivoted shape: one row per instrument, with the attribute display_name
-    # (resolved from attribute.display_name via JOIN) as a column.
     item = response.items[0]
     assert str(item["instrument_id"]) == str(instrument_id)
-    assert item[seeded["close_attr"].display_name] == 55.5
-    _ = close_id  # referenced so the attribute seed isn't garbage-collected
+    assert item[close_display] == 55.5
 
 
 # ---------------------------------------------------------------------------
-# Test 6 — feed_run.partition_id is backfilled after partition creation
+# Test 6 — every feed_run row carries a snapshot_timestamp matching its data
 # ---------------------------------------------------------------------------
 
 
-class _RunLinkFeed(Feed):
+class _RunSnapshotFeed(Feed):
     class Parameters(BaseModel):
         value: float = 1.0
 
@@ -634,7 +625,7 @@ class _RunLinkFeed(Feed):
     output = InstrumentAttributes
     provider = "KRAKEN"
     instrument_type = "SPOT_PAIR"
-    display_name = "Run Link Feed"
+    display_name = "Run Snapshot Feed"
 
     def fetch(self) -> DataFrame[InstrumentAttributes]:
         ids = self.get_universe()
@@ -644,17 +635,15 @@ class _RunLinkFeed(Feed):
 
 
 @pytest.mark.asyncio
-async def test_feed_run_is_linked_to_its_partition(
+async def test_every_run_has_snapshot_timestamp_matching_its_data(
     postgres_engine, redis_url, nats_url, database_url, db_session, seeded
 ):
-    """Regression: the UI's ``/feeds/{id}/runs/{run_id}?tab=Partition`` view
-    loads partition data by ``feed_run.partition_id``. If the services create
-    the ``FeedRun`` row before the executor creates the partition (and never
-    backfill), every run row ships with ``partition_id = NULL`` and the tab
-    renders empty even though the hypertable has rows.
+    """Regression: the UI run-detail Data tab joins ``feed_run.snapshot_timestamp``
+    against the output table's ``timestamp``. If runs ever ship with a
+    mismatched or NULL snapshot, the Data tab goes empty. This guards both.
     """
     instrument_id = seeded["btc_usd"].id
-    feed_id = deploy_feed(_RunLinkFeed, db_session)
+    feed_id = deploy_feed(_RunSnapshotFeed, db_session)
     db_session.add(FeedInstrumentScope(feed_id=feed_id, instrument_id=instrument_id, order=1))
     db_session.commit()
 
@@ -665,42 +654,62 @@ async def test_feed_run_is_linked_to_its_partition(
         include_writer=True,
         log_level="WARNING",
     )
-    runner.add(_RunLinkFeed)
+    runner.add(_RunSnapshotFeed)
 
-    def has_completed_run_with_partition() -> bool:
+    def has_two_completed_runs() -> bool:
         with Session(postgres_engine) as db:
             return (
                 db.execute(
                     text(
                         "SELECT COUNT(*) FROM feed_run "
-                        "WHERE feed_id = :fid AND status = 'COMPLETED' "
-                        "AND partition_id IS NOT NULL"
+                        "WHERE feed_id = :fid AND status = 'COMPLETED'"
                     ),
                     {"fid": feed_id},
                 ).scalar_one()
-                >= 1
+                >= 2
             )
 
-    await _run_with_runner(runner, has_completed_run_with_partition, timeout=10.0)
+    await _run_with_runner(runner, has_two_completed_runs, timeout=10.0)
 
+    # Drop the most-recent run — persistence is async, so its rows may not
+    # have landed yet when the run record reaches COMPLETED. Earlier runs
+    # must all be backed by their data in the hypertable.
     with Session(postgres_engine) as db:
-        runs = db.execute(
-            text(
-                "SELECT id, partition_id FROM feed_run "
-                "WHERE feed_id = :fid AND status = 'COMPLETED' "
-                "ORDER BY started_at"
-            ),
-            {"fid": feed_id},
-        ).all()
-    # Every successfully completed run must point to the partition that
-    # received its output — the UI's run-detail → partition-tab flow depends
-    # on this join.
-    assert runs, "no completed runs produced"
-    for run_id, partition_id in runs:
-        assert partition_id is not None, f"run {run_id} has NULL partition_id"
+        runs = (
+            db.execute(
+                text(
+                    "SELECT id, snapshot_timestamp FROM feed_run "
+                    "WHERE feed_id = :fid AND status = 'COMPLETED' "
+                    "ORDER BY started_at DESC OFFSET 1"
+                ),
+                {"fid": feed_id},
+            ).all()
+        )
+    assert runs, "expected at least one fully-persisted completed run"
+
+    for run_id, snapshot_ts in runs:
+        assert snapshot_ts is not None, f"run {run_id} has NULL snapshot_timestamp"
         with Session(postgres_engine) as db:
-            partition_matches = db.execute(
-                text("SELECT feed_id FROM feed_partition WHERE id = :pid"),
-                {"pid": partition_id},
+            matching_rows = db.execute(
+                text(
+                    "SELECT COUNT(*) FROM instrument_attribute "
+                    "WHERE instrument_id = :iid AND timestamp = :ts"
+                ),
+                {"iid": instrument_id, "ts": snapshot_ts},
             ).scalar_one()
-        assert partition_matches == feed_id
+        assert matching_rows >= 1, (
+            f"run {run_id} snapshot_timestamp={snapshot_ts} has no matching "
+            f"row in instrument_attribute"
+        )
+    with Session(postgres_engine) as db:
+        first_ts = db.execute(
+            text(
+                "SELECT timestamp FROM instrument_attribute "
+                "WHERE instrument_id = :iid LIMIT 1"
+            ),
+            {"iid": instrument_id},
+        ).scalar_one()
+    assert first_ts.tzinfo is not None, "timestamps must be timezone-aware"
+    # Guards against accidental feeds-from-2024 that would masquerade as
+    # "no data" in the UI's default time window.
+    assert abs((datetime.now(tz=UTC) - first_ts).total_seconds()) < 60

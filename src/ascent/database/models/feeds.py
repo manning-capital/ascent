@@ -12,7 +12,6 @@ from sqlalchemy import (
     ForeignKey,
     String,
     Text,
-    UniqueConstraint,
     Uuid,
     func,
 )
@@ -78,9 +77,6 @@ class Feed(NamedEntityMixin, Base):
     runs: Mapped[list[FeedRun]] = relationship(
         "FeedRun", back_populates="feed", order_by="FeedRun.started_at.desc()"
     )
-    partitions: Mapped[list[FeedPartition]] = relationship(
-        "FeedPartition", back_populates="feed", order_by="FeedPartition.partition_key.desc()"
-    )
     dependencies: Mapped[list[FeedDependency]] = relationship(
         "FeedDependency",
         back_populates="feed",
@@ -145,38 +141,6 @@ class StrategyFeed(Base):
     )
 
 
-class FeedPartition(Base):
-    __tablename__ = "feed_partition"
-    __table_args__ = (
-        UniqueConstraint("feed_id", "partition_key", name="uq_feed_partition_key"),
-        {"comment": "Represents a discrete time window (partition) for a feed."},
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    feed_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid,
-        ForeignKey("feed.id"),
-        nullable=False,
-    )
-    feed: Mapped[Feed] = relationship("Feed", back_populates="partitions")
-    partition_key: Mapped[datetime.datetime] = mapped_column(nullable=False)
-    window_start: Mapped[datetime.datetime] = mapped_column(nullable=False)
-    window_end: Mapped[datetime.datetime] = mapped_column(nullable=False)
-    status: Mapped[str] = mapped_column(String(50), nullable=False, default="PENDING")
-    created_at: Mapped[datetime.datetime] = mapped_column(
-        nullable=False,
-        server_default=func.now(),
-    )
-    updated_at: Mapped[datetime.datetime | None] = mapped_column(
-        nullable=False,
-        server_onupdate=func.now(),
-        server_default=func.now(),
-    )
-    runs: Mapped[list[FeedRun]] = relationship(
-        "FeedRun", back_populates="partition", order_by="FeedRun.started_at.desc()"
-    )
-
-
 class FeedRun(Base):
     __tablename__ = "feed_run"
     __table_args__ = {"comment": "Represents an execution instance of a data feed."}
@@ -188,12 +152,14 @@ class FeedRun(Base):
         nullable=False,
     )
     feed: Mapped[Feed] = relationship("Feed", back_populates="runs")
-    partition_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid,
-        ForeignKey("feed_partition.id"),
-        nullable=True,
+    snapshot_timestamp: Mapped[datetime.datetime] = mapped_column(
+        nullable=False,
+        comment=(
+            "The point-in-time this run's output represents — canonical join key "
+            "to the output table's `timestamp` column. Strategies downstream "
+            "consume rows stamped with this value."
+        ),
     )
-    partition: Mapped[FeedPartition | None] = relationship("FeedPartition", back_populates="runs")
     status: Mapped[str] = mapped_column(String(50), nullable=False)
     records_fetched: Mapped[int | None] = mapped_column(nullable=True)
     started_at: Mapped[datetime.datetime] = mapped_column(nullable=False)

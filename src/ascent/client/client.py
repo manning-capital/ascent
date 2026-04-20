@@ -486,9 +486,13 @@ class AscentClient:
         feed_id: uuid.UUID,
         data: pd.DataFrame,
         *,
-        partition_key: datetime.datetime | None = None,
+        snapshot_timestamp: datetime.datetime | None = None,
     ) -> dict[str, Any]:
-        """Publish data to a feed partition, triggering downstream consumers."""
+        """Publish data to a feed, triggering downstream consumers.
+
+        ``snapshot_timestamp`` is the point-in-time the records represent. If
+        omitted, the server computes it from the feed's schedule at wall clock.
+        """
         records = data.to_dict(orient="records")
         for record in records:
             for key, value in record.items():
@@ -498,46 +502,37 @@ class AscentClient:
                     record[key] = value.isoformat()
 
         payload: dict[str, Any] = {"records": records}
-        if partition_key is not None:
-            payload["partition_key"] = partition_key.isoformat()
+        if snapshot_timestamp is not None:
+            payload["snapshot_timestamp"] = snapshot_timestamp.isoformat()
 
         resp = self._client.post(f"/feeds/{feed_id}/publish", json=payload)
         self._raise(resp)
         return resp.json()
 
-    def get_partitions(
+    def get_run_data(
         self,
         feed_id: uuid.UUID,
-        *,
-        start: datetime.datetime | None = None,
-        end: datetime.datetime | None = None,
-        status: str | None = None,
-        page: int = 1,
-        page_size: int = 50,
-    ) -> dict[str, Any]:
-        params: dict[str, Any] = {"page": page, "page_size": page_size}
-        if start is not None:
-            params["start"] = start.isoformat()
-        if end is not None:
-            params["end"] = end.isoformat()
-        if status is not None:
-            params["status"] = status
-        resp = self._client.get(f"/feeds/{feed_id}/partitions", params=params)
-        self._raise(resp)
-        return resp.json()
-
-    def get_partition_data(
-        self,
-        feed_id: uuid.UUID,
-        partition_id: uuid.UUID,
+        run_id: uuid.UUID,
         *,
         page: int = 1,
         page_size: int = 50,
     ) -> dict[str, Any]:
         resp = self._client.get(
-            f"/feeds/{feed_id}/partitions/{partition_id}/data",
+            f"/feeds/{feed_id}/runs/{run_id}/data",
             params={"page": page, "page_size": page_size},
         )
+        self._raise(resp)
+        return resp.json()
+
+    def get_run_trades(
+        self, feed_id: uuid.UUID, run_id: uuid.UUID
+    ) -> list[dict[str, Any]]:
+        resp = self._client.get(f"/feeds/{feed_id}/runs/{run_id}/trades")
+        self._raise(resp)
+        return resp.json()
+
+    def get_trade_feed_runs(self, trade_id: uuid.UUID) -> list[dict[str, Any]]:
+        resp = self._client.get(f"/trades/{trade_id}/feed-runs")
         self._raise(resp)
         return resp.json()
 
@@ -637,11 +632,6 @@ class AscentClient:
 
     def reset_database(self) -> dict[str, Any]:
         resp = self._client.post("/admin/reset-database")
-        self._raise(resp)
-        return resp.json()
-
-    def create_feed_partition(self, **kwargs: Any) -> dict[str, Any]:
-        resp = self._client.post("/admin/feed-partitions", json=_body(**kwargs))
         self._raise(resp)
         return resp.json()
 

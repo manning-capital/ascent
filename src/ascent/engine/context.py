@@ -1,6 +1,6 @@
 """Runtime context for strategies and feeds.
 
-Provides ``get_logger()``, ``get_feed()``, and ``get_partition()``
+Provides ``get_logger()``, ``get_feed()``, and ``get_snapshot()``
 — contextvars-based accessors that the engine sets before invoking user code.
 """
 
@@ -13,28 +13,9 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 import pandas as pd
-from pydantic import BaseModel
 
 if TYPE_CHECKING:
     from ascent.feeds.decorator import Feed
-
-
-# ---------------------------------------------------------------------------
-# Partition info model
-# ---------------------------------------------------------------------------
-
-
-class PartitionInfo(BaseModel):
-    """Information about the current partition being executed."""
-
-    key: datetime
-    """The partition key (boundary time)."""
-
-    window_start: datetime
-    """Start of the time window (inclusive)."""
-
-    window_end: datetime
-    """End of the time window (exclusive)."""
 
 
 # ---------------------------------------------------------------------------
@@ -45,8 +26,8 @@ _current_logger: contextvars.ContextVar[logging.Logger] = contextvars.ContextVar
 _current_feeds: contextvars.ContextVar[dict[str, pd.DataFrame]] = contextvars.ContextVar(
     "ascent_feeds"
 )
-_current_partition: contextvars.ContextVar[PartitionInfo] = contextvars.ContextVar(
-    "ascent_partition"
+_current_snapshot: contextvars.ContextVar[datetime] = contextvars.ContextVar(
+    "ascent_snapshot_timestamp"
 )
 _current_universe: contextvars.ContextVar[list[uuid.UUID]] = contextvars.ContextVar(
     "ascent_universe"
@@ -70,14 +51,7 @@ def get_logger() -> logging.Logger:
 
 
 def get_feed(feed: Feed) -> pd.DataFrame:
-    """Get a parent feed's latest data inside a ``@feed(depends_on=...)`` function.
-
-    Args:
-        feed: The parent Feed object to retrieve data for.
-
-    Returns:
-        The parent feed's latest output as a DataFrame.
-    """
+    """Get a parent feed's latest data inside a ``@feed(depends_on=...)`` function."""
     try:
         feeds = _current_feeds.get()
     except LookupError:
@@ -93,16 +67,16 @@ def get_feed(feed: Feed) -> pd.DataFrame:
     return feeds[feed._feed_id]
 
 
-def get_partition() -> PartitionInfo:
-    """Get the current partition window. Call from within a feed function.
+def get_snapshot() -> datetime:
+    """Return the current run's snapshot timestamp.
 
-    Returns:
-        A :class:`PartitionInfo` with ``key``, ``window_start``, and ``window_end``.
+    This is the canonical "data-as-of" time — the value every persisted row
+    carries and the value strategies downstream can use to align multi-feed
+    snapshots. Available inside ``Feed.fetch()`` and ``Strategy.evaluate()``.
     """
     try:
-        return _current_partition.get()
+        return _current_snapshot.get()
     except LookupError:
         raise RuntimeError(
-            "get_partition() called outside of a feed run context. "
-            "This function can only be called inside a feed during engine execution."
+            "get_snapshot() called outside of a feed/strategy run context."
         ) from None

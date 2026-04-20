@@ -73,9 +73,9 @@ from ascent.feeds.output import FeedOutput
 from ascent.feeds.schedule import Schedule
 
 if TYPE_CHECKING:
-    from pandera.typing import DataFrame
+    from datetime import datetime
 
-    from ascent.engine.context import PartitionInfo
+    from pandera.typing import DataFrame
 
 
 class Feed(ABC):
@@ -240,14 +240,20 @@ class Feed(ABC):
         except LookupError:
             return logging.getLogger(f"ascent.feeds.{type(self).__name__}")
 
-    def get_partition(self) -> PartitionInfo:
-        """Get the current partition window."""
-        from ascent.engine.context import _current_partition
+    def get_snapshot(self) -> datetime:
+        """Return this run's snapshot timestamp.
+
+        For scheduled feeds this is the schedule-aligned boundary the tick
+        belongs to. For triggered feeds this is the parent feed's snapshot.
+        Every persisted row and every downstream strategy evaluation that
+        reads this run's output is keyed against it.
+        """
+        from ascent.engine.context import _current_snapshot
 
         try:
-            return _current_partition.get()
+            return _current_snapshot.get()
         except LookupError:
-            raise RuntimeError("get_partition() called outside of a feed run context.") from None
+            raise RuntimeError("get_snapshot() called outside of a feed run context.") from None
 
     def get_universe(self) -> list[uuid.UUID]:
         """Get the active scope IDs the engine resolved for this feed tick.

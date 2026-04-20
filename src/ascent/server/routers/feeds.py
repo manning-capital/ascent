@@ -14,10 +14,10 @@ from ascent.server.schemas.feeds import (
     FeedDependencySchema,
     FeedDetail,
     FeedListItem,
-    FeedPartitionItem,
     FeedPublishRequest,
     FeedPublishResponse,
     FeedRunListItem,
+    FeedRunTradeItem,
     FeedUpdate,
     StrategyFeedItem,
 )
@@ -130,49 +130,30 @@ def list_feed_runs(
     )
 
 
-@router.get("/{feed_id}/partitions", response_model=PaginatedResponse[FeedPartitionItem])
-def list_feed_partitions(
+@router.get(
+    "/{feed_id}/runs/{run_id}/data",
+    response_model=PaginatedResponse[dict],
+)
+def get_run_data(
     feed_id: uuid.UUID,
-    start: str | None = None,
-    end: str | None = None,
-    status: str | None = None,
+    run_id: uuid.UUID,
     page: int = 1,
     page_size: int = 50,
     db: Session = Depends(get_db),
 ):
-    items, total = feed_service.list_partitions(
-        db,
-        feed_id,
-        start=start,
-        end=end,
-        status=status,
-        page=page,
-        page_size=page_size,
-    )
-    total_pages = (total + page_size - 1) // page_size
-    return PaginatedResponse(
-        items=items,
-        total=total,
-        page=page,
-        page_size=page_size,
-        total_pages=total_pages,
-    )
+    return feed_service.get_run_data(db, feed_id, run_id, page=page, page_size=page_size)
 
 
 @router.get(
-    "/{feed_id}/partitions/{partition_id}/data",
-    response_model=PaginatedResponse[dict],
+    "/{feed_id}/runs/{run_id}/trades",
+    response_model=list[FeedRunTradeItem],
 )
-def get_partition_data(
+def get_run_trades(
     feed_id: uuid.UUID,
-    partition_id: uuid.UUID,
-    page: int = 1,
-    page_size: int = 50,
+    run_id: uuid.UUID,
     db: Session = Depends(get_db),
 ):
-    return feed_service.get_partition_data(
-        db, feed_id, partition_id, page=page, page_size=page_size
-    )
+    return feed_service.get_run_trades(db, feed_id, run_id)
 
 
 @router.post("/{feed_id}/publish", response_model=FeedPublishResponse, status_code=201)
@@ -183,7 +164,7 @@ def publish_feed_data(
     cache: EngineCache = Depends(get_cache),
 ):
     return feed_service.publish_feed_data(
-        db, feed_id, body.records, cache, partition_key=body.partition_key
+        db, feed_id, body.records, cache, snapshot_timestamp=body.snapshot_timestamp
     )
 
 

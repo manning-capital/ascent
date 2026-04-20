@@ -4,14 +4,12 @@ from sqlalchemy.orm import Session
 
 from ascent.database.models import StrategyRun
 from ascent.database.models.composites import CompositeAttribute
-from ascent.database.models.feeds import FeedPartition, FeedRun
+from ascent.database.models.feeds import FeedRun
 from ascent.database.models.instruments import InstrumentAttribute
 from ascent.database.models.strategy_run_feeds import StrategyRunFeedRun
 from ascent.server.dependencies import engine, get_db
 from ascent.server.schemas.admin import (
     CompositeAttributeBatchCreate,
-    FeedPartitionCreate,
-    FeedPartitionSchema,
     FeedRunCreate,
     FeedRunSchema,
     InstrumentAttributeBatchCreate,
@@ -51,15 +49,6 @@ def drop_and_recreate():
     engine.dispose()
     _create_tables()
     return {"status": "ok"}
-
-
-@router.post("/feed-partitions", status_code=201, response_model=FeedPartitionSchema)
-def create_feed_partition(data: FeedPartitionCreate, db: Session = Depends(get_db)):
-    obj = FeedPartition(**data.model_dump())
-    db.add(obj)
-    db.commit()
-    db.refresh(obj)
-    return obj
 
 
 @router.post("/feed-runs", status_code=201, response_model=FeedRunSchema)

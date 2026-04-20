@@ -8,11 +8,13 @@ import pandas as pd
 from sqlalchemy import bindparam, func, select, text
 from sqlalchemy.orm import Session, joinedload
 
-from ascent.database.models.feeds import Feed, FeedDependency, FeedPartition, FeedRun, StrategyFeed
-from ascent.database.models.types import CompositeType, InstrumentType
+from ascent.database.models.feeds import Feed, FeedDependency, FeedRun, StrategyFeed
+from ascent.database.models.strategy_run_feeds import StrategyRunFeedRun
+from ascent.database.models.trades import Trade
+from ascent.database.models.types import CompositeType, InstrumentType, TradeStatusType
 from ascent.engine.cache import EngineCache
-from ascent.feeds.partition import generate_keys, partition_key_for, partition_window
 from ascent.feeds.schedule import Schedule
+from ascent.feeds.snapshot import snapshot_timestamp_for
 from ascent.server.exceptions import BadRequestError, NotFoundError
 from ascent.server.schemas.common import PaginatedResponse
 from ascent.server.schemas.feeds import (
@@ -21,11 +23,12 @@ from ascent.server.schemas.feeds import (
     FeedDependencySchema,
     FeedDetail,
     FeedListItem,
-    FeedPartitionItem,
     FeedPublishResponse,
     FeedRunListItem,
+    FeedRunTradeItem,
     FeedUpdate,
     StrategyFeedItem,
+    TradeFeedRunItem,
 )
 
 
@@ -335,12 +338,7 @@ def get_feed_runs(
         .all()
     )
 
-    items = []
-    for r in runs:
-        item = FeedRunListItem.model_validate(r)
-        if r.partition_id is not None and r.partition is not None:
-            item.partition_key = r.partition.partition_key
-        items.append(item)
+    items = [FeedRunListItem.model_validate(r) for r in runs]
     return items, total
 
 
@@ -352,10 +350,7 @@ def get_feed_run(db: Session, feed_id: uuid.UUID, run_id: uuid.UUID) -> FeedRunL
     )
     if not run:
         raise NotFoundError("Feed run not found")
-    item = FeedRunListItem.model_validate(run)
-    if run.partition_id is not None and run.partition is not None:
-        item.partition_key = run.partition.partition_key
-    return item
+    return FeedRunListItem.model_validate(run)
 
 
 def get_feed_strategy_feeds(db: Session, feed_id: uuid.UUID) -> list[StrategyFeedItem]:
@@ -363,113 +358,19 @@ def get_feed_strategy_feeds(db: Session, feed_id: uuid.UUID) -> list[StrategyFee
     return [StrategyFeedItem.model_validate(sf) for sf in sfs]
 
 
-def list_partitions(
-    db: Session,
-    feed_id: uuid.UUID,
-    start: str | None = None,
-    end: str | None = None,
-    status: str | None = None,
-    page: int = 1,
-    page_size: int = 50,
-) -> tuple[list[FeedPartitionItem], int]:
-    """List partitions for a feed, merging schedule-computed keys with DB records.
-
-    For gaps (no DB row), computed partitions are returned as PENDING with no id.
-    """
-    feed = db.get(Feed, feed_id)
-    if feed is None:
-        raise NotFoundError("Feed not found")
-
-    if feed.schedule is None:
-        raise BadRequestError(f"Feed {feed_id} has no schedule — cannot compute partitions")
-
-    schedule = Schedule(**feed.schedule)
-    now = datetime.datetime.now(tz=datetime.UTC)
-
-    range_start = datetime.datetime.fromisoformat(start) if start else schedule.start_date
-    range_end = datetime.datetime.fromisoformat(end) if end else now
-
-    # Generate all expected partition keys in the range
-    all_keys = generate_keys(schedule, range_start, range_end)
-
-    # Load existing partition records for this feed in the range
-    query = select(FeedPartition).where(
-        FeedPartition.feed_id == feed_id,
-        FeedPartition.partition_key >= range_start,
-        FeedPartition.partition_key < range_end,
-    )
-    db_partitions = db.execute(query).scalars().all()
-    db_map: dict[datetime.datetime, FeedPartition] = {p.partition_key: p for p in db_partitions}
-
-    # Merge: for each computed key, use DB record if exists, else synthetic PENDING
-    items: list[FeedPartitionItem] = []
-    for key in all_keys:
-        db_part = db_map.get(key)
-        if db_part is not None:
-            # Get latest run for this partition
-            latest_run = (
-                db.execute(
-                    select(FeedRun)
-                    .where(FeedRun.partition_id == db_part.id)
-                    .order_by(FeedRun.started_at.desc())
-                    .limit(1)
-                )
-                .scalars()
-                .first()
-            )
-            item = FeedPartitionItem(
-                id=db_part.id,
-                partition_key=db_part.partition_key,
-                window_start=db_part.window_start,
-                window_end=db_part.window_end,
-                status=db_part.status,
-                latest_run=FeedRunListItem.model_validate(latest_run) if latest_run else None,
-            )
-        else:
-            w_start, w_end = partition_window(schedule, key)
-            item = FeedPartitionItem(
-                id=None,
-                partition_key=key,
-                window_start=w_start,
-                window_end=w_end,
-                status="PENDING",
-                latest_run=None,
-            )
-        items.append(item)
-
-    # Filter by status if requested
-    if status:
-        items = [i for i in items if i.status == status]
-
-    # Sort descending by partition_key (most recent first)
-    items.sort(key=lambda i: i.partition_key, reverse=True)
-
-    total = len(items)
-
-    # Paginate
-    start_idx = (page - 1) * page_size
-    end_idx = start_idx + page_size
-    page_items = items[start_idx:end_idx]
-
-    return page_items, total
-
-
 def publish_feed_data(
     db: Session,
     feed_id: uuid.UUID,
     records: list[dict],
     cache: EngineCache,
-    partition_key: datetime.datetime | None = None,
+    snapshot_timestamp: datetime.datetime | None = None,
 ) -> FeedPublishResponse:
     """Publish external data to a feed, writing to Redis and publishing an event.
 
-    This mirrors the publish path used by the engine's scheduled/triggered feed
-    runners, allowing external processes to push data into
-    the same event pipeline.
-
-    If ``partition_key`` is provided, the data is associated with that specific
-    partition. Otherwise, the partition key is computed from the current time
-    (if the feed has a schedule).
+    Mirrors the publish path used by the engine's scheduled/triggered runners so
+    external processes share one event pipeline. If ``snapshot_timestamp`` isn't
+    supplied, it's computed from the feed's schedule at the current wall clock
+    (or set to ``now`` for feeds without a schedule, e.g. triggered/streaming).
     """
     feed = db.get(Feed, feed_id)
     if feed is None:
@@ -478,7 +379,7 @@ def publish_feed_data(
     now = datetime.datetime.now(tz=datetime.UTC)
     timestamp = now.isoformat()
 
-    # Build DataFrame from records.  If the caller supplied a pivoted,
+    # Build DataFrame from records. If the caller supplied a pivoted,
     # name-based format (attribute names as columns, entity names as values)
     # it is automatically unpivoted and resolved to the EAV format expected
     # by the downstream DB-writer.
@@ -486,75 +387,38 @@ def publish_feed_data(
     df = _resolve_pivoted_data(db, df, feed.output_table)
     records_fetched = _pivoted_row_count(df, feed.output_table)
 
-    # Resolve partition if feed has a schedule
-    partition: FeedPartition | None = None
-    resolved_partition_key: datetime.datetime | None = None
+    if snapshot_timestamp is None:
+        if feed.schedule is not None:
+            snapshot_timestamp = snapshot_timestamp_for(Schedule(**feed.schedule), now)
+        else:
+            snapshot_timestamp = now
 
-    if feed.schedule is not None:
-        schedule = Schedule(**feed.schedule)
-        resolved_partition_key = (
-            partition_key if partition_key is not None else partition_key_for(schedule, now)
-        )
-        w_start, w_end = partition_window(schedule, resolved_partition_key)
-
-        # Find or create partition
-        partition = (
-            db.execute(
-                select(FeedPartition).where(
-                    FeedPartition.feed_id == feed_id,
-                    FeedPartition.partition_key == resolved_partition_key,
-                )
-            )
-            .scalars()
-            .first()
-        )
-        if partition is None:
-            partition = FeedPartition(
-                feed_id=feed_id,
-                partition_key=resolved_partition_key,
-                window_start=w_start,
-                window_end=w_end,
-                status="PENDING",
-            )
-            db.add(partition)
-            db.flush()
-
-    # Create a FeedRun record
     feed_run = FeedRun(
         feed_id=feed_id,
-        partition_id=partition.id if partition else None,
+        snapshot_timestamp=snapshot_timestamp,
         status="COMPLETED",
         records_fetched=records_fetched,
         started_at=now,
         completed_at=now,
     )
     db.add(feed_run)
-
-    # Mark partition as materialized
-    if partition is not None:
-        partition.status = "MATERIALIZED"
-
     db.commit()
     db.refresh(feed_run)
 
-    # Write to Redis cache
     cache.set_feed_data(feed_id, df, timestamp)
 
-    # Publish event via Redis pub/sub (same format as engine producer)
     event = {
         "feed_id": str(feed_id),
         "feed_ref": feed.feed_ref,
-        "timestamp": timestamp,
+        "snapshot_timestamp": snapshot_timestamp.isoformat(),
         "schema": feed.output_table,
         "feed_run_id": str(feed_run.id),
-        "partition_key": resolved_partition_key.isoformat() if resolved_partition_key else None,
     }
     cache.publish(feed.channel, event)
 
     return FeedPublishResponse(
         feed_run_id=feed_run.id,
-        partition_id=partition.id if partition else None,
-        partition_key=resolved_partition_key,
+        snapshot_timestamp=snapshot_timestamp,
         records_count=len(df),
         timestamp=timestamp,
     )
@@ -861,52 +725,45 @@ def _pivot_rows(
     )
 
 
-def get_partition_data(
+def get_run_data(
     db: Session,
     feed_id: uuid.UUID,
-    partition_id: uuid.UUID,
+    run_id: uuid.UUID,
     page: int = 1,
     page_size: int = 50,
 ) -> PaginatedResponse[dict]:
-    """Fetch actual data rows for a feed partition from TimescaleDB.
+    """Fetch the rows a given feed run produced, from the feed's output table.
 
-    Queries the feed's ``output_table`` filtered to the partition's time window.
-    Foreign-key UUID columns are resolved to human-readable names for known
-    output tables, and the ``timestamp`` column is excluded since the partition
-    window already provides the time context.
-
-    For EAV-style attribute tables the rows are automatically pivoted so that
-    descriptor names (attribute / metadata) become columns.
+    The run knows the exact ``snapshot_timestamp`` its output was written with.
+    We query the output table for rows matching that timestamp and pivot EAV
+    rows into wide form (attribute/metadata names become columns) for the UI.
     """
     feed = db.get(Feed, feed_id)
     if feed is None:
         raise NotFoundError("Feed not found")
 
-    partition = db.get(FeedPartition, partition_id)
-    if partition is None:
-        raise NotFoundError("Partition not found")
-    if partition.feed_id != feed_id:
-        raise BadRequestError(f"Partition {partition_id} does not belong to feed {feed_id}")
+    run = db.get(FeedRun, run_id)
+    if run is None:
+        raise NotFoundError("Feed run not found")
+    if run.feed_id != feed_id:
+        raise BadRequestError(f"Run {run_id} does not belong to feed {feed_id}")
 
     output_table = feed.output_table
-    window_params = {
-        "window_start": partition.window_start,
-        "window_end": partition.window_end,
-    }
+    ts_params = {"snapshot_timestamp": run.snapshot_timestamp}
 
     cfg = _PARTITION_DATA_CONFIGS.get(output_table)
     pivot_cfg = cfg.get("pivot") if cfg else None
 
     if cfg is not None and pivot_cfg is not None:
-        # Fetch all rows for the partition window — pagination is applied
-        # after the pivot so that page boundaries align with pivoted rows.
+        # Fetch all rows for the snapshot — pagination is applied after the
+        # pivot so that page boundaries align with pivoted rows.
         data_sql = (
             f"SELECT {cfg['select']} FROM {output_table} t "
             f"{cfg['joins']} "
-            "WHERE t.timestamp >= :window_start AND t.timestamp < :window_end "
+            "WHERE t.timestamp = :snapshot_timestamp "
             f"ORDER BY {cfg['order']}"
         )
-        data_result = db.execute(text(data_sql), window_params)
+        data_result = db.execute(text(data_sql), ts_params)
         rows = [dict(row._mapping) for row in data_result]
         return _pivot_rows(rows, pivot_cfg, page, page_size)
 
@@ -916,9 +773,9 @@ def get_partition_data(
     count_result = db.execute(
         text(
             f"SELECT COUNT(*) FROM {output_table} t "
-            "WHERE t.timestamp >= :window_start AND t.timestamp < :window_end"
+            "WHERE t.timestamp = :snapshot_timestamp"
         ),
-        window_params,
+        ts_params,
     )
     total = count_result.scalar() or 0
 
@@ -926,27 +783,24 @@ def get_partition_data(
         data_sql = (
             f"SELECT {cfg['select']} FROM {output_table} t "
             f"{cfg['joins']} "
-            "WHERE t.timestamp >= :window_start AND t.timestamp < :window_end "
+            "WHERE t.timestamp = :snapshot_timestamp "
             f"ORDER BY {cfg['order']} "
             "LIMIT :limit OFFSET :offset"
         )
     else:
-        # Fallback for unknown output tables — return all columns as-is
         data_sql = (
             f"SELECT * FROM {output_table} t "
-            "WHERE t.timestamp >= :window_start AND t.timestamp < :window_end "
+            "WHERE t.timestamp = :snapshot_timestamp "
             "ORDER BY t.timestamp "
             "LIMIT :limit OFFSET :offset"
         )
 
     data_result = db.execute(
         text(data_sql),
-        {**window_params, "limit": page_size, "offset": offset},
+        {**ts_params, "limit": page_size, "offset": offset},
     )
 
     rows = [dict(row._mapping) for row in data_result]
-
-    # Serialize datetime/UUID values for JSON response
     for row in rows:
         for key, value in row.items():
             if isinstance(value, datetime.datetime):
@@ -963,6 +817,82 @@ def get_partition_data(
         page_size=page_size,
         total_pages=total_pages,
     )
+
+
+def get_run_trades(
+    db: Session, feed_id: uuid.UUID, run_id: uuid.UUID
+) -> list[FeedRunTradeItem]:
+    """Return every trade created by a strategy run that consumed this feed run.
+
+    Join chain: ``feed_run → strategy_run_feed_run → strategy_run → trade``.
+    If no strategy evaluated off this feed run (or no trades were created),
+    returns an empty list — the empty result itself is informative in the UI.
+    """
+    run = db.get(FeedRun, run_id)
+    if run is None:
+        raise NotFoundError("Feed run not found")
+    if run.feed_id != feed_id:
+        raise BadRequestError(f"Run {run_id} does not belong to feed {feed_id}")
+
+    stmt = (
+        select(Trade, StrategyRunFeedRun.strategy_run_id, TradeStatusType.name)
+        .join(
+            StrategyRunFeedRun,
+            StrategyRunFeedRun.strategy_run_id == Trade.strategy_run_id,
+        )
+        .outerjoin(TradeStatusType, TradeStatusType.id == Trade.current_status_type_id)
+        .where(StrategyRunFeedRun.feed_run_id == run_id)
+        .order_by(Trade.created_at.desc())
+    )
+    items: list[FeedRunTradeItem] = []
+    for trade, strategy_run_id, status_name in db.execute(stmt).all():
+        items.append(
+            FeedRunTradeItem(
+                trade_id=trade.id,
+                strategy_id=trade.strategy_id,
+                strategy_run_id=strategy_run_id,
+                status=status_name or "UNKNOWN",
+                entry_at=trade.entry_at,
+                created_at=trade.created_at,
+            )
+        )
+    return items
+
+
+def get_trade_feed_runs(db: Session, trade_id: uuid.UUID) -> list[TradeFeedRunItem]:
+    """Return every feed run consulted by the strategy run that created this trade.
+
+    Answers "what data was the engine looking at when this trade was made?".
+    Marks the ``trigger_feed_id`` run so the UI can highlight which feed event
+    actually fired the evaluation.
+    """
+    trade = db.get(Trade, trade_id)
+    if trade is None:
+        raise NotFoundError("Trade not found")
+    if trade.strategy_run_id is None:
+        return []
+
+    stmt = (
+        select(FeedRun, Feed, StrategyRunFeedRun.is_trigger)
+        .join(StrategyRunFeedRun, StrategyRunFeedRun.feed_run_id == FeedRun.id)
+        .join(Feed, Feed.id == FeedRun.feed_id)
+        .where(StrategyRunFeedRun.strategy_run_id == trade.strategy_run_id)
+        .order_by(FeedRun.snapshot_timestamp.desc())
+    )
+    items: list[TradeFeedRunItem] = []
+    for feed_run, feed, is_trigger in db.execute(stmt).all():
+        items.append(
+            TradeFeedRunItem(
+                feed_run_id=feed_run.id,
+                feed_id=feed.id,
+                feed_name=feed.name,
+                feed_display_name=feed.display_name,
+                snapshot_timestamp=feed_run.snapshot_timestamp,
+                status=feed_run.status,
+                is_trigger=bool(is_trigger),
+            )
+        )
+    return items
 
 
 def get_feed_dependencies(db: Session, feed_id: uuid.UUID) -> list[FeedDependencySchema]:

@@ -26,6 +26,7 @@ from ascent.ports import (
     EventBus,
     LatestFeedStore,
     RunTrackerPort,
+    StrategyRunRepository,
     StrategyUniverseRepository,
     TradeRepository,
     UnitOfWorkFactory,
@@ -59,6 +60,7 @@ class StrategyEvaluator:
         feed_store: LatestFeedStore,
         event_bus: EventBus,
         run_tracker: RunTrackerPort,
+        strategy_run_repo: StrategyRunRepository,
         clock: Clock,
         evaluator: Evaluator,
         uow_factory: UnitOfWorkFactory,
@@ -72,6 +74,7 @@ class StrategyEvaluator:
         self._store = feed_store
         self._bus = event_bus
         self._tracker = run_tracker
+        self._strategy_runs = strategy_run_repo
         self._clock = clock
         self._evaluate = evaluator
         self._uow_factory = uow_factory
@@ -124,6 +127,18 @@ class StrategyEvaluator:
         async with self._tracker.track_strategy_run(self._strategy_id) as run_id:
             ctx = await self._build_context()
             await self._evaluate(ctx, run_id)
+
+            # Provenance: record every feed run this strategy evaluated
+            # against. Triggering feed is whichever event fired this tick.
+            feed_run_ids = {
+                feed_id: r_id for feed_id, r_id in latest_run_ids.items()
+            }
+            if feed_run_ids:
+                await self._strategy_runs.link_feed_runs(
+                    run_id,
+                    feed_run_ids=feed_run_ids,
+                    trigger_feed_id=updated_feed_id,
+                )
 
     async def _build_context(self) -> Context:
         latest = await self._store.get_latest_many([b.spec.feed_id for b in self._feeds])

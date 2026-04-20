@@ -3,6 +3,9 @@
 Wraps :class:`SqlAlchemyFeedRunRepository` and :class:`SqlAlchemyStrategyRunRepository`
 in an async context manager that creates the run row on enter and finalizes
 it on exit.
+
+``snapshot_timestamp`` is required at creation — the caller (``FeedExecutor``)
+always knows the run's snapshot before opening the context.
 """
 
 from __future__ import annotations
@@ -25,23 +28,18 @@ class SqlAlchemyRunTracker(RunTrackerPort):
         self._strategies = strategy_run_repo
 
     def track_feed_run(
-        self, feed_id: uuid.UUID, *, partition_id: uuid.UUID | None = None
+        self, feed_id: uuid.UUID, *, snapshot_timestamp: datetime
     ) -> AbstractAsyncContextManager[uuid.UUID]:
-        return self._feed_ctx(feed_id, partition_id)
-
-    async def link_feed_run_partition(
-        self, run_id: uuid.UUID, partition_id: uuid.UUID
-    ) -> None:
-        await self._feeds.link_partition(run_id, partition_id)
+        return self._feed_ctx(feed_id, snapshot_timestamp)
 
     def track_strategy_run(self, strategy_id: uuid.UUID) -> AbstractAsyncContextManager[uuid.UUID]:
         return self._strategy_ctx(strategy_id)
 
     @asynccontextmanager
-    async def _feed_ctx(self, feed_id: uuid.UUID, partition_id: uuid.UUID | None):
+    async def _feed_ctx(self, feed_id: uuid.UUID, snapshot_timestamp: datetime):
         started = datetime.now(tz=UTC)
         run_id = await self._feeds.create(
-            feed_id=feed_id, started_at=started, partition_id=partition_id
+            feed_id=feed_id, started_at=started, snapshot_timestamp=snapshot_timestamp
         )
         try:
             yield run_id

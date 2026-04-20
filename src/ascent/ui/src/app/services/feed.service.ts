@@ -2,7 +2,7 @@ import { Injectable, inject, signal } from '@angular/core';
 import { Subject, EMPTY, Observable } from 'rxjs';
 import { switchMap, tap, catchError } from 'rxjs/operators';
 import { ApiService } from './api.service';
-import { FeedListItem, FeedDetail, FeedRunListItem, FeedPartitionItem, PartitionDataResponse, StrategyFeedDAG, StrategyRunListItem } from '../models/feed.model';
+import { FeedListItem, FeedDetail, FeedRunListItem, FeedRunTradeItem, RunDataResponse, StrategyFeedDAG, StrategyRunListItem, TradeFeedRunItem } from '../models/feed.model';
 import { PaginatedResponse } from '../models/trade.model';
 import { ImpactReport, UniverseItem, UniverseItemCreate } from '../models/asset.model';
 import { RunFilter } from '../components/shared/run-viewer.component';
@@ -70,16 +70,16 @@ export class FeedService {
     return this.api.get<PaginatedResponse<FeedRunListItem>>(`/feeds/${feedId}/runs`, params);
   }
 
-  loadPartitions(feedId: string, page: number = 1, pageSize: number = 50, start?: string, end?: string, status?: string): Observable<PaginatedResponse<FeedPartitionItem>> {
-    const params: Record<string, string | number> = { page, page_size: pageSize };
-    if (start) params['start'] = start;
-    if (end) params['end'] = end;
-    if (status) params['status'] = status;
-    return this.api.get<PaginatedResponse<FeedPartitionItem>>(`/feeds/${feedId}/partitions`, params);
+  loadRunData(feedId: string, runId: string, page: number = 1, pageSize: number = 50): Observable<RunDataResponse> {
+    return this.api.get<RunDataResponse>(`/feeds/${feedId}/runs/${runId}/data`, { page, page_size: pageSize });
   }
 
-  loadPartitionData(feedId: string, partitionId: string, page: number = 1, pageSize: number = 50): Observable<PartitionDataResponse> {
-    return this.api.get<PartitionDataResponse>(`/feeds/${feedId}/partitions/${partitionId}/data`, { page, page_size: pageSize });
+  loadRunTrades(feedId: string, runId: string): Observable<FeedRunTradeItem[]> {
+    return this.api.get<FeedRunTradeItem[]>(`/feeds/${feedId}/runs/${runId}/trades`);
+  }
+
+  loadTradeFeedRuns(tradeId: string): Observable<TradeFeedRunItem[]> {
+    return this.api.get<TradeFeedRunItem[]>(`/trades/${tradeId}/feed-runs`);
   }
 
   loadStrategyFeedDAG(strategyId: string) {
