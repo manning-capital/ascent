@@ -1,4 +1,4 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal, viewChild } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DatePipe, JsonPipe } from '@angular/common';
 import { map } from 'rxjs/operators';
@@ -75,6 +75,7 @@ export class StrategyDetailComponent implements OnInit {
   tradeService = inject(TradeService);
 
   exchangeService = inject(ExchangeService);
+  private universePanel = viewChild(UniversePanelComponent);
 
   tabs = ['Overview', 'Trades', 'Orders', 'Universe', 'Exchanges', 'Runs', 'Configuration'];
   activeTab = signal('Overview');
@@ -344,6 +345,7 @@ export class StrategyDetailComponent implements OnInit {
     this.strategyService.batchAddInstruments(this.strategyId, event.instrumentIds, event.startOrder).subscribe({
       next: () => {
         this.toast.success(`${event.instrumentIds.length} instrument(s) added to universe`);
+        this.universePanel()?.refresh();
       },
       error: () => this.toast.error('Failed to add instruments to universe'),
     });
@@ -364,6 +366,7 @@ export class StrategyDetailComponent implements OnInit {
     this.strategyService.batchAddComposites(this.strategyId, event.compositeIds, event.startOrder).subscribe({
       next: () => {
         this.toast.success(`${event.compositeIds.length} composite(s) added to universe`);
+        this.universePanel()?.refresh();
       },
       error: () => this.toast.error('Failed to add composites to universe'),
     });

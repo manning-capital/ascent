@@ -1,4 +1,5 @@
 import { Component, computed, EventEmitter, inject, input, OnInit, Output, signal, viewChild } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { map } from 'rxjs/operators';
 import { AssetService } from '../../services/asset.service';
@@ -129,7 +130,7 @@ export class ToggleActiveCellRenderer implements ICellRendererAngularComp {
               <p-selectButton
                 [options]="modeOptions"
                 [ngModel]="mode()"
-                (ngModelChange)="mode.set($event)"
+                (ngModelChange)="onModeChange($event)"
                 optionLabel="label"
                 optionValue="value"
                 size="small"/>
@@ -241,6 +242,8 @@ export class ToggleActiveCellRenderer implements ICellRendererAngularComp {
 })
 export class UniversePanelComponent implements OnInit {
   private api = inject(ApiService);
+  private route = inject(ActivatedRoute);
+  private router = inject(Router);
   assetService = inject(AssetService);
   compositeService = inject(CompositeService);
   private serverTable = viewChild(ServerTableComponent);
@@ -251,7 +254,26 @@ export class UniversePanelComponent implements OnInit {
     const locked = this.restrictMode();
     if (locked) {
       this.mode.set(locked);
+    } else {
+      const savedMode = this.route.snapshot.queryParamMap.get('universeMode');
+      if (savedMode === 'instruments' || savedMode === 'composites') {
+        this.mode.set(savedMode);
+      }
     }
+  }
+
+  onModeChange(newMode: 'instruments' | 'composites'): void {
+    this.mode.set(newMode);
+    this.router.navigate([], {
+      relativeTo: this.route,
+      queryParams: { universeMode: newMode },
+      queryParamsHandling: 'merge',
+      replaceUrl: true,
+    });
+  }
+
+  refresh(): void {
+    this.refreshTrigger.update(v => v + 1);
   }
 
   // ─── Inputs ───────────────────────────────────────────────
@@ -287,6 +309,7 @@ export class UniversePanelComponent implements OnInit {
   showForm = signal(false);
   stagedIds = signal<Set<string>>(new Set());
   stagingAll = signal(false);
+  private refreshTrigger = signal(0);
 
   // Track universe sizes for startOrder calculation
   private instrumentCount = signal(0);
@@ -389,6 +412,7 @@ export class UniversePanelComponent implements OnInit {
     const baseUrl = this.universeBaseUrl();
     if (!baseUrl) return null;
     this.mode(); // track mode changes to force re-evaluation
+    this.refreshTrigger(); // force refetch when refresh() is called
     return (page: number, pageSize: number) => {
       return this.api.get<PaginatedResponse<UniverseItem>>(`${baseUrl}/universe/search`, { page, page_size: pageSize }).pipe(
         map(res => {
@@ -403,6 +427,7 @@ export class UniversePanelComponent implements OnInit {
     const baseUrl = this.universeBaseUrl();
     if (!baseUrl) return null;
     this.mode(); // track mode changes
+    this.refreshTrigger(); // force refetch when refresh() is called
     return (page: number, pageSize: number) => {
       return this.api.get<PaginatedResponse<CompositeUniverseItem>>(`${baseUrl}/composite-universe/search`, { page, page_size: pageSize }).pipe(
         map(res => {

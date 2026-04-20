@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, effect, inject, OnInit, signal, viewChild } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DatePipe, JsonPipe } from '@angular/common';
 import { FeedService } from '../../../services/feed.service';
@@ -50,6 +50,7 @@ export class FeedDetailComponent implements OnInit {
   private router = inject(Router);
   private toast = inject(ToastService);
   feedService = inject(FeedService);
+  private universePanel = viewChild(UniversePanelComponent);
 
   tabs = ['Overview', 'Runs', 'Universe', 'Configuration'];
   activeTab = signal('Overview');
@@ -222,7 +223,10 @@ export class FeedDetailComponent implements OnInit {
 
   onAddInstruments(event: { instrumentIds: string[]; startOrder: number }): void {
     this.feedService.batchAddFeedInstruments(this.feedId, event.instrumentIds, event.startOrder).subscribe({
-      next: () => this.toast.success(`${event.instrumentIds.length} instrument(s) added to universe`),
+      next: () => {
+        this.toast.success(`${event.instrumentIds.length} instrument(s) added to universe`);
+        this.universePanel()?.refresh();
+      },
       error: () => this.toast.error('Failed to add instruments to universe'),
     });
   }
@@ -238,7 +242,10 @@ export class FeedDetailComponent implements OnInit {
 
   onAddComposites(event: { compositeIds: string[]; startOrder: number }): void {
     this.feedService.batchAddFeedComposites(this.feedId, event.compositeIds, event.startOrder).subscribe({
-      next: () => this.toast.success(`${event.compositeIds.length} composite(s) added to universe`),
+      next: () => {
+        this.toast.success(`${event.compositeIds.length} composite(s) added to universe`);
+        this.universePanel()?.refresh();
+      },
       error: () => this.toast.error('Failed to add composites to universe'),
     });
   }
