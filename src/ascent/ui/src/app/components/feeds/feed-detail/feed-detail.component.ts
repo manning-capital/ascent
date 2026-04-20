@@ -16,7 +16,6 @@ import { DataTableComponent } from '../../shared/data-table/data-table.component
 import { DataTableColumn } from '../../shared/data-table/data-table.model';
 import { FeedRunsTabComponent } from './feed-runs-tab.component';
 import { Skeleton } from 'primeng/skeleton';
-import { Button } from 'primeng/button';
 
 export interface RecentRunPill {
   id: string;
@@ -39,7 +38,6 @@ export interface RecentRunPill {
     Tag,
     Tooltip,
     Skeleton,
-    Button,
     UniversePanelComponent,
     UniverseImpactDialogComponent,
     DataTableComponent,
