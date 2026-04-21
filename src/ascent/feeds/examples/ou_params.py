@@ -1,63 +1,69 @@
-"""Ornstein-Uhlenbeck parameter feed — triggered by composite market data.
+"""Ornstein-Uhlenbeck parameter feed.
 
-Emits the OU parameters ``OU_MU``, ``OU_THETA``, ``OU_SIGMA`` plus the current
-``OU_Z_SCORE`` per composite, using the same deterministic params as
-:mod:`ascent.feeds.examples.composite_market` so each pair's dynamics stay
-consistent across feeds.
+Publishes ``OU_MU``, ``OU_THETA``, ``OU_SIGMA``, ``OU_BETA`` per composite on a
+5-second schedule. Parameters are derived deterministically from each
+composite's UUID so a given pair always gets the same dynamics across restarts.
 """
 
+import hashlib
 import uuid
+from datetime import datetime
 
 import pandas as pd
 from pandera.typing.pandas import DataFrame
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
-from ascent.feeds import Feed
-from ascent.feeds.examples.composite_market import CompositeMarketData, _params_for
+from ascent.feeds import Feed, Schedule
 from ascent.feeds.output import CompositeAttributes
 
 
+def _params_for(composite_id: uuid.UUID) -> tuple[float, float, float, float]:
+    """Return deterministic ``(mu, theta, sigma, beta)`` for a composite."""
+    digest = hashlib.sha256(composite_id.bytes).digest()
+
+    def _u(i: int) -> float:
+        return int.from_bytes(digest[i * 8 : (i + 1) * 8], "big") / 2**64
+
+    mu = 0.05 + 0.20 * _u(0)
+    theta = -0.05 + 0.10 * _u(1)
+    sigma = 0.01 + 0.04 * _u(2)
+    beta = 0.5 + 1.0 * _u(3)
+    return (mu, theta, sigma, beta)
+
+
 class OUParams(Feed):
-    """Emits OU parameters and z-score per composite on each trigger."""
+    """Emits OU parameters and hedge ratio per composite on each tick."""
 
     class Parameters(BaseModel):
-        lookback_days: int = Field(default=60, ge=7, le=365)
+        pass
 
-    depends_on = [CompositeMarketData]
+    schedule = Schedule(interval=5, start_date=datetime(2024, 1, 1))
     output = CompositeAttributes
     provider = "KRAKEN"
     composite_type = "SPREAD"
     display_name = "OU Parameters"
-    description = "Emits OU mu/theta/sigma and current z-score per composite."
+    description = "Emits OU mu/theta/sigma and hedge ratio beta per composite."
 
     def fetch(self) -> DataFrame[CompositeAttributes]:
         logger = self.get_logger()
-        prices = self.get_feed(CompositeMarketData)
-        logger.info("Computing OU params from %d rows", len(prices))
-
-        if prices.empty:
-            return pd.DataFrame(
-                columns=["composite_id", "OU_MU", "OU_THETA", "OU_SIGMA", "OU_Z_SCORE"]
-            )
+        universe_ids = self.get_universe()
 
         rows: list[dict] = []
-        for _, price_row in prices.iterrows():
-            cid = uuid.UUID(str(price_row["composite_id"]))
-            spread = float(price_row["CLOSE"])
-            mu, theta, sigma = _params_for(cid)
-            z = (spread - theta) / sigma if sigma > 0 else 0.0
+        for cid in universe_ids:
+            mu, theta, sigma, beta = _params_for(cid)
             rows.append(
                 {
                     "composite_id": str(cid),
                     "OU_MU": round(mu, 8),
                     "OU_THETA": round(theta, 8),
                     "OU_SIGMA": round(sigma, 8),
-                    "OU_Z_SCORE": round(z, 8),
+                    "OU_BETA": round(beta, 8),
                 }
             )
 
+        logger.info("Generated OU params for %d composites", len(rows))
         return pd.DataFrame(
-            rows, columns=["composite_id", "OU_MU", "OU_THETA", "OU_SIGMA", "OU_Z_SCORE"]
+            rows, columns=["composite_id", "OU_MU", "OU_THETA", "OU_SIGMA", "OU_BETA"]
         )
 
 

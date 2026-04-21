@@ -64,6 +64,26 @@ def seed_descriptors(client: Any, ctx: dict) -> None:
     ctx["attr_ask"] = client.create_attribute(
         name="ASK", display_name="Ask", description="Best ask price"
     )
+    ctx["attr_ou_mu"] = client.create_attribute(
+        name="OU_MU",
+        display_name="OU Mu",
+        description="OU mean-reversion speed (kappa) — rate at which the spread returns to theta",
+    )
+    ctx["attr_ou_theta"] = client.create_attribute(
+        name="OU_THETA",
+        display_name="OU Theta",
+        description="OU long-run mean — the equilibrium level the spread reverts to",
+    )
+    ctx["attr_ou_sigma"] = client.create_attribute(
+        name="OU_SIGMA",
+        display_name="OU Sigma",
+        description="OU diffusion coefficient — per-unit-time volatility of the spread",
+    )
+    ctx["attr_ou_beta"] = client.create_attribute(
+        name="OU_BETA",
+        display_name="OU Beta",
+        description="Hedge ratio used in the log-spread: s = ln(p_a) - beta * ln(p_b)",
+    )
 
     ctx["all_attributes"] = [
         ctx["attr_close"],
@@ -84,6 +104,10 @@ def seed_descriptors(client: Any, ctx: dict) -> None:
         ctx["attr_iv"],
         ctx["attr_bid"],
         ctx["attr_ask"],
+        ctx["attr_ou_mu"],
+        ctx["attr_ou_theta"],
+        ctx["attr_ou_sigma"],
+        ctx["attr_ou_beta"],
     ]
 
     # --- Metadata types ---

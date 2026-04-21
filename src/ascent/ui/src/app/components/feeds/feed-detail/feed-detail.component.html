@@ -59,122 +59,71 @@
         @let f = feedService.selectedFeed();
         <div class="overflow-y-auto h-full p-6 space-y-6">
 
-          <!-- Top row: status stats + run stats -->
-          <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
-            <div class="border border-surface rounded-lg p-4">
-              <div class="text-xs text-muted-color uppercase tracking-wider mb-1">Total Runs</div>
-              <div class="text-2xl font-bold">{{ f?.total_runs ?? 0 }}</div>
-            </div>
-            <div class="border border-surface rounded-lg p-4">
-              <div class="text-xs text-muted-color uppercase tracking-wider mb-1">Completed</div>
-              <div class="text-2xl font-bold text-positive">{{ overviewStats().completed }}</div>
-            </div>
-            <div class="border border-surface rounded-lg p-4">
-              <div class="text-xs text-muted-color uppercase tracking-wider mb-1">Failed</div>
-              <div class="text-2xl font-bold text-negative">{{ overviewStats().failed }}</div>
-            </div>
-            <div class="border border-surface rounded-lg p-4">
-              <div class="text-xs text-muted-color uppercase tracking-wider mb-1">Success Rate</div>
-              <div class="text-2xl font-bold">{{ successRate() }}</div>
-            </div>
-            <div class="border border-surface rounded-lg p-4">
-              <div class="text-xs text-muted-color uppercase tracking-wider mb-1">Avg Duration</div>
-              <div class="text-2xl font-bold">{{ runStats().avgDuration }}</div>
-            </div>
-            <div class="border border-surface rounded-lg p-4">
-              <div class="text-xs text-muted-color uppercase tracking-wider mb-1">Avg Records</div>
-              <div class="text-2xl font-bold">{{ runStats().avgRecords }}</div>
-            </div>
-            <div class="border border-surface rounded-lg p-4">
-              <div class="text-xs text-muted-color uppercase tracking-wider mb-1">Last Run</div>
-              <div class="text-sm font-semibold mt-1">{{ f?.last_run_at ? (f!.last_run_at! | date:'MMM d, h:mm a') : 'Never' }}</div>
-            </div>
-            <div class="border border-surface rounded-lg p-4">
-              <div class="text-xs text-muted-color uppercase tracking-wider mb-1">Last Status</div>
-              <div class="mt-1">
+          <!-- Hero: 4 primary KPIs -->
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- Last Run (inline because it pairs a tag with the value) -->
+            <p-card>
+              <p class="text-xs font-medium text-surface-500 uppercase tracking-wider mb-1">Last Run</p>
+              <p class="text-2xl font-bold">{{ lastRunRelative() }}</p>
+              <div class="mt-2 min-h-[1.5rem]">
                 @if (f?.last_run_status) {
                   <p-tag [value]="f!.last_run_status!" [severity]="statusSeverity(f!.last_run_status!)" [rounded]="true"/>
-                } @else {
-                  <span class="text-sm text-muted-color">-</span>
                 }
               </div>
-            </div>
+            </p-card>
+            <app-stat-card label="Success Rate" [value]="successRate()"/>
+            <app-stat-card label="Avg Duration" [value]="runStats().avgDuration"/>
+            <app-stat-card label="Avg Records" [value]="runStats().avgRecords"/>
           </div>
 
-          <!-- Recent runs pill strip — clickable, color-coded by status. -->
+          <!-- Secondary counters: inline run of text, no flex children -->
+          <p class="text-sm text-surface-500">
+            Total <span class="font-semibold text-fg">{{ f?.total_runs ?? 0 }}</span>@if (recentRuns().length > 0) {<span class="mx-3 text-surface-300">·</span>Of last {{ recentRuns().length }}: <span class="font-semibold text-positive">{{ overviewStats().completed }}</span> completed, <span class="font-semibold text-negative">{{ overviewStats().failed }}</span> failed@if (overviewStats().running > 0) {, <span class="font-semibold text-warning">{{ overviewStats().running }}</span> running}}
+          </p>
+
+          <!-- Activity: day-grouped run pills -->
           <p-card>
             <div class="flex items-center justify-between mb-3">
-              <span class="font-semibold">Recent Runs</span>
-              <span class="text-xs text-muted-color">Showing {{ recentRuns().length }} most-recent</span>
+              <span class="font-semibold">Activity</span>
+              @if (recentRuns().length > 0) {
+                <span class="text-xs text-surface-500">Last {{ recentRuns().length }} runs</span>
+              }
             </div>
             @if (runsLoading()) {
               <div class="space-y-3">
                 <p-skeleton width="12rem" height="0.75rem"/>
-                <p-skeleton width="100%" height="3rem"/>
+                <p-skeleton width="100%" height="3.5rem"/>
               </div>
             } @else if (recentRuns().length > 0) {
-              <div class="flex flex-wrap gap-1">
-                @for (r of recentRuns(); track r.id) {
-                  <button
-                    type="button"
-                    class="w-5 h-5 rounded-sm transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
-                    [class]="pillClass(r.status)"
-                    [pTooltip]="r.status + ' @ ' + (r.snapshot_timestamp | date:'MMM d, HH:mm:ss')"
-                    tooltipPosition="top"
-                    (click)="onPillClick(r.id)">
-                  </button>
-                }
-              </div>
+              <app-feed-activity-timeline
+                [runs]="recentRuns()"
+                (runClick)="onPillClick($event)"/>
             } @else {
-              <div class="text-sm text-muted-color py-4 text-center">
+              <div class="text-sm text-surface-500 py-4 text-center">
                 No runs yet. This feed may be triggered externally or has not run.
               </div>
             }
           </p-card>
 
-          <!-- Bottom section: Feed Details + Recent Errors side by side -->
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <!-- Feed Details -->
-            @if (f) {
-              <p-card header="Feed Details">
-                <div class="space-y-2 text-sm">
-                  <div class="flex justify-between"><span class="text-muted-color">Provider</span><span>{{ f.provider_name ?? '—' }}</span></div>
-                  <div class="flex justify-between"><span class="text-muted-color">Scope</span><span class="capitalize">{{ f.scope_type }}</span></div>
-                  <div class="flex justify-between"><span class="text-muted-color">{{ f.scope_type === 'instrument' ? 'Instrument Type' : 'Composite Type' }}</span><span>{{ f.scope_type_name ?? '—' }}</span></div>
-                  <div class="flex justify-between"><span class="text-muted-color">Feed Ref</span><span class="font-mono text-xs">{{ f.feed_ref }}</span></div>
-                  <div class="flex justify-between"><span class="text-muted-color">Output Table</span><span>{{ f.output_table }}</span></div>
-                  <div class="flex justify-between"><span class="text-muted-color">Channel</span><span class="font-mono text-xs">{{ f.channel }}</span></div>
-                  <div class="flex justify-between"><span class="text-muted-color">Schedule</span><span>{{ scheduleLabel(f.schedule) }}</span></div>
-                  <div class="flex justify-between"><span class="text-muted-color">Active</span><span>{{ f.is_active ? 'Yes' : 'No' }}</span></div>
-                  @if (f.created_at) {
-                    <div class="flex justify-between"><span class="text-muted-color">Created</span><span>{{ f.created_at | date:'mediumDate' }}</span></div>
-                  }
-                  @if (f.updated_at) {
-                    <div class="flex justify-between"><span class="text-muted-color">Updated</span><span>{{ f.updated_at | date:'mediumDate' }}</span></div>
-                  }
-                </div>
-                @if (f.description) {
-                  <div class="mt-4 pt-3 border-t border-surface">
-                    <p class="text-sm text-muted-color">{{ f.description }}</p>
-                  </div>
-                }
-              </p-card>
-            }
+          <!-- Lineage placeholder (full-width; real viz lands later) -->
+          <p-card header="Lineage">
+            <div class="flex flex-col items-center justify-center h-40 text-center gap-2">
+              <span class="text-sm text-surface-500">Upstream &amp; downstream viz</span>
+              <span class="text-xs text-surface-400">Coming soon</span>
+            </div>
+          </p-card>
 
-            <!-- Recent Errors -->
+          <!-- Issues: conditional — only when errors exist -->
+          @if (hasErrors()) {
             <p-card header="Recent Errors">
-              @if (runStats().recentErrors.length > 0) {
-                <app-data-table
-                  [columns]="errorColumns"
-                  [rowData]="runStats().recentErrors"
-                  [pagination]="false"
-                  [rowClickRoute]="navigateToError"
-                  emptyMessage="No recent errors"/>
-              } @else {
-                <div class="text-sm text-muted-color py-4 text-center">No recent errors</div>
-              }
+              <app-data-table
+                [columns]="errorColumns"
+                [rowData]="runStats().recentErrors"
+                [pagination]="false"
+                [rowClickRoute]="navigateToError"
+                emptyMessage="No recent errors"/>
             </p-card>
-          </div>
+          }
         </div>
       }
 
@@ -201,33 +150,22 @@
 
       <!-- Configuration Tab -->
       @if (activeTab() === 'Configuration') {
-        <div class="max-w-3xl mx-auto p-6 space-y-6 overflow-y-auto h-full">
-          <!-- Info Card -->
-          <p-card header="Info">
-            <div class="space-y-2 text-sm">
-              <div class="flex justify-between"><span class="text-surface-500">Feed Ref</span><span class="font-mono text-xs">{{ feed.feed_ref }}</span></div>
-              <div class="flex justify-between"><span class="text-surface-500">Output Table</span><span>{{ feed.output_table }}</span></div>
-              <div class="flex justify-between"><span class="text-surface-500">Channel</span><span>{{ feed.channel }}</span></div>
-              <div class="flex justify-between"><span class="text-surface-500">Schedule</span><span>{{ scheduleLabel(feed.schedule) }}</span></div>
-              <div class="flex justify-between"><span class="text-surface-500">Active</span><span>{{ feed.is_active ? 'Yes' : 'No' }}</span></div>
-              @if (feed.created_at) {
-                <div class="flex justify-between"><span class="text-surface-500">Created</span><span>{{ feed.created_at | date:'mediumDate' }}</span></div>
-              }
-              @if (feed.updated_at) {
-                <div class="flex justify-between"><span class="text-surface-500">Updated</span><span>{{ feed.updated_at | date:'mediumDate' }}</span></div>
-              }
-            </div>
-          </p-card>
+        <div class="overflow-y-auto h-full">
+          <div class="max-w-5xl mx-auto p-6 space-y-6">
 
-          <!-- Description -->
           @if (feed.description) {
             <p-card header="Description">
-              <p class="text-sm text-surface-500">{{ feed.description }}</p>
+              <p class="text-sm">{{ feed.description }}</p>
             </p-card>
           }
 
-          <!-- Parameters -->
-          @if (feed.parameters) {
+          <app-field-panel header="Identity" [fields]="identityFields()"/>
+
+          <app-field-panel header="Source &amp; Scope" [fields]="sourceScopeFields()"/>
+
+          <app-field-panel header="Schedule" [fields]="scheduleFields()"/>
+
+          @if (feed.parameters || feed.parameter_schema) {
             <p-card header="Parameters">
               @if (feed.parameter_schema) {
                 <app-schema-form
@@ -235,17 +173,32 @@
                   [data]="feed.parameters"
                   [readonly]="true"/>
               } @else {
-                <pre class="text-xs text-surface-500 overflow-x-auto">{{ feed.parameters | json }}</pre>
+                <pre class="text-xs font-mono text-surface-500 overflow-x-auto">{{ feed.parameters | json }}</pre>
               }
             </p-card>
           }
 
-          <!-- Data Schema -->
           @if (feed.data_schema) {
             <p-card header="Output Schema">
-              <pre class="text-xs text-surface-500 overflow-x-auto">{{ feed.data_schema | json }}</pre>
+              @if (outputSchemaRows().length > 0) {
+                <app-data-table
+                  [columns]="outputSchemaColumns"
+                  [rowData]="outputSchemaRows()"
+                  [pagination]="false"/>
+              } @else {
+                <p class="text-sm text-surface-500">Schema metadata not available in tabular form.</p>
+              }
+              <details class="mt-4">
+                <summary class="cursor-pointer text-xs text-surface-500 select-none hover:text-surface-400">
+                  Raw schema JSON
+                </summary>
+                <pre class="text-xs font-mono text-surface-500 overflow-x-auto mt-2">{{ feed.data_schema | json }}</pre>
+              </details>
             </p-card>
           }
+
+          <app-field-panel header="Audit" [fields]="auditFields()"/>
+          </div>
         </div>
       }
 

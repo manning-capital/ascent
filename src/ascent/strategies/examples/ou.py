@@ -1,41 +1,190 @@
-"""Ornstein-Uhlenbeck mean-reversion strategy — trades composite spreads."""
+"""Ornstein-Uhlenbeck mean-reversion strategy over composite spreads.
 
+Trades composites whose two constituent instruments form a cointegrated pair.
+Consumes :class:`MarketData` (instrument-level CLOSE) and :class:`OUParams`
+(composite-level mu/theta/sigma/beta). On each tick it builds the log-spread
+``s = ln(p_a) - beta * ln(p_b)`` per composite, computes the Leung-Li optimal
+entry/exit levels from the known OU parameters, and opens/closes composite-
+scoped trades when the spread crosses those levels.
+"""
+
+from __future__ import annotations
+
+import math
+import os
+import uuid
+from typing import ClassVar
+
+import numpy as np
 from pydantic import BaseModel, Field
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import Session
 
-from ascent.feeds.examples.composite_market import CompositeMarketData
+from ascent.feeds.examples.market import MarketData
 from ascent.feeds.examples.ou_params import OUParams
+from ascent.math._non_rolling import OrnsteinUhlenbeck
 from ascent.strategies import Context, Strategy
 
 
 class OUStrategy(Strategy):
-    """Enters on z-score extremes, exits on mean reversion.
-
-    Scoped to composites (e.g. pair spreads). Reads the latest price from
-    :class:`CompositeMarketData` and the fitted OU parameters from
-    :class:`OUParams`, then enters/exits based on the z-score of the spread.
-    """
+    """Mean-reversion on composite spreads using Leung-Li optimal levels."""
 
     class Parameters(BaseModel):
-        entry_z: float = Field(2.0, ge=0.5, le=5.0, description="Z-score to enter")
-        exit_z: float = Field(0.5, ge=0.0, le=3.0, description="Z-score to exit")
-        stop_z: float = Field(4.0, ge=1.0, le=10.0, description="Z-score stop-out")
-        quantity: float = Field(1.0, gt=0, description="Units per trade")
+        discount_rate: float = Field(0.01, gt=0, description="r in the Leung-Li framework")
+        transaction_cost: float = Field(0.01, ge=0, description="c in the Leung-Li framework")
+        quantity: float = Field(1.0, gt=0, description="Composite units per trade")
 
-    feeds = [CompositeMarketData, OUParams]
+    feeds = [MarketData, OUParams]
+    exchanges = ["KRAKEN_SECURITY_EXCHANGE"]
+    portfolio = "MAIN"
     display_name = "OU Strategy"
-    description = "Mean-reversion on composite spreads using fitted OU parameters."
+    description = "Mean-reversion on composite spreads using Leung-Li optimal entry/exit levels."
+
+    _composite_legs: ClassVar[dict[uuid.UUID, tuple[uuid.UUID, uuid.UUID]]] = {}
+    _initialised: ClassVar[bool] = False
+
+    def _ensure_initialised(self) -> None:
+        if OUStrategy._initialised:
+            return
+        from ascent.database.models.composites import Composite, CompositeMember
+        from ascent.database.models.types import CompositeType
+
+        engine = create_engine(os.environ["ASCENT_DATABASE_URL"])
+        with Session(engine) as db:
+            rows = db.execute(
+                select(Composite.id, CompositeMember.order, CompositeMember.instrument_id)
+                .join(CompositeType, Composite.composite_type_id == CompositeType.id)
+                .join(CompositeMember, CompositeMember.composite_id == Composite.id)
+                .where(CompositeType.name == "SPREAD")
+                .order_by(Composite.id, CompositeMember.order)
+            ).all()
+
+        legs_by_composite: dict[uuid.UUID, dict[int, uuid.UUID]] = {}
+        for composite_id, order, instrument_id in rows:
+            legs_by_composite.setdefault(composite_id, {})[order] = instrument_id
+
+        for composite_id, legs in legs_by_composite.items():
+            if set(legs.keys()) == {1, 2}:
+                OUStrategy._composite_legs[composite_id] = (legs[1], legs[2])
+
+        OUStrategy._initialised = True
 
     def evaluate(self, ctx: Context) -> None:
         logger = self.get_logger()
-
         if ctx.df.empty:
             return
+        self._ensure_initialised()
 
-        df = ctx.df
-        waiting = df[df[("trade", "status")] == "WAITING"]
-        in_trade = df[df[("trade", "status")] == "OPEN"]
+        params = self.parameters
 
-        logger.info("Waiting: %d, In trade: %d", len(waiting), len(in_trade))
+        for composite_str in ctx.universe:
+            composite_id = uuid.UUID(composite_str)
+            legs = OUStrategy._composite_legs.get(composite_id)
+            if legs is None:
+                continue
+            inst_a, inst_b = legs
+
+            try:
+                composite_rows = ctx.df.loc[composite_str]
+            except KeyError:
+                continue
+            if composite_rows.empty:
+                continue
+
+            head = composite_rows.iloc[0]
+            try:
+                mu = float(head[("ou_params", "OU_MU")])
+                theta = float(head[("ou_params", "OU_THETA")])
+                sigma = float(head[("ou_params", "OU_SIGMA")])
+                beta = float(head[("ou_params", "OU_BETA")])
+            except KeyError:
+                continue
+            if any(not math.isfinite(v) for v in (mu, theta, sigma, beta)):
+                continue
+            if mu <= 0 or sigma <= 0 or beta == 0:
+                continue
+
+            try:
+                price_a = float(ctx.df.loc[(composite_str, str(inst_a)), ("market_data", "CLOSE")])
+                price_b = float(ctx.df.loc[(composite_str, str(inst_b)), ("market_data", "CLOSE")])
+            except KeyError:
+                continue
+            if not (math.isfinite(price_a) and math.isfinite(price_b)):
+                continue
+            if price_a <= 0 or price_b <= 0:
+                continue
+
+            spread = math.log(price_a) - beta * math.log(price_b)
+
+            exit_long = OrnsteinUhlenbeck.get_optimal_exit_level(
+                mu=np.array([mu]),
+                sigma=np.array([sigma]),
+                theta=np.array([theta]),
+                discount_rate=params.discount_rate,
+                transaction_cost=params.transaction_cost,
+            )[0]
+            if not np.isfinite(exit_long):
+                continue
+
+            entry_long = OrnsteinUhlenbeck.get_optimal_entry_level(
+                mu=np.array([mu]),
+                sigma=np.array([sigma]),
+                theta=np.array([theta]),
+                exit_level=np.array([exit_long]),
+                discount_rate=params.discount_rate,
+                transaction_cost=params.transaction_cost,
+            )[0]
+            if not np.isfinite(entry_long):
+                continue
+
+            entry_short = 2 * theta - entry_long
+            exit_short = 2 * theta - exit_long
+
+            trade_status = str(head[("trade", "status")])
+            trade_direction = head[("trade", "direction")]
+            trade_id = head[("trade", "trade_id")]
+
+            has_open_trade = trade_status not in ("WAITING", "PENDING")
+
+            logger.info(
+                "composite=%s spread=%+.6f entry_long=%+.6f exit_long=%+.6f "
+                "entry_short=%+.6f exit_short=%+.6f status=%s",
+                composite_str[:8],
+                spread,
+                entry_long,
+                exit_long,
+                entry_short,
+                exit_short,
+                trade_status,
+            )
+
+            if not has_open_trade:
+                if spread <= entry_long:
+                    self.open_trade(
+                        composite_id,
+                        direction="LONG",
+                        quantity=params.quantity,
+                        scope="composite",
+                    )
+                    logger.info("OPEN LONG composite=%s spread=%+.6f", composite_str[:8], spread)
+                elif spread >= entry_short:
+                    self.open_trade(
+                        composite_id,
+                        direction="SHORT",
+                        quantity=params.quantity,
+                        scope="composite",
+                    )
+                    logger.info("OPEN SHORT composite=%s spread=%+.6f", composite_str[:8], spread)
+                continue
+
+            if trade_id is None:
+                continue
+            if trade_direction == "LONG" and spread >= exit_long:
+                self.close_trade(str(trade_id), close_reason="OPTIMAL_EXIT")
+                logger.info("CLOSE LONG composite=%s spread=%+.6f", composite_str[:8], spread)
+            elif trade_direction == "SHORT" and spread <= exit_short:
+                self.close_trade(str(trade_id), close_reason="OPTIMAL_EXIT")
+                logger.info("CLOSE SHORT composite=%s spread=%+.6f", composite_str[:8], spread)
 
 
 if __name__ == "__main__":

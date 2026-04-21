@@ -69,7 +69,7 @@ class PairsOUStrategy(Strategy):
         stop_z: float = Field(4.0, description="Absolute z-score to hard-stop a pair")
         trade_qty: float = Field(0.01, description="Quantity per leg")
 
-    feeds = ["COMPOSITE_MARKET_DATA", "OUPARAMS"]
+    feeds = ["MARKET_DATA", "OUPARAMS"]
     exchanges = ["KRAKEN_SECURITY_EXCHANGE"]
     portfolio = "MAIN"
 

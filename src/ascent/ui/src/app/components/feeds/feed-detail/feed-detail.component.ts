@@ -1,6 +1,6 @@
 import { Component, computed, effect, inject, OnInit, signal, viewChild } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
-import { DatePipe, JsonPipe } from '@angular/common';
+import { JsonPipe } from '@angular/common';
 import { FeedService } from '../../../services/feed.service';
 import { ToastService } from '../../../services/toast.service';
 import { FeedRunListItem } from '../../../models/feed.model';
@@ -11,10 +11,12 @@ import { Tabs, TabList, Tab } from 'primeng/tabs';
 import { SchemaFormComponent } from '../../shared/schema-form.component';
 import { Card } from 'primeng/card';
 import { Tag } from 'primeng/tag';
-import { Tooltip } from 'primeng/tooltip';
 import { DataTableComponent } from '../../shared/data-table/data-table.component';
 import { DataTableColumn } from '../../shared/data-table/data-table.model';
 import { FeedRunsTabComponent } from './feed-runs-tab.component';
+import { FeedActivityTimelineComponent } from './feed-activity-timeline.component';
+import { StatCardComponent } from '../../shared/stat-card.component';
+import { FieldPanelComponent, PanelField } from '../../shared/field-panel.component';
 import { Skeleton } from 'primeng/skeleton';
 
 export interface RecentRunPill {
@@ -30,18 +32,19 @@ export interface RecentRunPill {
   standalone: true,
   imports: [
     RouterLink,
-    DatePipe,
     JsonPipe,
     Tabs, TabList, Tab,
     SchemaFormComponent,
     Card,
     Tag,
-    Tooltip,
     Skeleton,
     UniversePanelComponent,
     UniverseImpactDialogComponent,
     DataTableComponent,
     FeedRunsTabComponent,
+    FeedActivityTimelineComponent,
+    StatCardComponent,
+    FieldPanelComponent,
   ],
   templateUrl: './feed-detail.component.html',
 })
@@ -81,6 +84,79 @@ export class FeedDetailComponent implements OnInit {
     if (!feed) return null;
     return feed.scope_type === 'instrument' ? 'instruments' : 'composites';
   });
+
+  lastRunRelative = computed(() => {
+    const iso = this.feedService.selectedFeed()?.last_run_at ?? null;
+    return this.relativeTime(iso);
+  });
+
+  hasErrors = computed(() => this.runStats().recentErrors.length > 0);
+
+  identityFields = computed<PanelField[]>(() => {
+    const f = this.feedService.selectedFeed();
+    if (!f) return [];
+    return [
+      { label: 'Display Name', key: 'display_name', type: 'text', value: f.display_name },
+      { label: 'Internal Name', key: 'name', type: 'mono', value: f.name },
+      { label: 'Feed Ref', key: 'feed_ref', type: 'mono', value: f.feed_ref },
+      { label: 'Channel', key: 'channel', type: 'mono', value: f.channel },
+    ];
+  });
+
+  sourceScopeFields = computed<PanelField[]>(() => {
+    const f = this.feedService.selectedFeed();
+    if (!f) return [];
+    return [
+      { label: 'Provider', key: 'provider', type: 'text', value: f.provider_name ?? '—' },
+      { label: 'Scope', key: 'scope', type: 'text', value: this.capitalize(f.scope_type) },
+      {
+        label: f.scope_type === 'instrument' ? 'Instrument Type' : 'Composite Type',
+        key: 'scopeType',
+        type: 'text',
+        value: f.scope_type_name ?? '—',
+      },
+      { label: 'Output Table', key: 'output_table', type: 'mono', value: f.output_table },
+    ];
+  });
+
+  scheduleFields = computed<PanelField[]>(() => {
+    const f = this.feedService.selectedFeed();
+    if (!f) return [];
+    return [
+      { label: 'Schedule', key: 'schedule', type: 'text', value: this.scheduleLabel(f.schedule) },
+      { label: 'Active', key: 'active', type: 'active', value: f.is_active },
+    ];
+  });
+
+  auditFields = computed<PanelField[]>(() => {
+    const f = this.feedService.selectedFeed();
+    if (!f) return [];
+    const fields: PanelField[] = [
+      { label: 'ID', key: 'id', type: 'mono', value: f.id },
+    ];
+    if (f.created_at) fields.push({ label: 'Created', key: 'created', type: 'date', value: f.created_at });
+    if (f.updated_at) fields.push({ label: 'Updated', key: 'updated', type: 'date', value: f.updated_at });
+    return fields;
+  });
+
+  outputSchemaRows = computed<Array<{ name: string; dtype: string; nullable: string; description: string }>>(() => {
+    const schema = this.feedService.selectedFeed()?.data_schema;
+    const cols = schema && typeof schema === 'object' ? (schema as any)['columns'] : null;
+    if (!cols || typeof cols !== 'object') return [];
+    return Object.entries(cols).map(([name, def]) => ({
+      name,
+      dtype: (def as any)?.dtype ?? '—',
+      nullable: (def as any)?.nullable ? 'Yes' : 'No',
+      description: (def as any)?.description ?? '',
+    }));
+  });
+
+  outputSchemaColumns: DataTableColumn<any>[] = [
+    { field: 'name', header: 'Column', cellType: 'monospace', width: 200 },
+    { field: 'dtype', header: 'Type', cellType: 'monospace', width: 160 },
+    { field: 'nullable', header: 'Nullable', width: 100 },
+    { field: 'description', header: 'Description' },
+  ];
 
   private runsLoaded = false;
 
@@ -129,6 +205,21 @@ export class FeedDetailComponent implements OnInit {
     });
   }
 
+  private capitalize(s: string): string {
+    return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+  }
+
+  private relativeTime(iso: string | null): string {
+    if (!iso) return 'Never';
+    const diff = Date.now() - new Date(iso).getTime();
+    if (diff < 0) return 'just now';
+    if (diff < 60_000) return 'just now';
+    if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+    if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+    if (diff < 2_592_000_000) return `${Math.floor(diff / 86_400_000)}d ago`;
+    return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+
   scheduleLabel(schedule: Record<string, any> | null): string {
     if (!schedule) return 'Triggered';
     const interval = schedule['interval'];
@@ -146,15 +237,6 @@ export class FeedDetailComponent implements OnInit {
       case 'RUNNING': return 'warn';
       case 'PENDING': return 'secondary';
       default: return 'secondary';
-    }
-  }
-
-  pillClass(status: string): string {
-    switch (status) {
-      case 'COMPLETED': return 'bg-positive/80 hover:bg-positive';
-      case 'FAILED': return 'bg-negative/80 hover:bg-negative';
-      case 'RUNNING': return 'bg-warning/80 hover:bg-warning';
-      default: return 'bg-surface-500/50 hover:bg-surface-500';
     }
   }
 
