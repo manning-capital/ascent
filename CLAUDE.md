@@ -62,6 +62,10 @@ Code in this repo should follow Robert C. Martin's (Uncle Bob) *Clean Code* and 
 
 The project-level guidance in this CLAUDE.md and in conversation takes precedence (e.g. "only change what's asked", "no premature abstraction"). Clean Code is a lens for *how* to write the code that's in scope — not a license to expand scope into cleanup passes the user didn't request.
 
+## Clarifying Questions
+
+When you need clarification from the user, always use the `AskUserQuestion` tool to present labeled multiple-choice options (A/B/C…) rather than asking open-ended prose questions. This applies to any decision point — scope, approach, design tradeoffs, naming, etc. If the answer space is genuinely open-ended, still offer concrete options plus an "other" escape hatch.
+
 ## Python Formatting and Linting
 
 Run `ruff format` and `ruff check` regularly while working on Python code — typically between phases of a larger change or between bullet points in a multi-step task. Don't batch all formatting to the end; catch issues early so each phase lands clean. Fix lint findings as they come up rather than letting them accumulate.

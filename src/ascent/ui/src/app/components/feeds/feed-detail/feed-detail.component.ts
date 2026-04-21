@@ -59,7 +59,7 @@ export class FeedDetailComponent implements OnInit {
 
   errorColumns: DataTableColumn<FeedRunListItem>[] = [
     { field: 'started_at', header: 'Timestamp', cellType: 'date', width: 130 },
-    { field: 'error_message', header: 'Error', valueFormatter: (p: any) => p.value ?? 'Unknown error', cellClass: 'text-red-400' },
+    { field: 'error_message', header: 'Error', valueFormatter: (p: any) => p.value ?? 'Unknown error', cellClass: 'text-negative' },
   ];
 
   navigateToError = (row: FeedRunListItem) => ['/feeds', this.feedId, 'runs', row.id];
@@ -149,12 +149,11 @@ export class FeedDetailComponent implements OnInit {
     }
   }
 
-  /** Tailwind class for each pill — color maps directly to run status. */
   pillClass(status: string): string {
     switch (status) {
-      case 'COMPLETED': return 'bg-green-500/80 hover:bg-green-500';
-      case 'FAILED': return 'bg-red-500/80 hover:bg-red-500';
-      case 'RUNNING': return 'bg-yellow-500/80 hover:bg-yellow-500';
+      case 'COMPLETED': return 'bg-positive/80 hover:bg-positive';
+      case 'FAILED': return 'bg-negative/80 hover:bg-negative';
+      case 'RUNNING': return 'bg-warning/80 hover:bg-warning';
       default: return 'bg-surface-500/50 hover:bg-surface-500';
     }
   }

@@ -49,7 +49,7 @@ export class FeedRunsTabComponent {
     { field: 'duration', header: 'Duration', sortable: false, valueGetter: (p: any) => this.durationLabel(p.data) },
     { field: 'snapshot_timestamp', header: 'Snapshot', cellType: 'date', sortable: false },
     { field: 'records_fetched', header: 'Records', valueFormatter: (p: any) => p.value ?? '-' },
-    { field: 'error_message', header: 'Error', sortable: false, valueFormatter: (p: any) => p.value ?? '-', cellClass: (p: any) => p.value ? 'text-red-500' : '' },
+    { field: 'error_message', header: 'Error', sortable: false, valueFormatter: (p: any) => p.value ?? '-', cellClass: (p: any) => p.value ? 'text-negative' : '' },
   ];
 
   fetchPage = computed<ServerFetchFn<FeedRunListItem> | null>(() => {
