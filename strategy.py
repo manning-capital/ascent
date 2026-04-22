@@ -75,17 +75,35 @@ class PairsOUStrategy(Strategy):
 
     _pairs: ClassVar[list[tuple[uuid.UUID, uuid.UUID, str, str]]] = []
     _spread_history: ClassVar[dict[tuple[str, str], deque[float]]] = {}
-    _open_pair_trades: ClassVar[
-        dict[tuple[str, str], tuple[uuid.UUID, uuid.UUID, str]]
-    ] = {}
+    _open_pair_trades: ClassVar[dict[tuple[str, str], tuple[uuid.UUID, uuid.UUID, str]]] = {}
 
-    def _spread(self, ctx: Context, inst_a: uuid.UUID, inst_b: uuid.UUID) -> float | None:
+    def _spread(
+        self,
+        ctx: Context,
+        inst_a: uuid.UUID,
+        inst_b: uuid.UUID,
+        sym_a: str,
+        sym_b: str,
+    ) -> float | None:
+        log = self.get_logger()
         try:
             price_a = ctx.df.loc[str(inst_a), ("market_data_feed", "close")]
             price_b = ctx.df.loc[str(inst_b), ("market_data_feed", "close")]
         except KeyError:
+            log.info(
+                "%s/%s  skip: no market_data_feed.close row for one or both instruments",
+                sym_a,
+                sym_b,
+            )
             return None
         if pd.isna(price_a) or pd.isna(price_b) or price_a <= 0 or price_b <= 0:
+            log.info(
+                "%s/%s  skip: invalid prices  a=%s b=%s",
+                sym_a,
+                sym_b,
+                price_a,
+                price_b,
+            )
             return None
         return math.log(price_a) - math.log(price_b)
 
@@ -133,14 +151,18 @@ class PairsOUStrategy(Strategy):
         log = self.get_logger()
         log.info("Evaluating strategy with %d rows of data", len(ctx.df))
 
-        if ctx.df.empty or not self._pairs:
+        if ctx.df.empty:
+            log.info("skip evaluate: ctx.df is empty (no feed data arrived yet)")
+            return
+        if not self._pairs:
+            log.info("skip evaluate: no resolved pairs (instrument lookup returned empty)")
             return
 
         params = self.parameters
 
         for inst_a, inst_b, sym_a, sym_b in self._pairs:
             key = (sym_a, sym_b)
-            spread = self._spread(ctx, inst_a, inst_b)
+            spread = self._spread(ctx, inst_a, inst_b, sym_a, sym_b)
             if spread is None:
                 continue
 
@@ -148,12 +170,27 @@ class PairsOUStrategy(Strategy):
             history.append(spread)
 
             if len(history) < params.warmup:
+                log.info(
+                    "%s/%s  warming up  %d/%d  spread=%+.4f",
+                    sym_a,
+                    sym_b,
+                    len(history),
+                    params.warmup,
+                    spread,
+                )
                 continue
 
             series = pd.Series(history)
             mu = series.mean()
             sd = series.std(ddof=0)
             if sd == 0 or pd.isna(sd):
+                log.info(
+                    "%s/%s  skip: stddev is %s (spread has not moved over window=%d)",
+                    sym_a,
+                    sym_b,
+                    sd,
+                    len(history),
+                )
                 continue
 
             z = (spread - mu) / sd
@@ -170,7 +207,15 @@ class PairsOUStrategy(Strategy):
                 elif diverged_further:
                     self._close_pair(log, key, reason="STOP_LOSS")
                 else:
-                    log.debug("%s/%s  holding  z=%+.2f", sym_a, sym_b, z)
+                    log.info(
+                        "%s/%s  holding %s  z=%+.2f  exit_z=%.2f  stop_z=%.2f",
+                        sym_a,
+                        sym_b,
+                        side_a,
+                        z,
+                        params.exit_z,
+                        params.stop_z,
+                    )
                 continue
 
             if z >= params.entry_z:
@@ -179,6 +224,17 @@ class PairsOUStrategy(Strategy):
             elif z <= -params.entry_z:
                 log.info("%s/%s  z=%+.2f  → LONG %s / SHORT %s", sym_a, sym_b, z, sym_a, sym_b)
                 self._open_pair(log, key, inst_a, inst_b, side_a="LONG")
+            else:
+                log.info(
+                    "%s/%s  no trade  z=%+.2f  (entry_z=±%.2f)  mu=%+.4f sd=%.4f n=%d",
+                    sym_a,
+                    sym_b,
+                    z,
+                    params.entry_z,
+                    mu,
+                    sd,
+                    len(history),
+                )
 
 
 if __name__ == "__main__":

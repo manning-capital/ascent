@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: ascent
       POSTGRES_PASSWORD: ascent
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -18,10 +18,10 @@ services:
   redis:
     image: redis:8.6.1
     command: redis-server --appendonly yes --protected-mode no
-    # No host port mapping — Redis is only reachable from inside the compose
-    # network. The browser and external processes must go through FastAPI.
-    expose:
-      - "6379"
+    # Exposed on localhost so trading services (strategy/feed/exchange) can
+    # be run directly on the host for local testing against dockerized infra.
+    ports:
+      - "127.0.0.1:6379:6379"
     volumes:
       - redisdata:/data
     healthcheck:
@@ -34,14 +34,13 @@ services:
     image: nats:2.10-alpine
     # -js enables JetStream; -sd is the storage directory inside the container.
     command: ["-js", "-sd", "/data", "-m", "8222"]
-    # Client port (4222) stays network-internal — the browser never talks to
-    # NATS directly. Monitoring port (8222) is exposed on localhost only for
-    # operator tools (nats-top, HTTP /healthz). Remove the 127.0.0.1 prefix
-    # if you need it reachable from other hosts.
-    expose:
-      - "4222"
+    # Client port (4222) and monitoring port (8222) are both bound to
+    # localhost so host-side trading services and operator tools
+    # (nats-top, HTTP /healthz) can connect. Remove the 127.0.0.1 prefix
+    # if you need them reachable from other hosts.
     ports:
       - "127.0.0.1:8222:8222"
+      - "127.0.0.1:4222:4222"
     volumes:
       - natsdata:/data
     healthcheck:
@@ -56,7 +55,7 @@ services:
       context: .
       target: server
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     environment:
       ASCENT_DATABASE_URL: postgresql://ascent:ascent@db:5432/ascent
       ASCENT_REDIS_URL: redis://redis:6379/0

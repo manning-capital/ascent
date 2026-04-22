@@ -146,19 +146,21 @@ def deploy_feed(
     schedule_dict = feed_cls.schedule.model_dump(mode="json") if feed_cls.schedule else None
     description = feed_cls.description or ""
 
-    existing = db.execute(select(FeedModel).where(FeedModel.name == feed_name)).scalars().first()
-
-    # Only enforce required fields for new records
-    if not existing and missing:
+    if missing:
         raise ValueError(
             f"Cannot deploy feed '{feed_name}': missing required field(s): {', '.join(missing)}"
         )
+
+    existing = db.execute(select(FeedModel).where(FeedModel.name == feed_name)).scalars().first()
 
     if existing:
         existing.parameter_schema = param_schema
         existing.data_schema = data_schema
         existing.output_table = output_table
         existing.schedule = schedule_dict
+        existing.provider_id = provider_id
+        existing.instrument_type_id = instrument_type_id
+        existing.composite_type_id = composite_type_id
         if name:
             existing.name = name
         if description:
@@ -265,21 +267,21 @@ def deploy_strategy(
     param_schema = strategy_cls.parameter_schema()
     defaults = strategy_cls.Parameters().model_dump()
 
+    if portfolio_id is None:
+        raise ValueError(
+            f"Cannot deploy strategy '{strategy_name}': missing required field: portfolio"
+        )
+
     existing = (
         db.execute(select(StrategyModel).where(StrategyModel.name == strategy_name))
         .scalars()
         .first()
     )
 
-    # Validate required fields for new records
-    if not existing and portfolio_id is None:
-        raise ValueError(
-            f"Cannot deploy strategy '{strategy_name}': missing required field: portfolio"
-        )
-
     if existing:
         existing.parameter_schema = param_schema
         existing.parameters = defaults
+        existing.portfolio_id = portfolio_id
         if name:
             existing.display_name = name
         if description:
@@ -423,10 +425,8 @@ def deploy_exchange(
     if existing:
         existing.implementation_class = impl_class
         existing.config = config
-        if provider_id:
-            existing.provider_id = provider_id
-        if instrument_type_id:
-            existing.instrument_type_id = instrument_type_id
+        existing.provider_id = provider_id
+        existing.instrument_type_id = instrument_type_id
         db.flush()
         logger.info("Updated exchange '%s' (id=%s)", existing.name, existing.id)
         return existing.id

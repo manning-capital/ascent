@@ -51,7 +51,7 @@ class MarketData(Feed):
     depends_on = [OUParams]
     output = InstrumentAttributes
     provider = "KRAKEN"
-    instrument_type = "SECURITY"
+    instrument_type = "SPOT_INSTRUMENT"
     display_name = "Market Data"
     description = "Simulated OU-driven OHLCV market data per instrument."
 
