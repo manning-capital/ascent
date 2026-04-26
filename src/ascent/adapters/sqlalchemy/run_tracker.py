@@ -14,6 +14,7 @@ import uuid
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from datetime import UTC, datetime
 
+from ascent.domain import Context
 from ascent.ports import FeedRunRepository, RunTrackerPort, StrategyRunRepository
 
 
@@ -28,18 +29,30 @@ class SqlAlchemyRunTracker(RunTrackerPort):
         self._strategies = strategy_run_repo
 
     def track_feed_run(
-        self, feed_id: uuid.UUID, *, snapshot_timestamp: datetime
+        self,
+        feed_id: uuid.UUID,
+        *,
+        snapshot_timestamp: datetime,
+        context: Context | None = None,
     ) -> AbstractAsyncContextManager[uuid.UUID]:
-        return self._feed_ctx(feed_id, snapshot_timestamp)
+        return self._feed_ctx(feed_id, snapshot_timestamp, context)
 
     def track_strategy_run(self, strategy_id: uuid.UUID) -> AbstractAsyncContextManager[uuid.UUID]:
         return self._strategy_ctx(strategy_id)
 
     @asynccontextmanager
-    async def _feed_ctx(self, feed_id: uuid.UUID, snapshot_timestamp: datetime):
+    async def _feed_ctx(
+        self,
+        feed_id: uuid.UUID,
+        snapshot_timestamp: datetime,
+        context: Context | None,
+    ):
         started = datetime.now(tz=UTC)
         run_id = await self._feeds.create(
-            feed_id=feed_id, started_at=started, snapshot_timestamp=snapshot_timestamp
+            feed_id=feed_id,
+            started_at=started,
+            snapshot_timestamp=snapshot_timestamp,
+            context=context,
         )
         try:
             yield run_id

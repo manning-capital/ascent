@@ -1,11 +1,17 @@
+import asyncio
 import uuid
+from datetime import datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
+from starlette.responses import StreamingResponse
 
+from ascent.application.evaluate_strategy import STRATEGY_RUN_CHANNEL
 from ascent.engine.cache import EngineCache
+from ascent.server.dependencies import engine as db_engine
 from ascent.server.dependencies import get_cache, get_db
 from ascent.server.schemas.common import PaginatedResponse
+from ascent.server.schemas.context import ContextResponse
 from ascent.server.schemas.feeds import StrategyFeedItem
 from ascent.server.schemas.orders import OrderSchema
 from ascent.server.schemas.strategies import (
@@ -32,7 +38,13 @@ from ascent.server.schemas.universe import (
     UniverseItemCreate,
     UniverseItemSchema,
 )
-from ascent.server.services import order_service, strategy_service, trade_service, universe_service
+from ascent.server.services import (
+    context_service,
+    order_service,
+    strategy_service,
+    trade_service,
+    universe_service,
+)
 
 router = APIRouter(prefix="/strategies", tags=["strategies"])
 
@@ -384,18 +396,129 @@ def patch_strategy_exchange(
     data: ToggleActiveRequest,
     db: Session = Depends(get_db),
 ):
-    universe_service.set_strategy_exchange_active(
-        db, strategy_id, exchange_id, data.is_active
-    )
+    universe_service.set_strategy_exchange_active(db, strategy_id, exchange_id, data.is_active)
     # Re-fetch via the existing service to get the joined display fields
     return next(
-        s for s in strategy_service.get_strategy_exchanges(db, strategy_id) if s.exchange_id == exchange_id
+        s
+        for s in strategy_service.get_strategy_exchanges(db, strategy_id)
+        if s.exchange_id == exchange_id
     )
 
 
 @router.get("/{strategy_id}/runs/{run_id}", response_model=StrategyRunListItem)
 def get_strategy_run(strategy_id: uuid.UUID, run_id: uuid.UUID, db: Session = Depends(get_db)):
     return strategy_service.get_strategy_run(db, strategy_id, run_id)
+
+
+@router.get(
+    "/{strategy_id}/runs/{run_id}/context",
+    response_model=ContextResponse,
+)
+def get_strategy_run_context(
+    strategy_id: uuid.UUID,
+    run_id: uuid.UUID,
+    start: datetime | None = Query(default=None),
+    end: datetime | None = Query(default=None),
+    series: str | None = Query(default=None, description="Comma-separated series-name filter"),
+    trade_id: uuid.UUID | None = Query(
+        default=None,
+        description=(
+            "If provided, filter the result to only the scope of the given "
+            "trade — its leg instruments and any composite whose members "
+            "include those legs."
+        ),
+    ),
+    db: Session = Depends(get_db),
+) -> ContextResponse:
+    """Reconstruct what the strategy saw during this run.
+
+    Returns the persisted ``Context`` plus the resolved time-series ready
+    for chart rendering. The trade-detail page calls this with
+    ``trade_id=trade.id`` so the result is scoped to that trade's
+    instruments / composite, not every scope_id the strategy's feeds touch.
+    """
+    series_filter = [s.strip() for s in series.split(",")] if series else None
+    return context_service.get_by_strategy_run(
+        db,
+        strategy_id,
+        run_id,
+        start=start,
+        end=end,
+        series_filter=series_filter,
+        trade_id=trade_id,
+    )
+
+
+@router.get("/{strategy_id}/runs/{run_id}/context/stream")
+async def stream_strategy_run_context(
+    strategy_id: uuid.UUID,
+    run_id: uuid.UUID,
+    start: datetime | None = Query(default=None),
+    end: datetime | None = Query(default=None),
+    series: str | None = Query(default=None, description="Comma-separated series-name filter"),
+    trade_id: uuid.UUID | None = Query(default=None),
+    cache: EngineCache = Depends(get_cache),
+):
+    """SSE stream of context updates for an open trade's strategy run.
+
+    Emits the current ``ContextResponse`` immediately on connect, then a
+    fresh response every time the strategy ticks (i.e. publishes on
+    ``ascent.strategy_runs.updates`` with this ``run_id``). The trade-detail
+    chart connects to this for as long as the trade is open and switches
+    away once ``exit_at`` is set, so the cadence the UI sees matches the
+    strategy's evaluation rate — no UI polling required.
+    """
+    series_filter = [s.strip() for s in series.split(",")] if series else None
+
+    def _fetch_response_json() -> str:
+        with Session(db_engine) as db:
+            response = context_service.get_by_strategy_run(
+                db,
+                strategy_id,
+                run_id,
+                start=start,
+                end=end,
+                series_filter=series_filter,
+                trade_id=trade_id,
+            )
+        return response.model_dump_json()
+
+    async def event_generator():
+        # Initial snapshot so the chart paints without waiting for a tick.
+        try:
+            snapshot = await asyncio.to_thread(_fetch_response_json)
+            yield f"event: context_update\ndata: {snapshot}\n\n"
+        except Exception:
+            # Don't drop the connection on a transient first-fetch failure;
+            # the next tick will retry.
+            yield ": initial-fetch-failed\n\n"
+
+        pubsub = cache.subscribe([STRATEGY_RUN_CHANNEL])
+        try:
+            run_id_str = str(run_id)
+            while True:
+                msg = await asyncio.to_thread(cache.poll, pubsub, 5.0)
+                if msg is None:
+                    yield ": keepalive\n\n"
+                    continue
+                if msg.get("run_id") != run_id_str:
+                    continue
+                try:
+                    payload = await asyncio.to_thread(_fetch_response_json)
+                except Exception:
+                    continue
+                yield f"event: context_update\ndata: {payload}\n\n"
+        finally:
+            pubsub.close()
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get("/{strategy_id}/runs", response_model=PaginatedResponse[StrategyRunListItem])

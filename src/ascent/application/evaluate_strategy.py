@@ -15,7 +15,7 @@ import logging
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 
 import pandas as pd
 
@@ -33,6 +33,11 @@ from ascent.ports import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Redis pub/sub channel announcing strategy-run completions, consumed by
+# the server's SSE context-stream endpoint to push live updates to the
+# trade-detail chart for open trades.
+STRATEGY_RUN_CHANNEL = "ascent.strategy_runs.updates"
 
 
 @dataclass(frozen=True)
@@ -130,15 +135,21 @@ class StrategyEvaluator:
 
             # Provenance: record every feed run this strategy evaluated
             # against. Triggering feed is whichever event fired this tick.
-            feed_run_ids = {
-                feed_id: r_id for feed_id, r_id in latest_run_ids.items()
-            }
+            feed_run_ids = dict(latest_run_ids)
             if feed_run_ids:
                 await self._strategy_runs.link_feed_runs(
                     run_id,
                     feed_run_ids=feed_run_ids,
                     trigger_feed_id=updated_feed_id,
                 )
+
+        # Notify SSE listeners (e.g. trade-detail context chart) that this
+        # strategy just ticked. Published outside the run-tracker block so
+        # the run is committed before the UI re-fetches its view.
+        await self._bus.publish(
+            STRATEGY_RUN_CHANNEL,
+            {"strategy_id": str(self._strategy_id), "run_id": str(run_id)},
+        )
 
     async def _build_context(self) -> Context:
         latest = await self._store.get_latest_many([b.spec.feed_id for b in self._feeds])
@@ -165,10 +176,16 @@ class StrategyEvaluator:
 
         open_position_ids = self._derive_open_position_ids(trades)
 
+        # snapshot_timestamp anchors the run for context reconstruction.
+        # Use the moment of evaluation; the scope-as-of and downstream
+        # context queries will use this same anchor.
+        snapshot_timestamp = datetime.now(UTC)
+
         return build_context(
             scope=self._scope,
             feed_frames=frames,
             trades=trades,
+            snapshot_timestamp=snapshot_timestamp,
             composite_members=self._composite_members,
             universe_ids=universe_ids,
             open_position_ids=open_position_ids,
@@ -203,5 +220,5 @@ class StrategyEvaluator:
                 result.add(comp_id)
         return result
 
-_ = datetime  # silence unused-import from re-exports
+
 _ = pd  # keep the pandas import for backwards-compat type hints

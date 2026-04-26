@@ -19,7 +19,7 @@ from ascent.application.execute_feed import FeedContext, FeedExecutor, FeedFetch
 from ascent.application.persist_feed import FeedPersister
 from ascent.application.process_fill import FillProcessor
 from ascent.application.reconcile_orders import OrderReconciler
-from ascent.domain import FillEvent, OrderState
+from ascent.domain import Context, ContextSource, FillEvent, OrderState
 from ascent.feeds.schedule import Schedule
 from ascent.ports import (
     Clock,
@@ -32,6 +32,39 @@ from ascent.ports import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+_OUTPUT_TABLE_TO_SCOPE = {
+    "instrument_attribute": "instrument",
+    "instrument_period_attribute": "instrument",
+    "composite_attribute": "composite",
+    "composite_period_attribute": "composite",
+}
+
+
+def _build_feed_run_context(feed: FeedContext, snapshot_timestamp: datetime) -> Context:
+    """Build the persisted ``Context`` for a feed-run row.
+
+    Captures what we know at run-start without actually invoking the feed:
+    the target table, the scope type derived from the table name, and the
+    snapshot timestamp. ``attributes`` is left empty for now — the chart
+    API discovers them at query time by joining the attribute table.
+    """
+    scope_type = _OUTPUT_TABLE_TO_SCOPE.get(feed.output_table)
+    if scope_type is None:
+        # Unknown output table — skip context capture; the persister will
+        # likely fail downstream, but we don't want to block run creation.
+        return Context(snapshot_timestamp=snapshot_timestamp, sources=[])
+    return Context(
+        snapshot_timestamp=snapshot_timestamp,
+        sources=[
+            ContextSource(
+                table=feed.output_table,  # type: ignore[arg-type]
+                scope_type=scope_type,  # type: ignore[arg-type]
+                attributes=[],
+            )
+        ],
+    )
 
 
 class FetcherFactory(Protocol):
@@ -76,7 +109,9 @@ class ScheduledFeedService:
             snapshot.isoformat(),
         )
         async with self.run_tracker.track_feed_run(
-            self.feed.feed_id, snapshot_timestamp=snapshot
+            self.feed.feed_id,
+            snapshot_timestamp=snapshot,
+            context=_build_feed_run_context(self.feed, snapshot),
         ) as run_id:
             fetcher = self.fetcher_factory(snapshot, {})
             outcome = await self.executor.execute(
@@ -158,9 +193,7 @@ class TriggeredFeedService:
             if aclose:
                 await aclose()
 
-    async def _fire(
-        self, executor_feed: FeedContext, parent_snapshot: datetime | None
-    ) -> None:
+    async def _fire(self, executor_feed: FeedContext, parent_snapshot: datetime | None) -> None:
         # Triggered feeds inherit the parent's snapshot. If the parent didn't
         # carry one (shouldn't happen once scheduled feeds always publish it),
         # fall back to wall-clock — the executor will resolve it against the
@@ -168,7 +201,9 @@ class TriggeredFeedService:
         tick = parent_snapshot or datetime.now(tz=UTC)
         snapshot = self.executor.resolve_snapshot(executor_feed, tick)
         async with self.run_tracker.track_feed_run(
-            self.feed.feed_id, snapshot_timestamp=snapshot
+            self.feed.feed_id,
+            snapshot_timestamp=snapshot,
+            context=_build_feed_run_context(self.feed, snapshot),
         ) as run_id:
             # Load parent data snapshots so the fetcher can use get_feed().
             parent_data = await self.feed_store.get_latest_many(list(self.parent_refs.keys()))

@@ -2,7 +2,7 @@ import datetime
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, ForeignKey, String, Uuid, func
+from sqlalchemy import Boolean, ForeignKey, Index, String, Uuid, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -36,6 +36,7 @@ class Strategy(NamedEntityMixin, Base):
     )
     portfolio: Mapped["Portfolio"] = relationship("Portfolio")
     parameter_schema: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    trade_view: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     is_paused: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
@@ -75,7 +76,22 @@ class Strategy(NamedEntityMixin, Base):
 
 class StrategyInstrumentScope(Base):
     __tablename__ = "strategy_instrument_scope"
-    __table_args__ = {"comment": "Defines which instruments a strategy monitors."}
+    __table_args__ = (
+        Index(
+            "uq_strategy_instrument_scope_active",
+            "strategy_id",
+            "instrument_id",
+            unique=True,
+            postgresql_where=text("dropped_at IS NULL"),
+        ),
+        Index(
+            "idx_strategy_instrument_scope_asof",
+            "strategy_id",
+            "added_at",
+            "dropped_at",
+        ),
+        {"comment": "Defines which instruments a strategy monitors (bitemporal)."},
+    )
 
     strategy_id: Mapped[uuid.UUID] = mapped_column(
         Uuid,
@@ -94,18 +110,31 @@ class StrategyInstrumentScope(Base):
     )
     instrument: Mapped["Instrument"] = relationship("Instrument")
     order: Mapped[int] = mapped_column(nullable=False)
-    is_active: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True, server_default="true"
-    )
-    created_at: Mapped[datetime.datetime] = mapped_column(
+    added_at: Mapped[datetime.datetime] = mapped_column(
+        primary_key=True,
         nullable=False,
-        server_default=func.now(),
     )
+    dropped_at: Mapped[datetime.datetime | None] = mapped_column(nullable=True)
 
 
 class StrategyCompositeScope(Base):
     __tablename__ = "strategy_composite_scope"
-    __table_args__ = {"comment": "Defines which composites a strategy monitors."}
+    __table_args__ = (
+        Index(
+            "uq_strategy_composite_scope_active",
+            "strategy_id",
+            "composite_id",
+            unique=True,
+            postgresql_where=text("dropped_at IS NULL"),
+        ),
+        Index(
+            "idx_strategy_composite_scope_asof",
+            "strategy_id",
+            "added_at",
+            "dropped_at",
+        ),
+        {"comment": "Defines which composites a strategy monitors (bitemporal)."},
+    )
 
     strategy_id: Mapped[uuid.UUID] = mapped_column(
         Uuid,
@@ -124,13 +153,11 @@ class StrategyCompositeScope(Base):
     )
     composite: Mapped["Composite"] = relationship("Composite")
     order: Mapped[int] = mapped_column(nullable=False)
-    is_active: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True, server_default="true"
-    )
-    created_at: Mapped[datetime.datetime] = mapped_column(
+    added_at: Mapped[datetime.datetime] = mapped_column(
+        primary_key=True,
         nullable=False,
-        server_default=func.now(),
     )
+    dropped_at: Mapped[datetime.datetime | None] = mapped_column(nullable=True)
 
 
 class StrategyExchange(Base):

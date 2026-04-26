@@ -77,7 +77,7 @@ services:
   # handler pipeline wired via NATS JetStream + Redis).
   #
   # Prerequisites before first start:
-  #   docker compose run --rm server uv run ascent seed run --profile base
+  #   docker compose run --rm server ascent database seed run --profile base
   # (The feed/strategy/exchange scripts read instrument and attribute
   # rows from the DB; without seeding, feed.py exits immediately.)
   #
@@ -91,7 +91,7 @@ services:
     build:
       context: .
       target: runtime
-    command: ["uv", "run", "python", "/app/user/exchange.py"]
+    command: ["python", "/app/user/exchange.py"]
     environment:
       ASCENT_DATABASE_URL: postgresql://ascent:ascent@db:5432/ascent
       ASCENT_REDIS_URL: redis://redis:6379/0
@@ -111,7 +111,7 @@ services:
     build:
       context: .
       target: runtime
-    command: ["uv", "run", "python", "/app/user/feed.py"]
+    command: ["python", "/app/user/feed.py"]
     environment:
       ASCENT_DATABASE_URL: postgresql://ascent:ascent@db:5432/ascent
       ASCENT_REDIS_URL: redis://redis:6379/0
@@ -131,7 +131,7 @@ services:
     build:
       context: .
       target: runtime
-    command: ["uv", "run", "python", "/app/user/strategy.py"]
+    command: ["python", "/app/user/strategy.py"]
     environment:
       ASCENT_DATABASE_URL: postgresql://ascent:ascent@db:5432/ascent
       ASCENT_REDIS_URL: redis://redis:6379/0

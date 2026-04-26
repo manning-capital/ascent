@@ -5,6 +5,14 @@ here is a pure Python value type or a pure function. Adapter code maps these
 types to/from SQLAlchemy models, Redis payloads, exchange APIs, etc.
 """
 
+from ascent.domain.context import (
+    Attribute,
+    Context,
+    ContextSource,
+    Period,
+    RunContext,
+    RuntimeSource,
+)
 from ascent.domain.feed import FeedTick
 from ascent.domain.state_machine import (
     LegUpdate,
@@ -26,6 +34,9 @@ from ascent.domain.trade import (
 )
 
 __all__ = [
+    "Attribute",
+    "Context",
+    "ContextSource",
     "Direction",
     "FeedTick",
     "FillEvent",
@@ -35,6 +46,9 @@ __all__ = [
     "OrderState",
     "OrderType",
     "OrderUpdate",
+    "Period",
+    "RunContext",
+    "RuntimeSource",
     "Trade",
     "TradeLeg",
     "TradeState",

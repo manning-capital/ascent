@@ -1,9 +1,11 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnDestroy, OnInit, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
+import { Subscription } from 'rxjs';
 import { Card } from 'primeng/card';
 import { Tag } from 'primeng/tag';
 import { FeedService } from '../../services/feed.service';
 import { TradeService } from '../../services/trade.service';
+import { TradeStreamService } from '../../services/trade-stream.service';
 import { BadgeComponent } from '../shared/badge.component';
 import { StatCardComponent } from '../shared/stat-card.component';
 import { DataTableComponent } from '../shared/data-table/data-table.component';
@@ -12,6 +14,8 @@ import { DatePipe, JsonPipe } from '@angular/common';
 import { Skeleton } from 'primeng/skeleton';
 import { formatCloseReason } from '../shared/close-reason.util';
 import { TradeFeedRunItem } from '../../models/feed.model';
+import type { OrderDetail } from '../../models/order.model';
+import { RunContextChartComponent } from './run-context-chart/run-context-chart.component';
 
 const directionSeverity: Record<string, string> = {
   LONG: 'success',
@@ -32,22 +36,41 @@ const orderStatusSeverity: Record<string, string> = {
   NEW: 'info',
 };
 
+type OrderRow = OrderDetail & { instrument_name: string };
+
 @Component({
   selector: 'app-trade-detail',
   standalone: true,
-  imports: [RouterLink, BadgeComponent, StatCardComponent, DatePipe, JsonPipe, Card, Tag, Skeleton, DataTableComponent],
+  imports: [RouterLink, BadgeComponent, StatCardComponent, DatePipe, JsonPipe, Card, Tag, Skeleton, DataTableComponent, RunContextChartComponent],
   templateUrl: './trade-detail.component.html',
 })
-export class TradeDetailComponent implements OnInit {
+export class TradeDetailComponent implements OnInit, OnDestroy {
   private route = inject(ActivatedRoute);
   tradeService = inject(TradeService);
   private feedService = inject(FeedService);
+  private streamService = inject(TradeStreamService);
 
   String = String;
   formatCloseReason = formatCloseReason;
 
+  private tradeId: string | null = null;
+  private streamSub: Subscription | null = null;
+
   sourceFeedRuns = signal<TradeFeedRunItem[]>([]);
   sourceFeedRunsLoading = signal(false);
+
+  allOrders = computed<OrderRow[]>(() => {
+    const trade = this.tradeService.selectedTrade();
+    if (!trade) return [];
+    const rows: OrderRow[] = [];
+    for (const leg of trade.legs) {
+      for (const order of leg.orders ?? []) {
+        rows.push({ ...order, instrument_name: leg.instrument_name });
+      }
+    }
+    rows.sort((a, b) => (b.timestamp ?? '').localeCompare(a.timestamp ?? ''));
+    return rows;
+  });
 
   legColumns: DataTableColumn[] = [
     { field: 'instrument_name', header: 'Instrument' },
@@ -79,22 +102,25 @@ export class TradeDetailComponent implements OnInit {
   ];
 
   orderColumns: DataTableColumn[] = [
-    { field: 'timestamp', header: 'Time', cellType: 'date' },
+    { field: 'timestamp', header: 'Time', cellType: 'date', minWidth: 180 },
+    { field: 'instrument_name', header: 'Instrument', minWidth: 140 },
     {
       field: 'side',
       header: 'Side',
       cellType: 'tag',
+      minWidth: 80,
       tagMapper: (v: string) => ({
         label: v,
         severity: sideSeverity[v] ?? 'secondary',
       }),
     },
-    { field: 'order_type', header: 'Type' },
-    { field: 'quantity', header: 'Qty' },
-    { field: 'price', header: 'Price', cellType: 'currency' },
+    { field: 'order_type', header: 'Type', minWidth: 90 },
+    { field: 'quantity', header: 'Qty', minWidth: 90 },
+    { field: 'price', header: 'Price', cellType: 'currency', minWidth: 110 },
     {
       field: 'filled_quantity',
       header: 'Filled',
+      minWidth: 110,
       valueGetter: (params: any) => {
         const d = params.data;
         if (d?.filled_quantity !== null && d?.filled_quantity !== undefined) {
@@ -103,12 +129,12 @@ export class TradeDetailComponent implements OnInit {
         return '--';
       },
     },
-    { field: 'average_fill_price', header: 'Avg Fill', cellType: 'currency' },
-    { field: 'exchange_name', header: 'Exchange', valueFormatter: (p: any) => p.value || '--' },
+    { field: 'average_fill_price', header: 'Avg Fill', cellType: 'currency', minWidth: 110 },
     {
       field: 'current_status',
       header: 'Status',
       cellType: 'tag',
+      minWidth: 140,
       tagMapper: (v: string) => ({
         label: v,
         severity: orderStatusSeverity[v] ?? 'secondary',
@@ -144,9 +170,23 @@ export class TradeDetailComponent implements OnInit {
   ngOnInit(): void {
     this.route.paramMap.subscribe(params => {
       const tradeId = params.get('tradeId')!;
+      this.tradeId = tradeId;
       this.tradeService.loadTradeDetail(tradeId);
       this.loadSourceFeedRuns(tradeId);
     });
+
+    this.streamService.connect();
+    this.streamSub = this.streamService.tradeUpdates$.subscribe(batch => {
+      if (!this.tradeId) return;
+      if (batch.some(item => item.id === this.tradeId)) {
+        this.tradeService.refreshTradeDetail(this.tradeId);
+      }
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.streamSub?.unsubscribe();
+    this.streamSub = null;
   }
 
   private loadSourceFeedRuns(tradeId: string): void {

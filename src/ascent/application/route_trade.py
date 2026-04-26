@@ -153,6 +153,7 @@ class TradeRouter:
                     entry_at=now,
                     strategy_run_id=self._strategy_run_id,
                     legs=[],
+                    composite_id=composite.composite_id if composite else None,
                 )
                 await self._trades.set_state(
                     uow.session,
@@ -180,6 +181,7 @@ class TradeRouter:
                     entry_at=now,
                     strategy_run_id=self._strategy_run_id,
                     legs=leg_specs,
+                    composite_id=composite.composite_id if composite else None,
                 )
 
                 entry_orders: list[_EntryOrder] = []
@@ -231,8 +233,7 @@ class TradeRouter:
                             "order": {
                                 "order_type": order_type.value,
                                 "side": entry.side,
-                                "from_asset_symbol": str(entry.instrument_id),
-                                "to_asset_symbol": "USD",
+                                "instrument_id": str(entry.instrument_id),
                                 "quantity": entry.quantity,
                                 "price": price,
                                 "client_order_id": str(entry.order_id),
@@ -244,7 +245,11 @@ class TradeRouter:
         if rejection is not None:
             await self._bus.publish(
                 UI_CHANNEL,
-                {"event": "trade_rejected", "trade_id": str(rejected_trade_id), "reason": rejection},
+                {
+                    "event": "trade_rejected",
+                    "trade_id": str(rejected_trade_id),
+                    "reason": rejection,
+                },
             )
             return TradeDraft(
                 trade_id=rejected_trade_id,
@@ -349,8 +354,7 @@ class TradeRouter:
                         "order": {
                             "order_type": order_type.value,
                             "side": exit_.side,
-                            "from_asset_symbol": str(exit_.instrument_id),
-                            "to_asset_symbol": "USD",
+                            "instrument_id": str(exit_.instrument_id),
                             "quantity": exit_.quantity,
                             "price": price,
                             "client_order_id": str(exit_.order_id),

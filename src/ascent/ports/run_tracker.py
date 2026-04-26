@@ -7,6 +7,8 @@ from contextlib import AbstractAsyncContextManager
 from datetime import datetime
 from typing import Protocol, runtime_checkable
 
+from ascent.domain import Context
+
 
 @runtime_checkable
 class RunTrackerPort(Protocol):
@@ -19,10 +21,19 @@ class RunTrackerPort(Protocol):
     (for scheduled feeds, the schedule-aligned tick; for triggered feeds, the
     parent feed's snapshot). It's the canonical join key to the feed's output
     table and is stored on the run at creation time — no post-hoc linking.
+
+    ``context`` is the persisted :class:`ascent.domain.Context` describing
+    what the run produced (table, scope_type, attributes). Read by the
+    context-reconstruction API to render trade-detail charts. Optional —
+    runs without context render as "context not available".
     """
 
     def track_feed_run(
-        self, feed_id: uuid.UUID, *, snapshot_timestamp: datetime
+        self,
+        feed_id: uuid.UUID,
+        *,
+        snapshot_timestamp: datetime,
+        context: Context | None = None,
     ) -> AbstractAsyncContextManager[uuid.UUID]: ...
 
     def track_strategy_run(

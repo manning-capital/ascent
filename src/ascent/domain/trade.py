@@ -108,6 +108,7 @@ class Trade:
     exit_at: datetime | None = None
     total_realized_pnl: float | None = None
     strategy_run_id: uuid.UUID | None = None
+    composite_id: uuid.UUID | None = None
 
 
 @dataclass(frozen=True)

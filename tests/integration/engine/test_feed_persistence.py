@@ -222,7 +222,14 @@ async def test_multiple_ticks_produce_distinct_snapshot_timestamps(
 ):
     instrument_id = seeded["btc_usd"].id
     feed_id = deploy_feed(_MultiTickFeed, db_session)
-    db_session.add(FeedInstrumentScope(feed_id=feed_id, instrument_id=instrument_id, order=1))
+    db_session.add(
+        FeedInstrumentScope(
+            feed_id=feed_id,
+            instrument_id=instrument_id,
+            order=1,
+            added_at=datetime.now(UTC),
+        )
+    )
     db_session.commit()
 
     runner = Runner(
@@ -301,8 +308,18 @@ async def test_multi_entity_multi_attribute_persists_every_combination(
     feed_id = deploy_feed(_MultiAttrFeed, db_session)
     db_session.add_all(
         [
-            FeedInstrumentScope(feed_id=feed_id, instrument_id=btc_id, order=1),
-            FeedInstrumentScope(feed_id=feed_id, instrument_id=eth_id, order=2),
+            FeedInstrumentScope(
+                feed_id=feed_id,
+                instrument_id=btc_id,
+                order=1,
+                added_at=datetime.now(UTC),
+            ),
+            FeedInstrumentScope(
+                feed_id=feed_id,
+                instrument_id=eth_id,
+                order=2,
+                added_at=datetime.now(UTC),
+            ),
         ]
     )
     db_session.commit()
@@ -378,7 +395,14 @@ async def test_composite_scoped_feed_writes_to_composite_attribute(
     close_id = seeded_with_composite["close_attr"].id
 
     feed_id = deploy_feed(_CompositeFeed, db_session)
-    db_session.add(FeedCompositeScope(feed_id=feed_id, composite_id=composite_id, order=1))
+    db_session.add(
+        FeedCompositeScope(
+            feed_id=feed_id,
+            composite_id=composite_id,
+            order=1,
+            added_at=datetime.now(UTC),
+        )
+    )
     db_session.commit()
 
     runner = Runner(
@@ -471,13 +495,23 @@ async def test_triggered_feed_chain_persists_both_parent_and_child(
 
     parent_id = deploy_feed(_ParentFeed, db_session)
     db_session.add(
-        FeedInstrumentScope(feed_id=parent_id, instrument_id=instrument_id, order=1)
+        FeedInstrumentScope(
+            feed_id=parent_id,
+            instrument_id=instrument_id,
+            order=1,
+            added_at=datetime.now(UTC),
+        )
     )
     db_session.commit()
 
     child_id = deploy_feed(_ChildFeed, db_session)
     db_session.add(
-        FeedInstrumentScope(feed_id=child_id, instrument_id=instrument_id, order=1)
+        FeedInstrumentScope(
+            feed_id=child_id,
+            instrument_id=instrument_id,
+            order=1,
+            added_at=datetime.now(UTC),
+        )
     )
     db_session.commit()
 
@@ -568,7 +602,14 @@ async def test_ui_run_data_endpoint_sees_persisted_rows(
     close_display = seeded["close_attr"].display_name
 
     feed_id = deploy_feed(_RunDataFeed, db_session)
-    db_session.add(FeedInstrumentScope(feed_id=feed_id, instrument_id=instrument_id, order=1))
+    db_session.add(
+        FeedInstrumentScope(
+            feed_id=feed_id,
+            instrument_id=instrument_id,
+            order=1,
+            added_at=datetime.now(UTC),
+        )
+    )
     db_session.commit()
 
     runner = Runner(
@@ -644,7 +685,14 @@ async def test_every_run_has_snapshot_timestamp_matching_its_data(
     """
     instrument_id = seeded["btc_usd"].id
     feed_id = deploy_feed(_RunSnapshotFeed, db_session)
-    db_session.add(FeedInstrumentScope(feed_id=feed_id, instrument_id=instrument_id, order=1))
+    db_session.add(
+        FeedInstrumentScope(
+            feed_id=feed_id,
+            instrument_id=instrument_id,
+            order=1,
+            added_at=datetime.now(UTC),
+        )
+    )
     db_session.commit()
 
     runner = Runner(

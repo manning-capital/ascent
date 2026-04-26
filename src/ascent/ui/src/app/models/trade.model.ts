@@ -14,6 +14,8 @@ export interface TradeLegSummary {
 export interface TradeListItem {
   id: string;
   strategy_id: string;
+  strategy_run_id: string | null;
+  composite_id: string | null;
   strategy_name: string;
   is_paper: boolean;
   entry_at: string | null;

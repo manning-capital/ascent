@@ -1,5 +1,7 @@
 import uuid
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, joinedload
@@ -32,6 +34,80 @@ from ascent.server.schemas.universe import (
 
 _TERMINAL_TRADE_STATES: tuple[str, ...] = ("CLOSED", "CANCELLED", "REJECTED")
 
+
+# ---------------------------------------------------------------------------
+# Bitemporal helpers — single chokepoint for scope-table reads/writes.
+# Every read uses `dropped_at IS NULL`; every insert sets `added_at=now()`;
+# every "remove" or "deactivate" soft-drops by setting `dropped_at=now()`.
+# ---------------------------------------------------------------------------
+
+
+def _active_scope(
+    db: Session,
+    model: Any,
+    parent_col: str,
+    parent_id: uuid.UUID,
+    member_col: str,
+    member_id: uuid.UUID,
+) -> Any:
+    """Return the currently-active row for `(parent_id, member_id)` or None."""
+    return db.execute(
+        select(model)
+        .where(getattr(model, parent_col) == parent_id)
+        .where(getattr(model, member_col) == member_id)
+        .where(model.dropped_at.is_(None))
+    ).scalar_one_or_none()
+
+
+def _add_scope(
+    db: Session,
+    model: Any,
+    *,
+    parent_col: str,
+    parent_id: uuid.UUID,
+    member_col: str,
+    member_id: uuid.UUID,
+    order: int,
+) -> Any:
+    """Idempotent insert of an active scope row."""
+    existing = db.execute(
+        select(model)
+        .where(getattr(model, parent_col) == parent_id)
+        .where(getattr(model, member_col) == member_id)
+        .where(model.dropped_at.is_(None))
+    ).scalar_one_or_none()
+    if existing is not None:
+        return existing
+    row = model(
+        **{parent_col: parent_id, member_col: member_id},
+        order=order,
+        added_at=datetime.now(UTC),
+    )
+    db.add(row)
+    return row
+
+
+def _drop_scope(
+    db: Session,
+    model: Any,
+    *,
+    parent_col: str,
+    parent_id: uuid.UUID,
+    member_col: str,
+    member_id: uuid.UUID,
+) -> Any | None:
+    """Soft-drop the active row if any. Returns the row (now dropped) or None."""
+    row = db.execute(
+        select(model)
+        .where(getattr(model, parent_col) == parent_id)
+        .where(getattr(model, member_col) == member_id)
+        .where(model.dropped_at.is_(None))
+    ).scalar_one_or_none()
+    if row is not None:
+        row.dropped_at = datetime.now(UTC)
+    return row
+
+
 # ---------------------------------------------------------------------------
 # Strategy-side validation
 # ---------------------------------------------------------------------------
@@ -49,28 +125,24 @@ def _get_strategy_tradeable_pairs(
     return {(r[0], r[1]) for r in rows}
 
 
-def _get_strategy_feed_instrument_ids(
-    db: Session, strategy_id: uuid.UUID
-) -> set[uuid.UUID]:
+def _get_strategy_feed_instrument_ids(db: Session, strategy_id: uuid.UUID) -> set[uuid.UUID]:
     """Union of active FeedInstrumentScope.instrument_id across this strategy's feeds."""
     rows = db.execute(
         select(FeedInstrumentScope.instrument_id)
         .join(StrategyFeed, StrategyFeed.feed_id == FeedInstrumentScope.feed_id)
         .where(StrategyFeed.strategy_id == strategy_id)
-        .where(FeedInstrumentScope.is_active.is_(True))
+        .where(FeedInstrumentScope.dropped_at.is_(None))
     ).all()
     return {r[0] for r in rows}
 
 
-def _get_strategy_feed_composite_ids(
-    db: Session, strategy_id: uuid.UUID
-) -> set[uuid.UUID]:
+def _get_strategy_feed_composite_ids(db: Session, strategy_id: uuid.UUID) -> set[uuid.UUID]:
     """Union of active FeedCompositeScope.composite_id across this strategy's feeds."""
     rows = db.execute(
         select(FeedCompositeScope.composite_id)
         .join(StrategyFeed, StrategyFeed.feed_id == FeedCompositeScope.feed_id)
         .where(StrategyFeed.strategy_id == strategy_id)
-        .where(FeedCompositeScope.is_active.is_(True))
+        .where(FeedCompositeScope.dropped_at.is_(None))
     ).all()
     return {r[0] for r in rows}
 
@@ -238,9 +310,7 @@ def _validate_feed_composite_compatibility(
     ).all()
 
     mismatches = [
-        str(r.display_name or r.id)
-        for r in rows
-        if r.composite_type_id != feed.composite_type_id
+        str(r.display_name or r.id) for r in rows if r.composite_type_id != feed.composite_type_id
     ]
     if mismatches:
         raise BadRequestError(
@@ -260,7 +330,7 @@ def _build_item(scope) -> UniverseItemSchema:
         instrument_name=inst.name if inst else None,
         instrument_display_name=inst.display_name if inst else None,
         instrument_type_id=inst.instrument_type_id if inst else None,
-        is_active=scope.is_active,
+        is_active=(scope.dropped_at is None),
         order=scope.order,
     )
 
@@ -305,12 +375,15 @@ def add_strategy_universe_item(
     db: Session, strategy_id: uuid.UUID, data: UniverseItemCreate
 ) -> StrategyInstrumentScope:
     _validate_instruments_tradeable(db, strategy_id, [data.instrument_id])
-    scope = StrategyInstrumentScope(
-        strategy_id=strategy_id,
-        instrument_id=data.instrument_id,
+    scope = _add_scope(
+        db,
+        StrategyInstrumentScope,
+        parent_col="strategy_id",
+        parent_id=strategy_id,
+        member_col="instrument_id",
+        member_id=data.instrument_id,
         order=data.order,
     )
-    db.add(scope)
     db.commit()
     db.refresh(scope)
     return scope
@@ -321,13 +394,20 @@ def remove_strategy_universe_item(
     strategy_id: uuid.UUID,
     instrument_id: uuid.UUID,
 ) -> None:
-    scope = db.get(StrategyInstrumentScope, (strategy_id, instrument_id))
+    scope = _active_scope(
+        db,
+        StrategyInstrumentScope,
+        "strategy_id",
+        strategy_id,
+        "instrument_id",
+        instrument_id,
+    )
     if not scope:
         raise NotFoundError("Universe item not found")
     impact = compute_strategy_universe_impact(db, strategy_id, instrument_id)
     if not impact.can_remove:
         raise ConflictError(_format_impact_message(impact))
-    db.delete(scope)
+    scope.dropped_at = datetime.now(UTC)
     db.commit()
 
 
@@ -337,10 +417,27 @@ def set_strategy_universe_item_active(
     instrument_id: uuid.UUID,
     is_active: bool,
 ) -> StrategyInstrumentScope:
-    scope = db.get(StrategyInstrumentScope, (strategy_id, instrument_id))
-    if not scope:
-        raise NotFoundError("Universe item not found")
-    scope.is_active = is_active
+    if is_active:
+        scope = _add_scope(
+            db,
+            StrategyInstrumentScope,
+            parent_col="strategy_id",
+            parent_id=strategy_id,
+            member_col="instrument_id",
+            member_id=instrument_id,
+            order=0,
+        )
+    else:
+        scope = _drop_scope(
+            db,
+            StrategyInstrumentScope,
+            parent_col="strategy_id",
+            parent_id=strategy_id,
+            member_col="instrument_id",
+            member_id=instrument_id,
+        )
+        if scope is None:
+            raise NotFoundError("Universe item not found")
     db.commit()
     db.refresh(scope)
     return scope
@@ -386,12 +483,15 @@ def add_feed_universe_item(
     db: Session, feed_id: uuid.UUID, data: UniverseItemCreate
 ) -> FeedInstrumentScope:
     _validate_feed_instrument_compatibility(db, feed_id, [data.instrument_id])
-    scope = FeedInstrumentScope(
-        feed_id=feed_id,
-        instrument_id=data.instrument_id,
+    scope = _add_scope(
+        db,
+        FeedInstrumentScope,
+        parent_col="feed_id",
+        parent_id=feed_id,
+        member_col="instrument_id",
+        member_id=data.instrument_id,
         order=data.order,
     )
-    db.add(scope)
     db.commit()
     db.refresh(scope)
     return scope
@@ -402,13 +502,15 @@ def remove_feed_universe_item(
     feed_id: uuid.UUID,
     instrument_id: uuid.UUID,
 ) -> None:
-    scope = db.get(FeedInstrumentScope, (feed_id, instrument_id))
+    scope = _active_scope(
+        db, FeedInstrumentScope, "feed_id", feed_id, "instrument_id", instrument_id
+    )
     if not scope:
         raise NotFoundError("Universe item not found")
     impact = compute_feed_universe_impact(db, feed_id, instrument_id)
     if not impact.can_remove:
         raise ConflictError(_format_impact_message(impact))
-    db.delete(scope)
+    scope.dropped_at = datetime.now(UTC)
     db.commit()
 
 
@@ -418,10 +520,17 @@ def set_feed_universe_item_active(
     instrument_id: uuid.UUID,
     is_active: bool,
 ) -> FeedInstrumentScope:
-    scope = db.get(FeedInstrumentScope, (feed_id, instrument_id))
-    if not scope:
-        raise NotFoundError("Universe item not found")
-    if not is_active:
+    if is_active:
+        scope = _add_scope(
+            db,
+            FeedInstrumentScope,
+            parent_col="feed_id",
+            parent_id=feed_id,
+            member_col="instrument_id",
+            member_id=instrument_id,
+            order=0,
+        )
+    else:
         # Disabling feed-scope items is gated on open trades that need price data.
         blocking_trades = _trades_blocking_feed_disable(db, feed_id, instrument_id)
         if blocking_trades:
@@ -434,7 +543,16 @@ def set_feed_universe_item_active(
                 suggested_action="clear_blockers",
             )
             raise ConflictError(_format_impact_message(impact))
-    scope.is_active = is_active
+        scope = _drop_scope(
+            db,
+            FeedInstrumentScope,
+            parent_col="feed_id",
+            parent_id=feed_id,
+            member_col="instrument_id",
+            member_id=instrument_id,
+        )
+        if scope is None:
+            raise NotFoundError("Universe item not found")
     db.commit()
     db.refresh(scope)
     return scope
@@ -452,7 +570,9 @@ def batch_add_feed_instruments(
     existing = {
         r[0]
         for r in db.execute(
-            select(FeedInstrumentScope.instrument_id).where(FeedInstrumentScope.feed_id == feed_id)
+            select(FeedInstrumentScope.instrument_id)
+            .where(FeedInstrumentScope.feed_id == feed_id)
+            .where(FeedInstrumentScope.dropped_at.is_(None))
         ).all()
     }
     order = data.start_order
@@ -460,7 +580,15 @@ def batch_add_feed_instruments(
         if instrument_id in existing:
             continue
         existing.add(instrument_id)
-        db.add(FeedInstrumentScope(feed_id=feed_id, instrument_id=instrument_id, order=order))
+        _add_scope(
+            db,
+            FeedInstrumentScope,
+            parent_col="feed_id",
+            parent_id=feed_id,
+            member_col="instrument_id",
+            member_id=instrument_id,
+            order=order,
+        )
         order += 1
     db.commit()
     return get_feed_universe(db, feed_id)
@@ -473,9 +601,9 @@ def batch_add_strategy_instruments(
     existing = {
         r[0]
         for r in db.execute(
-            select(StrategyInstrumentScope.instrument_id).where(
-                StrategyInstrumentScope.strategy_id == strategy_id
-            )
+            select(StrategyInstrumentScope.instrument_id)
+            .where(StrategyInstrumentScope.strategy_id == strategy_id)
+            .where(StrategyInstrumentScope.dropped_at.is_(None))
         ).all()
     }
     order = data.start_order
@@ -483,10 +611,14 @@ def batch_add_strategy_instruments(
         if instrument_id in existing:
             continue
         existing.add(instrument_id)
-        db.add(
-            StrategyInstrumentScope(
-                strategy_id=strategy_id, instrument_id=instrument_id, order=order
-            )
+        _add_scope(
+            db,
+            StrategyInstrumentScope,
+            parent_col="strategy_id",
+            parent_id=strategy_id,
+            member_col="instrument_id",
+            member_id=instrument_id,
+            order=order,
         )
         order += 1
     db.commit()
@@ -505,7 +637,7 @@ def _build_composite_item(scope) -> CompositeUniverseItemSchema:
         composite_name=comp.name if comp else None,
         composite_display_name=comp.display_name if comp else None,
         composite_type_id=comp.composite_type_id if comp else None,
-        is_active=scope.is_active,
+        is_active=(scope.dropped_at is None),
         order=scope.order,
     )
 
@@ -555,7 +687,9 @@ def batch_add_feed_composites(
     existing = {
         r[0]
         for r in db.execute(
-            select(FeedCompositeScope.composite_id).where(FeedCompositeScope.feed_id == feed_id)
+            select(FeedCompositeScope.composite_id)
+            .where(FeedCompositeScope.feed_id == feed_id)
+            .where(FeedCompositeScope.dropped_at.is_(None))
         ).all()
     }
     order = data.start_order
@@ -563,7 +697,15 @@ def batch_add_feed_composites(
         if composite_id in existing:
             continue
         existing.add(composite_id)
-        db.add(FeedCompositeScope(feed_id=feed_id, composite_id=composite_id, order=order))
+        _add_scope(
+            db,
+            FeedCompositeScope,
+            parent_col="feed_id",
+            parent_id=feed_id,
+            member_col="composite_id",
+            member_id=composite_id,
+            order=order,
+        )
         order += 1
     db.commit()
     return get_feed_composite_universe(db, feed_id)
@@ -572,23 +714,30 @@ def batch_add_feed_composites(
 def remove_feed_composite_universe_item(
     db: Session, feed_id: uuid.UUID, composite_id: uuid.UUID
 ) -> None:
-    scope = db.get(FeedCompositeScope, (feed_id, composite_id))
+    scope = _active_scope(db, FeedCompositeScope, "feed_id", feed_id, "composite_id", composite_id)
     if not scope:
         raise NotFoundError("Composite universe item not found")
     impact = compute_feed_composite_universe_impact(db, feed_id, composite_id)
     if not impact.can_remove:
         raise ConflictError(_format_impact_message(impact))
-    db.delete(scope)
+    scope.dropped_at = datetime.now(UTC)
     db.commit()
 
 
 def set_feed_composite_universe_item_active(
     db: Session, feed_id: uuid.UUID, composite_id: uuid.UUID, is_active: bool
 ) -> FeedCompositeScope:
-    scope = db.get(FeedCompositeScope, (feed_id, composite_id))
-    if not scope:
-        raise NotFoundError("Composite universe item not found")
-    if not is_active:
+    if is_active:
+        scope = _add_scope(
+            db,
+            FeedCompositeScope,
+            parent_col="feed_id",
+            parent_id=feed_id,
+            member_col="composite_id",
+            member_id=composite_id,
+            order=0,
+        )
+    else:
         blocking_trades = _trades_blocking_feed_composite_disable(db, feed_id, composite_id)
         if blocking_trades:
             impact = ImpactReport(
@@ -600,7 +749,16 @@ def set_feed_composite_universe_item_active(
                 suggested_action="clear_blockers",
             )
             raise ConflictError(_format_impact_message(impact))
-    scope.is_active = is_active
+        scope = _drop_scope(
+            db,
+            FeedCompositeScope,
+            parent_col="feed_id",
+            parent_id=feed_id,
+            member_col="composite_id",
+            member_id=composite_id,
+        )
+        if scope is None:
+            raise NotFoundError("Composite universe item not found")
     db.commit()
     db.refresh(scope)
     return scope
@@ -651,9 +809,9 @@ def batch_add_strategy_composites(
     existing = {
         r[0]
         for r in db.execute(
-            select(StrategyCompositeScope.composite_id).where(
-                StrategyCompositeScope.strategy_id == strategy_id
-            )
+            select(StrategyCompositeScope.composite_id)
+            .where(StrategyCompositeScope.strategy_id == strategy_id)
+            .where(StrategyCompositeScope.dropped_at.is_(None))
         ).all()
     }
     order = data.start_order
@@ -661,8 +819,14 @@ def batch_add_strategy_composites(
         if composite_id in existing:
             continue
         existing.add(composite_id)
-        db.add(
-            StrategyCompositeScope(strategy_id=strategy_id, composite_id=composite_id, order=order)
+        _add_scope(
+            db,
+            StrategyCompositeScope,
+            parent_col="strategy_id",
+            parent_id=strategy_id,
+            member_col="composite_id",
+            member_id=composite_id,
+            order=order,
         )
         order += 1
     db.commit()
@@ -672,23 +836,42 @@ def batch_add_strategy_composites(
 def remove_strategy_composite_universe_item(
     db: Session, strategy_id: uuid.UUID, composite_id: uuid.UUID
 ) -> None:
-    scope = db.get(StrategyCompositeScope, (strategy_id, composite_id))
+    scope = _active_scope(
+        db, StrategyCompositeScope, "strategy_id", strategy_id, "composite_id", composite_id
+    )
     if not scope:
         raise NotFoundError("Composite universe item not found")
     impact = compute_strategy_composite_impact(db, strategy_id, composite_id)
     if not impact.can_remove:
         raise ConflictError(_format_impact_message(impact))
-    db.delete(scope)
+    scope.dropped_at = datetime.now(UTC)
     db.commit()
 
 
 def set_strategy_composite_universe_item_active(
     db: Session, strategy_id: uuid.UUID, composite_id: uuid.UUID, is_active: bool
 ) -> StrategyCompositeScope:
-    scope = db.get(StrategyCompositeScope, (strategy_id, composite_id))
-    if not scope:
-        raise NotFoundError("Composite universe item not found")
-    scope.is_active = is_active
+    if is_active:
+        scope = _add_scope(
+            db,
+            StrategyCompositeScope,
+            parent_col="strategy_id",
+            parent_id=strategy_id,
+            member_col="composite_id",
+            member_id=composite_id,
+            order=0,
+        )
+    else:
+        scope = _drop_scope(
+            db,
+            StrategyCompositeScope,
+            parent_col="strategy_id",
+            parent_id=strategy_id,
+            member_col="composite_id",
+            member_id=composite_id,
+        )
+        if scope is None:
+            raise NotFoundError("Composite universe item not found")
     db.commit()
     db.refresh(scope)
     return scope
@@ -915,7 +1098,7 @@ def _orphaned_universe_items_if_remove_exchange(
         select(StrategyInstrumentScope.instrument_id, Instrument.display_name)
         .join(Instrument, Instrument.id == StrategyInstrumentScope.instrument_id)
         .where(StrategyInstrumentScope.strategy_id == strategy_id)
-        .where(StrategyInstrumentScope.is_active.is_(True))
+        .where(StrategyInstrumentScope.dropped_at.is_(None))
         .where(Instrument.provider_id == exchange.provider_id)
         .where(Instrument.instrument_type_id == exchange.instrument_type_id)
     ).all()
@@ -1022,9 +1205,7 @@ def compute_feed_composite_universe_impact(
 
     reasons: list[str] = []
     if blocking_trades:
-        reasons.append(
-            f"{len(blocking_trades)} open composite trade(s) need data from this feed"
-        )
+        reasons.append(f"{len(blocking_trades)} open composite trade(s) need data from this feed")
     if blocking_scope:
         reasons.append(
             f"{len(blocking_scope)} strategy composite universe item(s) depend on this feed"
@@ -1061,7 +1242,7 @@ def _strategy_universe_items_depending_on_feed(
             select(StrategyCompositeScope.strategy_id, StrategyCompositeScope.composite_id)
             .where(StrategyCompositeScope.strategy_id.in_(strategy_ids))
             .where(StrategyCompositeScope.composite_id == target_id)
-            .where(StrategyCompositeScope.is_active.is_(True))
+            .where(StrategyCompositeScope.dropped_at.is_(None))
         ).all()
         return [
             BlockingScopeItem(
@@ -1076,7 +1257,7 @@ def _strategy_universe_items_depending_on_feed(
         select(StrategyInstrumentScope.strategy_id, StrategyInstrumentScope.instrument_id)
         .where(StrategyInstrumentScope.strategy_id.in_(strategy_ids))
         .where(StrategyInstrumentScope.instrument_id == target_id)
-        .where(StrategyInstrumentScope.is_active.is_(True))
+        .where(StrategyInstrumentScope.dropped_at.is_(None))
     ).all()
     return [
         BlockingScopeItem(
@@ -1152,9 +1333,7 @@ class _DriftItem:
     reason: str
 
 
-def reconcile_strategy_universe(
-    db: Session, strategy_id: uuid.UUID
-) -> list[_DriftItem]:
+def reconcile_strategy_universe(db: Session, strategy_id: uuid.UUID) -> list[_DriftItem]:
     """Detect drifted active scope rows and disable them.
 
     A strategy universe item has drifted iff it's ``is_active=True`` but:
@@ -1179,7 +1358,7 @@ def reconcile_strategy_universe(
         db.execute(
             select(StrategyInstrumentScope)
             .where(StrategyInstrumentScope.strategy_id == strategy_id)
-            .where(StrategyInstrumentScope.is_active.is_(True))
+            .where(StrategyInstrumentScope.dropped_at.is_(None))
             .options(joinedload(StrategyInstrumentScope.instrument))
         )
         .unique()
@@ -1196,7 +1375,7 @@ def reconcile_strategy_universe(
         elif inst.id not in fed_instrument_ids:
             reason = "instrument not in any strategy feed's active scope"
         if reason is not None:
-            scope.is_active = False
+            scope.dropped_at = datetime.now(UTC)
             drift.append(
                 _DriftItem(
                     scope_type="strategy_universe",
@@ -1210,7 +1389,7 @@ def reconcile_strategy_universe(
         db.execute(
             select(StrategyCompositeScope)
             .where(StrategyCompositeScope.strategy_id == strategy_id)
-            .where(StrategyCompositeScope.is_active.is_(True))
+            .where(StrategyCompositeScope.dropped_at.is_(None))
             .options(joinedload(StrategyCompositeScope.composite))
         )
         .unique()
@@ -1220,16 +1399,11 @@ def reconcile_strategy_universe(
     for scope in composite_scopes:
         comp_id = scope.composite_id
         reason = None
-        members = (
-            db.execute(
-                select(
-                    Instrument.id, Instrument.provider_id, Instrument.instrument_type_id
-                )
-                .join(CompositeMember, CompositeMember.instrument_id == Instrument.id)
-                .where(CompositeMember.composite_id == comp_id)
-            )
-            .all()
-        )
+        members = db.execute(
+            select(Instrument.id, Instrument.provider_id, Instrument.instrument_type_id)
+            .join(CompositeMember, CompositeMember.instrument_id == Instrument.id)
+            .where(CompositeMember.composite_id == comp_id)
+        ).all()
         if not members:
             reason = "composite has no members"
         else:
@@ -1241,7 +1415,7 @@ def reconcile_strategy_universe(
             elif comp_id not in fed_composite_ids:
                 reason = "composite not in any strategy feed's active composite scope"
         if reason is not None:
-            scope.is_active = False
+            scope.dropped_at = datetime.now(UTC)
             drift.append(
                 _DriftItem(
                     scope_type="strategy_composite_universe",
@@ -1254,5 +1428,3 @@ def reconcile_strategy_universe(
     if drift:
         db.commit()
     return drift
-
-

@@ -34,6 +34,7 @@ from __future__ import annotations
 
 import re
 import threading
+import uuid
 from abc import ABC, abstractmethod
 from collections.abc import Iterator
 from typing import ClassVar
@@ -46,8 +47,7 @@ class OrderRequest(BaseModel):
 
     order_type: str
     side: str
-    from_asset_symbol: str
-    to_asset_symbol: str
+    instrument_id: uuid.UUID
     quantity: float
     price: float | None = None
     time_in_force: str | None = None

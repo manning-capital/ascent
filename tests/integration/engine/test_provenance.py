@@ -186,7 +186,14 @@ async def test_strategy_evaluation_records_feed_run_provenance(
     """
     instrument_id = seeded["btc_usd"].id
     feed_id = deploy_feed(_ProvFeed, db_session)
-    db_session.add(FeedInstrumentScope(feed_id=feed_id, instrument_id=instrument_id, order=1))
+    db_session.add(
+        FeedInstrumentScope(
+            feed_id=feed_id,
+            instrument_id=instrument_id,
+            order=1,
+            added_at=datetime.now(UTC),
+        )
+    )
     strategy_id = deploy_strategy(_ProvStrategy, db_session)
     db_session.commit()
 
@@ -254,7 +261,14 @@ async def test_trade_feed_runs_endpoint_surfaces_provenance(
     pending_status = seeded["pending_status"]
 
     feed_id = deploy_feed(_ProvFeed, db_session)
-    db_session.add(FeedInstrumentScope(feed_id=feed_id, instrument_id=instrument_id, order=1))
+    db_session.add(
+        FeedInstrumentScope(
+            feed_id=feed_id,
+            instrument_id=instrument_id,
+            order=1,
+            added_at=datetime.now(UTC),
+        )
+    )
     strategy_id = deploy_strategy(_ProvStrategy, db_session)
     db_session.commit()
 
@@ -335,7 +349,14 @@ async def test_feed_run_trades_endpoint_lists_caused_trades(
     pending_status = seeded["pending_status"]
 
     feed_id = deploy_feed(_ProvFeed, db_session)
-    db_session.add(FeedInstrumentScope(feed_id=feed_id, instrument_id=instrument_id, order=1))
+    db_session.add(
+        FeedInstrumentScope(
+            feed_id=feed_id,
+            instrument_id=instrument_id,
+            order=1,
+            added_at=datetime.now(UTC),
+        )
+    )
     strategy_id = deploy_strategy(_ProvStrategy, db_session)
     db_session.commit()
 

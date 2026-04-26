@@ -6,6 +6,7 @@ Triggered by :class:`OUParams`. On each tick this feed reads the latest
 constituent legs.
 """
 
+import hashlib
 import math
 import os
 import random
@@ -31,6 +32,21 @@ BASE_PRICES: dict[str, float] = {
 }
 
 
+def _base_price_for(symbol: str) -> float:
+    """Return a deterministic starting price for an asset symbol.
+
+    Known symbols come from ``BASE_PRICES``; anything else is hashed into a
+    stable synthetic price in roughly ``[0.1, 1000]`` so the sim can run
+    against the full seeded universe without needing a hand-curated price
+    for every asset class.
+    """
+    if symbol in BASE_PRICES:
+        return BASE_PRICES[symbol]
+    digest = hashlib.sha256(symbol.encode()).digest()
+    u = int.from_bytes(digest[:8], "big") / 2**64
+    return 0.1 * (10.0 ** (4.0 * u))
+
+
 class _SpreadState:
     __slots__ = ("spread", "anchor_price")
 
@@ -46,7 +62,7 @@ class MarketData(Feed):
         anchor_volatility: float = Field(
             0.003, description="Per-tick volatility of the anchor (A) leg"
         )
-        dt: float = Field(5.0, description="OU time-step per tick (seconds)")
+        dt: float = Field(1.0, description="OU time-step per tick (seconds)")
 
     depends_on = [OUParams]
     output = InstrumentAttributes
@@ -93,8 +109,6 @@ class MarketData(Feed):
                 continue
             inst_a, sym_a = legs[1]
             inst_b, sym_b = legs[2]
-            if sym_a not in BASE_PRICES or sym_b not in BASE_PRICES:
-                continue
             MarketData._composite_legs[composite_id] = (inst_a, inst_b, sym_a, sym_b)
 
         MarketData._initialised = True
@@ -130,8 +144,15 @@ class MarketData(Feed):
 
             state = MarketData._composite_state.get(cid)
             if state is None:
-                initial_spread = math.log(BASE_PRICES[sym_a]) - beta * math.log(BASE_PRICES[sym_b])
-                state = _SpreadState(spread=initial_spread, anchor_price=BASE_PRICES[sym_a])
+                # Start at the OU equilibrium so there's no multi-tick
+                # transient. Seeding from log(base_a) - beta*log(base_b)
+                # puts spread arbitrarily far from theta; the subsequent
+                # mu*(theta - spread)*dt step then produces huge Δspread
+                # values, which the exp((ln p_a - spread)/beta) transform
+                # amplifies into many-x price swings on leg B until the
+                # process settles. Starting at theta avoids all of that.
+                base_a = _base_price_for(sym_a)
+                state = _SpreadState(spread=theta, anchor_price=base_a)
                 MarketData._composite_state[cid] = state
 
             state.spread += mu * (theta - state.spread) * dt + sigma * sqrt_dt * random.gauss(0, 1)

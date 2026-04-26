@@ -16,14 +16,16 @@ import uuid
 from typing import ClassVar
 
 import numpy as np
+import pandas as pd
 from pydantic import BaseModel, Field
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from ascent.feeds.examples.market import MarketData
 from ascent.feeds.examples.ou_params import OUParams
+from ascent.feeds.examples.ou_spread import OUSpread
 from ascent.math._non_rolling import OrnsteinUhlenbeck
-from ascent.strategies import Context, Strategy
+from ascent.strategies import Context, Strategy, TradeView
 
 
 class OUStrategy(Strategy):
@@ -34,11 +36,16 @@ class OUStrategy(Strategy):
         transaction_cost: float = Field(0.01, ge=0, description="c in the Leung-Li framework")
         quantity: float = Field(1.0, gt=0, description="Composite units per trade")
 
-    feeds = [MarketData, OUParams]
+    feeds = [MarketData, OUParams, OUSpread]
+    scope = "composite"
     exchanges = ["KRAKEN_SECURITY_EXCHANGE"]
     portfolio = "MAIN"
     display_name = "OU Strategy"
     description = "Mean-reversion on composite spreads using Leung-Li optimal entry/exit levels."
+    trade_view = TradeView(
+        series=["OU_SPREAD", "OU_THETA", "OU_ENTRY", "OU_EXIT"],
+        show_trade_markers=True,
+    )
 
     _composite_legs: ClassVar[dict[uuid.UUID, tuple[uuid.UUID, uuid.UUID]]] = {}
     _initialised: ClassVar[bool] = False
@@ -69,12 +76,124 @@ class OUStrategy(Strategy):
 
         OUStrategy._initialised = True
 
-    def evaluate(self, ctx: Context) -> None:
-        logger = self.get_logger()
+    _DERIVED_COLUMNS: ClassVar[tuple[str, ...]] = (
+        "spread",
+        "mean",
+        "entry_long",
+        "exit_long",
+        "entry_short",
+        "exit_short",
+    )
+
+    def derive(self, ctx: Context) -> pd.DataFrame:
+        """Per-composite spread and Leung-Li optimal entry/exit levels.
+
+        Returned frame shares ``ctx.df.index`` (MultiIndex composite_id,
+        instrument_id) with the same value broadcast across each composite's
+        legs — the UI de-duplicates on the server side when serializing.
+        """
+        frame = pd.DataFrame(
+            index=ctx.df.index,
+            columns=list(self._DERIVED_COLUMNS),
+            dtype=float,
+        )
         if ctx.df.empty:
-            return
+            return frame
+
         self._ensure_initialised()
 
+        for composite_str in ctx.df.index.get_level_values("composite_id").unique():
+            composite_id = uuid.UUID(composite_str)
+            legs = OUStrategy._composite_legs.get(composite_id)
+            if legs is None:
+                continue
+            values = self._compute_composite_row(ctx, composite_str, legs)
+            if values is None:
+                continue
+            for name, value in values.items():
+                frame.loc[composite_str, name] = value
+
+        return frame
+
+    def _compute_composite_row(
+        self,
+        ctx: Context,
+        composite_str: str,
+        legs: tuple[uuid.UUID, uuid.UUID],
+    ) -> dict[str, float] | None:
+        inst_a, inst_b = legs
+        try:
+            composite_rows = ctx.df.loc[composite_str]
+        except KeyError:
+            return None
+        if composite_rows.empty:
+            return None
+
+        head = composite_rows.iloc[0]
+        try:
+            mu = float(head[("ou_params", "OU_MU")])
+            theta = float(head[("ou_params", "OU_THETA")])
+            sigma = float(head[("ou_params", "OU_SIGMA")])
+            beta = float(head[("ou_params", "OU_BETA")])
+        except KeyError:
+            return None
+        if any(not math.isfinite(v) for v in (mu, theta, sigma, beta)):
+            return None
+        if mu <= 0 or sigma <= 0 or beta == 0:
+            return None
+
+        try:
+            price_a = float(ctx.df.loc[(composite_str, str(inst_a)), ("market_data", "CLOSE")])
+            price_b = float(ctx.df.loc[(composite_str, str(inst_b)), ("market_data", "CLOSE")])
+        except KeyError:
+            return None
+        if not (math.isfinite(price_a) and math.isfinite(price_b)):
+            return None
+        if price_a <= 0 or price_b <= 0:
+            return None
+
+        spread = math.log(price_a) - beta * math.log(price_b)
+        params = self.parameters
+
+        exit_long = OrnsteinUhlenbeck.get_optimal_exit_level(
+            mu=np.array([mu]),
+            sigma=np.array([sigma]),
+            theta=np.array([theta]),
+            discount_rate=params.discount_rate,
+            transaction_cost=params.transaction_cost,
+        )[0]
+        if not np.isfinite(exit_long):
+            return None
+
+        entry_long = OrnsteinUhlenbeck.get_optimal_entry_level(
+            mu=np.array([mu]),
+            sigma=np.array([sigma]),
+            theta=np.array([theta]),
+            exit_level=np.array([exit_long]),
+            discount_rate=params.discount_rate,
+            transaction_cost=params.transaction_cost,
+        )[0]
+        if not np.isfinite(entry_long):
+            return None
+
+        return {
+            "spread": spread,
+            "mean": theta,
+            "entry_long": entry_long,
+            "exit_long": exit_long,
+            "entry_short": 2 * theta - entry_long,
+            "exit_short": 2 * theta - exit_long,
+        }
+
+    def evaluate(self, ctx: Context) -> None:
+        logger = self.get_logger()
+
+        logger.info(ctx.df)
+
+        if ctx.df.empty:
+            return
+
+        derived = self.derive(ctx)
         params = self.parameters
 
         for composite_str in ctx.universe:
@@ -85,61 +204,19 @@ class OUStrategy(Strategy):
             inst_a, inst_b = legs
 
             try:
-                composite_rows = ctx.df.loc[composite_str]
+                signal = derived.loc[composite_str].iloc[0]
             except KeyError:
                 continue
-            if composite_rows.empty:
+            if signal.isna().any():
                 continue
 
-            head = composite_rows.iloc[0]
-            try:
-                mu = float(head[("ou_params", "OU_MU")])
-                theta = float(head[("ou_params", "OU_THETA")])
-                sigma = float(head[("ou_params", "OU_SIGMA")])
-                beta = float(head[("ou_params", "OU_BETA")])
-            except KeyError:
-                continue
-            if any(not math.isfinite(v) for v in (mu, theta, sigma, beta)):
-                continue
-            if mu <= 0 or sigma <= 0 or beta == 0:
-                continue
+            spread = float(signal["spread"])
+            entry_long = float(signal["entry_long"])
+            exit_long = float(signal["exit_long"])
+            entry_short = float(signal["entry_short"])
+            exit_short = float(signal["exit_short"])
 
-            try:
-                price_a = float(ctx.df.loc[(composite_str, str(inst_a)), ("market_data", "CLOSE")])
-                price_b = float(ctx.df.loc[(composite_str, str(inst_b)), ("market_data", "CLOSE")])
-            except KeyError:
-                continue
-            if not (math.isfinite(price_a) and math.isfinite(price_b)):
-                continue
-            if price_a <= 0 or price_b <= 0:
-                continue
-
-            spread = math.log(price_a) - beta * math.log(price_b)
-
-            exit_long = OrnsteinUhlenbeck.get_optimal_exit_level(
-                mu=np.array([mu]),
-                sigma=np.array([sigma]),
-                theta=np.array([theta]),
-                discount_rate=params.discount_rate,
-                transaction_cost=params.transaction_cost,
-            )[0]
-            if not np.isfinite(exit_long):
-                continue
-
-            entry_long = OrnsteinUhlenbeck.get_optimal_entry_level(
-                mu=np.array([mu]),
-                sigma=np.array([sigma]),
-                theta=np.array([theta]),
-                exit_level=np.array([exit_long]),
-                discount_rate=params.discount_rate,
-                transaction_cost=params.transaction_cost,
-            )[0]
-            if not np.isfinite(entry_long):
-                continue
-
-            entry_short = 2 * theta - entry_long
-            exit_short = 2 * theta - exit_long
-
+            head = ctx.df.loc[composite_str].iloc[0]
             trade_status = str(head[("trade", "status")])
             trade_direction = head[("trade", "direction")]
             trade_id = head[("trade", "trade_id")]
@@ -165,6 +242,7 @@ class OUStrategy(Strategy):
                         direction="LONG",
                         quantity=params.quantity,
                         scope="composite",
+                        composite_instrument_ids=[inst_a, inst_b],
                     )
                     logger.info("OPEN LONG composite=%s spread=%+.6f", composite_str[:8], spread)
                 elif spread >= entry_short:
@@ -173,6 +251,7 @@ class OUStrategy(Strategy):
                         direction="SHORT",
                         quantity=params.quantity,
                         scope="composite",
+                        composite_instrument_ids=[inst_a, inst_b],
                     )
                     logger.info("OPEN SHORT composite=%s spread=%+.6f", composite_str[:8], spread)
                 continue

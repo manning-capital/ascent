@@ -50,8 +50,7 @@ def _submit_payload() -> dict:
         "order": {
             "order_type": "MARKET",
             "side": "BUY",
-            "from_asset_symbol": "BTC",
-            "to_asset_symbol": "USD",
+            "instrument_id": str(uuid.uuid4()),
             "quantity": 1.0,
             "price": None,
         },

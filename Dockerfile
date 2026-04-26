@@ -39,6 +39,13 @@ COPY src/ src/
 
 RUN uv sync --no-dev --frozen
 
+# Put the uv-created venv on PATH so downstream targets can invoke
+# `python` / `ascent` directly instead of going through `uv run` (which
+# re-resolves the environment on every invocation — noticeable cold-start
+# overhead on container boot).
+ENV VIRTUAL_ENV=/app/.venv
+ENV PATH="/app/.venv/bin:${PATH}"
+
 # Directory convention for user-authored scripts. Extended targets (prod
 # exchange/feed/strategy) COPY into this path; the dev compose mounts
 # individual files on top of it.
@@ -66,7 +73,7 @@ COPY --from=ui-build /ui/dist/ui/browser/ src/ascent/server/ui/
 
 EXPOSE 8000
 
-CMD ["uv", "run", "ascent", "server", "start", "--host", "0.0.0.0"]
+CMD ["ascent", "server", "start", "--host", "0.0.0.0"]
 
 
 # ----------------------------------------------------------------------
@@ -93,14 +100,14 @@ CMD ["sh", "-c", "echo 'ascent-runtime: set a command or COPY a script into /app
 # ----------------------------------------------------------------------
 FROM runtime AS exchange
 COPY exchange.py /app/user/exchange.py
-CMD ["uv", "run", "python", "/app/user/exchange.py"]
+CMD ["python", "/app/user/exchange.py"]
 
 
 FROM runtime AS feed
 COPY feed.py /app/user/feed.py
-CMD ["uv", "run", "python", "/app/user/feed.py"]
+CMD ["python", "/app/user/feed.py"]
 
 
 FROM runtime AS strategy
 COPY strategy.py /app/user/strategy.py
-CMD ["uv", "run", "python", "/app/user/strategy.py"]
+CMD ["python", "/app/user/strategy.py"]

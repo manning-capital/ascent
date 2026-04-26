@@ -82,13 +82,19 @@
         <!-- Trade Legs Table -->
         <app-data-table [columns]="legColumns" [rowData]="trade.legs" [pagination]="false"/>
 
-        <!-- Orders per Leg -->
-        @for (leg of trade.legs; track leg.id) {
-          @if (leg.orders && leg.orders.length > 0) {
-            <p-card [header]="'Orders \u2014 ' + leg.instrument_name">
-              <app-data-table [columns]="orderColumns" [rowData]="leg.orders" [pagination]="false"/>
-            </p-card>
-          }
+        <!-- Strategy Context Chart -->
+        <app-run-context-chart
+          [strategyId]="trade.strategy_id"
+          [strategyRunId]="trade.strategy_run_id"
+          [tradeId]="trade.id"
+          [start]="trade.entry_at"
+          [end]="trade.exit_at"/>
+
+        <!-- Orders (all legs combined) -->
+        @if (allOrders().length > 0) {
+          <p-card header="Orders">
+            <app-data-table [columns]="orderColumns" [rowData]="allOrders()" [pagination]="false"/>
+          </p-card>
         }
 
         <!-- Strategy Conditions -->

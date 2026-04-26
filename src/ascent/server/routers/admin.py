@@ -51,6 +51,34 @@ def drop_and_recreate():
     return {"status": "ok"}
 
 
+@router.post("/clear-trades")
+def clear_trades():
+    """Delete all trades, trade legs, orders, and their statuses.
+
+    ``TRUNCATE ... CASCADE`` also clears ``event_outbox`` so no stale
+    dispatch intents are replayed against a freshly emptied trade set.
+    """
+    with engine.connect() as conn:
+        conn.execute(
+            text(
+                'TRUNCATE "trade", "trade_leg", "trade_status", '
+                '"order", "order_status", "event_outbox" '
+                "RESTART IDENTITY CASCADE"
+            )
+        )
+        conn.commit()
+    return {"status": "ok"}
+
+
+@router.post("/clear-holdings")
+def clear_holdings():
+    """Delete all portfolio asset holdings."""
+    with engine.connect() as conn:
+        conn.execute(text('TRUNCATE "portfolio_asset_holding" RESTART IDENTITY CASCADE'))
+        conn.commit()
+    return {"status": "ok"}
+
+
 @router.post("/feed-runs", status_code=201, response_model=FeedRunSchema)
 def create_feed_run(data: FeedRunCreate, db: Session = Depends(get_db)):
     obj = FeedRun(**data.model_dump())

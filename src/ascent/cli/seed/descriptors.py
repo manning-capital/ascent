@@ -84,6 +84,21 @@ def seed_descriptors(client: Any, ctx: dict) -> None:
         display_name="OU Beta",
         description="Hedge ratio used in the log-spread: s = ln(p_a) - beta * ln(p_b)",
     )
+    ctx["attr_ou_entry"] = client.create_attribute(
+        name="OU_ENTRY",
+        display_name="OU Entry",
+        description="Leung-Li optimal spread level at which to open a mean-reversion trade",
+    )
+    ctx["attr_ou_exit"] = client.create_attribute(
+        name="OU_EXIT",
+        display_name="OU Exit",
+        description="Leung-Li optimal spread level at which to close a mean-reversion trade",
+    )
+    ctx["attr_ou_spread"] = client.create_attribute(
+        name="OU_SPREAD",
+        display_name="OU Spread",
+        description="Per-tick log-spread s = ln(p_a) - beta*ln(p_b) for the composite",
+    )
 
     ctx["all_attributes"] = [
         ctx["attr_close"],
@@ -108,6 +123,9 @@ def seed_descriptors(client: Any, ctx: dict) -> None:
         ctx["attr_ou_theta"],
         ctx["attr_ou_sigma"],
         ctx["attr_ou_beta"],
+        ctx["attr_ou_entry"],
+        ctx["attr_ou_exit"],
+        ctx["attr_ou_spread"],
     ]
 
     # --- Metadata types ---

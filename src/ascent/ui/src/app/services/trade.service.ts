@@ -23,6 +23,7 @@ export class TradeService {
 
   private loadTrades$ = new Subject<Record<string, any>>();
   private loadDetail$ = new Subject<string>();
+  private refreshDetail$ = new Subject<string>();
 
   constructor() {
     this.loadTrades$.pipe(
@@ -50,6 +51,14 @@ export class TradeService {
       this.selectedTrade.set(trade);
       this.loading.set(false);
     });
+
+    this.refreshDetail$.pipe(
+      switchMap(tradeId =>
+        this.api.get<TradeDetail>(`/trades/${tradeId}`).pipe(catchError(() => EMPTY))
+      ),
+    ).subscribe(trade => {
+      this.selectedTrade.set(trade);
+    });
   }
 
   loadTrades(params: Record<string, any> = {}): void {
@@ -58,6 +67,10 @@ export class TradeService {
 
   loadTradeDetail(tradeId: string): void {
     this.loadDetail$.next(tradeId);
+  }
+
+  refreshTradeDetail(tradeId: string): void {
+    this.refreshDetail$.next(tradeId);
   }
 
   getPnlClass(value: number | null | undefined): string {

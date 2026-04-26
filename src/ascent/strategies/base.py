@@ -38,12 +38,30 @@ import uuid
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, ClassVar, Literal
 
+import pandas as pd
 from pydantic import BaseModel
 
 if TYPE_CHECKING:
     from ascent.application.context_builder import Context
     from ascent.application.route_trade import TradeDraft, TradeRouter
     from ascent.feeds.base import Feed
+
+Scope = Literal["instrument", "composite"]
+
+
+class TradeView(BaseModel):
+    """Per-strategy trade-detail chart configuration.
+
+    Declared as a class attribute on a ``Strategy`` subclass and persisted as
+    JSONB on the strategy DB row at deploy time, mirroring the
+    ``parameter_schema`` flow. The trade-detail UI uses this to pick which
+    context series to plot by default and whether to overlay vertical
+    reference lines at the trade's entry/exit timestamps.
+    """
+
+    series: list[str] = []
+    series_labels: dict[str, str] = {}
+    show_trade_markers: bool = True
 
 
 class Strategy(ABC):
@@ -74,6 +92,18 @@ class Strategy(ABC):
     #: and UUIDs at deploy time and subscribes to their Redis channels.
     feeds: ClassVar[list[str | type[Feed]] | None] = None
 
+    #: Entity scope of this strategy's evaluation context.
+    #:
+    #: - ``"instrument"`` — ``ctx.df`` is indexed by ``instrument_id``.
+    #:   Only instrument-scoped feeds may be declared.
+    #: - ``"composite"`` — ``ctx.df`` is indexed by
+    #:   ``(composite_id, instrument_id)``. Both composite- and
+    #:   instrument-scoped feeds are allowed; instrument rows are reindexed
+    #:   onto the composite's members.
+    #:
+    #: Validated at launch: feed scopes must be compatible with this value.
+    scope: ClassVar[Scope] = "instrument"
+
     #: Human-readable name shown in the UI.  Override in subclasses or
     #: leave ``None`` to use the class name.
     display_name: ClassVar[str | None] = None
@@ -87,6 +117,12 @@ class Strategy(ABC):
     #: Exchanges this strategy can use for order execution.  Each entry
     #: can be an exchange name (string) or a UUID.
     exchanges: ClassVar[list[str] | None] = None
+
+    #: Trade-detail chart configuration.  When set, the trade-detail UI
+    #: uses ``series`` to pick default series to plot and overlays
+    #: vertical entry/exit reference lines when ``show_trade_markers`` is
+    #: true. Persisted as JSONB on the strategy DB row at deploy time.
+    trade_view: ClassVar[TradeView | None] = None
 
     def __init__(self, parameters: Parameters | dict | None = None) -> None:
         if parameters is None:
@@ -133,6 +169,25 @@ class Strategy(ABC):
         Must be implemented by subclasses.
         """
 
+    def derive(self, ctx: Context) -> pd.DataFrame:
+        """Return derived columns aligned to ``ctx.df.index``.
+
+        This is where a strategy exposes its per-tick computed signals —
+        spreads, optimal levels, z-scores, regime flags, anything the
+        ``evaluate()`` decision logic reads from. The returned frame has a
+        single-level string column index; the trade-context endpoint wraps
+        each column under the ``('derived', ...)`` level when merging with
+        ``ctx.df`` so the UI can plot them alongside feed columns.
+
+        Must be PURE: no I/O, no order routing, no state mutation. The
+        engine calls ``derive()`` inside ``evaluate()``, and the server
+        calls it during trade-context reconstruction over historical feed
+        data — both paths must produce the same result for the same input.
+
+        Default returns an empty frame aligned to the context index.
+        """
+        return pd.DataFrame(index=ctx.df.index)
+
     # ------------------------------------------------------------------
     # Runtime accessors (thin wrappers around contextvars)
     # ------------------------------------------------------------------
@@ -166,10 +221,16 @@ class Strategy(ABC):
         quantity: float,
         *,
         scope: Literal["instrument", "composite"] = "instrument",
+        composite_instrument_ids: list[uuid.UUID] | None = None,
         price: float | None = None,
         order_type: str = "MARKET",
     ) -> TradeDraft:
         """Open a new trade on an instrument or composite.
+
+        For ``scope='composite'``, pass ``composite_instrument_ids`` as the
+        ordered list of member instrument UUIDs (leg 1 first, leg 2 second,
+        ...). The router creates one leg per instrument; the first leg takes
+        the submitted direction and subsequent legs alternate.
 
         Returns a :class:`~ascent.application.route_trade.TradeDraft` dataclass
         with ``trade_id`` (UUID), ``state`` (:class:`TradeState`), and
@@ -177,8 +238,23 @@ class Strategy(ABC):
         via the fill handler; this return value reflects only what has been
         submitted — not final status or realized PnL.
         """
+        from ascent.application.route_trade import CompositeSpec
+
         router = self._ensure_router()
         side = "BUY" if direction == "LONG" else "SELL"
+
+        composite_spec: CompositeSpec | None = None
+        if scope == "composite":
+            if not composite_instrument_ids:
+                raise ValueError(
+                    "scope='composite' requires composite_instrument_ids "
+                    "(ordered list of member instrument UUIDs)"
+                )
+            composite_spec = CompositeSpec(
+                composite_id=id,
+                ordered_instrument_ids=list(composite_instrument_ids),
+            )
+
         return router.submit(
             side=side,
             target_id=id,
@@ -186,6 +262,7 @@ class Strategy(ABC):
             quantity=quantity,
             price=price,
             order_type=order_type,
+            composite=composite_spec,
         )
 
     def close_trade(
@@ -229,6 +306,16 @@ class Strategy(ABC):
         This is what gets stored in the database and served to the UI.
         """
         return cls.Parameters.model_json_schema()
+
+    @classmethod
+    def trade_view_config(cls) -> dict | None:
+        """Return the trade-view config as a plain dict, or ``None``.
+
+        Captured at deploy time and persisted on the strategy DB row so the
+        server can return it in context responses without importing the
+        Python class.
+        """
+        return cls.trade_view.model_dump() if cls.trade_view is not None else None
 
     @classmethod
     def ref(cls) -> str:

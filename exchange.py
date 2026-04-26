@@ -5,6 +5,9 @@ FILLED).  Fill schedules are pre-computed at submission time and evaluated
 lazily when the runner polls ``get_open_orders()``.  No background threads
 are needed inside the exchange itself — the runner's monitor loop drives
 status updates.
+
+Fill prices are derived from the latest CLOSE attribute persisted for the
+traded instrument, with a small random jitter applied to simulate slippage.
 """
 
 from __future__ import annotations
@@ -13,7 +16,11 @@ import logging
 import os
 import random
 import time
+import uuid
 from typing import Any
+
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import Session
 
 from ascent.exchanges.base import (
     BalanceEntry,
@@ -24,6 +31,8 @@ from ascent.exchanges.base import (
 )
 
 logger = logging.getLogger(__name__)
+
+FALLBACK_FILL_PRICE = 100.0
 
 
 class KrakenSecurityExchange(BaseExchange):
@@ -38,6 +47,56 @@ class KrakenSecurityExchange(BaseExchange):
         self._balances: dict[str, float] = {"USD": self.config.get("initial_balance", 100000.0)}
         self._orders: dict[str, dict[str, Any]] = {}
         self._next_id = 1
+        self._slippage_bps: float = float(self.config.get("slippage_bps", 5.0))
+        self._slip_probability: float = float(self.config.get("slip_probability", 0.5))
+        self._engine = create_engine(os.environ["ASCENT_DATABASE_URL"])
+
+    # ------------------------------------------------------------------
+    # Market-data-driven fill price
+    # ------------------------------------------------------------------
+
+    def _lookup_close(self, instrument_id: uuid.UUID) -> float | None:
+        """Return the latest persisted CLOSE for an instrument."""
+        from ascent.database.models.descriptors import Attribute
+        from ascent.database.models.instruments import InstrumentAttribute
+
+        stmt = (
+            select(InstrumentAttribute.attribute_value)
+            .join(Attribute, InstrumentAttribute.attribute_id == Attribute.id)
+            .where(InstrumentAttribute.instrument_id == instrument_id)
+            .where(Attribute.name == "CLOSE")
+            .order_by(InstrumentAttribute.timestamp.desc())
+            .limit(1)
+        )
+        with Session(self._engine) as db:
+            return db.scalar(stmt)
+
+    def _fill_price_for(self, request: OrderRequest) -> float:
+        """Resolve the fill price for a request.
+
+        Priority:
+        1. Explicit ``request.price`` if the caller supplied one.
+        2. Latest CLOSE for the instrument: with probability ``slip_probability``
+           apply a random ``slippage_bps`` jitter, otherwise fill at the exact
+           CLOSE.
+        3. ``FALLBACK_FILL_PRICE`` as a last resort (and logged).
+        """
+        if request.price is not None:
+            return request.price
+
+        close = self._lookup_close(request.instrument_id)
+        if close is None or close <= 0:
+            logger.warning(
+                "No CLOSE in attribute table for instrument %s; falling back to %.2f",
+                request.instrument_id,
+                FALLBACK_FILL_PRICE,
+            )
+            return FALLBACK_FILL_PRICE
+
+        if random.random() >= self._slip_probability:
+            return close
+        jitter = random.uniform(-self._slippage_bps, self._slippage_bps) / 10_000.0
+        return close * (1.0 + jitter)
 
     # ------------------------------------------------------------------
     # Fill schedule helpers
@@ -94,7 +153,7 @@ class KrakenSecurityExchange(BaseExchange):
         order_id = f"SIM-{self._next_id:06d}"
         self._next_id += 1
 
-        fill_price = request.price or 100.0
+        fill_price = self._fill_price_for(request)
         self._orders[order_id] = {
             "request": request,
             "status": "SUBMITTED",
@@ -105,11 +164,10 @@ class KrakenSecurityExchange(BaseExchange):
         }
 
         logger.info(
-            "SUBMITTED %s %s %s/%s qty=%.4f @ %.2f",
+            "SUBMITTED %s %s instrument=%s qty=%.4f @ %.2f",
             order_id,
             request.side,
-            request.from_asset_symbol,
-            request.to_asset_symbol,
+            request.instrument_id,
             request.quantity,
             fill_price,
         )

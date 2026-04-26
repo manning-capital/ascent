@@ -55,6 +55,7 @@ class SqlAlchemyTradeRepository(TradeRepository):
         entry_at: datetime,
         strategy_run_id: uuid.UUID | None,
         legs: list[NewLegSpec],
+        composite_id: uuid.UUID | None = None,
     ) -> Trade:
         return await asyncio.to_thread(
             self._create_sync,
@@ -65,6 +66,7 @@ class SqlAlchemyTradeRepository(TradeRepository):
             entry_at,
             strategy_run_id,
             legs,
+            composite_id,
         )
 
     async def set_state(
@@ -153,11 +155,13 @@ class SqlAlchemyTradeRepository(TradeRepository):
         entry_at: datetime,
         strategy_run_id: uuid.UUID | None,
         legs: list[NewLegSpec],
+        composite_id: uuid.UUID | None,
     ) -> Trade:
         pending_id = self._types.trade_state_id(TradeState.PENDING)
         trade = TradeRow(
             strategy_id=strategy_id,
             strategy_run_id=strategy_run_id,
+            composite_id=composite_id,
             portfolio_id=portfolio_id,
             is_paper=is_paper,
             entry_at=entry_at,

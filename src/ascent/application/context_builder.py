@@ -1,6 +1,7 @@
 """Pure function that assembles the strategy evaluation context.
 
-Builds a :class:`Context` dataclass that wraps:
+Builds a :class:`RunContext` (re-exported as :class:`Context` here for
+backward compatibility) that wraps:
 
 - ``df``: the consolidated DataFrame indexed by ``instrument_id`` (or
   ``(composite_id, instrument_id)`` for composite strategies)
@@ -9,6 +10,8 @@ Builds a :class:`Context` dataclass that wraps:
 - ``open_only``: IDs present in ``df`` because of a non-terminal trade but
   *not* in ``universe`` — exit-only set, includes both disabled scope rows
   and removed-but-still-open instruments
+- ``snapshot_timestamp`` and ``sources`` / ``runtime_sources`` — populated
+  by the engine and used downstream for context reconstruction in the UI
 
 The function is deliberately pure: all inputs are pre-loaded by the use
 case. That makes it trivially testable with dict fixtures — no DB mocking.
@@ -18,12 +21,20 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Literal
 
 import numpy as np
 import pandas as pd
 
-from ascent.domain import Trade, TradeState
+from ascent.domain import ContextSource, RunContext, RuntimeSource, Trade, TradeState
+
+# Re-export the domain ``RunContext`` under the legacy ``Context`` alias so
+# existing import paths (``from ascent.application.context_builder import
+# Context``) keep working. Strategy.evaluate(ctx) now receives a
+# ``RunContext`` — same shape as before, plus ``snapshot_timestamp`` and
+# ``sources`` / ``runtime_sources``.
+Context = RunContext
 
 Scope = Literal["instrument", "composite"]
 
@@ -48,29 +59,18 @@ class FeedFrame:
     data: pd.DataFrame  # wide shape: entity_id column + one column per attribute
 
 
-@dataclass(frozen=True)
-class Context:
-    """Strategy evaluation context.
-
-    ``df`` is the assembled DataFrame; ``universe`` and ``open_only`` are
-    membership sets the strategy can use to decide whether an ID is open-eligible
-    or exit-only without inspecting the trade columns.
-    """
-
-    df: pd.DataFrame
-    universe: frozenset[str]
-    open_only: frozenset[str]
-
-
 def build_context(
     *,
     scope: Scope,
     feed_frames: list[FeedFrame],
     trades: list[Trade],
+    snapshot_timestamp: datetime,
     composite_members: dict[uuid.UUID, list[uuid.UUID]] | None = None,
     universe_ids: set[uuid.UUID] | None = None,
     open_position_ids: set[uuid.UUID] | None = None,
-) -> Context:
+    sources: list[ContextSource] | None = None,
+    runtime_sources: list[RuntimeSource] | None = None,
+) -> RunContext:
     """Build the strategy-evaluation context.
 
     The frame index is the union of ``universe_ids`` and ``open_position_ids``.
@@ -86,6 +86,8 @@ def build_context(
     universe_ids = set(universe_ids or ())
     open_position_ids = set(open_position_ids or ())
     composite_members = composite_members or {}
+    sources = sources or []
+    runtime_sources = runtime_sources or []
 
     if scope == "composite":
         composite_ids = universe_ids | open_position_ids
@@ -102,13 +104,27 @@ def build_context(
     open_only_str = frozenset(str(i) for i in (open_position_ids - universe_ids))
 
     if len(index) == 0:
-        return Context(df=pd.DataFrame(), universe=universe_str, open_only=open_only_str)
+        return RunContext(
+            snapshot_timestamp=snapshot_timestamp,
+            sources=sources,
+            df=pd.DataFrame(),
+            runtime_sources=runtime_sources,
+            universe=universe_str,
+            open_only=open_only_str,
+        )
 
     trade_df = _build_trade_columns(index, scope, trades, composite_members)
     feed_dfs = [_pivot_feed(frame, index, scope) for frame in feed_frames]
     feed_dfs = [df for df in feed_dfs if df is not None and not df.empty]
     df = pd.concat([trade_df] + feed_dfs, axis=1) if feed_dfs else trade_df
-    return Context(df=df, universe=universe_str, open_only=open_only_str)
+    return RunContext(
+        snapshot_timestamp=snapshot_timestamp,
+        sources=sources,
+        df=df,
+        runtime_sources=runtime_sources,
+        universe=universe_str,
+        open_only=open_only_str,
+    )
 
 
 # ---------------------------------------------------------------------------

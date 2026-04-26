@@ -88,6 +88,8 @@ def _build_trade_list_item(trade: Trade) -> TradeListItem:
     return TradeListItem(
         id=trade.id,
         strategy_id=trade.strategy_id,
+        strategy_run_id=trade.strategy_run_id,
+        composite_id=trade.composite_id,
         strategy_name=trade.strategy.display_name,
         is_paper=trade.is_paper,
         entry_at=trade.entry_at,
@@ -379,6 +381,8 @@ def get_trade_detail(db: Session, trade_id: uuid.UUID) -> TradeDetail:
     return TradeDetail(
         id=trade.id,
         strategy_id=trade.strategy_id,
+        strategy_run_id=trade.strategy_run_id,
+        composite_id=trade.composite_id,
         strategy_name=trade.strategy.display_name,
         is_paper=trade.is_paper,
         entry_at=trade.entry_at,

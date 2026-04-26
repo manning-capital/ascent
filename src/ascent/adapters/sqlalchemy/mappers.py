@@ -75,6 +75,7 @@ class OrmMappers:
             exit_at=row.exit_at,
             total_realized_pnl=row.total_realized_pnl,
             strategy_run_id=row.strategy_run_id,
+            composite_id=row.composite_id,
         )
 
     def _leg_from_row(self, row: TradeLegRow, db: Session) -> TradeLeg:

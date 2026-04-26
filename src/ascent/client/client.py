@@ -524,9 +524,7 @@ class AscentClient:
         self._raise(resp)
         return resp.json()
 
-    def get_run_trades(
-        self, feed_id: uuid.UUID, run_id: uuid.UUID
-    ) -> list[dict[str, Any]]:
+    def get_run_trades(self, feed_id: uuid.UUID, run_id: uuid.UUID) -> list[dict[str, Any]]:
         resp = self._client.get(f"/feeds/{feed_id}/runs/{run_id}/trades")
         self._raise(resp)
         return resp.json()
@@ -632,6 +630,16 @@ class AscentClient:
 
     def reset_database(self) -> dict[str, Any]:
         resp = self._client.post("/admin/reset-database")
+        self._raise(resp)
+        return resp.json()
+
+    def clear_trades(self) -> dict[str, Any]:
+        resp = self._client.post("/admin/clear-trades")
+        self._raise(resp)
+        return resp.json()
+
+    def clear_holdings(self) -> dict[str, Any]:
+        resp = self._client.post("/admin/clear-holdings")
         self._raise(resp)
         return resp.json()
 

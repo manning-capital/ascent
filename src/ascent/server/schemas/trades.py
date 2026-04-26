@@ -24,6 +24,8 @@ class TradeListItem(BaseModel):
 
     id: uuid.UUID
     strategy_id: uuid.UUID
+    strategy_run_id: uuid.UUID | None = None
+    composite_id: uuid.UUID | None = None
     strategy_name: str
     is_paper: bool
     entry_at: datetime.datetime | None = None

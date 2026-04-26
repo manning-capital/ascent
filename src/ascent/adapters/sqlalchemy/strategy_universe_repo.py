@@ -1,9 +1,8 @@
 """SQLAlchemy adapter for :class:`ascent.ports.StrategyUniverseRepository`.
 
-Returns the active subset of ``StrategyInstrumentScope`` /
-``StrategyCompositeScope`` rows. The query is intentionally tiny — a single
-indexed lookup on ``strategy_id`` filtered by ``is_active=True`` — so we can
-re-read it on every evaluation tick without measurable overhead.
+Returns the currently-active subset of ``StrategyInstrumentScope`` /
+``StrategyCompositeScope`` rows. The bitemporal scope tables encode "active"
+as ``dropped_at IS NULL``; the partial unique index keeps this query fast.
 """
 
 from __future__ import annotations
@@ -32,12 +31,12 @@ class SqlAlchemyStrategyUniverseRepository(StrategyUniverseRepository):
             rows = db.execute(
                 select(StrategyCompositeScope.composite_id)
                 .where(StrategyCompositeScope.strategy_id == strategy_id)
-                .where(StrategyCompositeScope.is_active.is_(True))
+                .where(StrategyCompositeScope.dropped_at.is_(None))
             ).all()
         else:
             rows = db.execute(
                 select(StrategyInstrumentScope.instrument_id)
                 .where(StrategyInstrumentScope.strategy_id == strategy_id)
-                .where(StrategyInstrumentScope.is_active.is_(True))
+                .where(StrategyInstrumentScope.dropped_at.is_(None))
             ).all()
         return {r[0] for r in rows}

@@ -46,6 +46,17 @@ class Trade(Base):
         comment="The identifier of the strategy run that created this trade. Nullable because a trade may span multiple runs or be created manually.",
     )
     strategy_run: Mapped[Optional["StrategyRun"]] = relationship("StrategyRun")
+    composite_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("composite.id"),
+        nullable=True,
+        comment=(
+            "The identifier of the composite this trade was opened on, when the "
+            "strategy is composite-scoped. NULL for instrument-scoped trades. "
+            "Stored explicitly at trade-time so context reconstruction doesn't "
+            "have to infer the composite from leg-membership matching."
+        ),
+    )
     portfolio_id: Mapped[uuid.UUID] = mapped_column(
         Uuid,
         ForeignKey("portfolio.id"),

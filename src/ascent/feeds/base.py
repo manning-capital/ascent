@@ -260,9 +260,11 @@ class Feed(ABC):
 
         For instrument-scoped feeds this is a list of ``instrument_id``;
         for composite-scoped feeds it's a list of ``composite_id``. The list
-        reflects only active rows (``FeedInstrumentScope.is_active=True`` /
-        ``FeedCompositeScope.is_active=True``) and is re-queried on every tick
-        so disable/enable changes apply without an engine restart.
+        is resolved as-of the run's ``snapshot_timestamp`` against the
+        bitemporal scope tables (rows whose ``[added_at, dropped_at)``
+        interval covers the timestamp), so the engine sees the membership
+        that was in effect *at run time* and edits made after run-start
+        don't change the view.
 
         Returns an empty list if the feed has no scope configured — the feed
         still runs but is expected to fetch nothing.
@@ -272,9 +274,7 @@ class Feed(ABC):
         try:
             return _current_universe.get()
         except LookupError:
-            raise RuntimeError(
-                "get_universe() called outside of a feed run context."
-            ) from None
+            raise RuntimeError("get_universe() called outside of a feed run context.") from None
 
     def get_feed(self, feed_cls: type[Feed]) -> pd.DataFrame:
         """Get a parent feed's latest data inside a triggered feed.

@@ -1,14 +1,15 @@
-"""Pairs-trading strategy over Ornstein-Uhlenbeck simulated spreads.
+"""Pairs-trading strategy over composite SPREAD instruments using OU parameters.
 
-For each configured pair ``(A, B)``, the strategy tracks a rolling mean and
-stddev of the log-spread ``s = ln(P_A) - ln(P_B)``, computes a z-score, and
-opens two simultaneous trades when the spread diverges:
+For each composite in the active universe, the strategy reads the hedge
+ratio ``OU_BETA``, the long-run mean ``OU_THETA``, and the Leung-Li optimal
+spread-space ``OU_ENTRY`` / ``OU_EXIT`` levels from the :class:`OUParams`
+feed, computes the current log-spread ``s = ln(P_A) - beta * ln(P_B)`` across
+the two legs, and opens or closes a composite-scoped trade when the spread
+crosses those levels. Short-side triggers are derived by reflecting the entry
+and exit levels around ``theta``.
 
-    z > entry_z   → SHORT A, LONG B       (spread too high; bet on reversion)
-    z < -entry_z  → LONG A, SHORT B       (spread too low)
-
-Both legs are closed together once ``|z|`` falls back inside ``exit_z``,
-or if the stop is breached.
+Because the OU parameters are fixed per composite and the optimal levels are
+emitted by the feed, the strategy needs no rolling window and no warmup.
 """
 
 from __future__ import annotations
@@ -16,7 +17,6 @@ from __future__ import annotations
 import math
 import os
 import uuid
-from collections import deque
 from typing import ClassVar
 
 import pandas as pd
@@ -24,225 +24,349 @@ from pydantic import BaseModel, Field
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
-from ascent.strategies import Context, Strategy
-
-PAIRS: list[tuple[str, str]] = [
-    ("BTC", "ETH"),
-    ("SOL", "ADA"),
-    ("XRP", "ADA"),
-]
-
-
-def _load_pair_instrument_ids(
-    database_url: str, pairs: list[tuple[str, str]]
-) -> list[tuple[uuid.UUID, uuid.UUID, str, str]]:
-    """Resolve each ``(sym_a, sym_b)`` pair to instrument UUIDs from the DB."""
-    from ascent.database.models.assets import Asset
-    from ascent.database.models.instruments import Instrument
-
-    engine = create_engine(database_url)
-    symbol_to_inst: dict[str, uuid.UUID] = {}
-    with Session(engine) as db:
-        rows = db.execute(
-            select(Instrument.id, Asset.name).join(Asset, Instrument.from_asset_id == Asset.id)
-        ).all()
-        for inst_id, asset_name in rows:
-            symbol_to_inst[asset_name] = inst_id
-
-    resolved: list[tuple[uuid.UUID, uuid.UUID, str, str]] = []
-    for sym_a, sym_b in pairs:
-        if sym_a not in symbol_to_inst or sym_b not in symbol_to_inst:
-            print(f"Skipping pair {sym_a}/{sym_b} (missing instrument)")
-            continue
-        resolved.append((symbol_to_inst[sym_a], symbol_to_inst[sym_b], sym_a, sym_b))
-    return resolved
+from ascent.strategies import Context, Strategy, TradeView
 
 
 class PairsOUStrategy(Strategy):
-    """Trade mean-reverting pair spreads using a rolling z-score."""
+    """Trade mean-reverting composite spreads using feed-published OU levels."""
 
     class Parameters(BaseModel):
-        lookback: int = Field(100, description="Rolling window size for spread stats")
-        warmup: int = Field(30, description="Min samples before trading")
-        entry_z: float = Field(2.0, description="Absolute z-score to open a pair")
-        exit_z: float = Field(0.5, description="Absolute z-score to close a pair")
-        stop_z: float = Field(4.0, description="Absolute z-score to hard-stop a pair")
-        trade_qty: float = Field(0.01, description="Quantity per leg")
-
-    feeds = ["MARKET_DATA", "OUPARAMS"]
-    exchanges = ["KRAKEN_SECURITY_EXCHANGE"]
-    portfolio = "MAIN"
-
-    _pairs: ClassVar[list[tuple[uuid.UUID, uuid.UUID, str, str]]] = []
-    _spread_history: ClassVar[dict[tuple[str, str], deque[float]]] = {}
-    _open_pair_trades: ClassVar[dict[tuple[str, str], tuple[uuid.UUID, uuid.UUID, str]]] = {}
-
-    def _spread(
-        self,
-        ctx: Context,
-        inst_a: uuid.UUID,
-        inst_b: uuid.UUID,
-        sym_a: str,
-        sym_b: str,
-    ) -> float | None:
-        log = self.get_logger()
-        try:
-            price_a = ctx.df.loc[str(inst_a), ("market_data_feed", "close")]
-            price_b = ctx.df.loc[str(inst_b), ("market_data_feed", "close")]
-        except KeyError:
-            log.info(
-                "%s/%s  skip: no market_data_feed.close row for one or both instruments",
-                sym_a,
-                sym_b,
-            )
-            return None
-        if pd.isna(price_a) or pd.isna(price_b) or price_a <= 0 or price_b <= 0:
-            log.info(
-                "%s/%s  skip: invalid prices  a=%s b=%s",
-                sym_a,
-                sym_b,
-                price_a,
-                price_b,
-            )
-            return None
-        return math.log(price_a) - math.log(price_b)
-
-    def _open_pair(
-        self,
-        log,
-        key: tuple[str, str],
-        inst_a: uuid.UUID,
-        inst_b: uuid.UUID,
-        side_a: str,
-    ) -> None:
-        """Open both legs of a pair trade simultaneously."""
-        side_b = "SHORT" if side_a == "LONG" else "LONG"
-        qty = self.parameters.trade_qty
-
-        res_a = self.open_trade(inst_a, side_a, qty)
-        res_b = self.open_trade(inst_b, side_b, qty)
-        self._open_pair_trades[key] = (res_a.trade_id, res_b.trade_id, side_a)
-
-        log.info(
-            "OPEN PAIR  %s/%s  %s %s / %s %s  trades=%s,%s",
-            key[0],
-            key[1],
-            side_a,
-            str(inst_a)[:8],
-            side_b,
-            str(inst_b)[:8],
-            str(res_a.trade_id)[:8],
-            str(res_b.trade_id)[:8],
+        capital_per_trade: float = Field(
+            1000.0,
+            gt=0,
+            description=(
+                "Target capital (USD) per trade. Composite units are sized as "
+                "capital_per_trade / (price_a + beta * price_b) for approximate "
+                "dollar-neutral pairs exposure."
+            ),
         )
 
-    def _close_pair(self, log, key: tuple[str, str], reason: str) -> None:
-        trade_a, trade_b, _ = self._open_pair_trades.pop(key)
+    feeds = ["MARKET_DATA", "OUPARAMS", "OUSPREAD"]
+    scope = "composite"
+    exchanges = ["KRAKEN_SECURITY_EXCHANGE"]
+    portfolio = "MAIN"
+    display_name = "Pairs OU Strategy"
+    description = (
+        "Mean-reversion on composite spreads using Leung-Li optimal "
+        "entry/exit levels published by the OU parameter feed."
+    )
+    trade_view = TradeView(
+        series=["OU_SPREAD", "OU_THETA", "OU_ENTRY", "OU_EXIT"],
+        show_trade_markers=True,
+    )
+
+    _composite_legs: ClassVar[dict[uuid.UUID, tuple[uuid.UUID, uuid.UUID]]] = {}
+    _initialised: ClassVar[bool] = False
+
+    _DERIVED_COLUMNS: ClassVar[tuple[str, ...]] = (
+        "spread",
+        "mean",
+        "entry_long",
+        "exit_long",
+        "entry_short",
+        "exit_short",
+    )
+
+    def _ensure_initialised(self) -> None:
+        if PairsOUStrategy._initialised:
+            return
+        from ascent.database.models.composites import Composite, CompositeMember
+        from ascent.database.models.types import CompositeType
+
+        engine = create_engine(os.environ["ASCENT_DATABASE_URL"])
+        with Session(engine) as db:
+            rows = db.execute(
+                select(Composite.id, CompositeMember.order, CompositeMember.instrument_id)
+                .join(CompositeType, Composite.composite_type_id == CompositeType.id)
+                .join(CompositeMember, CompositeMember.composite_id == Composite.id)
+                .where(CompositeType.name == "SPREAD")
+                .order_by(Composite.id, CompositeMember.order)
+            ).all()
+
+        legs_by_composite: dict[uuid.UUID, dict[int, uuid.UUID]] = {}
+        for composite_id, order, instrument_id in rows:
+            legs_by_composite.setdefault(composite_id, {})[order] = instrument_id
+
+        for composite_id, legs in legs_by_composite.items():
+            if set(legs.keys()) == {1, 2}:
+                PairsOUStrategy._composite_legs[composite_id] = (legs[1], legs[2])
+
+        PairsOUStrategy._initialised = True
+
+    def derive(self, ctx: Context) -> pd.DataFrame:
+        """Per-composite spread + feed-published entry/exit levels.
+
+        Pure: no logging, no trade routing. Called both by ``evaluate`` during
+        the live loop and by the server's trade-context endpoint when it
+        reconstructs this strategy's plottable signals from historical feed
+        data. Returned frame shares ``ctx.df.index`` — same value broadcast
+        across each composite's two legs; the server de-duplicates.
+        """
+        frame = pd.DataFrame(
+            index=ctx.df.index,
+            columns=list(self._DERIVED_COLUMNS),
+            dtype=float,
+        )
+        if ctx.df.empty:
+            return frame
+
+        self._ensure_initialised()
+
+        for composite_str in ctx.df.index.get_level_values("composite_id").unique():
+            composite_id = uuid.UUID(composite_str)
+            legs = PairsOUStrategy._composite_legs.get(composite_id)
+            if legs is None:
+                continue
+            values = self._compute_composite_row(ctx, composite_str, legs)
+            if values is None:
+                continue
+            for name, value in values.items():
+                frame.loc[composite_str, name] = value
+
+        return frame
+
+    def _compute_composite_row(
+        self,
+        ctx: Context,
+        composite_str: str,
+        legs: tuple[uuid.UUID, uuid.UUID],
+    ) -> dict[str, float] | None:
+        inst_a, inst_b = legs
         try:
-            self.close_trade(trade_a, close_reason=reason)
-        except Exception:  # noqa: BLE001
-            log.exception("Failed to close leg A trade=%s", trade_a)
+            composite_rows = ctx.df.loc[composite_str]
+        except KeyError:
+            return None
+        if composite_rows.empty:
+            return None
+
+        head = composite_rows.iloc[0]
         try:
-            self.close_trade(trade_b, close_reason=reason)
-        except Exception:  # noqa: BLE001
-            log.exception("Failed to close leg B trade=%s", trade_b)
-        log.info("CLOSE PAIR %s/%s  reason=%s", key[0], key[1], reason)
+            raw_beta = head[("ouparams", "OU_BETA")]
+            raw_theta = head[("ouparams", "OU_THETA")]
+            raw_entry = head[("ouparams", "OU_ENTRY")]
+            raw_exit = head[("ouparams", "OU_EXIT")]
+        except KeyError:
+            return None
+        if any(v is None or pd.isna(v) for v in (raw_beta, raw_theta, raw_entry, raw_exit)):
+            return None
+        beta = float(raw_beta)
+        theta = float(raw_theta)
+        entry_long = float(raw_entry)
+        exit_long = float(raw_exit)
+        if any(not math.isfinite(v) for v in (beta, theta, entry_long, exit_long)):
+            return None
+        if beta == 0:
+            return None
+
+        try:
+            raw_price_a = ctx.df.loc[(composite_str, str(inst_a)), ("market_data", "CLOSE")]
+            raw_price_b = ctx.df.loc[(composite_str, str(inst_b)), ("market_data", "CLOSE")]
+        except KeyError:
+            return None
+        if any(v is None or pd.isna(v) for v in (raw_price_a, raw_price_b)):
+            return None
+        price_a = float(raw_price_a)
+        price_b = float(raw_price_b)
+        if not (math.isfinite(price_a) and math.isfinite(price_b)):
+            return None
+        if price_a <= 0 or price_b <= 0:
+            return None
+
+        spread = math.log(price_a) - beta * math.log(price_b)
+        return {
+            "spread": spread,
+            "mean": theta,
+            "entry_long": entry_long,
+            "exit_long": exit_long,
+            "entry_short": 2 * theta - entry_long,
+            "exit_short": 2 * theta - exit_long,
+        }
 
     def evaluate(self, ctx: Context) -> None:
-        log = self.get_logger()
-        log.info("Evaluating strategy with %d rows of data", len(ctx.df))
+        logger = self.get_logger()
 
+        logger.info("evaluate tick: df_rows=%d universe=%d", len(ctx.df), len(ctx.universe))
         if ctx.df.empty:
-            log.info("skip evaluate: ctx.df is empty (no feed data arrived yet)")
+            logger.info("skip: ctx.df is empty (no feed data arrived yet)")
             return
-        if not self._pairs:
-            log.info("skip evaluate: no resolved pairs (instrument lookup returned empty)")
-            return
+        self._ensure_initialised()
+        logger.info("composite_legs resolved: %d", len(PairsOUStrategy._composite_legs))
 
         params = self.parameters
 
-        for inst_a, inst_b, sym_a, sym_b in self._pairs:
-            key = (sym_a, sym_b)
-            spread = self._spread(ctx, inst_a, inst_b, sym_a, sym_b)
-            if spread is None:
+        for composite_str in ctx.universe:
+            composite_id = uuid.UUID(composite_str)
+            legs = PairsOUStrategy._composite_legs.get(composite_id)
+            if legs is None:
+                logger.info("%s skip: composite not in leg lookup", composite_str[:8])
+                continue
+            inst_a, inst_b = legs
+
+            try:
+                composite_rows = ctx.df.loc[composite_str]
+            except KeyError:
+                logger.info("%s skip: composite not in ctx.df", composite_str[:8])
+                continue
+            if composite_rows.empty:
+                logger.info("%s skip: composite rows empty", composite_str[:8])
                 continue
 
-            history = self._spread_history.setdefault(key, deque(maxlen=params.lookback))
-            history.append(spread)
+            head = composite_rows.iloc[0]
+            try:
+                raw_beta = head[("ouparams", "OU_BETA")]
+                raw_theta = head[("ouparams", "OU_THETA")]
+                raw_entry = head[("ouparams", "OU_ENTRY")]
+                raw_exit = head[("ouparams", "OU_EXIT")]
+            except KeyError:
+                logger.info(
+                    "%s skip: ouparams columns missing (cols=%s)",
+                    composite_str[:8],
+                    list(head.index),
+                )
+                continue
+            if any(v is None or pd.isna(v) for v in (raw_beta, raw_theta, raw_entry, raw_exit)):
+                logger.info(
+                    "%s skip: ouparams not yet populated beta=%s theta=%s entry=%s exit=%s",
+                    composite_str[:8],
+                    raw_beta,
+                    raw_theta,
+                    raw_entry,
+                    raw_exit,
+                )
+                continue
+            beta = float(raw_beta)
+            theta = float(raw_theta)
+            entry_level = float(raw_entry)
+            exit_level = float(raw_exit)
+            if any(not math.isfinite(v) for v in (beta, theta, entry_level, exit_level)):
+                logger.info(
+                    "%s skip: non-finite ouparams beta=%s theta=%s entry=%s exit=%s",
+                    composite_str[:8],
+                    beta,
+                    theta,
+                    entry_level,
+                    exit_level,
+                )
+                continue
+            if beta == 0:
+                logger.info("%s skip: beta is 0", composite_str[:8])
+                continue
 
-            if len(history) < params.warmup:
-                log.info(
-                    "%s/%s  warming up  %d/%d  spread=%+.4f",
-                    sym_a,
-                    sym_b,
-                    len(history),
-                    params.warmup,
-                    spread,
+            entry_short = 2 * theta - entry_level
+            exit_short = 2 * theta - exit_level
+
+            try:
+                raw_price_a = ctx.df.loc[(composite_str, str(inst_a)), ("market_data", "CLOSE")]
+                raw_price_b = ctx.df.loc[(composite_str, str(inst_b)), ("market_data", "CLOSE")]
+            except KeyError:
+                logger.info(
+                    "%s skip: market_data.CLOSE missing for legs a=%s b=%s",
+                    composite_str[:8],
+                    str(inst_a)[:8],
+                    str(inst_b)[:8],
+                )
+                continue
+            if any(v is None or pd.isna(v) for v in (raw_price_a, raw_price_b)):
+                logger.info(
+                    "%s skip: market_data.CLOSE not yet populated a=%s b=%s",
+                    composite_str[:8],
+                    raw_price_a,
+                    raw_price_b,
+                )
+                continue
+            price_a = float(raw_price_a)
+            price_b = float(raw_price_b)
+            if not (math.isfinite(price_a) and math.isfinite(price_b)):
+                logger.info(
+                    "%s skip: non-finite prices a=%s b=%s",
+                    composite_str[:8],
+                    price_a,
+                    price_b,
+                )
+                continue
+            if price_a <= 0 or price_b <= 0:
+                logger.info(
+                    "%s skip: non-positive prices a=%s b=%s",
+                    composite_str[:8],
+                    price_a,
+                    price_b,
                 )
                 continue
 
-            series = pd.Series(history)
-            mu = series.mean()
-            sd = series.std(ddof=0)
-            if sd == 0 or pd.isna(sd):
-                log.info(
-                    "%s/%s  skip: stddev is %s (spread has not moved over window=%d)",
-                    sym_a,
-                    sym_b,
-                    sd,
-                    len(history),
-                )
+            spread = math.log(price_a) - beta * math.log(price_b)
+
+            trade_status = str(head[("trade", "status")])
+            trade_direction = head[("trade", "direction")]
+            trade_id = head[("trade", "trade_id")]
+
+            logger.info(
+                "composite=%s spread=%+.6f entry=%+.6f exit=%+.6f theta=%+.6f status=%s",
+                composite_str[:8],
+                spread,
+                entry_level,
+                exit_level,
+                theta,
+                trade_status,
+            )
+
+            if trade_status in ("OPENING", "CLOSING", "PENDING", "ERROR"):
                 continue
 
-            z = (spread - mu) / sd
+            if trade_status == "WAITING":
+                # Beta-hedged sizing: gross notional of a same-quantity pair
+                # is qty*(price_a + beta*price_b), so quantity that consumes
+                # `capital_per_trade` dollars of gross exposure is:
+                gross_per_unit = price_a + beta * price_b
+                if gross_per_unit <= 0:
+                    logger.info(
+                        "%s skip: non-positive gross_per_unit=%s", composite_str[:8], gross_per_unit
+                    )
+                    continue
+                quantity = params.capital_per_trade / gross_per_unit
 
-            open_state = self._open_pair_trades.get(key)
-            if open_state is not None:
-                _, _, side_a = open_state
-                diverged_further = (side_a == "SHORT" and z >= params.stop_z) or (
-                    side_a == "LONG" and z <= -params.stop_z
-                )
-                reverted = abs(z) <= params.exit_z
-                if reverted:
-                    self._close_pair(log, key, reason="MEAN_REVERT")
-                elif diverged_further:
-                    self._close_pair(log, key, reason="STOP_LOSS")
-                else:
-                    log.info(
-                        "%s/%s  holding %s  z=%+.2f  exit_z=%.2f  stop_z=%.2f",
-                        sym_a,
-                        sym_b,
-                        side_a,
-                        z,
-                        params.exit_z,
-                        params.stop_z,
+                if spread <= entry_level:
+                    self.open_trade(
+                        composite_id,
+                        direction="LONG",
+                        quantity=quantity,
+                        scope="composite",
+                        composite_instrument_ids=[inst_a, inst_b],
+                    )
+                    logger.info(
+                        "OPEN LONG composite=%s spread=%+.6f qty=%.6f",
+                        composite_str[:8],
+                        spread,
+                        quantity,
+                    )
+                elif spread >= entry_short:
+                    self.open_trade(
+                        composite_id,
+                        direction="SHORT",
+                        quantity=quantity,
+                        scope="composite",
+                        composite_instrument_ids=[inst_a, inst_b],
+                    )
+                    logger.info(
+                        "OPEN SHORT composite=%s spread=%+.6f qty=%.6f",
+                        composite_str[:8],
+                        spread,
+                        quantity,
                     )
                 continue
 
-            if z >= params.entry_z:
-                log.info("%s/%s  z=%+.2f  → SHORT %s / LONG %s", sym_a, sym_b, z, sym_a, sym_b)
-                self._open_pair(log, key, inst_a, inst_b, side_a="SHORT")
-            elif z <= -params.entry_z:
-                log.info("%s/%s  z=%+.2f  → LONG %s / SHORT %s", sym_a, sym_b, z, sym_a, sym_b)
-                self._open_pair(log, key, inst_a, inst_b, side_a="LONG")
-            else:
-                log.info(
-                    "%s/%s  no trade  z=%+.2f  (entry_z=±%.2f)  mu=%+.4f sd=%.4f n=%d",
-                    sym_a,
-                    sym_b,
-                    z,
-                    params.entry_z,
-                    mu,
-                    sd,
-                    len(history),
-                )
+            if trade_status == "OPEN":
+                if trade_id is None:
+                    continue
+                if trade_direction == "LONG" and spread >= exit_level:
+                    self.close_trade(str(trade_id), close_reason="OPTIMAL_EXIT")
+                    logger.info("CLOSE LONG composite=%s spread=%+.6f", composite_str[:8], spread)
+                elif trade_direction == "SHORT" and spread <= exit_short:
+                    self.close_trade(str(trade_id), close_reason="OPTIMAL_EXIT")
+                    logger.info("CLOSE SHORT composite=%s spread=%+.6f", composite_str[:8], spread)
 
 
 if __name__ == "__main__":
-    db_url = os.environ["ASCENT_DATABASE_URL"]
-    PairsOUStrategy._pairs = _load_pair_instrument_ids(db_url, PAIRS)
-    print(f"Resolved {len(PairsOUStrategy._pairs)} pairs for trading")
-
     PairsOUStrategy.run(
         redis_url=os.environ["ASCENT_REDIS_URL"],
-        database_url=db_url,
+        database_url=os.environ["ASCENT_DATABASE_URL"],
     )

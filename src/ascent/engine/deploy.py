@@ -265,6 +265,7 @@ def deploy_strategy(
     display_name = name or strategy_cls.get_display_name()
     description = strategy_cls.description or ""
     param_schema = strategy_cls.parameter_schema()
+    trade_view_config = strategy_cls.trade_view_config()
     defaults = strategy_cls.Parameters().model_dump()
 
     if portfolio_id is None:
@@ -282,6 +283,7 @@ def deploy_strategy(
         existing.parameter_schema = param_schema
         existing.parameters = defaults
         existing.portfolio_id = portfolio_id
+        existing.trade_view = trade_view_config
         if name:
             existing.display_name = name
         if description:
@@ -298,6 +300,7 @@ def deploy_strategy(
             portfolio_id=portfolio_id,
             parameters=defaults,
             parameter_schema=param_schema,
+            trade_view=trade_view_config,
             is_active=True,
         )
         db.add(strat)

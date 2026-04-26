@@ -9,6 +9,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session, sessionmaker
 
 from ascent.database.models.feeds import FeedRun
+from ascent.domain import Context
 from ascent.ports import FeedRunRepository
 
 
@@ -22,9 +23,10 @@ class SqlAlchemyFeedRunRepository(FeedRunRepository):
         feed_id: uuid.UUID,
         started_at: datetime,
         snapshot_timestamp: datetime,
+        context: Context | None = None,
     ) -> uuid.UUID:
         return await asyncio.to_thread(
-            self._create_sync, feed_id, started_at, snapshot_timestamp
+            self._create_sync, feed_id, started_at, snapshot_timestamp, context
         )
 
     async def complete(self, run_id: uuid.UUID, *, at: datetime) -> None:
@@ -38,6 +40,7 @@ class SqlAlchemyFeedRunRepository(FeedRunRepository):
         feed_id: uuid.UUID,
         started_at: datetime,
         snapshot_timestamp: datetime,
+        context: Context | None,
     ) -> uuid.UUID:
         with Session(bind=self._sf.kw["bind"]) as db:
             row = FeedRun(
@@ -45,6 +48,7 @@ class SqlAlchemyFeedRunRepository(FeedRunRepository):
                 snapshot_timestamp=snapshot_timestamp,
                 status="RUNNING",
                 started_at=started_at,
+                context=context.model_dump(mode="json") if context is not None else None,
             )
             db.add(row)
             db.commit()

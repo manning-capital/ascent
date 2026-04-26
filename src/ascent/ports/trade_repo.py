@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Any, Protocol, runtime_checkable
 
 from ascent.domain import (
+    Context,
     Direction,
     Order,
     OrderState,
@@ -46,6 +47,7 @@ class TradeRepository(Protocol):
         entry_at: datetime,
         strategy_run_id: uuid.UUID | None,
         legs: list[NewLegSpec],
+        composite_id: uuid.UUID | None = None,
     ) -> Trade: ...
 
     async def set_state(
@@ -130,6 +132,7 @@ class FeedRunRepository(Protocol):
         feed_id: uuid.UUID,
         started_at: datetime,
         snapshot_timestamp: datetime,
+        context: Context | None = None,
     ) -> uuid.UUID: ...
 
     async def complete(self, run_id: uuid.UUID, *, at: datetime) -> None: ...

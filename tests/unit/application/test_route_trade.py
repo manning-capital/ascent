@@ -145,7 +145,7 @@ class TestSubmitComposite:
         for entry in dispatches:
             payload = entry.payload
             assert payload["order"]["quantity"] == 2.5
-            assert payload["order"]["from_asset_symbol"] in (str(inst_a), str(inst_b))
+            assert payload["order"]["instrument_id"] in (str(inst_a), str(inst_b))
 
 
 class TestRejection:
@@ -214,9 +214,7 @@ class TestRejection:
     async def test_no_op_gate_default_lets_submit_through(self):
         # Constructed without an explicit route_gate — the always-allow default kicks in.
         router, _, _, _, outbox, _ = _router()
-        draft = await router.submit(
-            side="BUY", target_id=uuid.uuid4(), quantity=1.0, now=NOW
-        )
+        draft = await router.submit(side="BUY", target_id=uuid.uuid4(), quantity=1.0, now=NOW)
         assert draft.state == TradeState.OPENING
         assert len(outbox.enqueued) == 1
 

@@ -136,6 +136,18 @@ def _create_tables() -> None:
                 ") NOT VALID; EXCEPTION WHEN duplicate_object THEN NULL; END $$"
             )
         )
+        # Per-strategy trade-detail chart configuration (TradeView).
+        conn.execute(text("ALTER TABLE strategy ADD COLUMN IF NOT EXISTS trade_view JSONB"))
+        # Ensure the OU_SPREAD attribute row exists so the OUSpread feed can
+        # persist values on existing DBs where seed_descriptors won't re-run.
+        conn.execute(
+            text(
+                "INSERT INTO attribute (id, name, display_name, description, is_active) "
+                "VALUES (gen_random_uuid(), 'OU_SPREAD', 'OU Spread', "
+                "'Per-tick log-spread s = ln(p_a) - beta*ln(p_b) for the composite', true) "
+                "ON CONFLICT (name) DO NOTHING"
+            )
+        )
         conn.commit()
 
 

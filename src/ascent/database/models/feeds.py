@@ -7,13 +7,14 @@ import uuid
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
-    Boolean,
     CheckConstraint,
     ForeignKey,
+    Index,
     String,
     Text,
     Uuid,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -165,6 +166,15 @@ class FeedRun(Base):
     started_at: Mapped[datetime.datetime] = mapped_column(nullable=False)
     completed_at: Mapped[datetime.datetime | None] = mapped_column(nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    context: Mapped[dict | None] = mapped_column(
+        JSONB,
+        nullable=True,
+        comment=(
+            "Persisted `ascent.domain.Context` describing what this run produced — "
+            "table, scope_type, attributes, and snapshot_timestamp. Read by the "
+            "context-reconstruction API to render the trade-detail chart."
+        ),
+    )
     created_at: Mapped[datetime.datetime] = mapped_column(
         nullable=False,
         server_default=func.now(),
@@ -173,7 +183,22 @@ class FeedRun(Base):
 
 class FeedInstrumentScope(Base):
     __tablename__ = "feed_instrument_scope"
-    __table_args__ = {"comment": "Defines which instruments a feed covers."}
+    __table_args__ = (
+        Index(
+            "uq_feed_instrument_scope_active",
+            "feed_id",
+            "instrument_id",
+            unique=True,
+            postgresql_where=text("dropped_at IS NULL"),
+        ),
+        Index(
+            "idx_feed_instrument_scope_asof",
+            "feed_id",
+            "added_at",
+            "dropped_at",
+        ),
+        {"comment": "Defines which instruments a feed covers (bitemporal)."},
+    )
 
     feed_id: Mapped[uuid.UUID] = mapped_column(
         Uuid,
@@ -192,18 +217,31 @@ class FeedInstrumentScope(Base):
     )
     instrument: Mapped[Instrument] = relationship("Instrument")
     order: Mapped[int] = mapped_column(nullable=False)
-    is_active: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True, server_default="true"
-    )
-    created_at: Mapped[datetime.datetime] = mapped_column(
+    added_at: Mapped[datetime.datetime] = mapped_column(
+        primary_key=True,
         nullable=False,
-        server_default=func.now(),
     )
+    dropped_at: Mapped[datetime.datetime | None] = mapped_column(nullable=True)
 
 
 class FeedCompositeScope(Base):
     __tablename__ = "feed_composite_scope"
-    __table_args__ = {"comment": "Defines which composites a feed covers."}
+    __table_args__ = (
+        Index(
+            "uq_feed_composite_scope_active",
+            "feed_id",
+            "composite_id",
+            unique=True,
+            postgresql_where=text("dropped_at IS NULL"),
+        ),
+        Index(
+            "idx_feed_composite_scope_asof",
+            "feed_id",
+            "added_at",
+            "dropped_at",
+        ),
+        {"comment": "Defines which composites a feed covers (bitemporal)."},
+    )
 
     feed_id: Mapped[uuid.UUID] = mapped_column(
         Uuid,
@@ -222,10 +260,8 @@ class FeedCompositeScope(Base):
     )
     composite: Mapped[Composite] = relationship("Composite")
     order: Mapped[int] = mapped_column(nullable=False)
-    is_active: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True, server_default="true"
-    )
-    created_at: Mapped[datetime.datetime] = mapped_column(
+    added_at: Mapped[datetime.datetime] = mapped_column(
+        primary_key=True,
         nullable=False,
-        server_default=func.now(),
     )
+    dropped_at: Mapped[datetime.datetime | None] = mapped_column(nullable=True)

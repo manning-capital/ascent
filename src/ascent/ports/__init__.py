@@ -15,6 +15,7 @@ from ascent.ports.heartbeat import HeartbeatStore
 from ascent.ports.outbox import OutboxPublisher
 from ascent.ports.route_gate import RouteGate
 from ascent.ports.run_tracker import RunTrackerPort
+from ascent.ports.scope_repository import ScopeMembershipRecord, ScopeRepository
 from ascent.ports.state_store import StateStore
 from ascent.ports.strategy_universe import StrategyUniverseRepository
 from ascent.ports.trade_repo import (
@@ -42,6 +43,8 @@ __all__ = [
     "OutboxPublisher",
     "RouteGate",
     "RunTrackerPort",
+    "ScopeMembershipRecord",
+    "ScopeRepository",
     "StateStore",
     "StrategyRunRepository",
     "StrategyUniverseRepository",
