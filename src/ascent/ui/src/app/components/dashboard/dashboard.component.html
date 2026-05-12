@@ -1,5 +1,6 @@
-<div class="p-6">
-  <h1 class="text-2xl font-bold mb-6">Dashboard</h1>
+<app-page-header title="Dashboard" />
+
+<div class="p-4 overflow-auto">
 
   <!-- Section A: Key Metrics -->
   <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
@@ -19,7 +20,7 @@
         <app-stat-card label="Win Rate" [value]="s.win_rate + '%'" [subtitle]="s.wins + 'W / ' + s.losses + 'L'"/>
         <app-stat-card label="Profit Factor" [value]="s.profit_factor.toFixed(2)" [subtitle]="'Expectancy: ' + formatCurrency(s.expectancy)"/>
         <app-stat-card label="Total Trades" [value]="'' + s.total_trades" [subtitle]="s.open_trades + ' open / ' + s.closed_trades + ' closed'"/>
-        <app-stat-card label="Max Drawdown" [value]="formatCurrency(s.max_drawdown)" valueClass="text-red-500" [subtitle]="s.max_drawdown_duration + ' trades duration'"/>
+        <app-stat-card label="Max Drawdown" [value]="formatCurrency(s.max_drawdown)" valueClass="text-negative" [subtitle]="s.max_drawdown_duration + ' trades duration'"/>
       }
     }
   </div>
@@ -119,19 +120,19 @@
             </div>
             <div class="flex justify-between text-sm">
               <span class="text-muted-color">Avg Win</span>
-              <span class="font-semibold text-green-500">{{ formatCurrency(s.avg_win) }}</span>
+              <span class="font-semibold text-positive">{{ formatCurrency(s.avg_win) }}</span>
             </div>
             <div class="flex justify-between text-sm">
               <span class="text-muted-color">Avg Loss</span>
-              <span class="font-semibold text-red-500">{{ formatCurrency(s.avg_loss) }}</span>
+              <span class="font-semibold text-negative">{{ formatCurrency(s.avg_loss) }}</span>
             </div>
             <div class="flex justify-between text-sm">
               <span class="text-muted-color">Max Win</span>
-              <span class="font-semibold text-green-500">{{ formatCurrency(s.max_win) }}</span>
+              <span class="font-semibold text-positive">{{ formatCurrency(s.max_win) }}</span>
             </div>
             <div class="flex justify-between text-sm">
               <span class="text-muted-color">Max Loss</span>
-              <span class="font-semibold text-red-500">{{ formatCurrency(s.max_loss) }}</span>
+              <span class="font-semibold text-negative">{{ formatCurrency(s.max_loss) }}</span>
             </div>
           </div>
         </div>
@@ -150,7 +151,7 @@
             </div>
             <div class="flex justify-between text-sm">
               <span class="text-muted-color">Max Drawdown</span>
-              <span class="font-semibold text-red-500">{{ formatCurrency(s.max_drawdown) }}</span>
+              <span class="font-semibold text-negative">{{ formatCurrency(s.max_drawdown) }}</span>
             </div>
             <div class="flex justify-between text-sm">
               <span class="text-muted-color">Max DD Duration</span>
@@ -193,11 +194,11 @@
             </div>
             <div class="flex justify-between text-sm">
               <span class="text-muted-color">Winning</span>
-              <span class="font-semibold text-green-500">{{ s.wins }}</span>
+              <span class="font-semibold text-positive">{{ s.wins }}</span>
             </div>
             <div class="flex justify-between text-sm">
               <span class="text-muted-color">Losing</span>
-              <span class="font-semibold text-red-500">{{ s.losses }}</span>
+              <span class="font-semibold text-negative">{{ s.losses }}</span>
             </div>
             <div class="flex justify-between text-sm">
               <span class="text-muted-color">Win Rate</span>
@@ -205,11 +206,11 @@
             </div>
             <div class="flex justify-between text-sm">
               <span class="text-muted-color">Best Streak</span>
-              <span class="font-semibold text-green-500">{{ s.max_win_streak }} trades</span>
+              <span class="font-semibold text-positive">{{ s.max_win_streak }} trades</span>
             </div>
             <div class="flex justify-between text-sm">
               <span class="text-muted-color">Worst Streak</span>
-              <span class="font-semibold text-red-500">{{ s.max_loss_streak }} trades</span>
+              <span class="font-semibold text-negative">{{ s.max_loss_streak }} trades</span>
             </div>
           </div>
         </div>
@@ -288,7 +289,7 @@
               <ng-template #header>
                 <div class="flex items-center justify-between p-5 pb-0">
                   <h3 class="font-semibold text-sm">{{ strategy.display_name }}</h3>
-                  <span class="w-2 h-2 rounded-full" [class]="strategy.is_active ? 'bg-green-500' : 'bg-surface-400'"></span>
+                  <span class="w-2 h-2 rounded-full" [class]="strategy.is_active ? 'bg-positive' : 'bg-edge'"></span>
                 </div>
               </ng-template>
               <div class="flex items-center gap-2 mb-3">

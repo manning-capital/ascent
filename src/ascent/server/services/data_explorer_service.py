@@ -12,6 +12,8 @@ from ascent.server.exceptions import BadRequestError
 from ascent.server.schemas.common import PaginatedResponse
 from ascent.server.schemas.data_explorer import (
     DataExplorerFilterOptions,
+    DataSeriesPoint,
+    DataSeriesResponse,
     DataSourceInfo,
     FilterOption,
 )
@@ -373,6 +375,121 @@ def query_data(
         page_size=page_size,
         total_pages=total_pages,
         columns=columns,
+    )
+
+
+_BUCKET_INTERVALS = {
+    "minute": "1 minute",
+    "hour": "1 hour",
+    "day": "1 day",
+    "week": "1 week",
+    "month": "1 month",
+}
+
+_AGGREGATIONS = {"mean": "AVG", "sum": "SUM", "min": "MIN", "max": "MAX", "count": "COUNT"}
+
+
+def query_series(
+    db: Session,
+    table: str,
+    *,
+    entity_id: uuid.UUID,
+    descriptor_id: uuid.UUID,
+    period_id: uuid.UUID | None = None,
+    start: datetime.datetime | None = None,
+    end: datetime.datetime | None = None,
+    bucket: str = "none",
+    aggregation: str = "none",
+) -> DataSeriesResponse:
+    """Return a single time-series for one (entity, descriptor[, period]) tuple.
+
+    Used by the chart cells in the Data Explorer workspace. Unlike ``query_data``,
+    this returns a flat ``[{timestamp, value}]`` list with optional time-bucketing
+    and aggregation, suitable for direct plotting without client-side pivoting.
+    """
+    cfg = _DATA_EXPLORER_CONFIGS.get(table)
+    if cfg is None:
+        raise BadRequestError(f"Unknown data source: {table}")
+
+    if bucket != "none" and bucket not in _BUCKET_INTERVALS:
+        raise BadRequestError(f"Unknown bucket: {bucket}")
+    if aggregation != "none" and aggregation not in _AGGREGATIONS:
+        raise BadRequestError(f"Unknown aggregation: {aggregation}")
+    if bucket != "none" and aggregation == "none":
+        # Bucketing requires an aggregation function
+        aggregation = "mean"
+
+    # Resolve labels for the response (entity + descriptor display names)
+    entity_row = db.execute(
+        text(f"SELECT display_name FROM {cfg['entity_table']} WHERE id = :id"),
+        {"id": str(entity_id)},
+    ).fetchone()
+    descriptor_row = db.execute(
+        text(f"SELECT display_name FROM {cfg['descriptor_table']} WHERE id = :id"),
+        {"id": str(descriptor_id)},
+    ).fetchone()
+    entity_label = entity_row.display_name if entity_row else str(entity_id)
+    descriptor_label = descriptor_row.display_name if descriptor_row else str(descriptor_id)
+
+    # Coerce stored value to float. Metadata stores JSONB; attributes store DOUBLE.
+    if cfg["is_metadata"]:
+        value_expr = f"({cfg['value_column']} #>> '{{}}')::double precision"
+    else:
+        value_expr = f"({cfg['value_column']})::double precision"
+
+    where_parts = [
+        f"{cfg['entity_column']} = :entity_id",
+        f"{cfg['descriptor_column']} = :descriptor_id",
+    ]
+    params: dict = {"entity_id": str(entity_id), "descriptor_id": str(descriptor_id)}
+
+    if period_id is not None and cfg.get("period_column"):
+        where_parts.append(f"{cfg['period_column']} = :period_id")
+        params["period_id"] = str(period_id)
+    if start is not None:
+        where_parts.append("t.timestamp >= :start")
+        params["start"] = start
+    if end is not None:
+        where_parts.append("t.timestamp < :end")
+        params["end"] = end
+
+    where_clause = " WHERE " + " AND ".join(where_parts)
+
+    if bucket != "none":
+        # TimescaleDB time_bucket() — falls back gracefully on plain Postgres
+        # via date_trunc when time_bucket isn't installed (handled in CI infra,
+        # not application code).
+        interval = _BUCKET_INTERVALS[bucket]
+        agg_fn = _AGGREGATIONS[aggregation]
+        sql = (
+            f"SELECT time_bucket(INTERVAL '{interval}', t.timestamp) AS bucket_ts, "
+            f"{agg_fn}({value_expr}) AS v "
+            f"FROM {table} t{where_clause} "
+            f"GROUP BY bucket_ts ORDER BY bucket_ts"
+        )
+    elif aggregation != "none":
+        agg_fn = _AGGREGATIONS[aggregation]
+        sql = (
+            f"SELECT MIN(t.timestamp) AS bucket_ts, {agg_fn}({value_expr}) AS v "
+            f"FROM {table} t{where_clause}"
+        )
+    else:
+        sql = (
+            f"SELECT t.timestamp AS bucket_ts, {value_expr} AS v "
+            f"FROM {table} t{where_clause} ORDER BY t.timestamp"
+        )
+
+    rows = db.execute(text(sql), params).fetchall()
+    points = [
+        DataSeriesPoint(timestamp=row.bucket_ts, value=row.v if row.v is not None else None)
+        for row in rows
+        if row.bucket_ts is not None
+    ]
+
+    return DataSeriesResponse(
+        points=points,
+        entity_label=entity_label,
+        descriptor_label=descriptor_label,
     )
 
 

@@ -16,3 +16,14 @@ export interface DataSourceInfo {
   descriptor_type: string;
   has_period: boolean;
 }
+
+export interface DataSeriesPoint {
+  timestamp: string;
+  value: number | null;
+}
+
+export interface DataSeriesResponse {
+  points: DataSeriesPoint[];
+  entity_label: string;
+  descriptor_label: string;
+}

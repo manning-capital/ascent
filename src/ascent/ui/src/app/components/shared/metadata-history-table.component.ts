@@ -25,7 +25,7 @@ import {
   type GetRowIdParams,
   type CellStyleFunc,
 } from 'ag-grid-community';
-import { AG_GRID_THEME, agThemeMode } from './data-table/ag-grid-theme';
+import { AG_GRID_THEME, agThemeMode } from './metadata-history-ag-grid-theme';
 
 function formatLocalDateTime(d: Date): string {
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];

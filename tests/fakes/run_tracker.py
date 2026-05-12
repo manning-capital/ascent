@@ -27,9 +27,7 @@ class FakeRunTracker(RunTrackerPort):
     def track_feed_run(
         self, feed_id: uuid.UUID, *, snapshot_timestamp: datetime
     ) -> AbstractAsyncContextManager[uuid.UUID]:
-        return self._ctx(
-            kind="feed", entity_id=feed_id, snapshot_timestamp=snapshot_timestamp
-        )
+        return self._ctx(kind="feed", entity_id=feed_id, snapshot_timestamp=snapshot_timestamp)
 
     def track_strategy_run(self, strategy_id: uuid.UUID) -> AbstractAsyncContextManager[uuid.UUID]:
         return self._ctx(kind="strategy", entity_id=strategy_id)

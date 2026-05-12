@@ -29,7 +29,6 @@ def _wire():
     uow_factory = FakeUnitOfWorkFactory()
     router = TradeRouter(
         strategy_id=uuid.uuid4(),
-        portfolio_id=uuid.uuid4(),
         trade_repo=trade_repo,
         order_repo=order_repo,
         event_bus=bus,

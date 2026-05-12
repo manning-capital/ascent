@@ -120,7 +120,6 @@ class StrategyLauncher:
             return None
         return TradeRouter(
             strategy_id=strategy_id,
-            portfolio_id=info.portfolio_id,
             trade_repo=self._persistence.trade_repo,
             order_repo=self._persistence.order_repo,
             event_bus=self._messaging.event_bus,
@@ -131,4 +130,5 @@ class StrategyLauncher:
                 for eid in info.exchanges
             ],
             route_gate=self._persistence.route_gate,
+            instrument_repo=self._persistence.instrument_repo,
         )

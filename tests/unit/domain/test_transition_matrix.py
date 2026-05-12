@@ -16,11 +16,11 @@ from datetime import UTC, datetime
 import pytest
 
 from ascent.domain import (
-    Direction,
     FillEvent,
     Order,
     OrderSide,
     OrderState,
+    PositionType,
     Trade,
     TradeLeg,
     TradeState,
@@ -60,7 +60,7 @@ def _single_leg_trade(
     leg = TradeLeg(
         id=uuid.uuid4(),
         instrument_id=entry_order.instrument_id,
-        direction=Direction.LONG,
+        direction=PositionType.LONG,
         quantity=1.0,
         entry_order=entry_order,
         exit_order=exit_order,
@@ -69,7 +69,6 @@ def _single_leg_trade(
     trade = Trade(
         id=uuid.uuid4(),
         strategy_id=uuid.uuid4(),
-        portfolio_id=uuid.uuid4(),
         state=trade_state,
         is_paper=True,
         legs=(leg,),

@@ -8,65 +8,66 @@ import {
   input,
   signal,
 } from '@angular/core';
-import { FormsModule } from '@angular/forms';
-import { MultiSelect } from 'primeng/multiselect';
-import { Card } from 'primeng/card';
 import { UIChart } from 'primeng/chart';
 import { Skeleton } from 'primeng/skeleton';
-import { ChartData, ChartOptions, Plugin } from 'chart.js';
-import { Subscription, interval } from 'rxjs';
+import { Tab, TabList, TabPanel, TabPanels, Tabs } from 'primeng/tabs';
+import { Plugin } from 'chart.js';
+import { Subscription } from 'rxjs';
 import { timeout } from 'rxjs/operators';
+
 import { ContextService } from '../../../services/context.service';
-import { ContextResponse, ContextSeries, TradeView } from '../../../models/context.model';
-import { DARK_THEME } from '../../strategies/strategy-detail/charts/chart-defaults';
+import { ChartData, ChartOptions } from 'chart.js';
 
-interface SeriesOption {
-  label: string;
-  value: string;
-}
+import { ContextResponse, Plot } from '../../../models/context.model';
+import { TradeStatus } from '../../../models/trade.model';
+import {
+  TRADE_MARKERS_PLUGIN_ID,
+  TradeMarkersOptions,
+  buildChartDataForPlot,
+  buildChartOptionsForPlot,
+  buildChartTheme,
+  toEpochMs,
+} from './run-context-chart.config';
 
-const PALETTE = [
-  '#22c55e',
-  '#ef4444',
-  '#3b82f6',
-  '#eab308',
-  '#a855f7',
-  '#14b8a6',
-  '#f97316',
-  '#ec4899',
-];
+const ACTIVE_TAB_KEY_PREFIX = 'ascent.run-context.active-tab';
 
-const STORAGE_KEY_PREFIX = 'ascent.run-context.defaults';
-const INTERESTING_KEYWORDS = [
-  'spread',
-  'entry',
-  'exit',
-  'level',
-  'mu',
-  'theta',
-  'z_score',
-  'zscore',
-];
-
-const TRADE_MARKERS_PLUGIN_ID = 'tradeMarkers';
-
-// Open trades have no exit_at, so the initial load is a snapshot. Poll the
-// context endpoint while the trade is open so the spread/theta/entry/exit
-// series advance in (near) real time. Cadence aligns with strategy ticks
-// (when evaluation actually runs and decisions are made), not feed publish
-// cadence — the strategy's view is the meaningful unit of "new data".
-const LIVE_POLL_INTERVAL_MS = 1000;
-
-interface TradeMarkersOptions {
-  entryMs: number | null;
-  exitMs: number | null;
-}
-
-// Inline plugin: draws vertical reference lines at the trade's entry_at and
-// exit_at on the x-scale. Uses Chart.js core only — no annotation plugin
-// dependency. Plugin options are read per-chart from `options.plugins.tradeMarkers`.
 const tradeMarkersPlugin: Plugin<'line'> = {
   id: TRADE_MARKERS_PLUGIN_ID,
+  // Shade the off-trade regions BEFORE the datasets render so the line
+  // and points stay fully visible on top of the wash.
+  beforeDatasetsDraw(chart, _args, opts) {
+    const options = opts as unknown as TradeMarkersOptions | undefined;
+    if (!options || !options.outOfRangeFill) return;
+    const xScale = chart.scales['x'];
+    const yScale = chart.scales['y'];
+    if (!xScale || !yScale) return;
+    const ctx = chart.ctx;
+    const left = xScale.left;
+    const right = xScale.right;
+    const top = yScale.top;
+    const bottom = yScale.bottom;
+
+    const fillRect = (xStart: number, xEnd: number): void => {
+      if (xEnd <= xStart) return;
+      ctx.save();
+      ctx.fillStyle = options.outOfRangeFill;
+      ctx.fillRect(xStart, top, xEnd - xStart, bottom - top);
+      ctx.restore();
+    };
+
+    if (options.entryMs !== null) {
+      const entryPx = xScale.getPixelForValue(options.entryMs);
+      if (Number.isFinite(entryPx)) {
+        fillRect(left, Math.min(Math.max(entryPx, left), right));
+      }
+    }
+    if (options.exitMs !== null) {
+      const exitPx = xScale.getPixelForValue(options.exitMs);
+      if (Number.isFinite(exitPx)) {
+        fillRect(Math.min(Math.max(exitPx, left), right), right);
+      }
+    }
+  },
   afterDatasetsDraw(chart, _args, opts) {
     const options = opts as unknown as TradeMarkersOptions | undefined;
     if (!options) return;
@@ -88,67 +89,82 @@ const tradeMarkersPlugin: Plugin<'line'> = {
       ctx.setLineDash([4, 3]);
       ctx.stroke();
       ctx.setLineDash([]);
-      ctx.fillStyle = color;
+      ctx.fillStyle = options.labelColor || color;
       ctx.font = '11px sans-serif';
       ctx.textBaseline = 'top';
       ctx.fillText(label, x + 4, yScale.top + 4);
       ctx.restore();
     };
 
-    if (options.entryMs !== null) drawLine(options.entryMs, '#22c55e', 'Entry');
-    if (options.exitMs !== null) drawLine(options.exitMs, '#ef4444', 'Exit');
+    if (options.entryMs !== null) drawLine(options.entryMs, options.entryColor, 'Entry');
+    if (options.exitMs !== null) drawLine(options.exitMs, options.exitColor, 'Exit');
   },
 };
 
 @Component({
   selector: 'app-run-context-chart',
   standalone: true,
-  imports: [FormsModule, MultiSelect, Card, UIChart, Skeleton],
+  imports: [UIChart, Skeleton, Tabs, TabList, Tab, TabPanels, TabPanel],
+  // Renders the chart content only — no surrounding card. The caller is
+  // expected to provide the visual frame (heading, border, padding, AND a
+  // fixed height) and we fill that box in every state so the page doesn't
+  // jump when the data finishes loading or errors out.
   template: `
-    <p-card header="Strategy Context">
-      @if (!strategyRunId()) {
-        <div class="text-sm text-surface-500 py-4">
-          Context not available for this trade.
+    @if (!strategyRunId()) {
+      <div class="h-full flex items-center justify-center text-sm text-fg-muted px-4">
+        Context not available for this trade.
+      </div>
+    } @else if (loading()) {
+      <div class="h-full p-4">
+        <p-skeleton width="100%" height="100%"/>
+      </div>
+    } @else if (errorMessage()) {
+      <div class="h-full flex items-center justify-center text-sm text-negative px-4">
+        {{ errorMessage() }}
+      </div>
+    } @else if (!response() || response()!.series.length === 0) {
+      <div class="h-full flex items-center justify-center text-sm text-fg-muted px-4">
+        No context data available for this run yet.
+      </div>
+    } @else if (plots().length === 0) {
+      <div class="h-full flex items-center justify-center text-sm text-fg-muted px-4">
+        No plots configured for this strategy.
+      </div>
+    } @else if (plots().length === 1) {
+      <div class="h-full flex flex-col px-4 pt-2 pb-4">
+        <div class="text-xs font-medium text-fg-muted mb-2 shrink-0">{{ plots()[0].title }}</div>
+        <div class="flex-1 min-h-0 w-full">
+          <p-chart
+            type="line"
+            [data]="chartData()[plots()[0].id]"
+            [options]="chartOptions()[plots()[0].id]"
+            [plugins]="chartPlugins"
+            [style]="{ width: '100%', height: '100%' }"/>
         </div>
-      } @else if (loading()) {
-        <p-skeleton width="100%" height="18rem"/>
-      } @else if (errorMessage()) {
-        <div class="text-sm text-red-500 py-4">
-          {{ errorMessage() }}
-        </div>
-      } @else if (!response() || response()!.series.length === 0) {
-        <div class="text-sm text-surface-500 py-4">
-          No context data available for this run yet.
-        </div>
-      } @else {
-        <div class="flex flex-col gap-3">
-          <p-multiSelect
-            [options]="seriesOptions()"
-            [(ngModel)]="selectedSeries"
-            optionLabel="label"
-            optionValue="value"
-            placeholder="Select series to plot"
-            display="chip"
-            [filter]="true"
-            [showClear]="false"
-            styleClass="w-full"/>
-          <div class="h-80 w-full">
-            @if (selectedSeries().length === 0) {
-              <div class="flex items-center justify-center h-full text-sm text-surface-500">
-                Pick one or more series above to plot.
+      </div>
+    } @else {
+      <p-tabs class="h-full flex flex-col" [value]="activeTabId() ?? plots()[0].id" (valueChange)="onTabChange($event)">
+        <p-tablist>
+          @for (plot of plots(); track plot.id) {
+            <p-tab [value]="plot.id">{{ plot.title }}</p-tab>
+          }
+        </p-tablist>
+        <p-tabpanels class="flex-1 min-h-0">
+          @for (plot of plots(); track plot.id) {
+            <p-tabpanel [value]="plot.id" class="h-full">
+              <div class="h-full w-full px-4 pb-4">
+                <p-chart
+                  type="line"
+                  [data]="chartData()[plot.id]"
+                  [options]="chartOptions()[plot.id]"
+                  [plugins]="chartPlugins"
+                  [style]="{ width: '100%', height: '100%' }"/>
               </div>
-            } @else {
-              <p-chart
-                type="line"
-                [data]="chartData()"
-                [options]="chartOptions()"
-                [plugins]="chartPlugins"
-                [style]="{ width: '100%', height: '100%' }"/>
-            }
-          </div>
-        </div>
-      }
-    </p-card>
+            </p-tabpanel>
+          }
+        </p-tabpanels>
+      </p-tabs>
+    }
   `,
   styles: [`:host { display: block; }`],
 })
@@ -160,109 +176,92 @@ export class RunContextChartComponent implements OnInit, OnDestroy {
   tradeId = input<string | null>(null);
   start = input<string | null>(null);
   end = input<string | null>(null);
+  currentStatus = input<string | null>(null);
+  statuses = input<TradeStatus[]>([]);
+
+  // Trades in terminal states have no further ticks to stream — render
+  // them statically with the historical time scale even when ``exit_at``
+  // happens to be null (e.g. CANCELLED before any open).
+  private readonly TERMINAL_STATUSES = new Set([
+    'CLOSED',
+    'CANCELLED',
+    'REJECTED',
+    'ERROR',
+  ]);
+
+  private isTradeLive(): boolean {
+    const status = this.currentStatus();
+    if (status && this.TERMINAL_STATUSES.has(status)) return false;
+    return !this.end();
+  }
 
   loading = signal(true);
   errorMessage = signal<string | null>(null);
   response = signal<ContextResponse | null>(null);
-  selectedSeries = signal<string[]>([]);
+  activeTabId = signal<string | null>(null);
 
-  private fetchSub: Subscription | null = null;
+  private streamSub: Subscription | null = null;
+  private receivedFirstEvent = false;
 
-  // Plugin instances are passed per-chart so we don't need a global Chart.register().
   readonly chartPlugins = [tradeMarkersPlugin];
 
-  private seriesLabel(series: ContextSeries, tradeView: TradeView | null): string {
-    const override = tradeView?.series_labels?.[series.attribute.name];
-    return override ?? series.display_name;
-  }
+  plots = computed<Plot[]>(() => this.response()?.trade_view?.plots ?? []);
 
-  seriesOptions = computed<SeriesOption[]>(() => {
-    const r = this.response();
-    if (!r) return [];
-    return r.series.map(s => ({ label: this.seriesLabel(s, r.trade_view), value: s.name }));
-  });
+  // Options change rarely — only when the structural plot config or the
+  // trade's open/closed state changes. Cached by a stable key so PrimeNG's
+  // <p-chart> doesn't see an identity change and reinit the Chart.js
+  // instance on every SSE tick (the main jitter source).
+  private optionsCache = new Map<string, ChartOptions<'line'>>();
 
-  // Per-tick options so the trade-marker plugin and tick formatter can react
-  // to inputs (entry/exit timestamps) and the loaded response.
-  chartOptions = computed<ChartOptions<'line'>>(() => {
-    const tradeView = this.response()?.trade_view ?? null;
+  chartOptions = computed<Record<string, ChartOptions<'line'>>>(() => {
+    const plots = this.plots();
+    const tradeView = this.response()?.trade_view;
     const showMarkers = tradeView?.show_trade_markers !== false;
-    const entryMs = showMarkers ? toEpochMs(this.start()) : null;
-    const exitMs = showMarkers ? toEpochMs(this.end()) : null;
-
-    return {
-      responsive: true,
-      maintainAspectRatio: false,
-      animation: false,
-      plugins: {
-        legend: { labels: { color: DARK_THEME.tickColor } },
-        tooltip: {
-          backgroundColor: DARK_THEME.tooltipBg,
-          borderColor: DARK_THEME.tooltipBorder,
-          borderWidth: 1,
-          titleColor: DARK_THEME.tooltipTitle,
-          bodyColor: DARK_THEME.tooltipBody,
-          padding: 10,
-          cornerRadius: 8,
-          callbacks: {
-            title: (items) => {
-              const v = items[0]?.parsed?.x;
-              return typeof v === 'number' ? formatEpochFull(v) : '';
-            },
-          },
-        },
-        // Read by tradeMarkersPlugin via opts argument.
-        [TRADE_MARKERS_PLUGIN_ID]: { entryMs, exitMs } as TradeMarkersOptions,
-      },
-      scales: {
-        x: {
-          type: 'linear',
-          ticks: {
-            color: DARK_THEME.tickColor,
-            maxTicksLimit: 10,
-            callback: (value) =>
-              typeof value === 'number' ? formatEpochTime(value) : String(value),
-          },
-          grid: { color: DARK_THEME.gridColor },
-        },
-        y: {
-          ticks: { color: DARK_THEME.tickColor },
-          grid: { color: DARK_THEME.gridColor },
-        },
-      },
-    };
+    const entryMs = toEpochMs(this.start());
+    const exitMs = toEpochMs(this.end());
+    const isOpen = this.isTradeLive();
+    const theme = buildChartTheme();
+    const out: Record<string, ChartOptions<'line'>> = {};
+    for (const plot of plots) {
+      const key = JSON.stringify({
+        plot,
+        showMarkers,
+        entryMs,
+        exitMs,
+        isOpen,
+      });
+      let cached = this.optionsCache.get(key);
+      if (!cached) {
+        cached = buildChartOptionsForPlot({
+          plot,
+          showTradeMarkers: showMarkers,
+          entryMs,
+          exitMs,
+          isOpen,
+          theme,
+        });
+        this.optionsCache.set(key, cached);
+      }
+      out[plot.id] = cached;
+    }
+    return out;
   });
 
-  // Each series carries its own native timestamps. Points are emitted as
-  // {x: epochMs, y: value} tuples on a linear x-axis so the trade-markers
-  // plugin can position vertical lines at exact entry/exit timestamps
-  // without needing a time-scale adapter.
-  chartData = computed<ChartData<'line'>>(() => {
+  chartData = computed<Record<string, ChartData<'line'>>>(() => {
     const r = this.response();
-    const selected = new Set(this.selectedSeries());
-    if (!r || selected.size === 0) return { datasets: [] };
-
-    const wanted = r.series.filter(s => selected.has(s.name));
-    const datasets = wanted.map((series, idx) => {
-      const color = PALETTE[idx % PALETTE.length];
-      const data = series.points
-        .map(p => ({ x: Date.parse(p.t), y: p.v }))
-        .filter(point => Number.isFinite(point.x));
-      return {
-        label: this.seriesLabel(series, r.trade_view),
-        data,
-        borderColor: color,
-        backgroundColor: color,
-        borderWidth: 2,
-        pointRadius: 0,
-        pointHoverRadius: 4,
-        tension: 0,
-        stepped: true as const,
-        spanGaps: true,
-      };
-    });
-
-    return { datasets };
+    if (!r) return {};
+    const tradeView = r.trade_view;
+    const showOverlay = tradeView?.show_trade_status_overlay !== false;
+    const out: Record<string, ChartData<'line'>> = {};
+    for (const plot of this.plots()) {
+      out[plot.id] = buildChartDataForPlot({
+        plot,
+        contextSeries: r.series,
+        statuses: this.statuses(),
+        showStatusOverlay: showOverlay,
+      });
+    }
+    return out;
   });
 
   constructor() {
@@ -270,149 +269,114 @@ export class RunContextChartComponent implements OnInit, OnDestroy {
       const r = this.response();
       const runId = this.strategyRunId();
       if (!r || !runId) return;
-      if (this.selectedSeries().length > 0) return;
-      const stored = loadStoredDefaults(runId);
-      const available = new Set(r.series.map(s => s.name));
-      const storedValid = stored.filter(name => available.has(name));
-      if (storedValid.length > 0) {
-        this.selectedSeries.set(storedValid);
+      const plots = this.plots();
+      if (plots.length === 0) {
+        this.activeTabId.set(null);
         return;
       }
-      const fromTradeView = pickFromTradeView(r.series, r.trade_view);
-      if (fromTradeView.length > 0) {
-        this.selectedSeries.set(fromTradeView);
+      const stored = loadActiveTab(runId);
+      const validIds = new Set(plots.map(p => p.id));
+      const current = this.activeTabId();
+      if (current && validIds.has(current)) return;
+      if (stored && validIds.has(stored)) {
+        this.activeTabId.set(stored);
         return;
       }
-      this.selectedSeries.set(pickDefaultSeries(r.series));
+      this.activeTabId.set(plots[0].id);
     });
 
-    effect(() => {
-      const runId = this.strategyRunId();
-      const selection = this.selectedSeries();
-      if (!runId) return;
-      saveStoredDefaults(runId, selection);
-    });
-
-    // Live polling while the trade is open (no exit_at). The effect tears
-    // down the interval automatically when end() becomes set or the run id
-    // changes, so a trade that closes while the page is open stops polling.
     effect((onCleanup) => {
-      const runId = this.strategyRunId();
-      const isOpen = !this.end();
-      if (!runId || !isOpen) return;
-      const sub = interval(LIVE_POLL_INTERVAL_MS).subscribe(() => {
-        this.fetchContext({ silent: true });
-      });
-      onCleanup(() => sub.unsubscribe());
+      const sid = this.strategyId();
+      const rid = this.strategyRunId();
+      if (!rid) return;
+      const isOpen = this.isTradeLive();
+      this.receivedFirstEvent = false;
+      if (isOpen) {
+        const sub = this.contextService
+          .streamStrategyRunContext(sid, rid, {
+            start: this.start(),
+            end: this.end(),
+            tradeId: this.tradeId(),
+          })
+          .subscribe({
+            next: response => {
+              this.response.set(response);
+              if (!this.receivedFirstEvent) {
+                this.receivedFirstEvent = true;
+                this.loading.set(false);
+                this.errorMessage.set(null);
+              }
+            },
+            error: err => {
+              console.error('Context SSE subscription failed', err);
+              if (!this.receivedFirstEvent) {
+                this.errorMessage.set('Failed to load strategy context. See console.');
+                this.loading.set(false);
+              }
+            },
+          });
+        this.streamSub = sub;
+        onCleanup(() => sub.unsubscribe());
+      } else {
+        const sub = this.contextService
+          .loadStrategyRunContext(sid, rid, {
+            start: this.start(),
+            end: this.end(),
+            tradeId: this.tradeId(),
+          })
+          .pipe(timeout(20_000))
+          .subscribe({
+            next: response => {
+              this.response.set(response);
+              this.loading.set(false);
+              this.errorMessage.set(null);
+            },
+            error: err => {
+              console.error('Failed to load run context', err);
+              const status = typeof err?.status === 'number' ? ` (status ${err.status})` : '';
+              this.errorMessage.set(
+                `Failed to load strategy context${status}. See console.`,
+              );
+              this.loading.set(false);
+            },
+          });
+        this.streamSub = sub;
+        onCleanup(() => sub.unsubscribe());
+      }
     });
   }
 
   ngOnInit(): void {
     if (!this.strategyRunId()) {
       this.loading.set(false);
-      return;
     }
-    this.fetchContext({ silent: false });
   }
 
   ngOnDestroy(): void {
-    this.fetchSub?.unsubscribe();
-    this.fetchSub = null;
+    this.streamSub?.unsubscribe();
+    this.streamSub = null;
   }
 
-  private fetchContext({ silent }: { silent: boolean }): void {
-    const sid = this.strategyId();
-    const rid = this.strategyRunId();
-    if (!rid) return;
-    this.fetchSub?.unsubscribe();
-    this.fetchSub = this.contextService
-      .loadStrategyRunContext(sid, rid, {
-        start: this.start(),
-        end: this.end(),
-        tradeId: this.tradeId(),
-      })
-      .pipe(timeout(20_000))
-      .subscribe({
-        next: response => {
-          this.response.set(response);
-          if (!silent) {
-            this.loading.set(false);
-            this.errorMessage.set(null);
-          }
-        },
-        error: err => {
-          console.error('Failed to load run context', err);
-          if (silent) return;
-          const status = typeof err?.status === 'number' ? ` (status ${err.status})` : '';
-          this.errorMessage.set(`Failed to load strategy context${status}. See console.`);
-          this.loading.set(false);
-        },
-      });
+  onTabChange(value: string | number | undefined): void {
+    if (value === undefined) return;
+    const id = String(value);
+    this.activeTabId.set(id);
+    const runId = this.strategyRunId();
+    if (runId) saveActiveTab(runId, id);
   }
 }
 
-function toEpochMs(iso: string | null): number | null {
-  if (!iso) return null;
-  const ms = Date.parse(iso);
-  return Number.isFinite(ms) ? ms : null;
-}
-
-function formatEpochTime(ms: number): string {
-  const date = new Date(ms);
-  if (Number.isNaN(date.getTime())) return String(ms);
-  return date.toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
-}
-
-function formatEpochFull(ms: number): string {
-  const date = new Date(ms);
-  if (Number.isNaN(date.getTime())) return String(ms);
-  return date.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
-}
-
-function pickFromTradeView(series: ContextSeries[], tradeView: TradeView | null): string[] {
-  if (!tradeView || tradeView.series.length === 0) return [];
-  const picks: string[] = [];
-  for (const wanted of tradeView.series) {
-    for (const s of series) {
-      if (s.attribute.name === wanted) picks.push(s.name);
-    }
-  }
-  return picks;
-}
-
-function pickDefaultSeries(series: ContextSeries[]): string[] {
-  const interesting = series.filter(s => {
-    const lower = s.attribute.name.toLowerCase();
-    return INTERESTING_KEYWORDS.some(k => lower.includes(k));
-  });
-  if (interesting.length > 0) return interesting.map(s => s.name);
-  return series.slice(0, 4).map(s => s.name);
-}
-
-function loadStoredDefaults(runId: string): string[] {
+function loadActiveTab(runId: string): string | null {
   try {
-    const raw = localStorage.getItem(`${STORAGE_KEY_PREFIX}:${runId}`);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+    return localStorage.getItem(`${ACTIVE_TAB_KEY_PREFIX}:${runId}`);
   } catch {
-    return [];
+    return null;
   }
 }
 
-function saveStoredDefaults(runId: string, series: string[]): void {
+function saveActiveTab(runId: string, tabId: string): void {
   try {
-    localStorage.setItem(`${STORAGE_KEY_PREFIX}:${runId}`, JSON.stringify(series));
+    localStorage.setItem(`${ACTIVE_TAB_KEY_PREFIX}:${runId}`, tabId);
   } catch {
     // localStorage can be unavailable (private mode, quota) — silent.
   }

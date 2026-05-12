@@ -35,8 +35,8 @@
           <p-panel header="Feed Runs">
             <app-data-table
               [columns]="feedRunColumns"
-              [rowData]="r.feed_runs"
-              [pagination]="false"
+              [value]="r.feed_runs"
+              [showPaginator]="false"
               emptyMessage="No feed runs."/>
           </p-panel>
         }

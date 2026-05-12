@@ -24,9 +24,9 @@ import { EntityUsage } from '../../models/field.model';
               <p class="text-sm font-semibold mb-2">Data that will be permanently deleted:</p>
               <div class="flex flex-col gap-1 text-sm">
                 @for (item of cascadeItems; track item.label) {
-                  <div class="flex justify-between px-3 py-1.5 rounded bg-red-500/5 border border-red-500/10">
+                  <div class="flex justify-between px-3 py-1.5 rounded bg-negative/5 border border-negative/10">
                     <span class="text-surface-400">{{ item.label }}</span>
-                    <span class="font-mono text-red-400">{{ item.count }} {{ item.count === 1 ? 'record' : 'records' }}</span>
+                    <span class="font-mono text-negative">{{ item.count }} {{ item.count === 1 ? 'record' : 'records' }}</span>
                   </div>
                 }
               </div>
@@ -38,9 +38,9 @@ import { EntityUsage } from '../../models/field.model';
               <p class="text-sm font-semibold mb-2">References that will break:</p>
               <div class="flex flex-col gap-1 text-sm">
                 @for (item of referenceItems; track item.label) {
-                  <div class="flex justify-between px-3 py-1.5 rounded bg-yellow-500/5 border border-yellow-500/10">
+                  <div class="flex justify-between px-3 py-1.5 rounded bg-warning/5 border border-warning/10">
                     <span class="text-surface-400">{{ item.label }}</span>
-                    <span class="font-mono text-yellow-400">{{ item.count }} {{ item.count === 1 ? 'reference' : 'references' }}</span>
+                    <span class="font-mono text-warning">{{ item.count }} {{ item.count === 1 ? 'reference' : 'references' }}</span>
                   </div>
                 }
               </div>

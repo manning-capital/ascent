@@ -1,26 +1,139 @@
-<div class="flex flex-col h-[calc(100vh-3.5rem)] md:h-screen">
-  <div class="p-6 flex flex-col flex-1 min-h-0 gap-4">
-    <div class="flex items-center justify-between shrink-0">
-      <h1 class="text-2xl font-bold">Strategies</h1>
-    </div>
+<app-page-header title="Strategies" />
 
-    <!-- Filters -->
-    <div class="rounded-lg border border-edge bg-surface p-4 shrink-0">
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <input type="text" pInputText placeholder="Search strategies..."
-          [ngModel]="search()" (ngModelChange)="onSearch($event)">
-        <p-select [ngModel]="statusFilter()" (ngModelChange)="onStatusChange($event)"
-          [options]="statusOptions" optionLabel="label" optionValue="value"
-          placeholder="All Statuses" [showClear]="true"/>
-        <p-button (onClick)="clearFilters()" severity="secondary" [outlined]="true" label="Clear Filters"/>
+<div class="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-edge bg-canvas shrink-0">
+  <span class="relative">
+    <i class="pi pi-search absolute left-2 top-1/2 -translate-y-1/2 text-fg-faint text-xs"></i>
+    <input
+      type="text"
+      pInputText
+      placeholder="Search strategies"
+      class="pl-7 text-xs"
+      style="width: 14rem;"
+      [ngModel]="search()"
+      (ngModelChange)="onSearch($event)"
+    />
+  </span>
+
+  <p-select
+    [ngModel]="statusFilter()"
+    (ngModelChange)="onStatusChange($event)"
+    [options]="statusOptions"
+    optionLabel="label"
+    optionValue="value"
+    placeholder="All statuses"
+    [showClear]="true"
+    size="small"
+    [style]="{ width: '11rem' }"
+  />
+
+  <p-button
+    label="Clear filters"
+    severity="secondary"
+    [text]="true"
+    size="small"
+    icon="pi pi-filter-slash"
+    (onClick)="clearFilters()"
+  />
+</div>
+
+<div class="flex-1 min-h-0 flex flex-col">
+  <p-dataView
+    [value]="items()"
+    [paginator]="true"
+    [rows]="pageSize()"
+    [totalRecords]="total()"
+    [first]="first()"
+    [lazy]="true"
+    [loading]="loading()"
+    [rowsPerPageOptions]="[25, 50, 100]"
+    layout="list"
+    (onLazyLoad)="onLazyLoad($event)"
+    [showCurrentPageReport]="true"
+    currentPageReportTemplate="Showing {first} to {last} of {totalRecords}"
+    styleClass="border-0"
+  >
+    <ng-template #list let-strategies>
+      <div class="flex flex-col">
+        @for (s of strategies; track s.id) {
+          <button
+            type="button"
+            class="text-left px-4 py-3 border-b border-edge hover:bg-edge-dim transition-colors flex items-center gap-4 w-full"
+            (click)="navigateToStrategy(s)"
+          >
+            <!-- Status dot -->
+            <app-status-dot
+              [severity]="s.is_active ? 'success' : 'secondary'"
+              [size]="10"
+            />
+
+            <!-- Name + code (flex-grow) -->
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-semibold text-fg truncate">{{ s.display_name }}</span>
+                @if (!s.is_active) {
+                  <span class="text-[10px] uppercase tracking-wider text-fg-faint">Inactive</span>
+                }
+              </div>
+              <div class="text-[11px] font-mono text-fg-faint mt-0.5 truncate">
+                {{ s.name }}
+              </div>
+            </div>
+
+            <!-- Win rate -->
+            <div class="hidden sm:flex flex-col items-end shrink-0" style="width: 9rem;">
+              <span class="text-[10px] uppercase tracking-wider text-fg-faint">Win rate</span>
+              @if (s.win_rate != null) {
+                <app-progress-bar
+                  [value]="s.win_rate"
+                  [severity]="winRateSeverity(s.win_rate)"
+                  [width]="80"
+                />
+              } @else {
+                <span class="text-fg-faint text-xs">—</span>
+              }
+            </div>
+
+            <!-- Trades -->
+            <div class="hidden md:flex flex-col items-end shrink-0" style="width: 6rem;">
+              <span class="text-[10px] uppercase tracking-wider text-fg-faint">Trades</span>
+              <span class="text-sm tabular-nums text-fg">
+                {{ s.total_trades || 0 }}
+                @if (s.open_trades > 0) {
+                  <span class="text-positive text-[10px] ml-1">{{ s.open_trades }} open</span>
+                }
+              </span>
+            </div>
+
+            <!-- P&L -->
+            <div class="flex flex-col items-end shrink-0" style="width: 7rem;">
+              <span class="text-[10px] uppercase tracking-wider text-fg-faint">P&L</span>
+              <span [class]="'font-mono text-sm tabular-nums font-medium ' + pnlClass(s.total_pnl)">
+                {{ formatPnl(s.total_pnl) }}
+              </span>
+            </div>
+
+            <!-- Last trade -->
+            <div class="hidden lg:flex flex-col items-end shrink-0" style="width: 6rem;">
+              <span class="text-[10px] uppercase tracking-wider text-fg-faint">Last</span>
+              @if (s.last_trade_at) {
+                <app-relative-time [value]="s.last_trade_at" />
+              } @else {
+                <span class="text-fg-faint text-xs">—</span>
+              }
+            </div>
+
+            <i class="pi pi-chevron-right text-fg-faint text-xs shrink-0"></i>
+          </button>
+        }
       </div>
-    </div>
+    </ng-template>
 
-    <app-server-table class="flex-1 min-h-0"
-      [columns]="columns"
-      [fetchPage]="fetchPage()"
-      [rowClickRoute]="navigateToStrategy"
-      [pageSize]="25"
-      emptyMessage="No strategies found."/>
-  </div>
+    <ng-template #emptymessage>
+      <app-empty-state title="No strategies found." />
+    </ng-template>
+
+    <ng-template #loadingicon>
+      <i class="pi pi-spin pi-spinner text-fg-muted"></i>
+    </ng-template>
+  </p-dataView>
 </div>

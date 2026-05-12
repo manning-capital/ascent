@@ -24,6 +24,7 @@ from ascent.domain import (
 )
 from ascent.ports import (
     FeedRunRepository,
+    InstrumentRepository,
     OrderRepository,
     StrategyRunRepository,
     StrategyUniverseRepository,
@@ -31,6 +32,43 @@ from ascent.ports import (
 )
 from ascent.ports.strategy_universe import Scope
 from ascent.ports.trade_repo import NewLegSpec, NewOrderSpec
+
+
+class InMemoryInstrumentRepository(InstrumentRepository):
+    """Looks up base/quote asset metadata for an instrument id.
+
+    Tests register instruments via :meth:`register`; unknown ids are silently
+    omitted from results, matching the SQL adapter's contract.
+    """
+
+    def __init__(self) -> None:
+        self._symbols: dict[uuid.UUID, tuple[str, str]] = {}
+        self._asset_ids: dict[uuid.UUID, tuple[uuid.UUID, uuid.UUID]] = {}
+
+    def register(
+        self,
+        instrument_id: uuid.UUID,
+        from_asset: str,
+        to_asset: str,
+        from_asset_id: uuid.UUID | None = None,
+        to_asset_id: uuid.UUID | None = None,
+    ) -> None:
+        self._symbols[instrument_id] = (from_asset, to_asset)
+        if from_asset_id is not None and to_asset_id is not None:
+            self._asset_ids[instrument_id] = (from_asset_id, to_asset_id)
+
+    async def get_assets(self, session: Any, instrument_ids) -> dict[uuid.UUID, tuple[str, str]]:
+        return {iid: self._symbols[iid] for iid in instrument_ids if iid in self._symbols}
+
+    async def get_asset_ids(self, session: Any, instrument_ids):
+        from ascent.ports import InstrumentAssetIds
+
+        return {
+            iid: InstrumentAssetIds(from_asset_id=fid, to_asset_id=tid)
+            for iid in instrument_ids
+            if (pair := self._asset_ids.get(iid)) is not None
+            for fid, tid in [pair]
+        }
 
 
 class InMemoryStrategyUniverseRepository(StrategyUniverseRepository):
@@ -50,9 +88,7 @@ class InMemoryStrategyUniverseRepository(StrategyUniverseRepository):
     ) -> None:
         self._instrument_universe[strategy_id] = set(instrument_ids)
 
-    def set_composite_universe(
-        self, strategy_id: uuid.UUID, composite_ids: set[uuid.UUID]
-    ) -> None:
+    def set_composite_universe(self, strategy_id: uuid.UUID, composite_ids: set[uuid.UUID]) -> None:
         self._composite_universe[strategy_id] = set(composite_ids)
 
     async def get_active_universe(
@@ -68,12 +104,20 @@ class InMemoryTradeRepository(TradeRepository):
         self._trades: dict[uuid.UUID, Trade] = {}
         self._entry_order_of: dict[uuid.UUID, uuid.UUID] = {}  # leg_id → order_id
         self._exit_order_of: dict[uuid.UUID, uuid.UUID] = {}
+        self._leg_exchange: dict[uuid.UUID, uuid.UUID] = {}  # leg_id → exchange_id
+        self._instrument_assets: dict[uuid.UUID, tuple[str, str]] = {}
         self.close_reasons: dict[uuid.UUID, str] = {}
         self._order_repo: InMemoryOrderRepository | None = None
 
     def link_order_repo(self, order_repo: InMemoryOrderRepository) -> None:
         """Wire an order repo so ``get()`` can return legs with live order state."""
         self._order_repo = order_repo
+
+    def register_instrument_assets(
+        self, instrument_id: uuid.UUID, from_asset: str, to_asset: str
+    ) -> None:
+        """Test helper. Lets ``_materialize`` populate ``leg.from_asset_symbol``."""
+        self._instrument_assets[instrument_id] = (from_asset, to_asset)
 
     async def get(self, session: Any, trade_id: uuid.UUID) -> Trade | None:
         trade = self._trades.get(trade_id)
@@ -86,6 +130,16 @@ class InMemoryTradeRepository(TradeRepository):
             self._materialize(t)
             for t in self._trades.values()
             if t.strategy_id == strategy_id and not t.state.is_terminal
+        ]
+
+    async def list_non_terminal_for_exchange(
+        self, session: Any, exchange_id: uuid.UUID
+    ) -> list[Trade]:
+        return [
+            self._materialize(t)
+            for t in self._trades.values()
+            if not t.state.is_terminal
+            and any(self._leg_exchange.get(leg.id) == exchange_id for leg in t.legs)
         ]
 
     async def list_open_for_strategy(self, session: Any, strategy_id: uuid.UUID) -> list[Trade]:
@@ -108,7 +162,20 @@ class InMemoryTradeRepository(TradeRepository):
             exit_order = (
                 self._resolve_order(exit_order_id) if exit_order_id is not None else leg.exit_order
             )
-            new_legs.append(replace(leg, entry_order=entry_order, exit_order=exit_order))
+            from_asset, to_asset = self._instrument_assets.get(
+                leg.instrument_id, (leg.from_asset_symbol, leg.to_asset_symbol)
+            )
+            exchange_id = self._leg_exchange.get(leg.id, leg.exchange_id)
+            new_legs.append(
+                replace(
+                    leg,
+                    entry_order=entry_order,
+                    exit_order=exit_order,
+                    from_asset_symbol=from_asset,
+                    to_asset_symbol=to_asset,
+                    exchange_id=exchange_id,
+                )
+            )
         return replace(trade, legs=tuple(new_legs))
 
     def _resolve_order(self, order_id: uuid.UUID | None) -> Order | None:
@@ -125,11 +192,11 @@ class InMemoryTradeRepository(TradeRepository):
         session: Any,
         *,
         strategy_id: uuid.UUID,
-        portfolio_id: uuid.UUID,
         is_paper: bool,
         entry_at: datetime,
         strategy_run_id: uuid.UUID | None,
         legs: list[NewLegSpec],
+        composite_id: uuid.UUID | None = None,
     ) -> Trade:
         trade_id = uuid.uuid4()
         leg_records = tuple(
@@ -141,15 +208,17 @@ class InMemoryTradeRepository(TradeRepository):
             )
             for spec in legs
         )
+        for leg, spec in zip(leg_records, legs, strict=True):
+            self._leg_exchange[leg.id] = spec.exchange_id
         trade = Trade(
             id=trade_id,
             strategy_id=strategy_id,
-            portfolio_id=portfolio_id,
             state=TradeState.PENDING,
             is_paper=is_paper,
             legs=leg_records,
             entry_at=entry_at,
             strategy_run_id=strategy_run_id,
+            composite_id=composite_id,
         )
         self._trades[trade_id] = trade
         return trade
@@ -397,5 +466,3 @@ class InMemoryStrategyRunRepository(StrategyRunRepository):
         trigger_feed_id: uuid.UUID,
     ) -> None:
         self.links.append((strategy_run_id, dict(feed_run_ids), trigger_feed_id))
-
-

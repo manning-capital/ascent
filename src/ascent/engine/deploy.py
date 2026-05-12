@@ -229,7 +229,7 @@ def deploy_strategy(
     strategy_cls: type[Strategy],
     db: Session,
     *,
-    portfolio: str | uuid.UUID | None = None,
+    base_asset: str | uuid.UUID | None = None,
     name: str | None = None,
 ) -> uuid.UUID:
     """Register or update a Strategy class in the database.
@@ -240,26 +240,28 @@ def deploy_strategy(
 
     Also creates ``StrategyFeed`` records for declared feed dependencies.
 
-    The ``portfolio`` param accepts either a UUID or a name string.
+    The ``base_asset`` param accepts either a UUID or an asset name.
+    Optional; falls back to the strategy class's ``base_asset`` ClassVar
+    if set; otherwise leaves the column null.
 
     Args:
         strategy_cls: The Strategy subclass to deploy.
         db: An open SQLAlchemy session (caller manages commit/rollback).
-        portfolio: Portfolio UUID or name.
+        base_asset: Asset UUID or name to use as the strategy's reporting base.
         name: Override display name.  Defaults to ``strategy_cls.get_display_name()``.
 
     Returns:
         The database UUID of the strategy record.
     """
+    from ascent.database.models.assets import Asset
     from ascent.database.models.feeds import Feed as FeedModel
     from ascent.database.models.feeds import StrategyFeed
-    from ascent.database.models.portfolio import Portfolio
     from ascent.database.models.strategy import Strategy as StrategyModel
 
     # Fall back to class-level attribute
-    portfolio = portfolio or getattr(strategy_cls, "portfolio", None)
+    base_asset = base_asset or getattr(strategy_cls, "base_asset", None)
 
-    portfolio_id = _resolve_or_create_id(db, Portfolio, portfolio, "Portfolio")
+    base_asset_id = _resolve_id(db, Asset, base_asset, "Asset") if base_asset is not None else None
 
     strategy_name = strategy_cls.get_name()
     display_name = name or strategy_cls.get_display_name()
@@ -267,11 +269,6 @@ def deploy_strategy(
     param_schema = strategy_cls.parameter_schema()
     trade_view_config = strategy_cls.trade_view_config()
     defaults = strategy_cls.Parameters().model_dump()
-
-    if portfolio_id is None:
-        raise ValueError(
-            f"Cannot deploy strategy '{strategy_name}': missing required field: portfolio"
-        )
 
     existing = (
         db.execute(select(StrategyModel).where(StrategyModel.name == strategy_name))
@@ -282,7 +279,8 @@ def deploy_strategy(
     if existing:
         existing.parameter_schema = param_schema
         existing.parameters = defaults
-        existing.portfolio_id = portfolio_id
+        if base_asset_id is not None:
+            existing.base_asset_id = base_asset_id
         existing.trade_view = trade_view_config
         if name:
             existing.display_name = name
@@ -297,7 +295,7 @@ def deploy_strategy(
             display_name=display_name,
             description=description,
             strategy_ref=strategy_name,
-            portfolio_id=portfolio_id,
+            base_asset_id=base_asset_id,
             parameters=defaults,
             parameter_schema=param_schema,
             trade_view=trade_view_config,

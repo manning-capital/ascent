@@ -1,9 +1,7 @@
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { Component, computed, inject, OnInit, signal, TemplateRef, viewChild } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { forkJoin, Observable } from 'rxjs';
-import type { ICellRendererAngularComp } from 'ag-grid-angular';
-import type { ICellRendererParams } from 'ag-grid-community';
 import { CompositeService } from '../../../services/composite.service';
 import { AssetService } from '../../../services/asset.service';
 import { ProviderService } from '../../../services/provider.service';
@@ -23,37 +21,13 @@ import { DatePicker } from 'primeng/datepicker';
 import { Tag } from 'primeng/tag';
 import { Button } from 'primeng/button';
 import { Panel } from 'primeng/panel';
-import { DataTableComponent } from '../../shared/data-table/data-table.component';
-import type { DataTableColumn } from '../../shared/data-table/data-table.model';
+import { AppDataTableComponent } from '../../ui/data-table/app-data-table.component';
+import type { AppColumn } from '../../ui/data-table/app-column.model';
 import { MetadataHistoryTableComponent } from '../../shared/metadata-history-table.component';
 import { SafeDeleteDialogComponent } from '../../shared/safe-delete-dialog.component';
 import { FieldPanelComponent, PanelField } from '../../shared/field-panel.component';
+import { AppDangerZoneComponent } from '../../ui/danger-zone/app-danger-zone.component';
 import { SearchSelectComponent } from '../../shared/search-select.component';
-
-// ─── Remove button cell renderer for members table ─────────
-@Component({
-  selector: 'ag-remove-member-cell',
-  standalone: true,
-  template: `<button (click)="onRemove($event)" class="text-red-500 hover:text-red-400 text-xs font-medium cursor-pointer bg-transparent border-0">Remove</button>`,
-  host: { style: 'display:flex;align-items:center;height:100%' },
-})
-export class RemoveMemberCellRenderer implements ICellRendererAngularComp {
-  private params!: ICellRendererParams & { onRemove?: (data: any) => void };
-
-  agInit(params: ICellRendererParams & { onRemove?: (data: any) => void }): void {
-    this.params = params;
-  }
-
-  refresh(params: ICellRendererParams & { onRemove?: (data: any) => void }): boolean {
-    this.params = params;
-    return true;
-  }
-
-  onRemove(e: Event): void {
-    e.stopPropagation();
-    this.params.onRemove?.(this.params.data);
-  }
-}
 
 @Component({
   selector: 'app-composite-detail',
@@ -67,11 +41,12 @@ export class RemoveMemberCellRenderer implements ICellRendererAngularComp {
     Button,
     Skeleton,
     Panel,
-    DataTableComponent,
+    AppDataTableComponent,
     MetadataHistoryTableComponent,
     SafeDeleteDialogComponent,
     FieldPanelComponent,
     SearchSelectComponent,
+    AppDangerZoneComponent,
   ],
   templateUrl: './composite-detail.component.html',
 })
@@ -88,13 +63,24 @@ export class CompositeDetailComponent implements OnInit {
   private _initTab = this.route.snapshot.queryParamMap.get('tab');
   activeTab = signal(this._initTab && this.tabs.includes(this._initTab) ? this._initTab : 'Details');
 
-  // Members table columns
-  memberColumns: DataTableColumn[] = [
-    { field: 'order', header: '#', cellType: 'monospace', width: 60 },
-    { field: 'instrument_name', header: 'Instrument', cellType: 'link', linkRoute: (row: any) => ['/settings/instruments', row.instrument_id] },
-    { field: 'instrument_display_name', header: 'Display Name' },
-    { field: '', header: '', cellType: 'custom', sortable: false, width: 80, cellRenderer: RemoveMemberCellRenderer, cellRendererParams: { onRemove: (data: any) => this.removeMember(data) } },
-  ];
+  // Members table — column defs depend on the inline #removeMemberTpl ref
+  // resolved after view init.
+  removeMemberTpl = viewChild<TemplateRef<{ $implicit: any }>>('removeMemberTpl');
+  memberColumns = computed<AppColumn<any>[]>(() => {
+    const removeTpl = this.removeMemberTpl();
+    if (!removeTpl) return [];
+    return [
+      { field: 'order', header: '#', cellType: 'monospace', width: 60, sortable: false },
+      { field: 'instrument_name', header: 'Instrument', cellType: 'link', linkRoute: (row: any) => ['/settings/master-data/instruments', row.instrument_id], sortable: false },
+      { field: 'instrument_display_name', header: 'Display Name', sortable: false },
+      { field: '__remove', header: '', cellTemplate: removeTpl, sortable: false, width: 80 },
+    ];
+  });
+
+  onRemoveMemberClick(event: Event, row: any): void {
+    event.stopPropagation();
+    this.removeMember(row);
+  }
 
   compositeId = '';
   composite = signal<Composite | null>(null);

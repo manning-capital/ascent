@@ -34,13 +34,13 @@ from ascent.database.models.instruments import (
     InstrumentAttribute,
     InstrumentPeriodAttribute,
 )
-from ascent.database.models.portfolio import PortfolioAssetHolding
 from ascent.database.models.provider_content import (
     AssetContent,
     ProviderContent,
     ProviderContentAttribute,
     ProviderContentMetadata,
 )
+from ascent.database.models.strategy_asset_holding import StrategyAssetHolding
 from ascent.database.models.transactions import Transaction
 from ascent.server.exceptions import BadRequestError, ConflictError, NotFoundError
 from ascent.server.schemas.attributes import AttributeCreate, AttributeUpdate
@@ -121,7 +121,7 @@ def _count_asset_cascade(db: Session, asset_ids: list) -> list[tuple[str, int, s
             "reference",
         ),
         ("Asset Content Links", _count_in(db, AssetContent.asset_id, asset_ids), "cascade"),
-        ("Portfolio Holdings", _count_in(db, PortfolioAssetHolding.asset_id, asset_ids), "cascade"),
+        ("Strategy Holdings", _count_in(db, StrategyAssetHolding.asset_id, asset_ids), "cascade"),
         (
             "Transactions",
             _count_or_in(db, [Transaction.from_asset_id, Transaction.to_asset_id], asset_ids),
@@ -158,7 +158,7 @@ def _delete_assets_cascade(db: Session, asset_ids: list) -> None:
         (AssetMetadata, AssetMetadata.asset_id),
         (ProviderAssetMetadata, ProviderAssetMetadata.asset_id),
         (AssetContent, AssetContent.asset_id),
-        (PortfolioAssetHolding, PortfolioAssetHolding.asset_id),
+        (StrategyAssetHolding, StrategyAssetHolding.asset_id),
     ]:
         db.execute(tbl.__table__.delete().where(col.in_(asset_ids)))
     for tbl, cols in [

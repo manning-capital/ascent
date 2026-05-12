@@ -9,15 +9,16 @@ import { TradeService } from '../../services/trade.service';
 import { TradeStreamService } from '../../services/trade-stream.service';
 import { ApiService } from '../../services/api.service';
 import { PaginatedResponse, TradeListItem } from '../../models/trade.model';
-import type { ServerFetchFn } from '../shared/data-table/data-table.model';
-import { StatCardComponent } from '../shared/stat-card.component';
+import type { AppFetchFn } from '../ui/data-table/app-column.model';
+import { AppStatCardComponent } from '../ui/stat-card/app-stat-card.component';
 import { TradeTableComponent } from '../trade-table/trade-table.component';
 import { CumulativePnlChartComponent, Lookback, LOOKBACK_OPTIONS } from '../strategies/strategy-detail/charts/cumulative-pnl-chart.component';
 import { WinLossChartComponent } from '../strategies/strategy-detail/charts/win-loss-chart.component';
 import { Card } from 'primeng/card';
 import { Skeleton } from 'primeng/skeleton';
 import { SelectButton } from 'primeng/selectbutton';
-import { EmptyStateComponent } from '../shared/empty-state.component';
+import { AppEmptyStateComponent } from '../ui/empty-state/app-empty-state.component';
+import { AppPageHeaderComponent } from '../ui/page-header/app-page-header.component';
 
 const CURRENCY_FORMATTER = new Intl.NumberFormat('en-US', {
   style: 'currency',
@@ -28,7 +29,7 @@ const CURRENCY_FORMATTER = new Intl.NumberFormat('en-US', {
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [RouterLink, FormsModule, StatCardComponent, TradeTableComponent, CumulativePnlChartComponent, WinLossChartComponent, Card, Skeleton, SelectButton, EmptyStateComponent],
+  imports: [RouterLink, FormsModule, AppStatCardComponent, TradeTableComponent, CumulativePnlChartComponent, WinLossChartComponent, Card, Skeleton, SelectButton, AppEmptyStateComponent, AppPageHeaderComponent],
   templateUrl: './dashboard.component.html',
 })
 export class DashboardComponent implements OnInit, OnDestroy {
@@ -45,7 +46,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   cumulativePnlData = computed(() => this.dashboardService.stats()?.cumulative_pnl ?? []);
 
-  recentTradesFetchPage = computed<ServerFetchFn<TradeListItem>>(() => {
+  recentTradesFetchPage = computed<AppFetchFn<TradeListItem>>(() => {
     return (page: number, pageSize: number, sort?: { field: string; order: string }) =>
       this.api.get<PaginatedResponse<TradeListItem>>('/trades', { page, page_size: 5, sort_field: sort?.field ?? 'entry_at', sort_order: sort?.order ?? 'desc' }).pipe(
         map(res => ({ items: res.items, total: res.total }))
@@ -72,7 +73,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   pnlClass(value: number): string {
     if (value === 0) return '';
-    return value > 0 ? 'text-green-500' : 'text-red-500';
+    return value > 0 ? 'text-positive' : 'text-negative';
   }
 
   formatDuration(seconds: number | null): string {

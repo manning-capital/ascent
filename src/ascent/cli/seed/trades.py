@@ -108,20 +108,10 @@ def seed_trades(client: Any, ctx: dict) -> None:
     price_paths: dict[str, list[float]] = ctx["price_paths"]
     ref_prices: dict[str, float] = ctx["ref_prices"]
 
-    portfolio_provider_map = {
-        ctx["portfolio_main"]["id"]: str(kraken_id),
-        ctx["portfolio_paper"]["id"]: str(kraken_id),
-        ctx["portfolio_coinbase"]["id"]: str(ctx["coinbase_id"]),
-        ctx["portfolio_equity"]["id"]: str(ctx["ib_id"]),
-        ctx["portfolio_commodity"]["id"]: str(ctx["ib_id"]),
-    }
-    portfolio_exchange_map = {
-        ctx["portfolio_main"]["id"]: ctx["kraken_exchange"]["id"],
-        ctx["portfolio_paper"]["id"]: ctx["kraken_exchange"]["id"],
-        ctx["portfolio_coinbase"]["id"]: ctx["coinbase_exchange"]["id"],
-        ctx["portfolio_equity"]["id"]: ctx["ib_equity_exchange"]["id"],
-        ctx["portfolio_commodity"]["id"]: ctx["ib_futures_exchange"]["id"],
-    }
+    # Seed all trades onto Kraken. Per-strategy exchange routing is a
+    # follow-up task once StrategyExchange records drive seed dispatch.
+    default_provider_id = str(kraken_id)
+    default_exchange_id = ctx["kraken_exchange"]["id"]
 
     def _price_at(sym: str, days_ago: int, intraday_frac: float = 0.5) -> float:
         """Interpolate price from daily GBM path with intraday noise."""
@@ -166,10 +156,8 @@ def seed_trades(client: Any, ctx: dict) -> None:
                 exit_at = None
                 close_reason = "MANUAL"
 
-            is_paper = strat.get("portfolio_id") == ctx["portfolio_paper"].get("id")
-            trade_provider_id = portfolio_provider_map.get(
-                strat.get("portfolio_id", ctx["portfolio_main"]["id"]), str(kraken_id)
-            )
+            is_paper = random.random() < 0.25
+            trade_provider_id = default_provider_id
 
             exit_days_ago = None
             if exit_at:
@@ -177,6 +165,7 @@ def seed_trades(client: Any, ctx: dict) -> None:
 
             legs = []
             total_pnl = 0.0
+            skip_trade = False
             for pair_idx, (from_sym, to_sym) in enumerate(pairs):
                 entry_price = _price_at(from_sym, days_ago)
                 direction = (
@@ -208,12 +197,13 @@ def seed_trades(client: Any, ctx: dict) -> None:
                     asset_by_symbol[to_sym]["id"],
                 )
                 leg_instrument_id = pair_to_instrument.get(leg_key)
+                if not leg_instrument_id:
+                    skip_trade = True
+                    break
 
                 legs.append(
                     {
-                        "instrument_id": uuid.UUID(leg_instrument_id)
-                        if leg_instrument_id
-                        else None,
+                        "instrument_id": uuid.UUID(leg_instrument_id),
                         "direction": direction,
                         "quantity": quantity,
                         "entry_price": entry_price,
@@ -223,9 +213,11 @@ def seed_trades(client: Any, ctx: dict) -> None:
                     }
                 )
 
+            if skip_trade:
+                continue
+
             trade = client.create_trade(
                 strategy_id=uuid.UUID(strat["id"]),
-                portfolio_id=uuid.UUID(strat.get("portfolio_id", ctx["portfolio_main"]["id"])),
                 is_paper=is_paper,
                 entry_at=entry_at,
                 parameters={"seed_trade": True, "trade_index": t},
@@ -390,12 +382,8 @@ def seed_trades(client: Any, ctx: dict) -> None:
             (i for i, s in enumerate(strategy_objs) if s["id"] == trade.get("strategy_id")), 0
         )
         pairs = strategy_pairs.get(strat_idx, [("BTC", "USD")])
-        trade_exchange_id = portfolio_exchange_map.get(
-            trade.get("portfolio_id"), ctx["kraken_exchange"]["id"]
-        )
-        order_provider_id = portfolio_provider_map.get(
-            trade.get("portfolio_id", ctx["portfolio_main"]["id"]), str(kraken_id)
-        )
+        trade_exchange_id = default_exchange_id
+        order_provider_id = default_provider_id
 
         entry_days_ago = max(0, (now - trade_entry_at).days)
         exit_days_ago = max(0, (now - trade_exit_at).days) if trade_exit_at else None
@@ -422,7 +410,6 @@ def seed_trades(client: Any, ctx: dict) -> None:
                 order_type_id=uuid.UUID(order_type_by_name["MARKET"]["id"]),
                 side="BUY" if direction == "LONG" else "SELL",
                 exchange_id=uuid.UUID(trade_exchange_id),
-                portfolio_id=uuid.UUID(trade.get("portfolio_id", ctx["portfolio_main"]["id"])),
                 instrument_id=uuid.UUID(order_instrument_id) if order_instrument_id else None,
                 quantity=quantity,
                 price=entry_price,
@@ -452,7 +439,6 @@ def seed_trades(client: Any, ctx: dict) -> None:
                     order_type_id=uuid.UUID(order_type_by_name["MARKET"]["id"]),
                     side="SELL" if direction == "LONG" else "BUY",
                     exchange_id=uuid.UUID(trade_exchange_id),
-                    portfolio_id=uuid.UUID(trade.get("portfolio_id", ctx["portfolio_main"]["id"])),
                     instrument_id=uuid.UUID(order_instrument_id) if order_instrument_id else None,
                     quantity=quantity,
                     price=exit_price,

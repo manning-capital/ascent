@@ -28,6 +28,10 @@ def seed_composites(client: Any, ctx: dict) -> None:
         ]
 
     # --- Kraken Spreads ---
+    # Hand-curated non-overlapping pairs: each instrument participates in
+    # exactly one composite. Keeps the simulation simple to reason about
+    # and avoids wide-Y-axis chart variance from log-spreads centered far
+    # from zero.
     kraken_composites = []
     for syms in [
         ["BTC", "ETH"],

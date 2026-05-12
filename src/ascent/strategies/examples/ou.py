@@ -25,26 +25,71 @@ from ascent.feeds.examples.market import MarketData
 from ascent.feeds.examples.ou_params import OUParams
 from ascent.feeds.examples.ou_spread import OUSpread
 from ascent.math._non_rolling import OrnsteinUhlenbeck
-from ascent.strategies import Context, Strategy, TradeView
+from ascent.strategies import (
+    Context,
+    Plot,
+    PlotSeries,
+    SeriesStyle,
+    Strategy,
+    TradeView,
+)
 
 
 class OUStrategy(Strategy):
     """Mean-reversion on composite spreads using Leung-Li optimal levels."""
 
     class Parameters(BaseModel):
-        discount_rate: float = Field(0.01, gt=0, description="r in the Leung-Li framework")
+        discount_rate: float = Field(
+            1.0e-3,
+            gt=0,
+            description=(
+                "r in the Leung-Li framework. Per-second rate matching the "
+                "per-second mu published by OUParams; r/mu ~ 3 puts the "
+                "optimal exit ~0.5 stationary stds from theta."
+            ),
+        )
         transaction_cost: float = Field(0.01, ge=0, description="c in the Leung-Li framework")
         quantity: float = Field(1.0, gt=0, description="Composite units per trade")
 
     feeds = [MarketData, OUParams, OUSpread]
     scope = "composite"
     exchanges = ["KRAKEN_SECURITY_EXCHANGE"]
-    portfolio = "MAIN"
+    base_asset = "USD"
     display_name = "OU Strategy"
     description = "Mean-reversion on composite spreads using Leung-Li optimal entry/exit levels."
     trade_view = TradeView(
-        series=["OU_SPREAD", "OU_THETA", "OU_ENTRY", "OU_EXIT"],
+        plots=[
+            Plot(
+                id="spread",
+                title="OU Spread",
+                y_axis_label="Log Spread",
+                main_series_name="OU_SPREAD",
+                series=[
+                    PlotSeries(
+                        name="OU_SPREAD",
+                        label="Spread",
+                        style=SeriesStyle(color="primary", line_width=2.5, opacity=1.0),
+                    ),
+                    PlotSeries(
+                        name="OU_THETA",
+                        label="Mean (θ)",
+                        style=SeriesStyle(color="info", line_style="dashed", opacity=0.5),
+                    ),
+                    PlotSeries(
+                        name="OU_ENTRY",
+                        label="Entry Threshold",
+                        style=SeriesStyle(color="warning", line_style="dashed", opacity=0.4),
+                    ),
+                    PlotSeries(
+                        name="OU_EXIT",
+                        label="Exit Threshold",
+                        style=SeriesStyle(color="warning", line_style="dashed", opacity=0.4),
+                    ),
+                ],
+            ),
+        ],
         show_trade_markers=True,
+        show_trade_status_overlay=True,
     )
 
     _composite_legs: ClassVar[dict[uuid.UUID, tuple[uuid.UUID, uuid.UUID]]] = {}
@@ -236,6 +281,19 @@ class OUStrategy(Strategy):
             )
 
             if not has_open_trade:
+                # Strict dollar-neutral sizing: ``params.quantity`` is leg-A's
+                # share count; leg B trades ``quantity * (price_a / price_b)``
+                # shares so the dollar notional on each side matches.
+                price_a = float(ctx.df.loc[(composite_str, str(inst_a)), ("market_data", "CLOSE")])
+                price_b = float(ctx.df.loc[(composite_str, str(inst_b)), ("market_data", "CLOSE")])
+                if not (
+                    math.isfinite(price_a)
+                    and math.isfinite(price_b)
+                    and price_a > 0
+                    and price_b > 0
+                ):
+                    continue
+                leg_ratios = [1.0, price_a / price_b]
                 if spread <= entry_long:
                     self.open_trade(
                         composite_id,
@@ -243,6 +301,7 @@ class OUStrategy(Strategy):
                         quantity=params.quantity,
                         scope="composite",
                         composite_instrument_ids=[inst_a, inst_b],
+                        composite_leg_ratios=leg_ratios,
                     )
                     logger.info("OPEN LONG composite=%s spread=%+.6f", composite_str[:8], spread)
                 elif spread >= entry_short:
@@ -252,6 +311,7 @@ class OUStrategy(Strategy):
                         quantity=params.quantity,
                         scope="composite",
                         composite_instrument_ids=[inst_a, inst_b],
+                        composite_leg_ratios=leg_ratios,
                     )
                     logger.info("OPEN SHORT composite=%s spread=%+.6f", composite_str[:8], spread)
                 continue

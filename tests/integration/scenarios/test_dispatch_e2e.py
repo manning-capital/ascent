@@ -99,7 +99,6 @@ async def test_router_submit_end_to_end_reaches_exchange(
 
     router = TradeRouter(
         strategy_id=seeded_ids.strategy_id,
-        portfolio_id=seeded_ids.portfolio_id,
         trade_repo=trade_repo,
         order_repo=order_repo,
         event_bus=bus,
@@ -223,7 +222,6 @@ async def test_rollback_on_submit_prevents_exchange_dispatch(
 
     router = TradeRouter(
         strategy_id=seeded_ids.strategy_id,
-        portfolio_id=seeded_ids.portfolio_id,
         trade_repo=trade_repo,
         order_repo=order_repo,
         event_bus=bus,

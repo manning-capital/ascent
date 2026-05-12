@@ -6,14 +6,14 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ascent.database.models.assets import Asset
 from ascent.database.models.base import Base
-from ascent.database.models.portfolio import Portfolio
+from ascent.database.models.strategy import Strategy
 from ascent.database.models.types import TransactionStatusType, TransactionType
 
 
 class Transaction(Base):
     __tablename__ = "transaction"
     __table_args__ = {
-        "comment": "Represents individual portfolio transactions including buys, sells, and transfers. Used to track all asset movements within and between portfolios."
+        "comment": "Asset movement journal. Each fill writes a Transaction row; together with StrategyAssetHolding, these form a double-entry view of strategy positions. Manual deposits/withdrawals can also be recorded here with strategy_id null."
     }
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -32,13 +32,19 @@ class Transaction(Base):
         comment="The identifier of the transaction type",
     )
     transaction_type: Mapped["TransactionType"] = relationship("TransactionType")
-    portfolio_id: Mapped[uuid.UUID] = mapped_column(
+    strategy_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid,
-        ForeignKey("portfolio.id"),
-        nullable=False,
-        comment="The identifier of the portfolio this transaction belongs to",
+        ForeignKey("strategy.id"),
+        nullable=True,
+        comment="The strategy this transaction is attributed to. Null for manual deposits/withdrawals.",
     )
-    portfolio: Mapped["Portfolio"] = relationship("Portfolio", back_populates="transactions")
+    strategy: Mapped["Strategy | None"] = relationship("Strategy")
+    trade_leg_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("trade_leg.id"),
+        nullable=True,
+        comment="The trade leg this transaction was recorded for. Null for non-fill-driven transactions. Position type / direction is recoverable via the leg.",
+    )
     from_asset_id: Mapped[uuid.UUID] = mapped_column(
         Uuid,
         ForeignKey("asset.id"),
@@ -87,7 +93,7 @@ class Transaction(Base):
     )
 
     def __repr__(self):
-        return f"{Transaction.__name__}(id={self.id}, timestamp={self.timestamp}, transaction_type={self.transaction_type}, portfolio_id={self.portfolio_id})"
+        return f"{Transaction.__name__}(id={self.id}, timestamp={self.timestamp}, transaction_type={self.transaction_type}, strategy_id={self.strategy_id})"
 
 
 class TransactionGroup(Base):

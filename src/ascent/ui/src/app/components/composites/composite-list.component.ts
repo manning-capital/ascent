@@ -7,17 +7,17 @@ import { AssetService } from '../../services/asset.service';
 import { ToastService } from '../../services/toast.service';
 import { Select } from 'primeng/select';
 import { InputText } from 'primeng/inputtext';
-import { Card } from 'primeng/card';
 import { Button } from 'primeng/button';
 import { Composite, CompositeCreate, CompositeMemberCreate } from '../../models/composite.model';
-import { ServerTableComponent } from '../shared/data-table/server-table.component';
-import type { DataTableColumn, ServerFetchFn } from '../shared/data-table/data-table.model';
+import { AppDataTableComponent } from '../ui/data-table/app-data-table.component';
+import { AppPageHeaderComponent } from '../ui/page-header/app-page-header.component';
+import type { AppColumn, AppFetchFn, AppSeverity } from '../ui/data-table/app-column.model';
 import { SearchSelectComponent, SearchOption } from '../shared/search-select.component';
 
 @Component({
   selector: 'app-composite-list',
   standalone: true,
-  imports: [FormsModule, Select, InputText, Card, Button, ServerTableComponent, SearchSelectComponent],
+  imports: [FormsModule, Select, InputText, Button, AppDataTableComponent, AppPageHeaderComponent, SearchSelectComponent],
   templateUrl: './composite-list.component.html',
 })
 export class CompositeListComponent implements OnInit {
@@ -35,26 +35,47 @@ export class CompositeListComponent implements OnInit {
     { label: 'Inactive', value: false },
   ];
 
-  columns: DataTableColumn<Composite>[] = [
+  columns: AppColumn<Composite>[] = [
     { field: 'display_name', header: 'Display Name' },
     { field: 'name', header: 'Name', cellType: 'monospace' },
-    { field: 'composite_type_name', header: 'Type', cellType: 'link', linkRoute: (row: any) => `/settings/composite-types/${row.composite_type_id}` },
-    { field: 'members', header: 'Members', sortable: false, cellType: 'monospace', valueGetter: (p: any) => p.data?.members?.length ?? 0 },
-    { field: 'is_active', header: 'Status', cellType: 'status', width: 112 },
+    {
+      field: 'composite_type_name',
+      header: 'Type',
+      cellType: 'link',
+      linkRoute: (row: any) => `/settings/types/composite-types/${row.composite_type_id}`,
+    },
+    {
+      field: 'members',
+      header: 'Members',
+      sortable: false,
+      cellType: 'monospace',
+      format: (_, row: any) => String(row?.members?.length ?? 0),
+    },
+    {
+      field: 'is_active',
+      header: 'Status',
+      cellType: 'status',
+      width: 112,
+      pinned: 'right',
+      tagMapper: (v): { label: string; severity: AppSeverity } => ({
+        label: v ? 'Active' : 'Inactive',
+        severity: v ? 'success' : 'secondary',
+      }),
+    },
   ];
 
-  navigateToComposite = (row: any) => ['/settings/composites', row.id];
+  navigateToComposite = (row: Composite) => ['/settings/master-data/composites', row.id];
 
-  fetchPage = computed<ServerFetchFn<Composite>>(() => {
+  fetchPage = computed<AppFetchFn<Composite>>(() => {
     const search = this.search();
     const isActive = this.statusFilter();
-    return (page: number, pageSize: number, sort?: { field: string; order: string }) => {
+    return (page, pageSize, sort) => {
       const filters: any = {};
       if (search) filters.search = search;
       if (isActive != null) filters.is_active = isActive;
-      return this.compositeService.loadCompositesPaginated(page, pageSize, filters, sort).pipe(
-        map(res => ({ items: res.items, total: res.total }))
-      );
+      return this.compositeService
+        .loadCompositesPaginated(page, pageSize, filters, sort as any)
+        .pipe(map((res) => ({ items: res.items, total: res.total })));
     };
   });
 
@@ -130,7 +151,7 @@ export class CompositeListComponent implements OnInit {
       next: () => {
         this.toast.success('Composite created');
         this.showCreateForm.set(false);
-        this.search.update(s => s);
+        this.search.update((s) => s);
       },
       error: () => this.toast.error('Failed to create composite'),
     });

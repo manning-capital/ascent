@@ -117,11 +117,11 @@ def seed_feeds(client: Any, ctx: dict) -> None:
     spot_itype_id = uuid.UUID(ctx["spot_itype"]["id"])
     spread_ctype_id = uuid.UUID(ctx["spread_ctype"]["id"])
 
-    from ascent.feeds.examples.market import market_data
-    from ascent.feeds.examples.ou_params import ou_params
+    from ascent.feeds.examples.market import MarketData
+    from ascent.feeds.examples.ou_params import OUParams
 
-    market_schema = market_data.parameter_schema()
-    ou_schema = ou_params.parameter_schema()
+    market_schema = MarketData.parameter_schema()
+    ou_schema = OUParams.parameter_schema()
 
     # --- Kraken feeds ---
     feed_market = client.create_feed(
@@ -515,31 +515,30 @@ def seed_feeds(client: Any, ctx: dict) -> None:
         feed_correlation["id"],  # composite_attribute
     }
 
-    materialized = [
-        k
-        for k, v in partition_cache.items()
-        if v["status"] == "MATERIALIZED" and k[0] in attr_feed_ids
+    completed_runs: list[tuple[str, dict]] = [
+        (feed_id, run)
+        for feed_id, runs in feed_runs_by_feed.items()
+        if feed_id in attr_feed_ids
+        for run in runs
+        if run["status"] == "COMPLETED"
     ]
     attr_task = None
     if progress:
-        attr_task = progress.add_task("Attribute data", total=len(materialized))
+        attr_task = progress.add_task("Attribute data", total=len(completed_runs))
 
-    for cache_key, partition_obj in partition_cache.items():
-        if partition_obj["status"] != "MATERIALIZED":
-            continue
-        feed_id_key = cache_key[0]
-        if feed_id_key not in attr_feed_ids:
-            continue
-        feed_for_partition = next((f for f in all_feeds if f["id"] == feed_id_key), None)
-        if feed_for_partition is None:
+    for feed_id_key, run in completed_runs:
+        feed_for_run = next((f for f in all_feeds if f["id"] == feed_id_key), None)
+        if feed_for_run is None:
             continue
 
-        w_start = datetime.datetime.fromisoformat(partition_obj["window_start"])
-        w_end = datetime.datetime.fromisoformat(partition_obj["window_end"])
-        window_secs = (w_end - w_start).total_seconds()
-        ts = w_start + datetime.timedelta(seconds=window_secs * 0.5)
+        snapshot_value = run["snapshot_timestamp"]
+        ts = (
+            datetime.datetime.fromisoformat(snapshot_value)
+            if isinstance(snapshot_value, str)
+            else snapshot_value
+        )
 
-        output_table = feed_for_partition.get("output_table", "")
+        output_table = feed_for_run.get("output_table", "")
 
         if output_table == "instrument_attribute":
             for inst in all_instruments:

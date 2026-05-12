@@ -429,7 +429,7 @@ def get_strategies(
                 description=s.description,
                 strategy_ref=s.strategy_ref,
                 parameters=s.parameters,
-                portfolio_id=s.portfolio_id,
+                base_asset_id=s.base_asset_id,
                 is_active=s.is_active,
                 connection_status=conn_status,
                 **stats,
@@ -483,7 +483,7 @@ def get_strategy_detail(
     db: Session, strategy_id: uuid.UUID, cache: "EngineCache | None" = None
 ) -> StrategyDetail:
     query = (
-        select(Strategy).where(Strategy.id == strategy_id).options(joinedload(Strategy.portfolio))
+        select(Strategy).where(Strategy.id == strategy_id).options(joinedload(Strategy.base_asset))
     )
     strategy = db.execute(query).unique().scalars().first()
     if not strategy:
@@ -497,14 +497,14 @@ def get_strategy_detail(
         description=strategy.description,
         strategy_ref=strategy.strategy_ref,
         parameters=strategy.parameters,
-        portfolio_id=strategy.portfolio_id,
+        base_asset_id=strategy.base_asset_id,
         is_active=strategy.is_active,
         connection_status=(
             "connected"
             if cache is not None and cache.is_connected("strategy", strategy_id)
             else "disconnected"
         ),
-        portfolio_name=strategy.portfolio.display_name if strategy.portfolio else None,
+        base_asset_name=strategy.base_asset.name if strategy.base_asset else None,
         parameter_schema=strategy.parameter_schema,
         created_at=strategy.created_at,
         **stats,

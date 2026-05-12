@@ -9,11 +9,11 @@ import pytest
 
 from ascent.application import FillProcessor, OrderReconciler
 from ascent.domain import (
-    Direction,
     FillEvent,
     Order,
     OrderSide,
     OrderState,
+    PositionType,
     Trade,
     TradeLeg,
     TradeState,
@@ -39,14 +39,13 @@ def _legacy_trade_with_unlinked_leg(
     leg = TradeLeg(
         id=leg_id,
         instrument_id=uuid.uuid4(),
-        direction=Direction.LONG,
+        direction=PositionType.LONG,
         quantity=1.0,
         entry_order=None,
     )
     trade = Trade(
         id=uuid.uuid4(),
         strategy_id=uuid.uuid4(),
-        portfolio_id=uuid.uuid4(),
         state=TradeState.OPENING,
         is_paper=True,
         legs=(leg,),

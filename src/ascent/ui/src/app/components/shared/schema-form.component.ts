@@ -29,7 +29,7 @@ interface FormField {
           <label class="block text-xs font-medium text-surface-500 mb-1">
             {{ field.label }}
             @if (field.required) {
-              <span class="text-red-500">*</span>
+              <span class="text-negative">*</span>
             }
           </label>
 

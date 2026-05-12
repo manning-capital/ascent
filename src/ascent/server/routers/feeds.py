@@ -16,8 +16,12 @@ from ascent.server.schemas.feeds import (
     FeedListItem,
     FeedPublishRequest,
     FeedPublishResponse,
+    FeedRunDetail,
+    FeedRunLineageResponse,
     FeedRunListItem,
     FeedRunTradeItem,
+    FeedRunUniverseCompositeItem,
+    FeedRunUniverseInstrumentItem,
     FeedUpdate,
     StrategyFeedItem,
 )
@@ -92,7 +96,7 @@ def get_feed_parameter_schema(feed_id: uuid.UUID, db: Session = Depends(get_db))
     return feed.parameter_schema or {}
 
 
-@router.get("/{feed_id}/runs/{run_id}", response_model=FeedRunListItem)
+@router.get("/{feed_id}/runs/{run_id}", response_model=FeedRunDetail)
 def get_feed_run(feed_id: uuid.UUID, run_id: uuid.UUID, db: Session = Depends(get_db)):
     return feed_service.get_feed_run(db, feed_id, run_id)
 
@@ -154,6 +158,50 @@ def get_run_trades(
     db: Session = Depends(get_db),
 ):
     return feed_service.get_run_trades(db, feed_id, run_id)
+
+
+@router.get(
+    "/{feed_id}/runs/{run_id}/universe/instruments",
+    response_model=PaginatedResponse[FeedRunUniverseInstrumentItem],
+)
+def get_run_universe_instruments(
+    feed_id: uuid.UUID,
+    run_id: uuid.UUID,
+    page: int = 1,
+    page_size: int = 50,
+    db: Session = Depends(get_db),
+):
+    return feed_service.get_run_universe_instruments(
+        db, feed_id, run_id, page=page, page_size=page_size
+    )
+
+
+@router.get(
+    "/{feed_id}/runs/{run_id}/universe/composites",
+    response_model=PaginatedResponse[FeedRunUniverseCompositeItem],
+)
+def get_run_universe_composites(
+    feed_id: uuid.UUID,
+    run_id: uuid.UUID,
+    page: int = 1,
+    page_size: int = 50,
+    db: Session = Depends(get_db),
+):
+    return feed_service.get_run_universe_composites(
+        db, feed_id, run_id, page=page, page_size=page_size
+    )
+
+
+@router.get(
+    "/{feed_id}/runs/{run_id}/lineage",
+    response_model=FeedRunLineageResponse,
+)
+def get_run_lineage(
+    feed_id: uuid.UUID,
+    run_id: uuid.UUID,
+    db: Session = Depends(get_db),
+):
+    return feed_service.get_run_lineage(db, feed_id, run_id)
 
 
 @router.post("/{feed_id}/publish", response_model=FeedPublishResponse, status_code=201)

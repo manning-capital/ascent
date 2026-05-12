@@ -1,0 +1,47 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - v*
+
+jobs:
+  pypi:
+    environment: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: src/ascent/ui/package-lock.json
+
+      - name: Install UI dependencies
+        working-directory: src/ascent/ui
+        run: npm ci
+
+      - name: Build UI bundle
+        working-directory: src/ascent/ui
+        run: npx ng build --configuration production
+
+      - name: Stage UI bundle for packaging
+        run: |
+          mkdir -p src/ascent/server/ui
+          cp -R src/ascent/ui/dist/ui/browser/. src/ascent/server/ui/
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: "Set up Python"
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: ".python-version"
+
+      - name: "Build project"
+        run: uv build
+
+      - name: "Publish to PyPI"
+        run: uv publish --token ${{ secrets.PYPI_TOKEN }}

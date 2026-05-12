@@ -7,14 +7,13 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from ascent.database.models.base import Base
 from ascent.database.models.exchanges import Exchange
 from ascent.database.models.instruments import Instrument
-from ascent.database.models.portfolio import Portfolio
 from ascent.database.models.types import OrderStatusType, OrderType
 
 
 class Order(Base):
     __tablename__ = "order"
     __table_args__ = {
-        "comment": "Represents exchange orders submitted for execution. Tracks order type, side, fill status, and links to the portfolio and trade leg that originated the order."
+        "comment": "Represents exchange orders submitted for execution. Tracks order type, side, fill status, and links to the trade leg that originated the order."
     }
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -42,13 +41,6 @@ class Order(Base):
         comment="The identifier of the exchange this order was submitted to",
     )
     exchange: Mapped["Exchange"] = relationship("Exchange")
-    portfolio_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid,
-        ForeignKey("portfolio.id"),
-        nullable=False,
-        comment="The identifier of the portfolio this order belongs to",
-    )
-    portfolio: Mapped["Portfolio"] = relationship("Portfolio")
     instrument_id: Mapped[uuid.UUID] = mapped_column(
         Uuid,
         ForeignKey("instrument.id"),

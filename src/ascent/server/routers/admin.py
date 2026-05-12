@@ -72,9 +72,9 @@ def clear_trades():
 
 @router.post("/clear-holdings")
 def clear_holdings():
-    """Delete all portfolio asset holdings."""
+    """Delete all per-strategy asset holdings."""
     with engine.connect() as conn:
-        conn.execute(text('TRUNCATE "portfolio_asset_holding" RESTART IDENTITY CASCADE'))
+        conn.execute(text('TRUNCATE "strategy_asset_holding" RESTART IDENTITY CASCADE'))
         conn.commit()
     return {"status": "ok"}
 

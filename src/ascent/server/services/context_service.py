@@ -50,14 +50,13 @@ from ascent.database.models.strategy import Strategy as StrategyRow
 from ascent.database.models.strategy import StrategyRun
 from ascent.database.models.trades import Trade as TradeRow
 from ascent.database.models.trades import TradeLeg as TradeLegRow
-from ascent.domain import Attribute, Context, ContextSource, Period
+from ascent.domain import Attribute, Context, ContextSource, Period, TradeView
 from ascent.server.exceptions import NotFoundError
 from ascent.server.schemas.context import (
     ContextResponse,
     ContextSeries,
     SeriesPoint,
     SeriesScopeRef,
-    TradeViewSchema,
 )
 
 logger = logging.getLogger(__name__)
@@ -249,13 +248,13 @@ def get_by_strategy_run(
     )
 
 
-def _load_trade_view(db: Session, strategy_id: uuid.UUID) -> TradeViewSchema | None:
+def _load_trade_view(db: Session, strategy_id: uuid.UUID) -> TradeView | None:
     """Read the persisted TradeView dict off the strategy row."""
     strategy = db.get(StrategyRow, strategy_id)
     if strategy is None or strategy.trade_view is None:
         return None
     try:
-        return TradeViewSchema.model_validate(strategy.trade_view)
+        return TradeView.model_validate(strategy.trade_view)
     except Exception:
         logger.warning("Invalid trade_view JSON on strategy %s; ignoring", strategy_id)
         return None

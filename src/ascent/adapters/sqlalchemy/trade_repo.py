@@ -42,6 +42,13 @@ class SqlAlchemyTradeRepository(TradeRepository):
     ) -> list[Trade]:
         return await asyncio.to_thread(self._list_non_terminal_sync, session, strategy_id)
 
+    async def list_non_terminal_for_exchange(
+        self, session: Session, exchange_id: uuid.UUID
+    ) -> list[Trade]:
+        return await asyncio.to_thread(
+            self._list_non_terminal_for_exchange_sync, session, exchange_id
+        )
+
     async def list_open_for_strategy(self, session: Session, strategy_id: uuid.UUID) -> list[Trade]:
         return await asyncio.to_thread(self._list_open_sync, session, strategy_id)
 
@@ -50,7 +57,6 @@ class SqlAlchemyTradeRepository(TradeRepository):
         session: Session,
         *,
         strategy_id: uuid.UUID,
-        portfolio_id: uuid.UUID,
         is_paper: bool,
         entry_at: datetime,
         strategy_run_id: uuid.UUID | None,
@@ -61,7 +67,6 @@ class SqlAlchemyTradeRepository(TradeRepository):
             self._create_sync,
             session,
             strategy_id,
-            portfolio_id,
             is_paper,
             entry_at,
             strategy_run_id,
@@ -132,6 +137,25 @@ class SqlAlchemyTradeRepository(TradeRepository):
         rows = db.execute(stmt).scalars().all()
         return [self._mappers.trade_from_row(r, db) for r in rows]
 
+    def _list_non_terminal_for_exchange_sync(
+        self, db: Session, exchange_id: uuid.UUID
+    ) -> list[Trade]:
+        terminal_ids = [
+            self._types.trade_state_id(s)
+            for s in (TradeState.CLOSED, TradeState.CANCELLED)
+            if s in self._types._trade_state_to_id
+        ]
+        stmt = (
+            select(TradeRow)
+            .join(TradeLegRow, TradeLegRow.trade_id == TradeRow.id)
+            .where(TradeLegRow.exchange_id == exchange_id)
+            .distinct()
+        )
+        if terminal_ids:
+            stmt = stmt.where(TradeRow.current_status_type_id.notin_(terminal_ids))
+        rows = db.execute(stmt).scalars().all()
+        return [self._mappers.trade_from_row(r, db) for r in rows]
+
     def _list_open_sync(self, db: Session, strategy_id: uuid.UUID) -> list[Trade]:
         open_id = self._types.trade_state_id(TradeState.OPEN)
         rows = (
@@ -150,7 +174,6 @@ class SqlAlchemyTradeRepository(TradeRepository):
         self,
         db: Session,
         strategy_id: uuid.UUID,
-        portfolio_id: uuid.UUID,
         is_paper: bool,
         entry_at: datetime,
         strategy_run_id: uuid.UUID | None,
@@ -162,7 +185,6 @@ class SqlAlchemyTradeRepository(TradeRepository):
             strategy_id=strategy_id,
             strategy_run_id=strategy_run_id,
             composite_id=composite_id,
-            portfolio_id=portfolio_id,
             is_paper=is_paper,
             entry_at=entry_at,
             current_status_type_id=pending_id,

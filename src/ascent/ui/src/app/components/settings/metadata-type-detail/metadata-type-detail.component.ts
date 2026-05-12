@@ -11,11 +11,12 @@ import { Tabs, TabList, Tab } from 'primeng/tabs';
 import { Panel } from 'primeng/panel';
 import { SafeDeleteDialogComponent } from '../../shared/safe-delete-dialog.component';
 import { FieldPanelComponent, PanelField } from '../../shared/field-panel.component';
+import { AppDangerZoneComponent } from '../../ui/danger-zone/app-danger-zone.component';
 
 @Component({
   selector: 'app-metadata-type-detail',
   standalone: true,
-  imports: [RouterLink, FormsModule, Button, Tag, Skeleton, Tabs, TabList, Tab, Panel, SafeDeleteDialogComponent, FieldPanelComponent],
+  imports: [RouterLink, FormsModule, Button, Tag, Skeleton, Tabs, TabList, Tab, Panel, SafeDeleteDialogComponent, FieldPanelComponent, AppDangerZoneComponent],
   templateUrl: './metadata-type-detail.component.html',
 })
 export class MetadataTypeDetailComponent implements OnInit {

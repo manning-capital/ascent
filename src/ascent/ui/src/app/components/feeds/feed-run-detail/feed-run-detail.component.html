@@ -1,106 +1,61 @@
-<div class="flex flex-col h-[calc(100vh-3.5rem)] md:h-screen">
-  <!-- Header -->
-  <div class="flex items-center gap-3 px-4 py-2 border-b border-surface shrink-0 bg-emphasis">
-    <a [routerLink]="['/feeds', feedId]" [queryParams]="{tab: 'Runs'}" class="text-sm text-primary hover:underline">&larr; Runs</a>
-    <span class="text-surface-300">|</span>
+<app-page-header
+  [title]="loading() ? 'Loading…' : 'Run #' + (run()?.id ?? '').slice(0, 8)"
+  [breadcrumb]="breadcrumb()"
+>
+  <div actions class="flex items-center gap-2">
     @if (loading()) {
-      <p-skeleton width="8rem" height="1.25rem"/>
-    } @else {
-      <h1 class="text-lg font-bold truncate">Run #{{ run()?.id }}</h1>
-      @if (run(); as r) {
-        <p-tag [value]="r.status" [severity]="statusSeverity(r.status)" [rounded]="true"/>
+      <p-skeleton width="6rem" height="1.5rem" />
+    } @else if (run(); as r) {
+      <p-tag [value]="r.status" [severity]="statusSeverity(r.status)" [rounded]="true" />
+      <p-tag
+        [value]="r.snapshot_timestamp"
+        severity="secondary"
+        [rounded]="true"
+        icon="pi pi-calendar"
+      />
+      @if (r.records_fetched != null) {
+        <p-tag [value]="r.records_fetched + ' records'" severity="secondary" [rounded]="true" />
       }
     }
   </div>
+</app-page-header>
 
-  <!-- Tabs -->
-  <p-tabs class="shrink-0" [value]="activeTab()" (valueChange)="onTabChange($any($event))">
-    <p-tablist>
-      <p-tab value="Overview">Overview</p-tab>
-      <p-tab value="Data">Data</p-tab>
-      <p-tab value="Trades">Caused Trades</p-tab>
-    </p-tablist>
-  </p-tabs>
+@if (run()?.status === 'FAILED' && run()?.error_message) {
+  <p-message severity="error" class="shrink-0 block">
+    <span class="text-xs font-mono whitespace-pre-wrap break-words">{{ run()?.error_message }}</span>
+  </p-message>
+}
 
-  <!-- Content — flex column so the active tab can stretch to the bottom. -->
-  <div class="flex-1 flex flex-col min-h-0">
-    @if (activeTab() === 'Overview') {
-      <div class="flex-1 overflow-y-auto p-6 space-y-5 max-w-4xl mx-auto w-full">
-        @if (loading()) {
-          <div class="space-y-4">
-            <p-skeleton width="100%" height="2rem"/>
-            <p-skeleton width="100%" height="1.5rem"/>
-            <p-skeleton width="100%" height="1.5rem"/>
-            <p-skeleton width="100%" height="1.5rem"/>
-            <p-skeleton width="100%" height="1.5rem"/>
-          </div>
-        } @else if (run(); as r) {
-          <app-run-detail-card [run]="r" [extraFields]="extraFields"/>
-        }
-      </div>
-    }
-    @if (activeTab() === 'Data') {
-      <!-- Same flex chain as Data Explorer: outer flex-col + flex-1 + min-h-0
-           keeps the table's paginator pinned to the bottom of the viewport. -->
-      <div class="p-6 flex flex-col flex-1 min-h-0">
-        @if (run()) {
-          <app-server-table class="flex-1 min-h-0"
-            [fetchPage]="runDataFetchPage()"
-            [autoColumns]="true"
-            [autoLinks]="true"
-            [columnBorders]="true"
-            [rowHeight]="32"
-            [headerHeight]="32"/>
-        } @else {
-          <app-empty-state title="Run not loaded" message="Waiting for run details." icon="inbox"/>
-        }
-      </div>
-    }
-    @if (activeTab() === 'Trades') {
-      <div class="flex-1 overflow-y-auto p-6 space-y-3">
-        @if (tradesLoading()) {
-          <p-skeleton width="100%" height="2rem"/>
-          <p-skeleton width="100%" height="2rem"/>
-        } @else if (trades().length === 0) {
-          <app-empty-state
-            title="No trades caused by this run"
-            message="No strategy evaluation triggered by this feed event led to a trade."
-            icon="inbox"/>
-        } @else {
-          <table class="w-full text-sm">
-            <thead>
-              <tr class="border-b border-surface text-left">
-                <th class="py-2 px-3">Trade</th>
-                <th class="py-2 px-3">Strategy</th>
-                <th class="py-2 px-3">Status</th>
-                <th class="py-2 px-3">Entry</th>
-                <th class="py-2 px-3">Created</th>
-              </tr>
-            </thead>
-            <tbody>
-              @for (t of trades(); track t.trade_id) {
-                <tr class="border-b border-surface hover:bg-emphasis">
-                  <td class="py-2 px-3">
-                    <a [routerLink]="['/trades', t.trade_id]" class="text-primary hover:underline font-mono text-xs">
-                      {{ t.trade_id.slice(0, 8) }}
-                    </a>
-                  </td>
-                  <td class="py-2 px-3">
-                    <a [routerLink]="['/strategies', t.strategy_id]" class="text-primary hover:underline font-mono text-xs">
-                      {{ t.strategy_id.slice(0, 8) }}
-                    </a>
-                  </td>
-                  <td class="py-2 px-3">
-                    <p-tag [value]="t.status" [severity]="statusSeverity(t.status)" [rounded]="true"/>
-                  </td>
-                  <td class="py-2 px-3">{{ t.entry_at || '—' }}</td>
-                  <td class="py-2 px-3">{{ t.created_at }}</td>
-                </tr>
-              }
-            </tbody>
-          </table>
-        }
-      </div>
-    }
-  </div>
-</div>
+<p-splitter
+  layout="horizontal"
+  [panelSizes]="hSizes()"
+  stateKey="feed-run-detail-h-split"
+  stateStorage="local"
+  class="flex-1 min-h-0"
+  styleClass="border-0 rounded-none"
+>
+  <ng-template #panel>
+    <p-splitter
+      layout="vertical"
+      [panelSizes]="vSizes"
+      stateKey="feed-run-detail-v-split"
+      stateStorage="local"
+      class="h-full w-full"
+      styleClass="border-0 rounded-none h-full"
+    >
+      <ng-template #panel>
+        <app-feed-run-top-panel [run]="run()" [feedId]="feedId" />
+      </ng-template>
+      <ng-template #panel>
+        <app-feed-run-bottom-panel [run]="run()" [feedId]="feedId" />
+      </ng-template>
+    </p-splitter>
+  </ng-template>
+  <ng-template #panel>
+    <app-feed-run-stats-rail
+      [run]="run()"
+      [feedId]="feedId"
+      [(collapsed)]="railCollapsed"
+    />
+  </ng-template>
+</p-splitter>

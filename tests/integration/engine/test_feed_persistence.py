@@ -93,14 +93,10 @@ def seeded(db_session: Session) -> dict:
     db_session.flush()
 
     btc_usd = Instrument(
-        **make_instrument(
-            instrument_type.id, provider.id, btc.id, usd.id, name="KRAKEN_BTC_USD"
-        )
+        **make_instrument(instrument_type.id, provider.id, btc.id, usd.id, name="KRAKEN_BTC_USD")
     )
     eth_usd = Instrument(
-        **make_instrument(
-            instrument_type.id, provider.id, eth.id, usd.id, name="KRAKEN_ETH_USD"
-        )
+        **make_instrument(instrument_type.id, provider.id, eth.id, usd.id, name="KRAKEN_ETH_USD")
     )
     db_session.add_all([btc_usd, eth_usd])
     db_session.commit()
@@ -131,12 +127,8 @@ def seeded_with_composite(db_session: Session, seeded: dict) -> dict:
 
     db_session.add_all(
         [
-            CompositeMember(
-                **make_composite_member(composite.id, seeded["btc_usd"].id, order=1)
-            ),
-            CompositeMember(
-                **make_composite_member(composite.id, seeded["eth_usd"].id, order=2)
-            ),
+            CompositeMember(**make_composite_member(composite.id, seeded["btc_usd"].id, order=1)),
+            CompositeMember(**make_composite_member(composite.id, seeded["eth_usd"].id, order=2)),
         ]
     )
     db_session.commit()
@@ -178,10 +170,7 @@ async def _run_with_runner(runner: Runner, predicate, *, timeout: float) -> None
 def _count_distinct_timestamps(engine, table: str, entity_col: str, entity_id: uuid.UUID) -> int:
     with Session(engine) as db:
         return db.execute(
-            text(
-                f"SELECT COUNT(DISTINCT timestamp) FROM {table} "
-                f"WHERE {entity_col} = :eid"
-            ),
+            text(f"SELECT COUNT(DISTINCT timestamp) FROM {table} WHERE {entity_col} = :eid"),
             {"eid": entity_id},
         ).scalar_one()
 
@@ -251,13 +240,17 @@ async def test_multiple_ticks_produce_distinct_snapshot_timestamps(
     )
 
     with Session(postgres_engine) as db:
-        timestamps = db.execute(
-            text(
-                "SELECT DISTINCT timestamp FROM instrument_attribute "
-                "WHERE instrument_id = :iid ORDER BY timestamp"
-            ),
-            {"iid": instrument_id},
-        ).scalars().all()
+        timestamps = (
+            db.execute(
+                text(
+                    "SELECT DISTINCT timestamp FROM instrument_attribute "
+                    "WHERE instrument_id = :iid ORDER BY timestamp"
+                ),
+                {"iid": instrument_id},
+            )
+            .scalars()
+            .all()
+        )
     # 3 ticks at 1s interval must have 3 distinct snapshot timestamps; they
     # must sort ascending because the engine stamps the schedule-aligned
     # boundary, not wall clock. Dedupe sanity-checks the ON CONFLICT path
@@ -344,7 +337,12 @@ async def test_multi_entity_multi_attribute_persists_every_combination(
                     {"btc": btc_id, "eth": eth_id},
                 ).all()
             )
-        expected = {(btc_id, close_id), (btc_id, volume_id), (eth_id, close_id), (eth_id, volume_id)}
+        expected = {
+            (btc_id, close_id),
+            (btc_id, volume_id),
+            (eth_id, close_id),
+            (eth_id, volume_id),
+        }
         return expected.issubset(pairs)
 
     await _run_with_runner(runner, all_combos_present, timeout=10.0)
@@ -416,9 +414,7 @@ async def test_composite_scoped_feed_writes_to_composite_attribute(
 
     await _run_with_runner(
         runner,
-        lambda: _row_count(
-            postgres_engine, "composite_attribute", "composite_id", composite_id
-        )
+        lambda: _row_count(postgres_engine, "composite_attribute", "composite_id", composite_id)
         >= 1,
         timeout=10.0,
     )
@@ -432,9 +428,7 @@ async def test_composite_scoped_feed_writes_to_composite_attribute(
             {"cid": composite_id},
         ).all()
         # Composite-scoped feeds must not leak into instrument_attribute.
-        inst_rows = db.execute(
-            text("SELECT COUNT(*) FROM instrument_attribute")
-        ).scalar_one()
+        inst_rows = db.execute(text("SELECT COUNT(*) FROM instrument_attribute")).scalar_one()
 
     assert rows, "expected at least one composite_attribute row"
     for attr_id, val in rows:
@@ -623,9 +617,7 @@ async def test_ui_run_data_endpoint_sees_persisted_rows(
 
     await _run_with_runner(
         runner,
-        lambda: _row_count(
-            postgres_engine, "instrument_attribute", "instrument_id", instrument_id
-        )
+        lambda: _row_count(postgres_engine, "instrument_attribute", "instrument_id", instrument_id)
         >= 1,
         timeout=10.0,
     )
@@ -723,16 +715,14 @@ async def test_every_run_has_snapshot_timestamp_matching_its_data(
     # have landed yet when the run record reaches COMPLETED. Earlier runs
     # must all be backed by their data in the hypertable.
     with Session(postgres_engine) as db:
-        runs = (
-            db.execute(
-                text(
-                    "SELECT id, snapshot_timestamp FROM feed_run "
-                    "WHERE feed_id = :fid AND status = 'COMPLETED' "
-                    "ORDER BY started_at DESC OFFSET 1"
-                ),
-                {"fid": feed_id},
-            ).all()
-        )
+        runs = db.execute(
+            text(
+                "SELECT id, snapshot_timestamp FROM feed_run "
+                "WHERE feed_id = :fid AND status = 'COMPLETED' "
+                "ORDER BY started_at DESC OFFSET 1"
+            ),
+            {"fid": feed_id},
+        ).all()
     assert runs, "expected at least one fully-persisted completed run"
 
     for run_id, snapshot_ts in runs:
@@ -751,10 +741,7 @@ async def test_every_run_has_snapshot_timestamp_matching_its_data(
         )
     with Session(postgres_engine) as db:
         first_ts = db.execute(
-            text(
-                "SELECT timestamp FROM instrument_attribute "
-                "WHERE instrument_id = :iid LIMIT 1"
-            ),
+            text("SELECT timestamp FROM instrument_attribute WHERE instrument_id = :iid LIMIT 1"),
             {"iid": instrument_id},
         ).scalar_one()
     assert first_ts.tzinfo is not None, "timestamps must be timezone-aware"

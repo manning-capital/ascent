@@ -11,14 +11,14 @@ from datetime import UTC, datetime
 
 import pytest
 
-from ascent.domain import Direction, TradeState
+from ascent.domain import PositionType, TradeState
 from ascent.ports.trade_repo import NewLegSpec
 
 NOW = datetime(2026, 4, 16, 12, 0, tzinfo=UTC)
 LATER = datetime(2026, 4, 16, 13, 0, tzinfo=UTC)
 
 
-def _leg_spec(exchange_id: uuid.UUID, direction: Direction = Direction.LONG) -> NewLegSpec:
+def _leg_spec(exchange_id: uuid.UUID, direction: PositionType = PositionType.LONG) -> NewLegSpec:
     return NewLegSpec(
         instrument_id=uuid.uuid4(),
         direction=direction,
@@ -37,7 +37,6 @@ class TestCreateAndGet:
         trade = await trade_repo.create(
             session,
             strategy_id=strategy_id,
-            portfolio_id=portfolio_id,
             is_paper=True,
             entry_at=NOW,
             strategy_run_id=None,
@@ -51,7 +50,7 @@ class TestCreateAndGet:
         assert fetched.is_paper is True
         assert fetched.state == TradeState.PENDING
         assert len(fetched.legs) == 1
-        assert fetched.legs[0].direction == Direction.LONG
+        assert fetched.legs[0].direction == PositionType.LONG
         assert fetched.legs[0].quantity == 1.0
 
     @pytest.mark.asyncio
@@ -65,28 +64,27 @@ class TestCreateAndGet:
         trade = await trade_repo.create(
             session,
             strategy_id=uuid.uuid4(),
-            portfolio_id=uuid.uuid4(),
             is_paper=False,
             entry_at=NOW,
             strategy_run_id=uuid.uuid4(),
             legs=[
                 NewLegSpec(
                     instrument_id=inst_a,
-                    direction=Direction.LONG,
+                    direction=PositionType.LONG,
                     quantity=1.0,
                     expected_entry_price=None,
                     exchange_id=exchange_id,
                 ),
                 NewLegSpec(
                     instrument_id=inst_b,
-                    direction=Direction.SHORT,
+                    direction=PositionType.SHORT,
                     quantity=2.0,
                     expected_entry_price=None,
                     exchange_id=exchange_id,
                 ),
                 NewLegSpec(
                     instrument_id=inst_c,
-                    direction=Direction.SHORT,
+                    direction=PositionType.SHORT,
                     quantity=3.0,
                     expected_entry_price=None,
                     exchange_id=exchange_id,
@@ -96,9 +94,9 @@ class TestCreateAndGet:
         fetched = await trade_repo.get(session, trade.id)
         assert [leg.instrument_id for leg in fetched.legs] == [inst_a, inst_b, inst_c]
         assert [leg.direction for leg in fetched.legs] == [
-            Direction.LONG,
-            Direction.SHORT,
-            Direction.SHORT,
+            PositionType.LONG,
+            PositionType.SHORT,
+            PositionType.SHORT,
         ]
         assert [leg.quantity for leg in fetched.legs] == [1.0, 2.0, 3.0]
 
@@ -231,7 +229,6 @@ async def _make_pending(trade_repo, session, *, strategy_id: uuid.UUID | None = 
     return await trade_repo.create(
         session,
         strategy_id=strategy_id or uuid.uuid4(),
-        portfolio_id=uuid.uuid4(),
         is_paper=True,
         entry_at=NOW,
         strategy_run_id=None,

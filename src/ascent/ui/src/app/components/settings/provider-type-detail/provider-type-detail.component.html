@@ -143,28 +143,24 @@
               </div>
             }
 
-            <app-data-table
-              [columns]="fieldColumns"
-              [rowData]="allFields()"
-              [pagination]="false"
-              emptyMessage="No metadata fields defined. Click + Add Field to get started."/>
+            <app-metadata-fields-table
+              [fields]="allFields()"
+              routePrefix="/settings/types/provider-types"
+              emptyMessage="No metadata fields defined. Click + Add Field to get started."
+              (removeField)="removeField($event)" />
           </p-panel>
 
         </div>
 
       } @else if (activeTab() === 'Settings') {
         <div class="p-6">
-          <div class="border border-red-500/30 rounded-lg overflow-hidden max-w-3xl">
-            <div class="px-5 py-4 border-b border-red-500/30 bg-red-500/5">
-              <h3 class="text-lg font-semibold text-red-500">Danger Zone</h3>
-            </div>
-            <div class="px-5 py-4 flex items-center justify-between">
-              <div>
-                <p class="font-medium">Delete this provider type</p>
-                <p class="text-sm text-surface-400 mt-1">Once deleted, all associated metadata field definitions will be permanently removed.</p>
-              </div>
-              <p-button (onClick)="openDelete()" severity="danger" [outlined]="true" size="small" label="Delete provider type"/>
-            </div>
+          <div class="max-w-3xl">
+            <app-danger-zone
+              title="Delete this provider type"
+              description="Once deleted, all associated metadata field definitions will be permanently removed."
+              actionLabel="Delete provider type"
+              (confirmed)="openDelete()"
+            />
           </div>
         </div>
       }

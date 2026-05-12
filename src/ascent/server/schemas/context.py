@@ -16,7 +16,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from ascent.domain import Attribute, Context, Period
+from ascent.domain import Attribute, Context, Period, TradeView
 
 
 class SeriesPoint(BaseModel):
@@ -54,27 +54,14 @@ class ContextSeries(BaseModel):
     points: list[SeriesPoint]
 
 
-class TradeViewSchema(BaseModel):
-    """Per-strategy trade-detail chart configuration.
-
-    Mirrors the persisted ``Strategy.trade_view`` JSONB. The trade-detail UI
-    uses ``series`` to seed default series selection (by attribute name) and
-    overlays vertical reference lines at the trade's entry/exit timestamps
-    when ``show_trade_markers`` is true.
-    """
-
-    series: list[str] = []
-    series_labels: dict[str, str] = {}
-    show_trade_markers: bool = True
-
-
 class ContextResponse(BaseModel):
     """Reconstructed view of what a run (or scope) cared about.
 
     The ``context`` field is the literal Pydantic shape the engine wrote
-    to ``FeedRun.context``; the ``series`` field is the resolved data.
+    to ``FeedRun.context``; the ``series`` field is the resolved data; the
+    ``trade_view`` field carries the strategy's persisted plot configuration.
     """
 
     context: Context
     series: list[ContextSeries]
-    trade_view: TradeViewSchema | None = None
+    trade_view: TradeView | None = None

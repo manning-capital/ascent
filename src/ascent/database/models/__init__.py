@@ -59,9 +59,6 @@ from ascent.database.models.instruments import (
 # Import orders
 from ascent.database.models.orders import Order, OrderStatus
 
-# Import portfolio
-from ascent.database.models.portfolio import Portfolio, PortfolioAssetHolding
-
 # Import provider assets
 from ascent.database.models.provider_assets import ProviderAssetMetadata
 
@@ -91,6 +88,7 @@ from ascent.database.models.strategy import (
     StrategyRun,
     StrategyState,
 )
+from ascent.database.models.strategy_asset_holding import StrategyAssetHolding
 from ascent.database.models.strategy_run_feeds import StrategyRunFeedRun
 
 # Import trade analysis
@@ -154,9 +152,6 @@ __all__ = [
     "Exchange",
     # Providers
     "Provider",
-    # Portfolio
-    "Portfolio",
-    "PortfolioAssetHolding",
     # Attribute System
     "Attribute",
     "Metadata",
@@ -203,6 +198,7 @@ __all__ = [
     "Strategy",
     "StrategyInstrumentScope",
     "StrategyCompositeScope",
+    "StrategyAssetHolding",
     "StrategyExchange",
     "StrategyRun",
     "StrategyRunFeedRun",

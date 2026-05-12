@@ -10,7 +10,11 @@ from sqlalchemy.orm import Session
 
 from ascent.server.dependencies import get_db
 from ascent.server.schemas.common import PaginatedResponse
-from ascent.server.schemas.data_explorer import DataExplorerFilterOptions, DataSourceInfo
+from ascent.server.schemas.data_explorer import (
+    DataExplorerFilterOptions,
+    DataSeriesResponse,
+    DataSourceInfo,
+)
 from ascent.server.services import data_explorer_service
 
 router = APIRouter(prefix="/data", tags=["data-explorer"])
@@ -29,6 +33,36 @@ def get_filter_options(
 ):
     """Return entity/descriptor/period options for populating filter dropdowns."""
     return data_explorer_service.get_filter_options(db, table)
+
+
+@router.get("/series", response_model=DataSeriesResponse)
+def query_series(
+    table: str,
+    entity_id: uuid.UUID,
+    descriptor_id: uuid.UUID,
+    period_id: uuid.UUID | None = None,
+    start: datetime.datetime | None = None,
+    end: datetime.datetime | None = None,
+    bucket: str = "none",
+    aggregation: str = "none",
+    db: Session = Depends(get_db),
+):
+    """Return a single time-series for one (entity, descriptor[, period]) tuple.
+
+    Used by the chart cells in the Data Explorer workspace. Optionally bucketed
+    via TimescaleDB ``time_bucket`` and aggregated (mean/sum/min/max/count).
+    """
+    return data_explorer_service.query_series(
+        db,
+        table,
+        entity_id=entity_id,
+        descriptor_id=descriptor_id,
+        period_id=period_id,
+        start=start,
+        end=end,
+        bucket=bucket,
+        aggregation=aggregation,
+    )
 
 
 @router.get("/query", response_model=PaginatedResponse[dict])

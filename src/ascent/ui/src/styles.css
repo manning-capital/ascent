@@ -4,46 +4,61 @@
 @import "tailwindcss/theme" layer(tw-base);
 @import "tailwindcss-primeui";
 @import "tailwindcss/utilities" layer(tw-utilities);
+@import "primeicons/primeicons.css";
+
+/* Inter (UI) — 400/500/600/700. JetBrains Mono (numerics) — 400/500/600. */
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/inter/700.css";
+@import "@fontsource/jetbrains-mono/400.css";
+@import "@fontsource/jetbrains-mono/500.css";
+@import "@fontsource/jetbrains-mono/600.css";
+
+@import "./styles/compact-density.css";
 
 @variant dark (&:where(.dark, .dark *));
 
-/* ── Semantic layout tokens — switch automatically with light/dark ── */
+/* Semantic layout tokens — every value below resolves to a PrimeNG --p-*
+   token defined in the AscentPreset (app.config.ts). The .dark class is
+   already handled by PrimeNG's darkModeSelector, so these aliases work in
+   both schemes without a parallel .dark block. */
 :root {
-  --canvas: #f1f5f9;
-  --surface: #ffffff;
-  --elevated: #ffffff;
-  --fg: #111827;
-  --fg-muted: #6b7280;
-  --fg-faint: #9ca3af;
-  --edge: rgba(0, 0, 0, 0.1);
-  --edge-dim: rgba(0, 0, 0, 0.05);
-  --overlay: rgba(0, 0, 0, 0.5);
-  --graph-accent-1: #f59e0b;
-  --graph-accent-2: #43aa8b;
-  --graph-accent-3: #a78bfa;
+  --canvas: var(--p-content-background);
+  --surface: var(--p-content-background);
+  --elevated: var(--p-overlay-background);
+  --sidebar-bg: var(--p-sidebar-background);
+  --fg: var(--p-text-color);
+  --fg-muted: var(--p-text-muted-color);
+  --fg-faint: var(--p-text-secondary-color);
+  --edge: var(--p-content-border-color);
+  --edge-dim: var(--p-content-hover-background);
+  --overlay: var(--p-mask-background);
+
+  --positive: var(--p-positive-color);
+  --negative: var(--p-negative-color);
+  --warning: var(--p-warning-color);
+  --info: var(--p-info-color);
+
+  /* Typography — Inter for UI, JetBrains Mono for numerics / IDs / code.
+     Defined in @theme below; this just exposes the PrimeNG token. */
+  --p-font-family: var(--font-sans);
+  --default-font-family: var(--font-sans);
+  --default-mono-font-family: var(--font-mono);
+
+  --graph-accent-1: var(--p-graph-accent-1);
+  --graph-accent-2: var(--p-graph-accent-2);
+  --graph-accent-3: var(--p-graph-accent-3);
+  --graph-accent-4: var(--p-graph-accent-4);
+  --graph-accent-5: var(--p-graph-accent-5);
 }
 
-.dark {
-  --canvas: #0a0a0a;
-  --surface: #18181b;
-  --elevated: #27272a;
-  --fg: #fafafa;
-  --fg-muted: #a1a1aa;
-  --fg-faint: #71717a;
-  --edge: rgba(255, 255, 255, 0.1);
-  --edge-dim: rgba(255, 255, 255, 0.05);
-  --overlay: rgba(0, 0, 0, 0.7);
-  --graph-accent-1: #f59e0b;
-  --graph-accent-2: #43aa8b;
-  --graph-accent-3: #a78bfa;
-}
-
-html {
+html, body {
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -59,7 +74,6 @@ html {
 }
 
 @theme {
-  /* ── Semantic layout tokens ── */
   --color-canvas: var(--canvas);
   --color-surface: var(--surface);
   --color-elevated: var(--elevated);
@@ -70,16 +84,21 @@ html {
   --color-edge-dim: var(--edge-dim);
   --color-overlay: var(--overlay);
 
-  /* ── Accent colors (standard Tailwind-aligned) ── */
-  --color-positive: #22c55e;
-  --color-negative: #ef4444;
-  --color-warning: #f97316;
-  --color-info: #3b82f6;
+  --color-positive: var(--positive);
+  --color-negative: var(--negative);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
 
-  /* ── Graph accent colors ── */
   --color-graph-accent-1: var(--graph-accent-1);
   --color-graph-accent-2: var(--graph-accent-2);
   --color-graph-accent-3: var(--graph-accent-3);
+  --color-graph-accent-4: var(--graph-accent-4);
+  --color-graph-accent-5: var(--graph-accent-5);
+
+  /* Tailwind picks these up to drive font-sans / font-mono utilities AND
+     publishes them at :root for the PrimeNG / preflight overrides above. */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 @layer tw-utilities {
@@ -87,6 +106,40 @@ html {
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
   }
+
+  /* Route components rendered next to <router-outlet> have no intrinsic
+     height. Force them to fill the main area so their inner h-full /
+     flex-1 layouts work without each component having to set a host
+     class. Matches both top-level routes (under <main>) and nested
+     routes (e.g. settings sub-routes inside SettingsLayoutComponent). */
+  main router-outlet + * {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    min-height: 0;
+  }
+}
+
+/* Flat-palette card/panel definition — with content background == page
+   canvas, PrimeNG's default cards have no visible separation. Replace
+   background contrast + shadow with a hairline border. Square corners
+   keep the Bloomberg / IBKR-style "section, not floating tile" feel. */
+.p-card,
+.p-card-body {
+  border-radius: 0;
+}
+.p-card {
+  border: 1px solid var(--edge);
+  box-shadow: none;
+}
+.p-card:hover {
+  box-shadow: none;
+}
+.p-panel {
+  border: 1px solid var(--edge);
+  box-shadow: none;
+  border-radius: 0;
 }
 
 @keyframes pulse-live {
@@ -98,3 +151,98 @@ html {
   animation: pulse-live 2s ease-in-out infinite;
 }
 
+/* Staged-row highlight in universe / exchange pickers (left edge accent + tint). */
+tr.app-picker-row-staged > td {
+  background: color-mix(in srgb, var(--p-positive-color) 10%, transparent);
+}
+tr.app-picker-row-staged > td:first-child {
+  box-shadow: inset 3px 0 0 var(--p-positive-color);
+}
+
+/* DataView (rich list rows) — anchor paginator to the bottom even when the
+   list has fewer items than fill the viewport, and let only the items area
+   scroll so the paginator stays in place under the user's eye.
+
+   The list pages wrap p-dataview in `flex-1 min-h-0 flex flex-col`, so we
+   force the custom element host AND the inner .p-dataview wrapper to fill
+   that height. The content area scrolls; the bottom paginator is pinned. */
+p-dataview {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+p-dataview .p-dataview {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+}
+.p-dataview-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+.p-dataview-paginator-bottom {
+  flex-shrink: 0;
+  border-top: 1px solid var(--edge);
+}
+
+/* Tables — sticky header on scroll. PrimeNG's [scrollable]="true" + scrollHeight="flex"
+   already does this, but ensure the rule wins against any conflicting compact
+   overrides. */
+.p-datatable-scrollable .p-datatable-thead > tr > th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface);
+}
+
+/* Angular CDK drag-drop polish — used by the Data Explorer notebook to
+   reorder cells. Default CDK behavior leaves the original spot ambiguous;
+   we render a dashed placeholder via *cdkDragPlaceholder and add the
+   following visual treatment so the drag reads clearly:
+     - cdk-drag-preview: floating shadow under the cursor-following clone
+     - cdk-drag-animating: smooth snap-back / slot-shuffle
+     - cdk-drop-list-dragging .cdk-drag (siblings): smooth reflow
+*/
+.cdk-drag-preview {
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18), 0 4px 8px rgba(0, 0, 0, 0.1);
+  border-radius: 0.375rem;
+  opacity: 0.95;
+}
+.cdk-drag-animating {
+  transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+.cdk-drop-list-dragging .cdk-drag:not(.cdk-drag-placeholder) {
+  transition: transform 200ms cubic-bezier(0, 0, 0.2, 1);
+}
+
+/* Paginator — modernized to match the compact density aesthetic.
+   Default Aura paginator uses 40px circular buttons + heavy padding which
+   reads as too prominent next to the dense table rows. We slim everything,
+   subdue the report typography, and keep the rows-per-page select tight. */
+.p-paginator {
+  font-size: 0.75rem;
+  border-top: 1px solid var(--edge);
+}
+.p-paginator .p-paginator-current {
+  font-size: 0.75rem;
+  color: var(--fg-faint);
+  margin-right: auto;
+}
+.p-paginator .p-paginator-pages .p-paginator-page {
+  font-size: 0.75rem;
+  font-weight: 500;
+  min-width: 1.75rem;
+}
+.p-paginator .p-paginator-rpp-options {
+  height: 1.75rem;
+  font-size: 0.75rem;
+}
+/* PrimeNG injects an icon (chevron) inside the rows-per-page select; keep it tight. */
+.p-paginator .p-paginator-rpp-options .p-select-label {
+  padding: 0.1875rem 0.375rem;
+  line-height: 1.2;
+}

@@ -59,7 +59,7 @@
       <span class="text-surface-300">|</span>
       <h1 class="text-lg font-bold truncate">{{ asset.display_name }}</h1>
       <span class="text-sm text-surface-500 font-mono">({{ asset.name }})</span>
-      <span class="w-2 h-2 rounded-full shrink-0" [class]="asset.is_active ? 'bg-green-500' : 'bg-surface-400'"></span>
+      <span class="w-2 h-2 rounded-full shrink-0" [class]="asset.is_active ? 'bg-positive' : 'bg-edge'"></span>
       @if (asset.asset_type_name) {
         <p-tag [value]="asset.asset_type_name!" severity="secondary"/>
       }
@@ -139,7 +139,7 @@
                       <div>
                         <label class="block text-xs text-surface-500 mb-1">
                           {{ paf.metadata_display_name }}
-                          @if (paf.is_required) { <span class="text-red-500">*</span> }
+                          @if (paf.is_required) { <span class="text-negative">*</span> }
                         </label>
                         @if (paf.value_type === 'boolean') {
                           <p-select [(ngModel)]="editPAFieldValues[selectedProviderId()! + ':' + paf.metadata_id]" [options]="[{label: 'true', value: 'true'}, {label: 'false', value: 'false'}]" optionLabel="label" optionValue="value" placeholder="-- select --" class="w-full"/>
@@ -230,17 +230,13 @@
       <!-- ==================== SETTINGS TAB ==================== -->
       } @else if (activeTab() === 'Settings') {
         <div class="p-6">
-          <div class="border border-red-500/30 rounded-lg overflow-hidden max-w-3xl">
-            <div class="px-5 py-4 border-b border-red-500/30 bg-red-500/5">
-              <h3 class="text-lg font-semibold text-red-500">Danger Zone</h3>
-            </div>
-            <div class="px-5 py-4 flex items-center justify-between">
-              <div>
-                <p class="font-medium">Delete this asset</p>
-                <p class="text-sm text-surface-400 mt-1">Once deleted, all associated metadata and provider links will be permanently removed.</p>
-              </div>
-              <p-button (onClick)="openDelete()" severity="danger" [outlined]="true" size="small" label="Delete asset"/>
-            </div>
+          <div class="max-w-3xl">
+            <app-danger-zone
+              title="Delete this asset"
+              description="Once deleted, all associated metadata and provider links will be permanently removed."
+              actionLabel="Delete asset"
+              (confirmed)="openDelete()"
+            />
           </div>
         </div>
       }

@@ -1526,11 +1526,18 @@ class OrnsteinUhlenbeck(StochasticModel):
                 x, mu, sigma, theta=theta, r=r, derivative=2, use_analytical=True
             )
 
-        # Grid search in spread space (theta=0 normalization)
+        # Grid search in spread space (theta=0 normalization).
+        # Bound is in stationary stds (sigma/sqrt(2*mu)) rather than raw sigma:
+        # the optimal exit level lives O(1) stationary stds from theta, while
+        # raw sigma is per-sqrt-time and shrinks toward zero as the OU process
+        # is parameterized over longer timescales. Using raw sigma collapses
+        # the search range to a small fraction of one std and the grid never
+        # finds a positive-derivative region.
+        grid_bound = 100 * sigma_v / np.sqrt(2 * mu_v)
         # For single parameter set, create 1D grid; for multiple, create 2D grid
         if len(mu_v) == 1:
             # Single parameter: create 1D grid for efficiency in spread space
-            x_grid_spread = np.linspace(0, float(100 * sigma_v), n_grid)
+            x_grid_spread = np.linspace(0, float(grid_bound), n_grid)
             f_grid = f_exit_level(x_grid_spread, mu_v, sigma_v, 0, r, c)
             fp_grid = f_prime_exit_level(x_grid_spread, mu_v, sigma_v, 0, r, c)
             # Filter: f(x) > 0 and f'(x) > 0 (both must be positive)
@@ -1539,7 +1546,7 @@ class OrnsteinUhlenbeck(StochasticModel):
         else:
             # Multiple parameters: create 2D grid in spread space
             # x_grid_spread shape: (n_grid, n_params)
-            x_grid_spread = np.linspace(np.zeros_like(mu_v), 100 * sigma_v, n_grid)
+            x_grid_spread = np.linspace(np.zeros_like(mu_v), grid_bound, n_grid)
             f_grid = f_exit_level(x_grid_spread, mu_v, sigma_v, 0, r, c)
             fp_grid = f_prime_exit_level(x_grid_spread, mu_v, sigma_v, 0, r, c)
             # Filter: f(x) > 0 and f'(x) > 0 (both must be positive)
@@ -1703,10 +1710,13 @@ class OrnsteinUhlenbeck(StochasticModel):
         # Need to also convert exit_level to spread space
         exit_level_spread_v = exit_level_v - theta_v
 
+        # Bound is in stationary stds (sigma/sqrt(2*mu)) rather than raw sigma:
+        # see get_optimal_exit_level for the rationale.
+        grid_bound = 100 * sigma_v / np.sqrt(2 * mu_v)
         # For single parameter set, create 1D grid; for multiple, create 2D grid
         if len(mu_v) == 1:
             # Single parameter: create 1D grid for efficiency in spread space
-            x_grid_spread = np.linspace(float(-100 * sigma_v), 0, n_grid)
+            x_grid_spread = np.linspace(float(-grid_bound), 0, n_grid)
             f_grid = f_entry_level(x_grid_spread, mu_v, sigma_v, 0, r, c, exit_level_spread_v)
             fp_grid = f_prime_entry_level(
                 x_grid_spread, mu_v, sigma_v, 0, r, c, exit_level_spread_v
@@ -1717,7 +1727,7 @@ class OrnsteinUhlenbeck(StochasticModel):
         else:
             # Multiple parameters: create 2D grid in spread space
             # x_grid_spread shape: (n_grid, n_params)
-            x_grid_spread = np.linspace(-100 * sigma_v, np.zeros_like(mu_v), n_grid)
+            x_grid_spread = np.linspace(-grid_bound, np.zeros_like(mu_v), n_grid)
             f_grid = f_entry_level(x_grid_spread, mu_v, sigma_v, 0, r, c, exit_level_spread_v)
             fp_grid = f_prime_entry_level(
                 x_grid_spread, mu_v, sigma_v, 0, r, c, exit_level_spread_v

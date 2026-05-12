@@ -6,16 +6,16 @@ import { AssetService } from '../../services/asset.service';
 import { ToastService } from '../../services/toast.service';
 import { Select } from 'primeng/select';
 import { InputText } from 'primeng/inputtext';
-import { Card } from 'primeng/card';
 import { Button } from 'primeng/button';
 import { AssetCreate, AssetListItem } from '../../models/asset.model';
-import { ServerTableComponent } from '../shared/data-table/server-table.component';
-import type { DataTableColumn, ServerFetchFn } from '../shared/data-table/data-table.model';
+import { AppDataTableComponent } from '../ui/data-table/app-data-table.component';
+import { AppPageHeaderComponent } from '../ui/page-header/app-page-header.component';
+import type { AppColumn, AppFetchFn, AppSeverity } from '../ui/data-table/app-column.model';
 
 @Component({
   selector: 'app-asset-list',
   standalone: true,
-  imports: [FormsModule, Select, InputText, Card, Button, ServerTableComponent],
+  imports: [FormsModule, Select, InputText, Button, AppDataTableComponent, AppPageHeaderComponent],
   templateUrl: './asset-list.component.html',
 })
 export class AssetListComponent implements OnInit {
@@ -32,27 +32,42 @@ export class AssetListComponent implements OnInit {
     { label: 'Inactive', value: false },
   ];
 
-  typeNames = computed(() => this.assetService.assetTypes().map(t => t.display_name));
+  typeNames = computed(() => this.assetService.assetTypes().map((t) => t.display_name));
 
-  columns: DataTableColumn<AssetListItem>[] = [
+  columns: AppColumn<AssetListItem>[] = [
     { field: 'display_name', header: 'Display Name' },
     { field: 'name', header: 'Name', cellType: 'monospace' },
-    { field: 'asset_type_name', header: 'Type', cellType: 'link', linkRoute: (row: any) => `/settings/asset-types/${row.asset_type_id}` },
-    { field: 'is_active', header: 'Status', cellType: 'status', width: 112 },
+    {
+      field: 'asset_type_name',
+      header: 'Type',
+      cellType: 'link',
+      linkRoute: (row: any) => `/settings/types/asset-types/${row.asset_type_id}`,
+    },
+    {
+      field: 'is_active',
+      header: 'Status',
+      cellType: 'status',
+      width: 112,
+      pinned: 'right',
+      tagMapper: (v): { label: string; severity: AppSeverity } => ({
+        label: v ? 'Active' : 'Inactive',
+        severity: v ? 'success' : 'secondary',
+      }),
+    },
   ];
 
-  navigateToAsset = (row: any) => ['/settings/assets', row.id];
+  navigateToAsset = (row: AssetListItem) => ['/settings/master-data/assets', row.id];
 
-  fetchPage = computed<ServerFetchFn<AssetListItem>>(() => {
+  fetchPage = computed<AppFetchFn<AssetListItem>>(() => {
     const search = this.search();
     const isActive = this.statusFilter();
-    return (page: number, pageSize: number, sort?: { field: string; order: string }) => {
+    return (page, pageSize, sort) => {
       const filters: any = {};
       if (search) filters.search = search;
       if (isActive != null) filters.is_active = isActive;
-      return this.assetService.loadAssetsPaginated(page, pageSize, filters, sort).pipe(
-        map(res => ({ items: res.items, total: res.total }))
-      );
+      return this.assetService
+        .loadAssetsPaginated(page, pageSize, filters, sort as any)
+        .pipe(map((res) => ({ items: res.items, total: res.total })));
     };
   });
 
@@ -118,8 +133,7 @@ export class AssetListComponent implements OnInit {
       next: () => {
         this.toast.success('Asset created');
         this.showCreateForm.set(false);
-        // Trigger refetch by toggling a filter signal
-        this.search.update(s => s);
+        this.search.update((s) => s);
       },
       error: () => this.toast.error('Failed to create asset'),
     });

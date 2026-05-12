@@ -1,9 +1,9 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { Observable, Subject, EMPTY } from 'rxjs';
-import { switchMap, tap, catchError } from 'rxjs/operators';
+import { Observable, Subject, EMPTY, of } from 'rxjs';
+import { switchMap, tap, catchError, shareReplay } from 'rxjs/operators';
 import { ApiService } from './api.service';
 import { PaginatedResponse } from '../models/trade.model';
-import { DataSourceInfo, DataExplorerFilterOptions } from '../models/data-explorer.model';
+import { DataSourceInfo, DataExplorerFilterOptions, DataSeriesResponse } from '../models/data-explorer.model';
 
 @Injectable({ providedIn: 'root' })
 export class DataExplorerService {
@@ -71,5 +71,63 @@ export class DataExplorerService {
 
   queryData(params: Record<string, any>): Observable<PaginatedResponse<Record<string, any>>> {
     return this.api.get<PaginatedResponse<Record<string, any>>>('/data/query', params);
+  }
+
+  // ─── Series fetch + cache ──────────────────────────────────────
+  // The chart cells call fetchSeries() once per series; multiple cells
+  // referencing the same (table, entity, descriptor, period, range, bucket)
+  // tuple share a single in-flight observable via shareReplay so the network
+  // request happens only once.
+  private seriesCache = new Map<string, Observable<DataSeriesResponse>>();
+
+  fetchSeries(params: {
+    table: string;
+    entityId: string;
+    descriptorId: string;
+    periodId?: string;
+    start?: string | null;
+    end?: string | null;
+    bucket?: string;
+    aggregation?: string;
+  }): Observable<DataSeriesResponse> {
+    const key = [
+      params.table,
+      params.entityId,
+      params.descriptorId,
+      params.periodId ?? '',
+      params.start ?? '',
+      params.end ?? '',
+      params.bucket ?? 'none',
+      params.aggregation ?? 'none',
+    ].join('|');
+
+    const cached = this.seriesCache.get(key);
+    if (cached) return cached;
+
+    const queryParams: Record<string, any> = {
+      table: params.table,
+      entity_id: params.entityId,
+      descriptor_id: params.descriptorId,
+    };
+    if (params.periodId) queryParams['period_id'] = params.periodId;
+    if (params.start) queryParams['start'] = params.start;
+    if (params.end) queryParams['end'] = params.end;
+    if (params.bucket && params.bucket !== 'none') queryParams['bucket'] = params.bucket;
+    if (params.aggregation && params.aggregation !== 'none') queryParams['aggregation'] = params.aggregation;
+
+    const obs = this.api
+      .get<DataSeriesResponse>('/data/series', queryParams)
+      .pipe(
+        catchError(() => of<DataSeriesResponse>({ points: [], entity_label: '', descriptor_label: '' })),
+        shareReplay(1),
+      );
+    this.seriesCache.set(key, obs);
+    return obs;
+  }
+
+  /** Drop the series cache. Called when the workspace's table or time range
+   *  changes — old cache entries are no longer relevant. */
+  clearSeriesCache(): void {
+    this.seriesCache.clear();
   }
 }

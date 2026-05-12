@@ -45,7 +45,7 @@ export type ImpactDialogChoice = 'remove' | 'disable' | 'cancel';
                 <p class="text-sm font-semibold mb-2">Open trades:</p>
                 <div class="flex flex-col gap-1 text-sm max-h-48 overflow-auto">
                   @for (t of impact.blocking_trades; track t.trade_id) {
-                    <div class="flex items-center justify-between px-3 py-1.5 rounded bg-yellow-500/5 border border-yellow-500/10">
+                    <div class="flex items-center justify-between px-3 py-1.5 rounded bg-warning/5 border border-warning/10">
                       <span class="font-mono text-xs text-surface-400">{{ shortId(t.trade_id) }}</span>
                       <span class="text-xs text-surface-300">
                         {{ t.state }}{{ t.direction ? ' · ' + t.direction : '' }}{{ t.quantity != null ? ' · qty ' + t.quantity : '' }}
@@ -61,7 +61,7 @@ export type ImpactDialogChoice = 'remove' | 'disable' | 'cancel';
                 <p class="text-sm font-semibold mb-2">Dependent items:</p>
                 <div class="flex flex-col gap-1 text-sm max-h-48 overflow-auto">
                   @for (s of impact.blocking_scope_items; track scopeKey(s)) {
-                    <div class="flex items-center justify-between px-3 py-1.5 rounded bg-red-500/5 border border-red-500/10">
+                    <div class="flex items-center justify-between px-3 py-1.5 rounded bg-negative/5 border border-negative/10">
                       <span class="text-xs text-surface-400">{{ scopeLabel(s) }}</span>
                       <span class="font-mono text-xs text-surface-500">{{ scopeIdLabel(s) }}</span>
                     </div>

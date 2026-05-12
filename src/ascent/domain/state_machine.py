@@ -15,10 +15,10 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from ascent.domain.trade import (
-    Direction,
     FillEvent,
     Order,
     OrderState,
+    PositionType,
     Trade,
     TradeState,
 )
@@ -278,9 +278,9 @@ def _sum_pnl(trade: Trade, leg_updates: tuple[LegUpdate, ...]) -> float:
 
 
 def _compute_leg_pnl(
-    *, direction: Direction, entry_price: float, exit_price: float, quantity: float
+    *, direction: PositionType, entry_price: float, exit_price: float, quantity: float
 ) -> float:
-    if direction == Direction.LONG:
+    if direction == PositionType.LONG:
         return (exit_price - entry_price) * quantity
     return (entry_price - exit_price) * quantity
 

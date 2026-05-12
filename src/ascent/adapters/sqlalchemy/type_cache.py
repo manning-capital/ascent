@@ -13,7 +13,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from ascent.database.models.descriptors import Attribute
-from ascent.database.models.types import OrderStatusType, OrderType, TradeStatusType
+from ascent.database.models.types import (
+    OrderStatusType,
+    OrderType,
+    TradeStatusType,
+    TransactionType,
+)
 from ascent.domain import OrderState, TradeState
 from ascent.domain import OrderType as OrderTypeEnum
 
@@ -27,6 +32,7 @@ class TypeCache:
         self._id_to_order_state: dict[uuid.UUID, OrderState] = {}
         self._trade_state_to_id: dict[TradeState, uuid.UUID] = {}
         self._id_to_trade_state: dict[uuid.UUID, TradeState] = {}
+        self._transaction_type_to_id: dict[str, uuid.UUID] = {}
         self._attribute_name: dict[uuid.UUID, str] = {}
         self._attribute_id_by_name: dict[str, uuid.UUID] = {}
         self._load(session_factory)
@@ -52,6 +58,8 @@ class TypeCache:
                     continue
                 self._trade_state_to_id[state] = row.id
                 self._id_to_trade_state[row.id] = state
+            for row in db.execute(select(TransactionType)).scalars():
+                self._transaction_type_to_id[row.name] = row.id
             for row in db.execute(select(Attribute)).scalars():
                 self._attribute_name[row.id] = row.name.lower()
                 self._attribute_id_by_name[row.name] = row.id
@@ -74,6 +82,9 @@ class TypeCache:
         if status_id is None:
             return None
         return self._id_to_trade_state.get(status_id)
+
+    def transaction_type_id(self, transaction_type_name: str) -> uuid.UUID:
+        return self._transaction_type_to_id[transaction_type_name]
 
     def attribute_name(self, attribute_id: uuid.UUID) -> str | None:
         return self._attribute_name.get(attribute_id)

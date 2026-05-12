@@ -18,6 +18,7 @@ export interface FeedListItem {
   total_runs: number;
   last_run_at: string | null;
   last_run_status: string | null;
+  recent_run_statuses: string[];
 }
 
 export interface FeedDetail extends FeedListItem {
@@ -37,6 +38,28 @@ export interface FeedRunListItem {
   started_at: string;
   completed_at: string | null;
   error_message: string | null;
+}
+
+export interface FeedRunContextAttribute {
+  id: string;
+  name: string;
+  display_name?: string | null;
+  period?: { id: string; name: string; duration_nanoseconds?: number | null } | null;
+}
+
+export interface FeedRunContextSource {
+  table: string;
+  scope_type: string;
+  attributes: FeedRunContextAttribute[];
+}
+
+export interface FeedRunContext {
+  snapshot_timestamp?: string;
+  sources: FeedRunContextSource[];
+}
+
+export interface FeedRunDetail extends FeedRunListItem {
+  context: FeedRunContext | null;
 }
 
 export interface RunDataResponse {
@@ -102,4 +125,48 @@ export interface StrategyRunListItem {
   error_message: string | null;
   feed_runs: StrategyRunFeedRunItem[];
   trigger_feed_id: string | null;
+}
+
+export interface FeedRunUniverseInstrumentItem {
+  instrument_id: string;
+  name: string;
+  display_name: string;
+  instrument_type_id: string | null;
+  instrument_type_name: string | null;
+  added_at: string;
+}
+
+export interface FeedRunUniverseCompositeItem {
+  composite_id: string;
+  name: string;
+  display_name: string;
+  composite_type_id: string | null;
+  composite_type_name: string | null;
+  added_at: string;
+}
+
+export interface UpstreamFeedRunItem {
+  feed_run_id: string;
+  feed_id: string;
+  feed_name: string;
+  feed_display_name: string;
+  snapshot_timestamp: string;
+  status: string;
+}
+
+export interface DownstreamStrategyRunItem {
+  strategy_run_id: string;
+  strategy_id: string;
+  strategy_name: string;
+  strategy_display_name: string;
+  started_at: string;
+  completed_at: string | null;
+  status: string;
+  is_trigger: boolean;
+}
+
+export interface FeedRunLineageResponse {
+  upstream_runs: UpstreamFeedRunItem[];
+  downstream_strategy_runs: DownstreamStrategyRunItem[];
+  downstream_trades: FeedRunTradeItem[];
 }

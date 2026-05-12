@@ -495,13 +495,18 @@ async def stream_strategy_run_context(
 
         pubsub = cache.subscribe([STRATEGY_RUN_CHANNEL])
         try:
-            run_id_str = str(run_id)
+            # Match on strategy_id, not run_id: each evaluation creates a
+            # NEW StrategyRun, so filtering by the original run_id would
+            # discard every tick. The context query already widens its
+            # window to [entry_at, now()], so refetching on any tick for
+            # this strategy picks up the new attribute rows.
+            strategy_id_str = str(strategy_id)
             while True:
                 msg = await asyncio.to_thread(cache.poll, pubsub, 5.0)
                 if msg is None:
                     yield ": keepalive\n\n"
                     continue
-                if msg.get("run_id") != run_id_str:
+                if msg.get("strategy_id") != strategy_id_str:
                     continue
                 try:
                     payload = await asyncio.to_thread(_fetch_response_json)

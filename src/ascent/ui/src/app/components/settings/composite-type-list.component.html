@@ -1,30 +1,26 @@
-<div class="flex flex-col h-full">
-  <div class="flex items-center justify-between p-6 pb-4 shrink-0">
-    <div>
-      <h1 class="text-2xl font-bold">Composite Types</h1>
-      <p class="text-sm text-surface-500 mt-1">Define composite classifications and their required metadata fields. Click a node to view details.</p>
-    </div>
-  </div>
+<app-page-header
+  title="Composite Types"
+  subtitle="Define composite classifications and their required metadata fields. Click a node to view details."
+/>
 
-  @if (treeData() === null) {
-    <!-- Loading skeleton -->
-    <div class="flex-1 min-h-0 px-6 pb-6">
-      <div class="w-full h-full rounded-lg border border-edge-dim flex items-center justify-center">
-        <div class="flex flex-col items-center gap-10">
-          <p-skeleton width="10rem" height="2.5rem" borderRadius="8px"/>
-          <div class="flex items-center gap-16">
-            <p-skeleton width="10rem" height="2.5rem" borderRadius="8px"/>
-            <p-skeleton width="10rem" height="2.5rem" borderRadius="8px"/>
-          </div>
+@if (treeData() === null) {
+  <div class="flex-1 min-h-0 p-4">
+    <div class="w-full h-full rounded-lg border border-edge flex items-center justify-center">
+      <div class="flex flex-col items-center gap-10">
+        <p-skeleton width="10rem" height="2.5rem" borderRadius="8px" />
+        <div class="flex items-center gap-16">
+          <p-skeleton width="10rem" height="2.5rem" borderRadius="8px" />
+          <p-skeleton width="10rem" height="2.5rem" borderRadius="8px" />
         </div>
       </div>
     </div>
-  } @else {
-    <div class="flex-1 min-h-0 px-6 pb-6">
-      <app-type-hierarchy-graph
-        [trees]="treeData()!"
-        (nodeClick)="onNodeClick($event)"
-        (createType)="onCreateType($event)"/>
-    </div>
-  }
-</div>
+  </div>
+} @else {
+  <div class="flex-1 min-h-0 p-4">
+    <app-type-hierarchy-graph
+      [trees]="treeData()!"
+      (nodeClick)="onNodeClick($event)"
+      (createType)="onCreateType($event)"
+    />
+  </div>
+}

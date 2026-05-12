@@ -121,5 +121,3 @@ def get_exchange_trades(
     return PaginatedResponse(
         items=items, total=total, page=page, page_size=page_size, total_pages=total_pages
     )
-
-

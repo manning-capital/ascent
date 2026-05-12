@@ -24,9 +24,7 @@ class SqlAlchemyStrategyUniverseRepository(StrategyUniverseRepository):
     ) -> set[uuid.UUID]:
         return await asyncio.to_thread(self._get_sync, session, strategy_id, scope)
 
-    def _get_sync(
-        self, db: Session, strategy_id: uuid.UUID, scope: Scope
-    ) -> set[uuid.UUID]:
+    def _get_sync(self, db: Session, strategy_id: uuid.UUID, scope: Scope) -> set[uuid.UUID]:
         if scope == "composite":
             rows = db.execute(
                 select(StrategyCompositeScope.composite_id)

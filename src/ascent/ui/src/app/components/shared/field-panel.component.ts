@@ -44,7 +44,7 @@ const BOOL_OPTIONS = [{ label: 'true', value: 'true' }, { label: 'false', value:
           <div class="min-w-0">
             <label class="block text-xs text-surface-500 mb-1">
               {{ field.label }}
-              @if (field.required) { <span class="text-red-500">*</span> }
+              @if (field.required) { <span class="text-negative">*</span> }
               @if (field.inherited) { <span class="text-surface-400 italic text-[0.6875rem] ml-1">(inherited)</span> }
             </label>
             @if (editing() && isEditable(field)) {
@@ -119,7 +119,7 @@ const BOOL_OPTIONS = [{ label: 'true', value: 'true' }, { label: 'false', value:
                 @case ('active') {
                   <div class="text-sm py-1.5">
                     <span class="inline-flex items-center gap-1.5">
-                      <span class="w-2 h-2 rounded-full" [class]="field.value ? 'bg-green-500' : 'bg-surface-400'"></span>
+                      <span class="w-2 h-2 rounded-full" [class]="field.value ? 'bg-positive' : 'bg-edge'"></span>
                       {{ field.value ? 'Yes' : 'No' }}
                     </span>
                   </div>

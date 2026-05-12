@@ -185,14 +185,10 @@ export class FeedActivityTimelineComponent implements AfterViewInit, OnDestroy {
     const styles = getComputedStyle(document.documentElement);
     const read = (name: string) => styles.getPropertyValue(name).trim();
     switch (status) {
-      case 'COMPLETED':
-        return read('--color-positive') || '#22c55e';
-      case 'FAILED':
-        return read('--color-negative') || '#ef4444';
-      case 'RUNNING':
-        return read('--color-warning') || '#f97316';
-      default:
-        return read('--fg-faint') || '#9ca3af';
+      case 'COMPLETED': return read('--positive');
+      case 'FAILED': return read('--negative');
+      case 'RUNNING': return read('--warning');
+      default: return read('--fg-faint');
     }
   }
 

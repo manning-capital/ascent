@@ -18,9 +18,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal
 
-from ascent.domain import Direction, OrderType, TradeState
+from ascent.domain import OrderType, PositionType, TradeState
 from ascent.ports import (
     EventBus,
+    InstrumentRepository,
     OrderRepository,
     OutboxPublisher,
     RouteGate,
@@ -51,10 +52,21 @@ class ExchangeBinding:
 
 @dataclass(frozen=True)
 class CompositeSpec:
-    """Resolved composite membership. The evaluate-strategy use case loads these."""
+    """Resolved composite membership. The evaluate-strategy use case loads these.
+
+    ``leg_quantity_ratios`` lets the caller assign a different number of
+    shares to each leg from the single ``quantity`` passed to
+    :meth:`TradeRouter.submit`. Leg ``i`` ends up trading
+    ``quantity * leg_quantity_ratios[i]`` shares. For pairs trading this is
+    the hedge ratio: passing ``[1.0, beta]`` yields ``1 : beta`` share
+    sizing on a two-leg spread, which keeps the spread move's PnL on the
+    long leg vs the short leg in the right proportion. Default ``None``
+    treats every leg as having a ratio of ``1.0`` (uniform sizing).
+    """
 
     composite_id: uuid.UUID
     ordered_instrument_ids: list[uuid.UUID]
+    leg_quantity_ratios: list[float] | None = None
 
 
 @dataclass(frozen=True)
@@ -82,7 +94,6 @@ class TradeRouter:
         self,
         *,
         strategy_id: uuid.UUID,
-        portfolio_id: uuid.UUID,
         trade_repo: TradeRepository,
         order_repo: OrderRepository,
         event_bus: EventBus,
@@ -91,11 +102,11 @@ class TradeRouter:
         exchanges: list[ExchangeBinding],
         route_gate: RouteGate | None = None,
         is_paper: bool = False,
+        instrument_repo: InstrumentRepository | None = None,
     ) -> None:
         if not exchanges:
             raise ValueError("TradeRouter requires at least one exchange binding")
         self._strategy_id = strategy_id
-        self._portfolio_id = portfolio_id
         self._trades = trade_repo
         self._orders = order_repo
         self._bus = event_bus
@@ -104,6 +115,7 @@ class TradeRouter:
         self._exchanges = exchanges
         self._route_gate: RouteGate = route_gate or _AlwaysAllowRouteGate()
         self._is_paper = is_paper
+        self._instruments = instrument_repo
         self._strategy_run_id: uuid.UUID | None = None
 
     def bind_strategy_run(self, strategy_run_id: uuid.UUID) -> None:
@@ -148,7 +160,6 @@ class TradeRouter:
                 trade = await self._trades.create(
                     uow.session,
                     strategy_id=self._strategy_id,
-                    portfolio_id=self._portfolio_id,
                     is_paper=self._is_paper,
                     entry_at=now,
                     strategy_run_id=self._strategy_run_id,
@@ -176,7 +187,6 @@ class TradeRouter:
                 trade = await self._trades.create(
                     uow.session,
                     strategy_id=self._strategy_id,
-                    portfolio_id=self._portfolio_id,
                     is_paper=self._is_paper,
                     entry_at=now,
                     strategy_run_id=self._strategy_run_id,
@@ -186,7 +196,7 @@ class TradeRouter:
 
                 entry_orders: list[_EntryOrder] = []
                 for leg, spec in zip(trade.legs, leg_specs, strict=True):
-                    order_side = "BUY" if spec.direction == Direction.LONG else "SELL"
+                    order_side = "BUY" if spec.direction == PositionType.LONG else "SELL"
                     order = await self._orders.create(
                         uow.session,
                         NewOrderSpec(
@@ -196,7 +206,6 @@ class TradeRouter:
                             quantity=spec.quantity,
                             price=price or 0.0,
                             exchange_id=binding.exchange_id,
-                            portfolio_id=self._portfolio_id,
                             instrument_id=spec.instrument_id,
                             trade_leg_id=leg.id,
                         ),
@@ -216,10 +225,18 @@ class TradeRouter:
                     uow.session, trade.id, new_state=TradeState.OPENING, at=now
                 )
 
+                # Resolve asset symbols for ledger-style exchanges. Empty dict
+                # if no instrument_repo wired — caller's choice; some test
+                # exchanges don't need them.
+                assets = await self._resolve_assets(
+                    uow.session, [e.instrument_id for e in entry_orders]
+                )
+
                 # Durable dispatch: enqueue each entry order to the outbox,
                 # atomically with the trade/order rows. The relay forwards these
                 # to the broker; the exchange dispatcher consumes from there.
                 for entry in entry_orders:
+                    from_asset, to_asset = assets.get(entry.instrument_id, (None, None))
                     await self._outbox.enqueue(
                         uow.session,
                         channel=binding.channel,
@@ -237,6 +254,8 @@ class TradeRouter:
                                 "quantity": entry.quantity,
                                 "price": price,
                                 "client_order_id": str(entry.order_id),
+                                "from_asset_symbol": from_asset,
+                                "to_asset_symbol": to_asset,
                             },
                         },
                     )
@@ -306,7 +325,7 @@ class TradeRouter:
                 raise ValueError(f"Trade {trade_id} is not OPEN (state={trade.state.value})")
 
             for leg in trade.legs:
-                exit_side = "SELL" if leg.direction == Direction.LONG else "BUY"
+                exit_side = "SELL" if leg.direction == PositionType.LONG else "BUY"
                 order = await self._orders.create(
                     uow.session,
                     NewOrderSpec(
@@ -316,7 +335,6 @@ class TradeRouter:
                         quantity=leg.quantity,
                         price=price or 0.0,
                         exchange_id=binding.exchange_id,
-                        portfolio_id=self._portfolio_id,
                         instrument_id=leg.instrument_id,
                         trade_leg_id=leg.id,
                     ),
@@ -340,7 +358,10 @@ class TradeRouter:
                 close_reason=close_reason,
             )
 
+            assets = await self._resolve_assets(uow.session, [e.instrument_id for e in exit_orders])
+
             for exit_ in exit_orders:
+                from_asset, to_asset = assets.get(exit_.instrument_id, (None, None))
                 await self._outbox.enqueue(
                     uow.session,
                     channel=binding.channel,
@@ -358,6 +379,8 @@ class TradeRouter:
                             "quantity": exit_.quantity,
                             "price": price,
                             "client_order_id": str(exit_.order_id),
+                            "from_asset_symbol": from_asset,
+                            "to_asset_symbol": to_asset,
                         },
                     },
                 )
@@ -400,6 +423,13 @@ class TradeRouter:
 
     # ---- internal ----
 
+    async def _resolve_assets(
+        self, session, instrument_ids: list[uuid.UUID]
+    ) -> dict[uuid.UUID, tuple[str, str]]:
+        if self._instruments is None or not instrument_ids:
+            return {}
+        return await self._instruments.get_assets(session, instrument_ids)
+
     def _build_leg_specs(
         self,
         *,
@@ -414,24 +444,30 @@ class TradeRouter:
         if scope == "composite":
             if composite is None:
                 raise ValueError("composite scope requires a CompositeSpec")
+            ratios = composite.leg_quantity_ratios
+            if ratios is not None and len(ratios) != len(composite.ordered_instrument_ids):
+                raise ValueError(
+                    "leg_quantity_ratios length must match ordered_instrument_ids length"
+                )
             legs = []
             for i, instrument_id in enumerate(composite.ordered_instrument_ids):
                 if i == 0:
-                    direction = Direction.LONG if side == "BUY" else Direction.SHORT
+                    direction = PositionType.LONG if side == "BUY" else PositionType.SHORT
                 else:
-                    direction = Direction.SHORT if side == "BUY" else Direction.LONG
+                    direction = PositionType.SHORT if side == "BUY" else PositionType.LONG
+                ratio = ratios[i] if ratios is not None else 1.0
                 legs.append(
                     NewLegSpec(
                         instrument_id=instrument_id,
                         direction=direction,
-                        quantity=quantity,
+                        quantity=quantity * ratio,
                         expected_entry_price=price,
                         exchange_id=exchange_id,
                     )
                 )
             return legs
 
-        direction = Direction.LONG if side == "BUY" else Direction.SHORT
+        direction = PositionType.LONG if side == "BUY" else PositionType.SHORT
         return [
             NewLegSpec(
                 instrument_id=target_id,

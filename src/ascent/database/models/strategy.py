@@ -6,10 +6,10 @@ from sqlalchemy import Boolean, ForeignKey, Index, String, Uuid, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from ascent.database.models.assets import Asset
 from ascent.database.models.base import Base, NamedEntityMixin
 from ascent.database.models.composites import Composite
 from ascent.database.models.instruments import Instrument
-from ascent.database.models.portfolio import Portfolio
 
 if TYPE_CHECKING:
     from ascent.database.models.exchanges import Exchange
@@ -29,12 +29,13 @@ class Strategy(NamedEntityMixin, Base):
         JSONB,
         nullable=True,
     )
-    portfolio_id: Mapped[uuid.UUID] = mapped_column(
+    base_asset_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid,
-        ForeignKey("portfolio.id"),
-        nullable=False,
+        ForeignKey("asset.id"),
+        nullable=True,
+        comment="Strategy's accounting/reporting asset. Drives PnL display and (eventually) universe filtering.",
     )
-    portfolio: Mapped["Portfolio"] = relationship("Portfolio")
+    base_asset: Mapped["Asset | None"] = relationship("Asset")
     parameter_schema: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     trade_view: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     is_paused: Mapped[bool] = mapped_column(

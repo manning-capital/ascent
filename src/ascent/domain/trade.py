@@ -22,7 +22,15 @@ class OrderType(str, enum.Enum):
     LIMIT = "LIMIT"
 
 
-class Direction(str, enum.Enum):
+class PositionType(str, enum.Enum):
+    """Direction or holding type of a position.
+
+    Today only ``LONG`` and ``SHORT`` are valid; future values
+    (``STAKED``, ``BORROWED``, ``PROVIDED_LIQUIDITY``) extend the enum
+    without schema change. ``TradeLeg.direction`` is always ``LONG`` or
+    ``SHORT`` — non-directional position types only apply to holdings.
+    """
+
     LONG = "LONG"
     SHORT = "SHORT"
 
@@ -87,20 +95,22 @@ class Order:
 class TradeLeg:
     id: uuid.UUID
     instrument_id: uuid.UUID
-    direction: Direction
+    direction: PositionType
     quantity: float
     entry_order: Order | None = None
     exit_order: Order | None = None
     entry_price: float | None = None
     exit_price: float | None = None
     realized_pnl: float | None = None
+    from_asset_symbol: str | None = None
+    to_asset_symbol: str | None = None
+    exchange_id: uuid.UUID | None = None
 
 
 @dataclass(frozen=True)
 class Trade:
     id: uuid.UUID
     strategy_id: uuid.UUID
-    portfolio_id: uuid.UUID
     state: TradeState
     is_paper: bool
     legs: tuple[TradeLeg, ...]

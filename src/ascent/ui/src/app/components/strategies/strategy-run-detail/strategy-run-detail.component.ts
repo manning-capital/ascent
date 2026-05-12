@@ -9,8 +9,8 @@ import { Tabs, TabList, Tab } from 'primeng/tabs';
 import { Panel } from 'primeng/panel';
 import { Tag } from 'primeng/tag';
 import { Skeleton } from 'primeng/skeleton';
-import { DataTableComponent } from '../../shared/data-table/data-table.component';
-import type { DataTableColumn } from '../../shared/data-table/data-table.model';
+import { AppDataTableComponent } from '../../ui/data-table/app-data-table.component';
+import type { AppColumn, AppSeverity } from '../../ui/data-table/app-column.model';
 
 @Component({
   selector: 'app-strategy-run-detail',
@@ -23,7 +23,7 @@ import type { DataTableColumn } from '../../shared/data-table/data-table.model';
     Skeleton,
     RunDetailCardComponent,
     FeedDagComponent,
-    DataTableComponent,
+    AppDataTableComponent,
   ],
   templateUrl: './strategy-run-detail.component.html',
 })
@@ -42,13 +42,16 @@ export class StrategyRunDetailComponent implements OnInit {
 
   strategyName = computed(() => this.strategyService.selectedStrategy()?.name ?? '');
 
-  feedRunColumns: DataTableColumn[] = [
+  feedRunColumns: AppColumn[] = [
     { field: 'feed_id', header: 'Feed', cellType: 'monospace' },
-    { field: 'status', header: 'Status', cellType: 'tag', tagMapper: (v: string) => {
-      const map: Record<string, string> = { COMPLETED: 'success', FAILED: 'danger', RUNNING: 'warn' };
-      return { label: v, severity: map[v] ?? 'secondary' };
-    }},
-    { field: 'is_trigger', header: 'Trigger', valueFormatter: (p: any) => p.value ? 'Yes' : '-' },
+    {
+      field: 'status', header: 'Status', cellType: 'tag',
+      tagMapper: (v: string) => {
+        const map: Record<string, AppSeverity> = { COMPLETED: 'success', FAILED: 'danger', RUNNING: 'warn' };
+        return { label: v, severity: map[v] ?? 'secondary' };
+      },
+    },
+    { field: 'is_trigger', header: 'Trigger', format: (v) => v ? 'Yes' : '-' },
   ];
 
   runDetailItem = computed<RunDetailItem | null>(() => {

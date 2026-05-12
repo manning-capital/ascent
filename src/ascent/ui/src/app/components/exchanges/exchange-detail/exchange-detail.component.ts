@@ -1,5 +1,5 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { JsonPipe, KeyValuePipe } from '@angular/common';
 import { map } from 'rxjs/operators';
 import { ExchangeService } from '../../../services/exchange.service';
@@ -15,8 +15,9 @@ import { Tag } from 'primeng/tag';
 import { Card } from 'primeng/card';
 import { Skeleton } from 'primeng/skeleton';
 import { FieldPanelComponent, PanelField } from '../../shared/field-panel.component';
-import { ServerTableComponent } from '../../shared/data-table/server-table.component';
-import type { DataTableColumn, ServerFetchFn } from '../../shared/data-table/data-table.model';
+import { AppDataTableComponent } from '../../ui/data-table/app-data-table.component';
+import type { AppColumn, AppFetchFn, AppSeverity } from '../../ui/data-table/app-column.model';
+import { AppPageHeaderComponent } from '../../ui/page-header/app-page-header.component';
 
 const CURRENCY_FORMATTER = new Intl.NumberFormat('en-US', {
   style: 'currency',
@@ -29,7 +30,6 @@ const NUMBER_FORMATTER = new Intl.NumberFormat('en-US', { maximumFractionDigits:
   selector: 'app-exchange-detail',
   standalone: true,
   imports: [
-    RouterLink,
     JsonPipe,
     KeyValuePipe,
     Tabs, TabList, Tab,
@@ -38,9 +38,10 @@ const NUMBER_FORMATTER = new Intl.NumberFormat('en-US', { maximumFractionDigits:
     Card,
     Skeleton,
     FieldPanelComponent,
-    ServerTableComponent,
+    AppDataTableComponent,
     SelectButton,
     FormsModule,
+    AppPageHeaderComponent,
   ],
   templateUrl: './exchange-detail.component.html',
 })
@@ -56,22 +57,37 @@ export class ExchangeDetailComponent implements OnInit {
   exchangeId = '';
 
   // Order columns
-  orderColumns: DataTableColumn[] = [
+  orderColumns: AppColumn<OrderListItem>[] = [
     { field: 'instrument_name', header: 'Pair', sortable: false },
-    { field: 'side', header: 'Side', cellType: 'tag', tagMapper: (v: string) => ({ label: v, severity: v === 'BUY' ? 'success' : v === 'SELL' ? 'danger' : 'secondary' }) },
-    { field: 'order_type', header: 'Type', sortable: false, cellClass: 'text-muted-color' },
+    {
+      field: 'side', header: 'Side', cellType: 'tag',
+      tagMapper: (v: string) => ({
+        label: v,
+        severity: (v === 'BUY' ? 'success' : v === 'SELL' ? 'danger' : 'secondary') as AppSeverity,
+      }),
+    },
+    { field: 'order_type', header: 'Type', sortable: false, cellClass: 'text-fg-muted' },
     { field: 'quantity', header: 'Qty' },
-    { field: 'price', header: 'Price', valueFormatter: (p: any) => this.formatCurrency(p.value) },
-    { field: 'filled_quantity', header: 'Filled', valueGetter: (p: any) => p.data?.filled_quantity !== null ? `${p.data.filled_quantity} / ${p.data.quantity}` : '\u2014' },
-    { field: 'current_status', header: 'Status', sortable: false, cellType: 'tag', tagMapper: (v: string) => {
-      if (!v) return { label: '', severity: 'secondary' };
-      const map: Record<string, string> = { FILLED: 'success', PARTIALLY_FILLED: 'warn', SUBMITTED: 'warn', ACCEPTED: 'warn', REJECTED: 'danger', CANCELLED: 'secondary' };
-      return { label: v, severity: map[v] ?? 'secondary' };
-    }},
+    { field: 'price', header: 'Price', format: (v) => this.formatCurrency(v) },
+    {
+      field: 'filled_quantity', header: 'Filled',
+      format: (_, row) => row?.filled_quantity !== null ? `${row.filled_quantity} / ${row.quantity}` : '\u2014',
+    },
+    {
+      field: 'current_status', header: 'Status', sortable: false, cellType: 'tag',
+      tagMapper: (v: string) => {
+        if (!v) return { label: '', severity: 'secondary' as AppSeverity };
+        const map: Record<string, AppSeverity> = {
+          FILLED: 'success', PARTIALLY_FILLED: 'warn', SUBMITTED: 'warn',
+          ACCEPTED: 'warn', REJECTED: 'danger', CANCELLED: 'secondary',
+        };
+        return { label: v, severity: map[v] ?? 'secondary' };
+      },
+    },
   ];
 
   // Server-side fetch functions
-  ordersFetchPage = computed<ServerFetchFn<OrderListItem> | null>(() => {
+  ordersFetchPage = computed<AppFetchFn<OrderListItem> | null>(() => {
     this.exchangeService.selectedExchange(); // track exchange changes
     const id = this.exchangeId;
     if (!id) return null;
@@ -84,7 +100,7 @@ export class ExchangeDetailComponent implements OnInit {
     };
   });
 
-  tradesFetchPage = computed<ServerFetchFn<TradeListItem> | null>(() => {
+  tradesFetchPage = computed<AppFetchFn<TradeListItem> | null>(() => {
     this.exchangeService.selectedExchange(); // track exchange changes
     const id = this.exchangeId;
     if (!id) return null;
@@ -174,19 +190,25 @@ export class ExchangeDetailComponent implements OnInit {
     { label: 'Composites', value: 'composites' },
   ];
 
-  instrumentColumns: DataTableColumn[] = [
+  instrumentColumns: AppColumn[] = [
     { field: 'display_name', header: 'Instrument', sortable: true },
-    { field: 'name', header: 'Name', sortable: true, cellClass: 'font-mono text-surface-500' },
-    { field: 'is_active', header: 'Status', sortable: false, cellType: 'tag', tagMapper: (v: boolean) => ({ label: v ? 'Active' : 'Inactive', severity: v ? 'success' : 'secondary' }) },
+    { field: 'name', header: 'Name', sortable: true, cellClass: 'font-mono text-fg-muted' },
+    {
+      field: 'is_active', header: 'Status', sortable: false, cellType: 'tag',
+      tagMapper: (v: boolean) => ({ label: v ? 'Active' : 'Inactive', severity: (v ? 'success' : 'secondary') as AppSeverity }),
+    },
   ];
 
-  compositeColumns: DataTableColumn[] = [
+  compositeColumns: AppColumn[] = [
     { field: 'display_name', header: 'Composite', sortable: true },
-    { field: 'name', header: 'Name', sortable: true, cellClass: 'font-mono text-surface-500' },
-    { field: 'is_active', header: 'Status', sortable: false, cellType: 'tag', tagMapper: (v: boolean) => ({ label: v ? 'Active' : 'Inactive', severity: v ? 'success' : 'secondary' }) },
+    { field: 'name', header: 'Name', sortable: true, cellClass: 'font-mono text-fg-muted' },
+    {
+      field: 'is_active', header: 'Status', sortable: false, cellType: 'tag',
+      tagMapper: (v: boolean) => ({ label: v ? 'Active' : 'Inactive', severity: (v ? 'success' : 'secondary') as AppSeverity }),
+    },
   ];
 
-  instrumentsFetchPage = computed<ServerFetchFn<Instrument> | null>(() => {
+  instrumentsFetchPage = computed<AppFetchFn<Instrument> | null>(() => {
     const exchange = this.exchangeService.selectedExchange();
     this.universeMode(); // track mode changes
     if (!exchange || !exchange.provider_id || !exchange.instrument_type_id) return null;
@@ -205,7 +227,7 @@ export class ExchangeDetailComponent implements OnInit {
     };
   });
 
-  compositesFetchPage = computed<ServerFetchFn<any> | null>(() => {
+  compositesFetchPage = computed<AppFetchFn<any> | null>(() => {
     const exchange = this.exchangeService.selectedExchange();
     this.universeMode(); // track mode changes
     if (!exchange) return null;

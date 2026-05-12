@@ -5,17 +5,17 @@ import { map } from 'rxjs/operators';
 import { FieldService } from '../../services/field.service';
 import { ToastService } from '../../services/toast.service';
 import { AttributeItem } from '../../models/field.model';
-import { Card } from 'primeng/card';
 import { Button } from 'primeng/button';
 import { InputText } from 'primeng/inputtext';
 import { Select } from 'primeng/select';
-import { ServerTableComponent } from '../shared/data-table/server-table.component';
-import type { DataTableColumn, ServerFetchFn } from '../shared/data-table/data-table.model';
+import { AppDataTableComponent } from '../ui/data-table/app-data-table.component';
+import { AppPageHeaderComponent } from '../ui/page-header/app-page-header.component';
+import type { AppColumn, AppFetchFn, AppSeverity } from '../ui/data-table/app-column.model';
 
 @Component({
   selector: 'app-attribute-list',
   standalone: true,
-  imports: [FormsModule, Card, Button, InputText, Select, ServerTableComponent],
+  imports: [FormsModule, Button, InputText, Select, AppDataTableComponent, AppPageHeaderComponent],
   templateUrl: './attribute-list.component.html',
 })
 export class AttributeListComponent implements OnInit {
@@ -37,25 +37,40 @@ export class AttributeListComponent implements OnInit {
   newDisplayName = '';
   newDescription = '';
 
-  columns: DataTableColumn<AttributeItem>[] = [
+  columns: AppColumn<AttributeItem>[] = [
     { field: 'name', header: 'Name', cellType: 'monospace' },
     { field: 'display_name', header: 'Display Name' },
-    { field: 'is_active', header: 'Status', cellType: 'status' },
-    { field: 'description', header: 'Description', valueFormatter: (p) => p.value || '-', cellClass: 'text-surface-400' },
+    {
+      field: 'is_active',
+      header: 'Status',
+      cellType: 'status',
+      width: 112,
+      pinned: 'right',
+      tagMapper: (v): { label: string; severity: AppSeverity } => ({
+        label: v ? 'Active' : 'Inactive',
+        severity: v ? 'success' : 'secondary',
+      }),
+    },
+    {
+      field: 'description',
+      header: 'Description',
+      format: (v) => v || '—',
+      cellClass: 'text-fg-faint',
+    },
   ];
 
-  navigateToAttribute = (row: AttributeItem) => ['/settings/attributes', row.id];
+  navigateToAttribute = (row: AttributeItem) => ['/settings/types/attributes', row.id];
 
-  fetchPage = computed<ServerFetchFn<AttributeItem>>(() => {
+  fetchPage = computed<AppFetchFn<AttributeItem>>(() => {
     const search = this.search();
     const isActive = this.statusFilter();
-    return (page: number, pageSize: number, sort?: { field: string; order: string }) => {
+    return (page, pageSize, sort) => {
       const filters: any = {};
       if (search) filters.search = search;
       if (isActive != null) filters.is_active = isActive;
-      return this.fieldService.loadAttributesPaginated(page, pageSize, filters, sort).pipe(
-        map(res => ({ items: res.items, total: res.total }))
-      );
+      return this.fieldService
+        .loadAttributesPaginated(page, pageSize, filters, sort as any)
+        .pipe(map((res) => ({ items: res.items, total: res.total })));
     };
   });
 
@@ -112,7 +127,7 @@ export class AttributeListComponent implements OnInit {
       next: () => {
         this.toast.success('Attribute created');
         this.showCreateForm.set(false);
-        this.search.update(s => s);
+        this.search.update((s) => s);
       },
       error: () => this.toast.error('Failed to create attribute'),
     });

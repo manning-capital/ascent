@@ -134,7 +134,7 @@ type Radius = 5 | 10 | 30 | 60;
                 <span>{{ durationLabel(run) }}</span>
               </div>
               @if (run.error_message) {
-                <p class="text-xs text-red-500 mt-1 line-clamp-1">{{ run.error_message }}</p>
+                <p class="text-xs text-negative mt-1 line-clamp-1">{{ run.error_message }}</p>
               }
             </div>
           } @empty {

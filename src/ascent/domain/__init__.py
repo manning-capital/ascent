@@ -14,6 +14,7 @@ from ascent.domain.context import (
     RuntimeSource,
 )
 from ascent.domain.feed import FeedTick
+from ascent.domain.holdings import StrategyAssetHolding
 from ascent.domain.state_machine import (
     LegUpdate,
     OrderUpdate,
@@ -22,22 +23,30 @@ from ascent.domain.state_machine import (
     opening_from_orders,
 )
 from ascent.domain.trade import (
-    Direction,
     FillEvent,
     Order,
     OrderSide,
     OrderState,
     OrderType,
+    PositionType,
     Trade,
     TradeLeg,
     TradeState,
 )
+from ascent.domain.trade_view import (
+    ColorToken,
+    Plot,
+    PlotSeries,
+    SeriesStyle,
+    TradeView,
+)
 
 __all__ = [
     "Attribute",
+    "ColorToken",
     "Context",
     "ContextSource",
-    "Direction",
+    "PositionType",
     "FeedTick",
     "FillEvent",
     "LegUpdate",
@@ -47,12 +56,17 @@ __all__ = [
     "OrderType",
     "OrderUpdate",
     "Period",
+    "Plot",
+    "PlotSeries",
     "RunContext",
     "RuntimeSource",
+    "SeriesStyle",
+    "StrategyAssetHolding",
     "Trade",
     "TradeLeg",
     "TradeState",
     "TradeTransition",
+    "TradeView",
     "apply_fill",
     "opening_from_orders",
 ]

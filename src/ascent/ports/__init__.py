@@ -12,6 +12,8 @@ from ascent.ports.event_bus import Event, EventBus
 from ascent.ports.exchange_port import ExchangePort
 from ascent.ports.feed_store import FeedStore, HistoricalFeedStore, LatestFeedStore
 from ascent.ports.heartbeat import HeartbeatStore
+from ascent.ports.holdings_repo import HoldingsRepository
+from ascent.ports.instrument_repo import InstrumentAssetIds, InstrumentRepository
 from ascent.ports.outbox import OutboxPublisher
 from ascent.ports.route_gate import RouteGate
 from ascent.ports.run_tracker import RunTrackerPort
@@ -24,6 +26,7 @@ from ascent.ports.trade_repo import (
     StrategyRunRepository,
     TradeRepository,
 )
+from ascent.ports.transaction_repo import NewTransactionSpec, TransactionRepository
 from ascent.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 __all__ = [
@@ -38,7 +41,11 @@ __all__ = [
     "FeedStore",
     "HeartbeatStore",
     "HistoricalFeedStore",
+    "HoldingsRepository",
+    "InstrumentAssetIds",
+    "InstrumentRepository",
     "LatestFeedStore",
+    "NewTransactionSpec",
     "OrderRepository",
     "OutboxPublisher",
     "RouteGate",
@@ -49,6 +56,7 @@ __all__ = [
     "StrategyRunRepository",
     "StrategyUniverseRepository",
     "TradeRepository",
+    "TransactionRepository",
     "UnitOfWork",
     "UnitOfWorkFactory",
 ]

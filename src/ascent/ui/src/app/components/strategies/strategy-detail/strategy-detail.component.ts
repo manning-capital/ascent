@@ -1,4 +1,4 @@
-import { Component, computed, inject, OnInit, signal, viewChild } from '@angular/core';
+import { Component, computed, inject, OnInit, signal, TemplateRef, viewChild } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { DatePipe, JsonPipe } from '@angular/common';
 import { map } from 'rxjs/operators';
@@ -19,6 +19,7 @@ import { TradeTableComponent } from '../../trade-table/trade-table.component';
 import { StrategyRunsTabComponent } from './strategy-runs-tab.component';
 import { CumulativePnlChartComponent, CumulativePnlPoint, Lookback, LOOKBACK_OPTIONS } from './charts/cumulative-pnl-chart.component';
 import { PnlDistributionChartComponent } from './charts/pnl-distribution-chart.component';
+import { WinLossChartComponent } from './charts/win-loss-chart.component';
 import { Button } from 'primeng/button';
 import { SelectButton } from 'primeng/selectbutton';
 import { FormsModule } from '@angular/forms';
@@ -27,12 +28,11 @@ import { Tag } from 'primeng/tag';
 import { Card } from 'primeng/card';
 import { Skeleton } from 'primeng/skeleton';
 
-import { ServerTableComponent } from '../../shared/data-table/server-table.component';
-import type { DataTableColumn, ServerFetchFn } from '../../shared/data-table/data-table.model';
-import { StageCellRenderer, StatusBadgeCellRenderer, RemoveCellRenderer } from '../../shared/universe-panel.component';
+import { AppDataTableComponent } from '../../ui/data-table/app-data-table.component';
+import type { AppColumn, AppFetchFn, AppSeverity } from '../../ui/data-table/app-column.model';
 import { UniverseImpactDialogComponent, ImpactDialogChoice } from '../../shared/universe-impact-dialog.component';
+import { AppPageHeaderComponent } from '../../ui/page-header/app-page-header.component';
 import { ImpactReport } from '../../../models/asset.model';
-import type { ColDef } from 'ag-grid-community';
 
 const CURRENCY_FORMATTER = new Intl.NumberFormat('en-US', {
   style: 'currency',
@@ -53,6 +53,7 @@ const CURRENCY_FORMATTER = new Intl.NumberFormat('en-US', {
     TradeTableComponent,
     CumulativePnlChartComponent,
     PnlDistributionChartComponent,
+    WinLossChartComponent,
     Button,
     SelectButton,
     Tag,
@@ -60,8 +61,9 @@ const CURRENCY_FORMATTER = new Intl.NumberFormat('en-US', {
     Skeleton,
     UniversePanelComponent,
     UniverseImpactDialogComponent,
-    ServerTableComponent,
+    AppDataTableComponent,
     StrategyRunsTabComponent,
+    AppPageHeaderComponent,
   ],
   templateUrl: './strategy-detail.component.html',
 })
@@ -77,30 +79,45 @@ export class StrategyDetailComponent implements OnInit {
   exchangeService = inject(ExchangeService);
   private universePanel = viewChild(UniversePanelComponent);
 
-  tabs = ['Overview', 'Trades', 'Orders', 'Universe', 'Exchanges', 'Runs', 'Configuration'];
-  activeTab = signal('Overview');
+  tabs = ['Trades', 'Orders', 'Runs', 'Universe', 'Exchanges', 'Configuration'];
+  activeTab = signal('Trades');
   editing = signal(false);
   editedParameters = signal<Record<string, any>>({});
   feedDag = signal<StrategyFeedDAG | null>(null);
 
   // Order columns
-  orderColumns: DataTableColumn[] = [
+  orderColumns: AppColumn<OrderListItem>[] = [
     { field: 'instrument_name', header: 'Pair', sortable: false },
-    { field: 'side', header: 'Side', cellType: 'tag', tagMapper: (v: string) => ({ label: v, severity: v === 'BUY' ? 'success' : v === 'SELL' ? 'danger' : 'secondary' }) },
-    { field: 'order_type', header: 'Type', sortable: false, cellClass: 'text-muted-color' },
+    {
+      field: 'side', header: 'Side', cellType: 'tag',
+      tagMapper: (v: string) => ({
+        label: v,
+        severity: (v === 'BUY' ? 'success' : v === 'SELL' ? 'danger' : 'secondary') as AppSeverity,
+      }),
+    },
+    { field: 'order_type', header: 'Type', sortable: false, cellClass: 'text-fg-muted' },
     { field: 'quantity', header: 'Qty' },
-    { field: 'price', header: 'Price', valueFormatter: (p: any) => this.formatCurrency(p.value) },
-    { field: 'filled_quantity', header: 'Filled', valueGetter: (p: any) => p.data?.filled_quantity !== null ? `${p.data.filled_quantity} / ${p.data.quantity}` : '\u2014' },
-    { field: 'current_status', header: 'Status', sortable: false, cellType: 'tag', tagMapper: (v: string) => {
-      if (!v) return { label: '', severity: 'secondary' };
-      const map: Record<string, string> = { FILLED: 'success', PARTIALLY_FILLED: 'warn', SUBMITTED: 'warn', ACCEPTED: 'warn', REJECTED: 'danger', CANCELLED: 'secondary' };
-      return { label: v, severity: map[v] ?? 'secondary' };
-    }},
+    { field: 'price', header: 'Price', format: (v) => this.formatCurrency(v) },
+    {
+      field: 'filled_quantity', header: 'Filled',
+      format: (_, row) => row?.filled_quantity !== null ? `${row.filled_quantity} / ${row.quantity}` : '\u2014',
+    },
+    {
+      field: 'current_status', header: 'Status', sortable: false, cellType: 'tag',
+      tagMapper: (v: string) => {
+        if (!v) return { label: '', severity: 'secondary' as AppSeverity };
+        const map: Record<string, AppSeverity> = {
+          FILLED: 'success', PARTIALLY_FILLED: 'warn', SUBMITTED: 'warn',
+          ACCEPTED: 'warn', REJECTED: 'danger', CANCELLED: 'secondary',
+        };
+        return { label: v, severity: map[v] ?? 'secondary' };
+      },
+    },
   ];
 
 
   // Server-side fetch functions for child table components
-  ordersFetchPage = computed<ServerFetchFn<OrderListItem> | null>(() => {
+  ordersFetchPage = computed<AppFetchFn<OrderListItem> | null>(() => {
     this.strategyService.selectedStrategy(); // track strategy changes
     const id = this.strategyId;
     if (!id) return null;
@@ -113,7 +130,7 @@ export class StrategyDetailComponent implements OnInit {
     };
   });
 
-  tradesFetchPage = computed<ServerFetchFn<TradeListItem> | null>(() => {
+  tradesFetchPage = computed<AppFetchFn<TradeListItem> | null>(() => {
     this.strategyService.selectedStrategy(); // track strategy changes
     const id = this.strategyId;
     if (!id) return null;
@@ -126,20 +143,40 @@ export class StrategyDetailComponent implements OnInit {
     };
   });
 
+  // Exchange template refs — picker stage button + current-exchanges remove button
+  exchangeRemoveTpl = viewChild<TemplateRef<{ $implicit: StrategyExchangeItem }>>('exchangeRemoveTpl');
+  exchangeStageTpl = viewChild<TemplateRef<{ $implicit: any }>>('exchangeStageTpl');
+
   // Exchange columns for the current exchanges view (with remove button)
-  exchangeColumns: DataTableColumn[] = [
-    { field: 'exchange_display_name', header: 'Exchange', sortable: false },
-    { field: 'exchange_name', header: 'Name', sortable: false, cellClass: 'font-mono text-surface-500' },
-    { field: 'provider_name', header: 'Provider', sortable: false },
-    { field: 'is_active', header: 'Status', sortable: false, cellType: 'tag', tagMapper: (v: boolean) => ({ label: v ? 'Active' : 'Inactive', severity: v ? 'success' : 'secondary' }) },
-    { field: '', header: '', sortable: false, cellType: 'custom', cellRenderer: RemoveCellRenderer, width: 80 },
-  ];
+  exchangeColumns = computed<AppColumn<StrategyExchangeItem>[]>(() => {
+    const removeTpl = this.exchangeRemoveTpl();
+    if (!removeTpl) return [];
+    return [
+      { field: 'exchange_display_name', header: 'Exchange', sortable: false },
+      { field: 'exchange_name', header: 'Name', sortable: false, cellClass: 'font-mono text-fg-muted' },
+      { field: 'provider_name', header: 'Provider', sortable: false },
+      {
+        field: 'is_active', header: 'Status', sortable: false, cellType: 'tag',
+        tagMapper: (v: boolean) => ({
+          label: v ? 'Active' : 'Inactive',
+          severity: (v ? 'success' : 'secondary') as AppSeverity,
+        }),
+      },
+      { field: '__remove', header: '', sortable: false, cellTemplate: removeTpl, width: 80 },
+    ];
+  });
 
-  exchangeGridContext = {
-    onRemove: (id: string) => this.removeExchange(id),
-  };
+  onRemoveExchangeClick(event: Event, row: StrategyExchangeItem): void {
+    event.stopPropagation();
+    this.removeExchange(row.exchange_id);
+  }
 
-  exchangesFetchPage = computed<ServerFetchFn<StrategyExchangeItem> | null>(() => {
+  onToggleStageExchange(event: Event, exchangeId: string): void {
+    event.stopPropagation();
+    this.toggleStageExchange(exchangeId);
+  }
+
+  exchangesFetchPage = computed<AppFetchFn<StrategyExchangeItem> | null>(() => {
     this.strategyService.selectedStrategy(); // track strategy changes
     const id = this.strategyId;
     if (!id) return null;
@@ -153,32 +190,30 @@ export class StrategyDetailComponent implements OnInit {
     };
   });
 
-  // Picker columns using ag-grid ColDef with StageCellRenderer
-  exchangePickerColDefs: ColDef[] = [
-    { headerName: 'Display Name', field: 'display_name', minWidth: 160 },
-    { headerName: 'Name', field: 'name', cellClass: 'font-mono text-surface-500', minWidth: 140 },
-    { headerName: 'Provider', field: 'provider_name', sortable: false },
-    { headerName: 'Status', field: 'is_active', cellRenderer: StatusBadgeCellRenderer },
-    { headerName: '', field: '', cellRenderer: StageCellRenderer, sortable: false, maxWidth: 80 },
-  ];
+  // Picker columns — template-based stage button
+  exchangePickerColumns = computed<AppColumn<any>[]>(() => {
+    const stageTpl = this.exchangeStageTpl();
+    if (!stageTpl) return [];
+    return [
+      { field: 'display_name', header: 'Display Name', minWidth: 160 },
+      { field: 'name', header: 'Name', cellClass: 'font-mono text-fg-muted', minWidth: 140 },
+      { field: 'provider_name', header: 'Provider', sortable: false },
+      {
+        field: 'is_active', header: 'Status', sortable: false, cellType: 'tag',
+        tagMapper: (v: boolean) => ({
+          label: v ? 'Active' : 'Inactive',
+          severity: (v ? 'success' : 'secondary') as AppSeverity,
+        }),
+      },
+      { field: '__stage', header: '', sortable: false, cellTemplate: stageTpl, width: 80 },
+    ];
+  });
 
-  exchangePickerContext = {
-    isStaged: (id: string) => this.stagedExchangeIds().has(id),
-    toggleStage: (id: string) => this.toggleStageExchange(id),
+  exchangePickerRowClass = (row: any) => {
+    return row?.id && this.stagedExchangeIds().has(row.id) ? 'app-picker-row-staged' : '';
   };
 
-  getExchangeRowStyle = (params: any) => {
-    const id = params.data?.id;
-    if (id && this.stagedExchangeIds().has(id)) {
-      return {
-        background: 'rgba(34, 197, 94, 0.08)',
-        borderLeft: '3px solid rgb(34, 197, 94)',
-      };
-    }
-    return undefined;
-  };
-
-  exchangePickerFetchPage = computed<ServerFetchFn<any> | null>(() => {
+  exchangePickerFetchPage = computed<AppFetchFn<any> | null>(() => {
     const id = this.strategyId;
     if (!id) return null;
     return (page: number, pageSize: number, sort?: { field: string; order: string }) => {
@@ -229,13 +264,13 @@ export class StrategyDetailComponent implements OnInit {
       if (id === this.strategyId) return;
       this.strategyId = id;
 
-      // Restore tab and run from query params (for back-navigation)
+      // Restore tab from query params (for back-navigation)
       const qp = this.route.snapshot.queryParamMap;
       const tab = qp.get('tab');
       if (tab && this.tabs.includes(tab)) {
         this.activeTab.set(tab);
       } else {
-        this.activeTab.set('Overview');
+        this.activeTab.set('Trades');
       }
       // Reset state for the new strategy
       this.editing.set(false);
@@ -256,13 +291,9 @@ export class StrategyDetailComponent implements OnInit {
 
   onTabChange(tab: string): void {
     this.activeTab.set(tab);
-    this.updateQueryParams({ tab });
-  }
-
-  private updateQueryParams(params: Record<string, string | null>): void {
     this.router.navigate([], {
       relativeTo: this.route,
-      queryParams: params,
+      queryParams: { tab },
       queryParamsHandling: 'merge',
       replaceUrl: true,
     });

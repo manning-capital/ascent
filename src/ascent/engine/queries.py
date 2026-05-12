@@ -46,7 +46,7 @@ class StrategyInfo:
     """Per-strategy boot-time snapshot used by :class:`StrategyLauncher`."""
 
     parameters: dict
-    portfolio_id: uuid.UUID
+    base_asset_id: uuid.UUID | None
     feed_specs: list[FeedSpecInfo]
     exchanges: list[uuid.UUID]
 
@@ -132,7 +132,7 @@ class StartupQueries:
 
             return StrategyInfo(
                 parameters=record.parameters or {},
-                portfolio_id=record.portfolio_id,
+                base_asset_id=record.base_asset_id,
                 feed_specs=feed_specs,
                 exchanges=exchanges,
             )

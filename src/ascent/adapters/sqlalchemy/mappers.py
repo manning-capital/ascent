@@ -6,15 +6,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ascent.adapters.sqlalchemy.type_cache import TypeCache
+from ascent.database.models.instruments import Instrument as InstrumentRow
 from ascent.database.models.orders import Order as OrderRow
 from ascent.database.models.orders import OrderStatus as OrderStatusRow
 from ascent.database.models.trades import Trade as TradeRow
 from ascent.database.models.trades import TradeLeg as TradeLegRow
 from ascent.domain import (
-    Direction,
     Order,
     OrderSide,
     OrderState,
+    PositionType,
     Trade,
     TradeLeg,
     TradeState,
@@ -67,7 +68,6 @@ class OrmMappers:
         return Trade(
             id=row.id,
             strategy_id=row.strategy_id,
-            portfolio_id=row.portfolio_id,
             state=state,
             is_paper=row.is_paper,
             legs=legs,
@@ -89,17 +89,41 @@ class OrmMappers:
             if row.exit_order_id
             else None
         )
+        from_asset_symbol, to_asset_symbol = self._asset_symbols_for_instrument(
+            db, row.instrument_id
+        )
         return TradeLeg(
             id=row.id,
             instrument_id=row.instrument_id,
-            direction=Direction(row.direction),
+            direction=PositionType(row.direction),
             quantity=row.quantity,
             entry_order=entry_order,
             exit_order=exit_order,
             entry_price=row.entry_price,
             exit_price=row.exit_price,
             realized_pnl=row.realized_pnl,
+            from_asset_symbol=from_asset_symbol,
+            to_asset_symbol=to_asset_symbol,
+            exchange_id=row.exchange_id,
         )
+
+    @staticmethod
+    def _asset_symbols_for_instrument(db: Session, instrument_id) -> tuple[str | None, str | None]:
+        """Look up base/quote asset symbols for an instrument.
+
+        Reads the instrument row with its ``from_asset`` / ``to_asset``
+        relationships. SQLAlchemy lazy-loads these the first time per row;
+        for batch reads (the reconciliation sweep) the cost is one extra
+        query per distinct instrument, which is acceptable for the sweep's
+        size — and the alternative (eager-loading every leg query) would
+        slow the hot path of single-trade reads.
+        """
+        row = db.get(InstrumentRow, instrument_id)
+        if row is None:
+            return (None, None)
+        from_name = row.from_asset.name if row.from_asset is not None else None
+        to_name = row.to_asset.name if row.to_asset is not None else None
+        return (from_name, to_name)
 
     # -------- Simple utilities --------
 

@@ -105,7 +105,6 @@ class TradeLegUpdate(BaseModel):
 
 class TradeCreate(BaseModel):
     strategy_id: uuid.UUID
-    portfolio_id: uuid.UUID
     is_paper: bool = False
     entry_at: datetime.datetime | None = None
     parameters: dict | list | str | int | float | bool | None = None

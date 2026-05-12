@@ -2,15 +2,21 @@ import { Component, computed, inject, input, signal } from '@angular/core';
 import { map } from 'rxjs/operators';
 import { FeedService } from '../../../services/feed.service';
 import { FeedRunListItem } from '../../../models/feed.model';
-import { DataTableColumn, ServerFetchFn } from '../../shared/data-table/data-table.model';
-import { ServerTableComponent } from '../../shared/data-table/server-table.component';
+import type { AppColumn, AppFetchFn, AppSeverity } from '../../ui/data-table/app-column.model';
+import { AppDataTableComponent } from '../../ui/data-table/app-data-table.component';
 import { RunFilterPanelComponent } from '../../shared/run-filter-panel.component';
 import type { RunFilter } from '../../shared/run-viewer.component';
+
+const STATUS_SEVERITY: Record<string, AppSeverity> = {
+  COMPLETED: 'success',
+  FAILED: 'danger',
+  RUNNING: 'warn',
+};
 
 @Component({
   selector: 'app-feed-runs-tab',
   standalone: true,
-  imports: [ServerTableComponent, RunFilterPanelComponent],
+  imports: [AppDataTableComponent, RunFilterPanelComponent],
   styles: [`
     :host {
       display: flex;
@@ -23,11 +29,10 @@ import type { RunFilter } from '../../shared/run-viewer.component';
     <div class="p-6 flex flex-col flex-1 min-h-0 gap-4">
       <app-run-filter-panel class="shrink-0" (filterChange)="onFilterChange($event)"/>
 
-      <app-server-table class="flex-1 min-h-0"
+      <app-data-table class="flex-1 min-h-0"
         [columns]="runColumns"
         [fetchPage]="fetchPage()"
         [rowClickRoute]="navigateToRun()"
-        [pageSize]="25"
         emptyMessage="No runs yet."/>
     </div>
   `,
@@ -39,25 +44,29 @@ export class FeedRunsTabComponent {
 
   private filter = signal<RunFilter>({});
 
-  runColumns: DataTableColumn<FeedRunListItem>[] = [
-    { field: 'status', header: 'Status', cellType: 'tag', width: 96, tagMapper: (v: string) => {
-      const map: Record<string, string> = { COMPLETED: 'success', FAILED: 'danger', RUNNING: 'warn' };
-      return { label: v, severity: map[v] ?? 'secondary' };
-    }},
+  runColumns: AppColumn<FeedRunListItem>[] = [
+    {
+      field: 'status', header: 'Status', cellType: 'tag', width: 96,
+      tagMapper: (v: string) => ({ label: v, severity: STATUS_SEVERITY[v] ?? 'secondary' }),
+    },
     { field: 'id', header: 'Run ID', cellType: 'monospace', sortable: false },
     { field: 'started_at', header: 'Started', cellType: 'date' },
-    { field: 'duration', header: 'Duration', sortable: false, valueGetter: (p: any) => this.durationLabel(p.data) },
+    { field: 'duration', header: 'Duration', sortable: false, format: (_, row) => this.durationLabel(row) },
     { field: 'snapshot_timestamp', header: 'Snapshot', cellType: 'date', sortable: false },
-    { field: 'records_fetched', header: 'Records', valueFormatter: (p: any) => p.value ?? '-' },
-    { field: 'error_message', header: 'Error', sortable: false, valueFormatter: (p: any) => p.value ?? '-', cellClass: (p: any) => p.value ? 'text-negative' : '' },
+    { field: 'records_fetched', header: 'Records', format: (v) => v ?? '-' },
+    {
+      field: 'error_message', header: 'Error', sortable: false,
+      format: (v) => v ?? '-',
+      cellClass: (row) => row.error_message ? 'text-negative' : '',
+    },
   ];
 
-  fetchPage = computed<ServerFetchFn<FeedRunListItem> | null>(() => {
-    this.feedService.selectedFeed(); // track feed changes
+  fetchPage = computed<AppFetchFn<FeedRunListItem> | null>(() => {
+    this.feedService.selectedFeed();
     const feedId = this.feedId();
     if (!feedId) return null;
     const filter = this.filter();
-    return (page: number, pageSize: number, sort?: { field: string; order: string }) => {
+    return (page, pageSize, sort) => {
       const f = Object.keys(filter).length > 0 ? filter : undefined;
       return this.feedService.loadFeedRuns(feedId, page, pageSize, f, sort).pipe(
         map(res => ({ items: res.items, total: res.total }))

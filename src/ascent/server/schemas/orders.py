@@ -9,7 +9,6 @@ class OrderCreate(BaseModel):
     order_type_id: uuid.UUID
     side: str
     exchange_id: uuid.UUID
-    portfolio_id: uuid.UUID
     instrument_id: uuid.UUID
     quantity: float
     price: float

@@ -7,16 +7,16 @@ import { ToastService } from '../../services/toast.service';
 import { Select } from 'primeng/select';
 import { InputText } from 'primeng/inputtext';
 import { Textarea } from 'primeng/textarea';
-import { Card } from 'primeng/card';
 import { Button } from 'primeng/button';
 import { ProviderCreate, ProviderListItem } from '../../models/provider.model';
-import { ServerTableComponent } from '../shared/data-table/server-table.component';
-import type { DataTableColumn, ServerFetchFn } from '../shared/data-table/data-table.model';
+import { AppDataTableComponent } from '../ui/data-table/app-data-table.component';
+import { AppPageHeaderComponent } from '../ui/page-header/app-page-header.component';
+import type { AppColumn, AppFetchFn, AppSeverity } from '../ui/data-table/app-column.model';
 
 @Component({
   selector: 'app-provider-list',
   standalone: true,
-  imports: [FormsModule, Select, InputText, Textarea, Card, Button, ServerTableComponent],
+  imports: [FormsModule, Select, InputText, Textarea, Button, AppDataTableComponent, AppPageHeaderComponent],
   templateUrl: './provider-list.component.html',
 })
 export class ProviderListComponent implements OnInit {
@@ -33,26 +33,46 @@ export class ProviderListComponent implements OnInit {
     { label: 'Inactive', value: false },
   ];
 
-  columns: DataTableColumn<ProviderListItem>[] = [
+  columns: AppColumn<ProviderListItem>[] = [
     { field: 'display_name', header: 'Display Name' },
     { field: 'name', header: 'Name', cellType: 'monospace' },
-    { field: 'provider_type_name', header: 'Type', cellType: 'link', linkRoute: (row: any) => `/settings/provider-types/${row.provider_type_id}` },
-    { field: 'provider_external_code', header: 'Code', cellType: 'monospace', valueFormatter: (p) => p.value ?? '\u2014' },
-    { field: 'is_active', header: 'Status', cellType: 'status', width: 112 },
+    {
+      field: 'provider_type_name',
+      header: 'Type',
+      cellType: 'link',
+      linkRoute: (row: any) => `/settings/types/provider-types/${row.provider_type_id}`,
+    },
+    {
+      field: 'provider_external_code',
+      header: 'Code',
+      cellType: 'monospace',
+      format: (v) => v ?? '—',
+    },
+    {
+      field: 'is_active',
+      header: 'Status',
+      cellType: 'status',
+      width: 112,
+      pinned: 'right',
+      tagMapper: (v): { label: string; severity: AppSeverity } => ({
+        label: v ? 'Active' : 'Inactive',
+        severity: v ? 'success' : 'secondary',
+      }),
+    },
   ];
 
-  navigateToProvider = (row: any) => ['/settings/providers', row.id];
+  navigateToProvider = (row: ProviderListItem) => ['/settings/master-data/providers', row.id];
 
-  fetchPage = computed<ServerFetchFn<ProviderListItem>>(() => {
+  fetchPage = computed<AppFetchFn<ProviderListItem>>(() => {
     const search = this.search();
     const isActive = this.statusFilter();
-    return (page: number, pageSize: number, sort?: { field: string; order: string }) => {
+    return (page, pageSize, sort) => {
       const filters: any = {};
       if (search) filters.search = search;
       if (isActive != null) filters.is_active = isActive;
-      return this.providerService.loadProvidersPaginated(page, pageSize, filters, sort).pipe(
-        map(res => ({ items: res.items, total: res.total }))
-      );
+      return this.providerService
+        .loadProvidersPaginated(page, pageSize, filters, sort as any)
+        .pipe(map((res) => ({ items: res.items, total: res.total })));
     };
   });
 
@@ -124,7 +144,7 @@ export class ProviderListComponent implements OnInit {
       next: () => {
         this.toast.success('Provider created');
         this.showCreateForm.set(false);
-        this.search.update(s => s);
+        this.search.update((s) => s);
       },
       error: () => this.toast.error('Failed to create provider'),
     });

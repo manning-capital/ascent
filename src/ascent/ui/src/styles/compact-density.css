@@ -1,0 +1,86 @@
+/* Compact density — Bloomberg/IBKR-style tight rows, smaller controls.
+   Overrides PrimeNG --p-* density tokens so every component scales together
+   without touching individual stylesheets. */
+
+:root {
+  /* Form fields (input, textarea, dropdown, multiselect, date picker) */
+  --p-form-field-padding-x: 0.5rem;
+  --p-form-field-padding-y: 0.25rem;
+  --p-form-field-sm-padding-x: 0.375rem;
+  --p-form-field-sm-padding-y: 0.1875rem;
+  --p-form-field-lg-padding-x: 0.625rem;
+  --p-form-field-lg-padding-y: 0.375rem;
+  --p-form-field-font-size: 0.8125rem;
+
+  /* Buttons */
+  --p-button-padding-x: 0.625rem;
+  --p-button-padding-y: 0.25rem;
+  --p-button-sm-padding-x: 0.5rem;
+  --p-button-sm-padding-y: 0.1875rem;
+  --p-button-font-size: 0.8125rem;
+  --p-button-icon-only-width: 1.75rem;
+
+  /* Tables */
+  --p-datatable-header-cell-padding: 0.375rem 0.5rem;
+  --p-datatable-body-cell-padding: 0.3125rem 0.5rem;
+  --p-datatable-footer-cell-padding: 0.375rem 0.5rem;
+  --p-datatable-header-padding: 0.5rem;
+  --p-datatable-footer-padding: 0.5rem;
+  --p-datatable-row-toggle-button-size: 1.25rem;
+
+  /* Tabs */
+  --p-tabs-tab-padding: 0.5rem 0.75rem;
+  --p-tabs-tablist-tab-list-padding: 0;
+
+  /* Paginator — slim, square-ish navigation; subdued report text */
+  --p-paginator-padding: 0.375rem 0.5rem;
+  --p-paginator-gap: 0.125rem;
+  --p-paginator-nav-button-width: 1.75rem;
+  --p-paginator-nav-button-height: 1.75rem;
+  --p-paginator-nav-button-border-radius: 0.25rem;
+  --p-paginator-jump-to-page-input-max-width: 2rem;
+
+  /* Menu / select / list items */
+  --p-list-option-padding: 0.3125rem 0.5rem;
+  --p-list-padding: 0.25rem 0;
+  --p-menu-item-padding: 0.3125rem 0.5rem;
+
+  /* Cards / panels — keep modest internal padding for breathing room */
+  --p-card-body-padding: 0.875rem;
+  --p-panel-content-padding: 0.875rem;
+  --p-panel-header-padding: 0.5rem 0.75rem;
+  --p-fieldset-content-padding: 0.875rem;
+  --p-fieldset-legend-padding: 0.25rem 0.5rem;
+
+  /* Tags / chips */
+  --p-tag-padding: 0.125rem 0.4375rem;
+  --p-tag-font-size: 0.6875rem;
+  --p-tag-gap: 0.25rem;
+  --p-chip-padding-x: 0.5rem;
+  --p-chip-padding-y: 0.1875rem;
+
+  /* Toolbar */
+  --p-toolbar-padding: 0.5rem 0.75rem;
+  --p-toolbar-gap: 0.5rem;
+
+  /* Dialog */
+  --p-dialog-header-padding: 0.75rem 1rem;
+  --p-dialog-content-padding: 0 1rem 1rem 1rem;
+  --p-dialog-footer-padding: 0.5rem 1rem 0.875rem 1rem;
+  --p-dialog-footer-gap: 0.5rem;
+
+  /* Overlay panels / popovers / tooltips */
+  --p-popover-content-padding: 0.5rem;
+  --p-tooltip-padding: 0.25rem 0.5rem;
+
+  /* Dividers / spacing rhythm */
+  --p-content-padding: 0.875rem;
+}
+
+/* Body baseline: 13px keeps Tailwind utilities at standard sizing while
+   nudging text density down. PrimeNG components above use absolute rem
+   values so they stay compact regardless of root font-size. */
+body {
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}

@@ -11,6 +11,10 @@ from tests.fakes.event_bus import InMemoryEventBus
 from tests.fakes.exchange import FakeExchange
 from tests.fakes.feed_store import InMemoryFeedStore
 from tests.fakes.heartbeat import InMemoryHeartbeat
+from tests.fakes.holdings import (
+    InMemoryHoldingsRepository,
+    InMemoryTransactionRepository,
+)
 from tests.fakes.outbox import (
     InMemoryOutboxPublisher,
     InMemoryOutboxReader,
@@ -18,6 +22,7 @@ from tests.fakes.outbox import (
 )
 from tests.fakes.repositories import (
     InMemoryFeedRunRepository,
+    InMemoryInstrumentRepository,
     InMemoryOrderRepository,
     InMemoryStrategyRunRepository,
     InMemoryStrategyUniverseRepository,
@@ -39,6 +44,8 @@ __all__ = [
     "InMemoryFeedRunRepository",
     "InMemoryFeedStore",
     "InMemoryHeartbeat",
+    "InMemoryHoldingsRepository",
+    "InMemoryInstrumentRepository",
     "InMemoryOrderRepository",
     "InMemoryOutboxPublisher",
     "InMemoryOutboxReader",
@@ -46,5 +53,6 @@ __all__ = [
     "InMemoryStrategyRunRepository",
     "InMemoryStrategyUniverseRepository",
     "InMemoryTradeRepository",
+    "InMemoryTransactionRepository",
     "make_outbox_pair",
 ]

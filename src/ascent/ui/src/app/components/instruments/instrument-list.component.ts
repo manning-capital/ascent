@@ -7,17 +7,17 @@ import { ProviderService } from '../../services/provider.service';
 import { ToastService } from '../../services/toast.service';
 import { Select } from 'primeng/select';
 import { InputText } from 'primeng/inputtext';
-import { Card } from 'primeng/card';
 import { Button } from 'primeng/button';
 import { InstrumentCreate, Instrument } from '../../models/asset.model';
-import { ServerTableComponent } from '../shared/data-table/server-table.component';
-import type { DataTableColumn, ServerFetchFn } from '../shared/data-table/data-table.model';
+import { AppDataTableComponent } from '../ui/data-table/app-data-table.component';
+import { AppPageHeaderComponent } from '../ui/page-header/app-page-header.component';
+import type { AppColumn, AppFetchFn, AppSeverity } from '../ui/data-table/app-column.model';
 import { SearchSelectComponent } from '../shared/search-select.component';
 
 @Component({
   selector: 'app-instrument-list',
   standalone: true,
-  imports: [FormsModule, Select, InputText, Card, Button, ServerTableComponent, SearchSelectComponent],
+  imports: [FormsModule, Select, InputText, Button, AppDataTableComponent, AppPageHeaderComponent, SearchSelectComponent],
   templateUrl: './instrument-list.component.html',
 })
 export class InstrumentListComponent implements OnInit {
@@ -35,26 +35,47 @@ export class InstrumentListComponent implements OnInit {
     { label: 'Inactive', value: false },
   ];
 
-  columns: DataTableColumn<Instrument>[] = [
+  columns: AppColumn<Instrument>[] = [
     { field: 'display_name', header: 'Display Name' },
     { field: 'name', header: 'Name', cellType: 'monospace' },
-    { field: 'instrument_type_name', header: 'Type', cellType: 'link', linkRoute: (row: any) => `/settings/instrument-types/${row.instrument_type_id}` },
-    { field: 'pair', header: 'Pair', sortable: false, cellClass: 'text-surface-500', valueGetter: (p: any) => `${p.data?.from_asset_name ?? ''}/${p.data?.to_asset_name ?? ''}` },
-    { field: 'is_active', header: 'Status', cellType: 'status', width: 112 },
+    {
+      field: 'instrument_type_name',
+      header: 'Type',
+      cellType: 'link',
+      linkRoute: (row: any) => `/settings/types/instrument-types/${row.instrument_type_id}`,
+    },
+    {
+      field: 'pair',
+      header: 'Pair',
+      sortable: false,
+      cellClass: 'text-fg-muted',
+      format: (_, row: any) => `${row?.from_asset_name ?? ''}/${row?.to_asset_name ?? ''}`,
+    },
+    {
+      field: 'is_active',
+      header: 'Status',
+      cellType: 'status',
+      width: 112,
+      pinned: 'right',
+      tagMapper: (v): { label: string; severity: AppSeverity } => ({
+        label: v ? 'Active' : 'Inactive',
+        severity: v ? 'success' : 'secondary',
+      }),
+    },
   ];
 
-  navigateToInstrument = (row: any) => ['/settings/instruments', row.id];
+  navigateToInstrument = (row: Instrument) => ['/settings/master-data/instruments', row.id];
 
-  fetchPage = computed<ServerFetchFn<Instrument>>(() => {
+  fetchPage = computed<AppFetchFn<Instrument>>(() => {
     const search = this.search();
     const isActive = this.statusFilter();
-    return (page: number, pageSize: number, sort?: { field: string; order: string }) => {
+    return (page, pageSize, sort) => {
       const filters: any = {};
       if (search) filters.search = search;
       if (isActive != null) filters.is_active = isActive;
-      return this.assetService.loadInstrumentsPaginated(page, pageSize, filters, sort).pipe(
-        map(res => ({ items: res.items, total: res.total }))
-      );
+      return this.assetService
+        .loadInstrumentsPaginated(page, pageSize, filters, sort as any)
+        .pipe(map((res) => ({ items: res.items, total: res.total })));
     };
   });
 
@@ -131,7 +152,7 @@ export class InstrumentListComponent implements OnInit {
       next: () => {
         this.toast.success('Instrument created');
         this.showCreateForm.set(false);
-        this.search.update(s => s);
+        this.search.update((s) => s);
       },
       error: () => this.toast.error('Failed to create instrument'),
     });

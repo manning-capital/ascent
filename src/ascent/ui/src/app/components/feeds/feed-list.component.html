@@ -1,26 +1,127 @@
-<div class="flex flex-col h-[calc(100vh-3.5rem)] md:h-screen">
-  <div class="p-6 flex flex-col flex-1 min-h-0 gap-4">
-    <div class="flex items-center justify-between shrink-0">
-      <h1 class="text-2xl font-bold">Feeds</h1>
-    </div>
+<app-page-header title="Feeds" />
 
-    <!-- Filters -->
-    <div class="rounded-lg border border-edge bg-surface p-4 shrink-0">
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <input type="text" pInputText placeholder="Search feeds..."
-          [ngModel]="search()" (ngModelChange)="onSearch($event)">
-        <p-select [ngModel]="statusFilter()" (ngModelChange)="onStatusChange($event)"
-          [options]="statusOptions" optionLabel="label" optionValue="value"
-          placeholder="All Statuses" [showClear]="true"/>
-        <p-button (onClick)="clearFilters()" severity="secondary" [outlined]="true" label="Clear Filters"/>
+<div class="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-edge bg-canvas shrink-0">
+  <span class="relative">
+    <i class="pi pi-search absolute left-2 top-1/2 -translate-y-1/2 text-fg-faint text-xs"></i>
+    <input
+      type="text"
+      pInputText
+      placeholder="Search feeds"
+      class="pl-7 text-xs"
+      style="width: 14rem;"
+      [ngModel]="search()"
+      (ngModelChange)="onSearch($event)"
+    />
+  </span>
+
+  <p-select
+    [ngModel]="statusFilter()"
+    (ngModelChange)="onStatusChange($event)"
+    [options]="statusOptions"
+    optionLabel="label"
+    optionValue="value"
+    placeholder="All statuses"
+    [showClear]="true"
+    size="small"
+    [style]="{ width: '11rem' }"
+  />
+
+  <p-button
+    label="Clear filters"
+    severity="secondary"
+    [text]="true"
+    size="small"
+    icon="pi pi-filter-slash"
+    (onClick)="clearFilters()"
+  />
+</div>
+
+<div class="flex-1 min-h-0 flex flex-col">
+  <p-dataView
+    [value]="items()"
+    [paginator]="true"
+    [rows]="pageSize()"
+    [totalRecords]="total()"
+    [first]="first()"
+    [lazy]="true"
+    [loading]="loading()"
+    [rowsPerPageOptions]="[25, 50, 100]"
+    layout="list"
+    (onLazyLoad)="onLazyLoad($event)"
+    [showCurrentPageReport]="true"
+    currentPageReportTemplate="Showing {first} to {last} of {totalRecords}"
+    styleClass="border-0"
+  >
+    <ng-template #list let-feeds>
+      <div class="flex flex-col">
+        @for (f of feeds; track f.id) {
+          <button
+            type="button"
+            class="text-left px-4 py-3 border-b border-edge hover:bg-edge-dim transition-colors flex items-center gap-4 w-full"
+            (click)="navigateToFeed(f)"
+          >
+            <!-- Status dot -->
+            <app-status-dot
+              [severity]="feedDotSeverity(f)"
+              [size]="10"
+              [pulse]="f.is_active && f.last_run_status === 'RUNNING'"
+            />
+
+            <!-- Name + channel -->
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2">
+                <span class="text-sm font-semibold text-fg truncate">{{ f.display_name }}</span>
+                @if (!f.is_active) {
+                  <span class="text-[10px] uppercase tracking-wider text-fg-faint">Inactive</span>
+                }
+              </div>
+              <div class="text-[11px] font-mono text-fg-faint mt-0.5 truncate">
+                {{ f.channel }}
+              </div>
+            </div>
+
+            <!-- Schedule -->
+            <div class="hidden sm:flex flex-col items-end shrink-0" style="width: 5rem;">
+              <span class="text-[10px] uppercase tracking-wider text-fg-faint">Schedule</span>
+              <span class="text-sm font-mono tabular-nums text-fg">
+                {{ scheduleLabel(f.schedule) }}
+              </span>
+            </div>
+
+            <!-- Recent runs (history ticks) -->
+            <div class="hidden md:flex flex-col items-end shrink-0" style="width: 6.5rem;">
+              <span class="text-[10px] uppercase tracking-wider text-fg-faint">Recent</span>
+              <app-run-history [statuses]="f.recent_run_statuses ?? []" />
+            </div>
+
+            <!-- Last run -->
+            <div class="hidden lg:flex flex-col items-end shrink-0" style="width: 6rem;">
+              <span class="text-[10px] uppercase tracking-wider text-fg-faint">Last run</span>
+              @if (f.last_run_at) {
+                <app-relative-time [value]="f.last_run_at" />
+              } @else {
+                <span class="text-fg-faint text-xs">Never</span>
+              }
+            </div>
+
+            <!-- Total runs -->
+            <div class="hidden xl:flex flex-col items-end shrink-0" style="width: 5rem;">
+              <span class="text-[10px] uppercase tracking-wider text-fg-faint">Runs</span>
+              <span class="text-sm tabular-nums text-fg">{{ f.total_runs || 0 }}</span>
+            </div>
+
+            <i class="pi pi-chevron-right text-fg-faint text-xs shrink-0"></i>
+          </button>
+        }
       </div>
-    </div>
+    </ng-template>
 
-    <app-server-table class="flex-1 min-h-0"
-      [columns]="columns"
-      [fetchPage]="fetchPage()"
-      [rowClickRoute]="navigateToFeed"
-      [pageSize]="25"
-      emptyMessage="No feeds found."/>
-  </div>
+    <ng-template #emptymessage>
+      <app-empty-state title="No feeds found." />
+    </ng-template>
+
+    <ng-template #loadingicon>
+      <i class="pi pi-spin pi-spinner text-fg-muted"></i>
+    </ng-template>
+  </p-dataView>
 </div>

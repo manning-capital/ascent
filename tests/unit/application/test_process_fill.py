@@ -9,11 +9,11 @@ import pytest
 
 from ascent.application import FillProcessor
 from ascent.domain import (
-    Direction,
     FillEvent,
     Order,
     OrderSide,
     OrderState,
+    PositionType,
     Trade,
     TradeLeg,
     TradeState,
@@ -55,14 +55,13 @@ def _build_opening_trade(trade_repo, order_repo):
     leg = TradeLeg(
         id=uuid.uuid4(),
         instrument_id=entry_order.instrument_id,
-        direction=Direction.LONG,
+        direction=PositionType.LONG,
         quantity=1.0,
         entry_order=entry_order,
     )
     trade = Trade(
         id=uuid.uuid4(),
         strategy_id=uuid.uuid4(),
-        portfolio_id=uuid.uuid4(),
         state=TradeState.OPENING,
         is_paper=True,
         legs=(leg,),

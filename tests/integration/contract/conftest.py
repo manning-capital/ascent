@@ -113,7 +113,6 @@ def seeded_ids(postgres_engine) -> SeededIds:
             name="TEST_STRATEGY",
             display_name="Test Strategy",
             strategy_ref="TEST_STRATEGY",
-            portfolio_id=portfolio.id,
             parameters={},
             parameter_schema={},
         )
@@ -130,7 +129,6 @@ def seeded_ids(postgres_engine) -> SeededIds:
 
         return SeededIds(
             strategy_id=strategy.id,
-            portfolio_id=portfolio.id,
             exchange_id=exchange.id,
             instrument_id_a=inst_a.id,
             instrument_id_b=inst_b.id,

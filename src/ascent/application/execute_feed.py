@@ -30,7 +30,9 @@ logger = logging.getLogger(__name__)
 class FeedFetcher(Protocol):
     """Thin abstraction over a user feed class."""
 
-    async def fetch(self, snapshot_timestamp: datetime, context: dict[str, Any]) -> pd.DataFrame: ...
+    async def fetch(
+        self, snapshot_timestamp: datetime, context: dict[str, Any]
+    ) -> pd.DataFrame: ...
     async def on_error(self, error: BaseException) -> None: ...
 
 

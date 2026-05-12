@@ -13,7 +13,7 @@ from ascent.application.route_trade import (
     ExchangeBinding,
     TradeRouter,
 )
-from ascent.domain import Direction, TradeState
+from ascent.domain import PositionType, TradeState
 from ascent.ports import RouteGate
 from tests.fakes import (
     FakeUnitOfWorkFactory,
@@ -50,7 +50,6 @@ def _router(*, route_gate: RouteGate | None = None):
     exchange_id = uuid.uuid4()
     router = TradeRouter(
         strategy_id=uuid.uuid4(),
-        portfolio_id=uuid.uuid4(),
         trade_repo=trade_repo,
         order_repo=order_repo,
         event_bus=bus,
@@ -83,7 +82,7 @@ class TestSubmitInstrument:
         assert trade.state == TradeState.OPENING
         assert len(trade.legs) == 1
         assert trade.legs[0].instrument_id == instrument_id
-        assert trade.legs[0].direction == Direction.LONG
+        assert trade.legs[0].direction == PositionType.LONG
 
         # Dispatch intent lives in the outbox (durable), not the event bus.
         assert len(outbox.enqueued) == 1
@@ -119,9 +118,9 @@ class TestSubmitComposite:
         )
         trade = await trade_repo.get(None, draft.trade_id)
         assert [leg.direction for leg in trade.legs] == [
-            Direction.LONG,
-            Direction.SHORT,
-            Direction.SHORT,
+            PositionType.LONG,
+            PositionType.SHORT,
+            PositionType.SHORT,
         ]
 
     @pytest.mark.asyncio

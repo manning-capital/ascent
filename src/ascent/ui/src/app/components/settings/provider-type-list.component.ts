@@ -6,11 +6,12 @@ import { TypeHierarchyNode, ReparentPreview } from '../../models/asset.model';
 import { Skeleton } from 'primeng/skeleton';
 import { TypeHierarchyGraphComponent, TypeCreateRequest, TypeReparentRequest } from './type-hierarchy-graph.component';
 import { ReparentConfirmDialogComponent, ReparentConfirmEvent } from '../shared/reparent-confirm-dialog.component';
+import { AppPageHeaderComponent } from '../ui/page-header/app-page-header.component';
 
 @Component({
   selector: 'app-provider-type-list',
   standalone: true,
-  imports: [Skeleton, TypeHierarchyGraphComponent, ReparentConfirmDialogComponent],
+  imports: [Skeleton, TypeHierarchyGraphComponent, ReparentConfirmDialogComponent, AppPageHeaderComponent],
   templateUrl: './provider-type-list.component.html',
   host: { class: 'block h-full' },
 })
@@ -40,7 +41,7 @@ export class ProviderTypeListComponent implements OnInit {
   }
 
   onNodeClick(nodeId: string): void {
-    this.router.navigate(['/settings/provider-types', nodeId]);
+    this.router.navigate(['/settings/types/provider-types', nodeId]);
   }
 
   onCreateType(req: TypeCreateRequest): void {

@@ -123,7 +123,6 @@ class SqlAlchemyOrderRepository(OrderRepository):
             order_type_id=self._types.order_type_id(spec.order_type),
             side=spec.side,
             exchange_id=spec.exchange_id,
-            portfolio_id=spec.portfolio_id,
             instrument_id=spec.instrument_id,
             quantity=spec.quantity,
             price=spec.price,

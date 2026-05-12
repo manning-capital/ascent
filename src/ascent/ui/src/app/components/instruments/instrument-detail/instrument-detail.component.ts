@@ -21,6 +21,7 @@ import { Panel } from 'primeng/panel';
 import { MetadataHistoryTableComponent } from '../../shared/metadata-history-table.component';
 import { SafeDeleteDialogComponent } from '../../shared/safe-delete-dialog.component';
 import { FieldPanelComponent, PanelField } from '../../shared/field-panel.component';
+import { AppDangerZoneComponent } from '../../ui/danger-zone/app-danger-zone.component';
 
 @Component({
   selector: 'app-instrument-detail',
@@ -37,6 +38,7 @@ import { FieldPanelComponent, PanelField } from '../../shared/field-panel.compon
     MetadataHistoryTableComponent,
     SafeDeleteDialogComponent,
     FieldPanelComponent,
+    AppDangerZoneComponent,
   ],
   templateUrl: './instrument-detail.component.html',
 })

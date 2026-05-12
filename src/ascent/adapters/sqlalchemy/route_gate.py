@@ -56,9 +56,9 @@ class SqlAlchemyRouteGate(RouteGate):
             return "exchange_missing"
 
         rows = db.execute(
-            select(
-                Instrument.id, Instrument.provider_id, Instrument.instrument_type_id
-            ).where(Instrument.id.in_(instrument_ids))
+            select(Instrument.id, Instrument.provider_id, Instrument.instrument_type_id).where(
+                Instrument.id.in_(instrument_ids)
+            )
         ).all()
         found_ids = {r.id for r in rows}
         if found_ids != set(instrument_ids):

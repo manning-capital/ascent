@@ -1,7 +1,7 @@
 import { Component, computed, input, model } from '@angular/core';
 import { UIChart } from 'primeng/chart';
 import { ChartData, ChartOptions } from 'chart.js';
-import { DARK_THEME, CHART_COLORS } from './chart-defaults';
+import { useChartTheme, formatPnlTick } from './chart-defaults';
 
 export interface CumulativePnlPoint {
   date: string;
@@ -33,7 +33,7 @@ const LOOKBACK_MS: Record<Lookback, number | null> = {
   template: `
     <div class="h-full w-full min-h-[200px]">
       @if (filteredData().length > 0) {
-        <p-chart type="line" [data]="chartData()" [options]="chartOptions" [style]="{'width': '100%', 'height': '100%'}"/>
+        <p-chart type="line" [data]="chartData()" [options]="chartOptions()" [style]="{'width': '100%', 'height': '100%'}" />
       } @else {
         <div class="flex items-center justify-center h-full text-fg-faint text-sm">
           No closed trades in selected window
@@ -46,58 +46,69 @@ export class CumulativePnlChartComponent {
   data = input.required<CumulativePnlPoint[]>();
   lookback = model<Lookback>('all');
 
+  private theme = useChartTheme();
+
   filteredData = computed<CumulativePnlPoint[]>(() => {
     const points = this.data();
     const window = LOOKBACK_MS[this.lookback()];
     if (window === null) return points;
     const cutoff = Date.now() - window;
-    return points.filter(p => new Date(p.date).getTime() >= cutoff);
+    return points.filter((p) => new Date(p.date).getTime() >= cutoff);
   });
 
-  chartOptions: ChartOptions<'line'> = {
-    responsive: true,
-    maintainAspectRatio: false,
-    animation: false,
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        backgroundColor: DARK_THEME.tooltipBg,
-        borderColor: DARK_THEME.tooltipBorder,
-        borderWidth: 1,
-        titleColor: DARK_THEME.tooltipTitle,
-        bodyColor: DARK_THEME.tooltipBody,
-        padding: 10,
-        cornerRadius: 8,
-      },
-    },
-    scales: {
-      x: {
-        ticks: { color: DARK_THEME.tickColor, maxTicksLimit: 10 },
-        grid: { color: DARK_THEME.gridColor },
-      },
-      y: {
-        ticks: {
-          color: DARK_THEME.tickColor,
-          callback: (value) => `$${value}`,
+  chartOptions = computed<ChartOptions<'line'>>(() => {
+    const t = this.theme();
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: t.tooltipBg,
+          borderColor: t.tooltipBorder,
+          borderWidth: 1,
+          titleColor: t.tooltipTitle,
+          bodyColor: t.tooltipBody,
+          padding: 10,
+          cornerRadius: 8,
+          callbacks: {
+            label: (item) => formatPnlTick(item.parsed.y ?? 0),
+          },
         },
-        grid: { color: DARK_THEME.gridColor },
       },
-    },
-  };
+      scales: {
+        x: {
+          ticks: { color: t.tickColor, maxTicksLimit: 10 },
+          grid: { color: t.gridColor },
+        },
+        y: {
+          ticks: {
+            color: t.tickColor,
+            callback: (value) => formatPnlTick(value),
+          },
+          grid: { color: t.gridColor },
+        },
+      },
+    };
+  });
 
   chartData = computed<ChartData<'line'>>(() => {
+    const t = this.theme();
     const points = this.filteredData();
     return {
-      labels: points.map(p => new Date(p.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
+      labels: points.map((p) =>
+        new Date(p.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      ),
       datasets: [{
-        data: points.map(p => p.value),
-        borderColor: CHART_COLORS.positive,
-        backgroundColor: CHART_COLORS.positiveFill,
+        data: points.map((p) => p.value),
+        borderColor: t.positive,
+        backgroundColor: t.positiveFill,
         fill: true,
         tension: 0,
         pointRadius: points.length > 50 ? 0 : 3,
         pointHoverRadius: 5,
-        pointBackgroundColor: CHART_COLORS.positive,
+        pointBackgroundColor: t.positive,
         borderWidth: 2,
       }],
     };

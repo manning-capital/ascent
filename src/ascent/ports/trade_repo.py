@@ -12,10 +12,10 @@ from typing import Any, Protocol, runtime_checkable
 
 from ascent.domain import (
     Context,
-    Direction,
     Order,
     OrderState,
     OrderType,
+    PositionType,
     Trade,
     TradeLeg,
     TradeState,
@@ -35,6 +35,17 @@ class TradeRepository(Protocol):
         self, session: Any, strategy_id: uuid.UUID
     ) -> list[Trade]: ...
 
+    async def list_non_terminal_for_exchange(
+        self, session: Any, exchange_id: uuid.UUID
+    ) -> list[Trade]:
+        """Return non-terminal trades whose legs settle on the given exchange.
+
+        Used by the reconciler's phantom-trade sweep to compute claim
+        aggregates against the exchange's reported balances. Returned trades
+        must carry ``leg.from_asset_symbol`` populated by the adapter.
+        """
+        ...
+
     async def list_open_for_strategy(self, session: Any, strategy_id: uuid.UUID) -> list[Trade]: ...
 
     async def create(
@@ -42,7 +53,6 @@ class TradeRepository(Protocol):
         session: Any,
         *,
         strategy_id: uuid.UUID,
-        portfolio_id: uuid.UUID,
         is_paper: bool,
         entry_at: datetime,
         strategy_run_id: uuid.UUID | None,
@@ -168,7 +178,7 @@ from dataclasses import dataclass  # noqa: E402
 @dataclass(frozen=True)
 class NewLegSpec:
     instrument_id: uuid.UUID
-    direction: Direction
+    direction: PositionType
     quantity: float
     expected_entry_price: float | None
     exchange_id: uuid.UUID
@@ -182,10 +192,9 @@ class NewOrderSpec:
     quantity: float
     price: float
     exchange_id: uuid.UUID
-    portfolio_id: uuid.UUID
     instrument_id: uuid.UUID
     trade_leg_id: uuid.UUID | None
 
 
 # Re-exports needed for type-checking of repository TYPE_CHECKING blocks.
-_ = (Direction, Order, OrderState, OrderType, Trade, TradeLeg, TradeState)
+_ = (PositionType, Order, OrderState, OrderType, Trade, TradeLeg, TradeState)

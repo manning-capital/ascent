@@ -5,16 +5,35 @@ import { map } from 'rxjs/operators';
 import { InputText } from 'primeng/inputtext';
 import { Select } from 'primeng/select';
 import { Button } from 'primeng/button';
+import { DataView, DataViewLazyLoadEvent } from 'primeng/dataview';
 import { StrategyService } from '../../services/strategy.service';
 import { StrategyListItem } from '../../models/strategy.model';
-import { ServerTableComponent } from '../shared/data-table/server-table.component';
-import type { DataTableColumn, ServerFetchFn } from '../shared/data-table/data-table.model';
+import { AppPageHeaderComponent } from '../ui/page-header/app-page-header.component';
+import { AppEmptyStateComponent } from '../ui/empty-state/app-empty-state.component';
+import { AppStatusDotComponent } from '../ui/cells/app-status-dot.component';
+import { AppProgressBarComponent } from '../ui/cells/app-progress-bar.component';
+import { AppRelativeTimeComponent } from '../ui/cells/app-relative-time.component';
+import type { AppFetchFn, AppSeverity } from '../ui/data-table/app-column.model';
+import { DEFAULT_PAGE_SIZE } from '../../constants/pagination';
+import type { Observable } from 'rxjs';
 
 @Component({
   selector: 'app-strategy-list',
   standalone: true,
-  imports: [FormsModule, InputText, Select, Button, ServerTableComponent],
+  imports: [
+    FormsModule,
+    InputText,
+    Select,
+    Button,
+    DataView,
+    AppPageHeaderComponent,
+    AppEmptyStateComponent,
+    AppStatusDotComponent,
+    AppProgressBarComponent,
+    AppRelativeTimeComponent,
+  ],
   templateUrl: './strategy-list.component.html',
+  host: { class: 'flex flex-col h-full min-h-0' },
 })
 export class StrategyListComponent implements OnInit {
   private route = inject(ActivatedRoute);
@@ -29,27 +48,22 @@ export class StrategyListComponent implements OnInit {
     { label: 'Inactive', value: false },
   ];
 
-  columns: DataTableColumn<StrategyListItem>[] = [
-    { field: 'display_name', header: 'Display Name' },
-    { field: 'total_trades', header: 'Trades', sortable: false },
-    { field: 'win_rate', header: 'Win Rate', sortable: false, valueFormatter: (p) => p.value != null ? `${p.value}%` : '' },
-    { field: 'open_trades', header: 'Open', sortable: false },
-    { field: 'total_pnl', header: 'Total P&L', cellType: 'currency', sortable: false },
-    { field: 'is_active', header: 'Status', cellType: 'status', width: 112 },
-  ];
+  items = signal<StrategyListItem[]>([]);
+  total = signal(0);
+  first = signal(0);
+  pageSize = signal(DEFAULT_PAGE_SIZE);
+  loading = signal(false);
 
-  navigateToStrategy = (row: any) => ['/strategies', row.id];
-
-  fetchPage = computed<ServerFetchFn<StrategyListItem>>(() => {
+  fetchPage = computed<AppFetchFn<StrategyListItem>>(() => {
     const search = this.search();
     const isActive = this.statusFilter();
-    return (page: number, pageSize: number, sort?: { field: string; order: string }) => {
+    return (page, pageSize, sort) => {
       const filters: any = {};
       if (search) filters.search = search;
       if (isActive != null) filters.is_active = isActive;
-      return this.strategyService.loadStrategiesPaginated(page, pageSize, filters, sort).pipe(
-        map(res => ({ items: res.items, total: res.total }))
-      );
+      return this.strategyService.loadStrategiesPaginated(page, pageSize, filters, sort as any).pipe(
+        map((res) => ({ items: res.items, total: res.total })),
+      ) as ReturnType<AppFetchFn<StrategyListItem>>;
     };
   });
 
@@ -57,21 +71,73 @@ export class StrategyListComponent implements OnInit {
     const qp = this.route.snapshot.queryParamMap;
     if (qp.get('search')) this.search.set(qp.get('search')!);
     if (qp.get('is_active') != null) this.statusFilter.set(qp.get('is_active') === 'true');
+    this.load();
+  }
+
+  onLazyLoad(event: DataViewLazyLoadEvent): void {
+    if (event.first != null) this.first.set(event.first);
+    if (event.rows != null) this.pageSize.set(event.rows);
+    this.load();
+  }
+
+  private load(): void {
+    const page = Math.floor(this.first() / this.pageSize()) + 1;
+    this.loading.set(true);
+    this.fetchPage()(page, this.pageSize()).subscribe({
+      next: (res) => {
+        this.items.set(res.items);
+        this.total.set(res.total);
+        this.loading.set(false);
+      },
+      error: () => this.loading.set(false),
+    });
+  }
+
+  navigateToStrategy(row: StrategyListItem): void {
+    this.router.navigate(['/strategies', row.id]);
+  }
+
+  pnlClass(value: number | null | undefined): string {
+    if (value == null || value === 0) return 'text-fg-muted';
+    return value > 0 ? 'text-positive' : 'text-negative';
+  }
+
+  winRateSeverity(rate: number | null | undefined): AppSeverity {
+    if (rate == null) return 'secondary';
+    if (rate >= 60) return 'success';
+    if (rate >= 45) return 'warn';
+    return 'danger';
+  }
+
+  formatPnl(value: number | null | undefined): string {
+    if (value == null) return '—';
+    const sign = value > 0 ? '+' : '';
+    return `${sign}${value.toLocaleString(undefined, {
+      style: 'currency',
+      currency: 'USD',
+      maximumFractionDigits: 0,
+    })}`;
   }
 
   onSearch(value: string): void {
     this.search.set(value);
+    this.first.set(0);
+    this.load();
     this.updateUrl();
   }
 
   onStatusChange(value: boolean | null): void {
     this.statusFilter.set(value);
+    this.first.set(0);
+    this.load();
     this.updateUrl();
   }
 
   clearFilters(): void {
     this.search.set('');
     this.statusFilter.set(null);
+    this.first.set(0);
+    this.load();
     this.updateUrl();
   }
 

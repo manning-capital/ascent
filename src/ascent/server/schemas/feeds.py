@@ -30,6 +30,7 @@ class FeedListItem(BaseModel):
     total_runs: int = 0
     last_run_at: datetime.datetime | None = None
     last_run_status: str | None = None
+    recent_run_statuses: list[str] = []
 
 
 class FeedDetail(FeedListItem):
@@ -82,6 +83,12 @@ class FeedRunListItem(BaseModel):
     started_at: datetime.datetime
     completed_at: datetime.datetime | None = None
     error_message: str | None = None
+
+
+class FeedRunDetail(FeedRunListItem):
+    """Single-run response that also exposes the persisted context snapshot."""
+
+    context: dict | None = None
 
 
 class StrategyFeedItem(BaseModel):
@@ -141,3 +148,65 @@ class TradeFeedRunItem(BaseModel):
     snapshot_timestamp: datetime.datetime
     status: str
     is_trigger: bool
+
+
+class FeedRunUniverseInstrumentItem(BaseModel):
+    """Instrument in a feed's universe at a specific snapshot timestamp."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    instrument_id: uuid.UUID
+    name: str
+    display_name: str
+    instrument_type_id: uuid.UUID | None = None
+    instrument_type_name: str | None = None
+    added_at: datetime.datetime
+
+
+class FeedRunUniverseCompositeItem(BaseModel):
+    """Composite in a feed's universe at a specific snapshot timestamp."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    composite_id: uuid.UUID
+    name: str
+    display_name: str
+    composite_type_id: uuid.UUID | None = None
+    composite_type_name: str | None = None
+    added_at: datetime.datetime
+
+
+class UpstreamFeedRunItem(BaseModel):
+    """A feed run that this run depended on (matched by snapshot_timestamp)."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    feed_run_id: uuid.UUID
+    feed_id: uuid.UUID
+    feed_name: str
+    feed_display_name: str
+    snapshot_timestamp: datetime.datetime
+    status: str
+
+
+class DownstreamStrategyRunItem(BaseModel):
+    """A strategy run that consumed this feed run."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    strategy_run_id: uuid.UUID
+    strategy_id: uuid.UUID
+    strategy_name: str
+    strategy_display_name: str
+    started_at: datetime.datetime
+    completed_at: datetime.datetime | None = None
+    status: str
+    is_trigger: bool
+
+
+class FeedRunLineageResponse(BaseModel):
+    """Combined upstream + downstream lineage for a feed run."""
+
+    upstream_runs: list[UpstreamFeedRunItem]
+    downstream_strategy_runs: list[DownstreamStrategyRunItem]
+    downstream_trades: list[FeedRunTradeItem]

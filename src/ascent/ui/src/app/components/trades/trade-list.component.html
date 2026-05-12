@@ -1,87 +1,97 @@
-<div class="flex flex-col h-[calc(100vh-3.5rem)] md:h-screen p-6">
-  <div class="flex items-center justify-between mb-4 shrink-0">
-    <h1 class="text-2xl font-bold flex items-center gap-3">
-      Trades
-      <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse-live"></span>
-    </h1>
-  </div>
+<div class="flex flex-col h-full min-h-0">
+  <app-page-header title="Trades" subtitle="Live · streaming">
+    <div actions class="flex items-center gap-2">
+      <p-button
+        label="Clear filters"
+        severity="secondary"
+        [text]="true"
+        size="small"
+        icon="pi pi-filter-slash"
+        (onClick)="clearFilters()"
+      />
+    </div>
+  </app-page-header>
 
-  <!-- Filters -->
-  <p-card styleClass="mb-4 shrink-0">
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
-      <!-- Search -->
+  <div class="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-edge bg-canvas shrink-0">
+    <span class="relative">
+      <i class="pi pi-search absolute left-2 top-1/2 -translate-y-1/2 text-fg-faint text-xs"></i>
       <input
         type="text"
         pInputText
-        placeholder="Search symbol..."
+        placeholder="Search symbol"
+        class="pl-7 text-xs"
+        style="width: 14rem;"
         [ngModel]="search()"
-        (ngModelChange)="onSearch($event)">
+        (ngModelChange)="onSearch($event)"
+      />
+    </span>
 
-      <!-- Status -->
-      <p-select
-        [ngModel]="status()"
-        (ngModelChange)="onStatusChange($event)"
-        [options]="statusOptions"
-        optionLabel="label"
-        optionValue="value"
-        placeholder="All Statuses"
-        [showClear]="true"/>
+    <p-select
+      [ngModel]="status()"
+      (ngModelChange)="onStatusChange($event)"
+      [options]="statusOptions"
+      optionLabel="label"
+      optionValue="value"
+      placeholder="All statuses"
+      [showClear]="true"
+      size="small"
+      styleClass="text-xs"
+      [style]="{ width: '11rem' }"
+    />
 
-      <!-- Strategy -->
-      <p-select
-        [ngModel]="selectedStrategyId()"
-        (ngModelChange)="onStrategyChange($event)"
-        [options]="strategyService.strategies()"
-        optionLabel="display_name"
-        optionValue="id"
-        placeholder="All Strategies"
-        [showClear]="true"
-        [filter]="true"
-        filterPlaceholder="Search strategies..."/>
+    <p-select
+      [ngModel]="selectedStrategyId()"
+      (ngModelChange)="onStrategyChange($event)"
+      [options]="strategyService.strategies()"
+      optionLabel="display_name"
+      optionValue="id"
+      placeholder="All strategies"
+      [showClear]="true"
+      [filter]="true"
+      filterPlaceholder="Search…"
+      size="small"
+      styleClass="text-xs"
+      [style]="{ width: '14rem' }"
+    />
 
-      <!-- Clear -->
-      <p-button (onClick)="clearFilters()" severity="secondary" [outlined]="true" label="Clear Filters"/>
-    </div>
+    <p-datepicker
+      [ngModel]="startDate()"
+      (ngModelChange)="startDate.set($event); onDateChange()"
+      dateFormat="yy-mm-dd"
+      [showIcon]="true"
+      [showButtonBar]="true"
+      placeholder="From"
+      size="small"
+      [style]="{ width: '10rem' }"
+    />
 
-    <!-- Date Range -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-      <div class="flex items-center gap-2">
-        <label class="text-xs text-surface-500 shrink-0">From:</label>
-        <p-datepicker
-          [ngModel]="startDate()"
-          (ngModelChange)="startDate.set($event); onDateChange()"
-          dateFormat="yy-mm-dd"
-          [showIcon]="true"
-          [showButtonBar]="true"
-          placeholder="Start date"
-          [style]="{'width': '100%'}"/>
-      </div>
-      <div class="flex items-center gap-2">
-        <label class="text-xs text-surface-500 shrink-0">To:</label>
-        <p-datepicker
-          [ngModel]="endDate()"
-          (ngModelChange)="endDate.set($event); onDateChange()"
-          dateFormat="yy-mm-dd"
-          [showIcon]="true"
-          [showButtonBar]="true"
-          placeholder="End date"
-          [style]="{'width': '100%'}"/>
-      </div>
-    </div>
+    <p-datepicker
+      [ngModel]="endDate()"
+      (ngModelChange)="endDate.set($event); onDateChange()"
+      dateFormat="yy-mm-dd"
+      [showIcon]="true"
+      [showButtonBar]="true"
+      placeholder="To"
+      size="small"
+      [style]="{ width: '10rem' }"
+    />
 
-    <!-- Tags -->
-    <div class="flex items-center gap-2">
-      <span class="text-xs text-surface-500">Tags:</span>
-      <p-selectButton [multiple]="true" [ngModel]="selectedTags()" (ngModelChange)="onTagsChange($event)" [options]="availableTags"/>
-    </div>
-  </p-card>
+    <p-selectButton
+      [multiple]="true"
+      [ngModel]="selectedTags()"
+      (ngModelChange)="onTagsChange($event)"
+      [options]="availableTags"
+      size="small"
+    />
+  </div>
 
-  <!-- Table fills remaining space -->
-  <app-trade-table class="flex-1 min-h-0"
+  <app-trade-table
+    class="flex-1 min-h-0"
     [showStrategy]="true"
     [fetchPage]="fetchPageFn()"
     [pageSize]="pageSize()"
     (sortChange)="onSortChange($event)"
     (pageSizeChange)="onPageSizeChange($event)"
-    (serverPageChange)="onPageChange($event)"/>
+    (serverPageChange)="onPageChange($event)"
+  />
 </div>

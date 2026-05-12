@@ -50,7 +50,6 @@ def scenario() -> Scenario:
     strategy_id = uuid.uuid4()
     router = TradeRouter(
         strategy_id=strategy_id,
-        portfolio_id=uuid.uuid4(),
         trade_repo=trade_repo,
         order_repo=order_repo,
         event_bus=bus,

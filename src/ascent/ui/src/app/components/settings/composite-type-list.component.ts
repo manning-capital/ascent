@@ -5,11 +5,12 @@ import { ToastService } from '../../services/toast.service';
 import { TypeHierarchyNode } from '../../models/asset.model';
 import { Skeleton } from 'primeng/skeleton';
 import { TypeHierarchyGraphComponent, TypeCreateRequest } from './type-hierarchy-graph.component';
+import { AppPageHeaderComponent } from '../ui/page-header/app-page-header.component';
 
 @Component({
   selector: 'app-composite-type-list',
   standalone: true,
-  imports: [Skeleton, TypeHierarchyGraphComponent],
+  imports: [Skeleton, TypeHierarchyGraphComponent, AppPageHeaderComponent],
   templateUrl: './composite-type-list.component.html',
   host: { class: 'block h-full' },
 })
@@ -42,7 +43,7 @@ export class CompositeTypeListComponent implements OnInit {
   }
 
   onNodeClick(nodeId: string): void {
-    this.router.navigate(['/settings/composite-types', nodeId]);
+    this.router.navigate(['/settings/types/composite-types', nodeId]);
   }
 
   onCreateType(req: TypeCreateRequest): void {

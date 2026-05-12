@@ -1,5 +1,5 @@
 import { Component, computed, effect, inject, OnInit, signal, viewChild } from '@angular/core';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { JsonPipe } from '@angular/common';
 import { FeedService } from '../../../services/feed.service';
 import { ToastService } from '../../../services/toast.service';
@@ -11,13 +11,13 @@ import { Tabs, TabList, Tab } from 'primeng/tabs';
 import { SchemaFormComponent } from '../../shared/schema-form.component';
 import { Card } from 'primeng/card';
 import { Tag } from 'primeng/tag';
-import { DataTableComponent } from '../../shared/data-table/data-table.component';
-import { DataTableColumn } from '../../shared/data-table/data-table.model';
+import { AppDataTableComponent } from '../../ui/data-table/app-data-table.component';
+import type { AppColumn } from '../../ui/data-table/app-column.model';
 import { FeedRunsTabComponent } from './feed-runs-tab.component';
 import { FeedActivityTimelineComponent } from './feed-activity-timeline.component';
-import { StatCardComponent } from '../../shared/stat-card.component';
 import { FieldPanelComponent, PanelField } from '../../shared/field-panel.component';
 import { Skeleton } from 'primeng/skeleton';
+import { AppPageHeaderComponent } from '../../ui/page-header/app-page-header.component';
 
 export interface RecentRunPill {
   id: string;
@@ -31,7 +31,6 @@ export interface RecentRunPill {
   selector: 'app-feed-detail',
   standalone: true,
   imports: [
-    RouterLink,
     JsonPipe,
     Tabs, TabList, Tab,
     SchemaFormComponent,
@@ -40,11 +39,11 @@ export interface RecentRunPill {
     Skeleton,
     UniversePanelComponent,
     UniverseImpactDialogComponent,
-    DataTableComponent,
+    AppDataTableComponent,
     FeedRunsTabComponent,
     FeedActivityTimelineComponent,
-    StatCardComponent,
     FieldPanelComponent,
+    AppPageHeaderComponent,
   ],
   templateUrl: './feed-detail.component.html',
 })
@@ -60,9 +59,9 @@ export class FeedDetailComponent implements OnInit {
 
   feedId = '';
 
-  errorColumns: DataTableColumn<FeedRunListItem>[] = [
+  errorColumns: AppColumn<FeedRunListItem>[] = [
     { field: 'started_at', header: 'Timestamp', cellType: 'date', width: 130 },
-    { field: 'error_message', header: 'Error', valueFormatter: (p: any) => p.value ?? 'Unknown error', cellClass: 'text-negative' },
+    { field: 'error_message', header: 'Error', format: (v) => v ?? 'Unknown error', cellClass: 'text-negative' },
   ];
 
   navigateToError = (row: FeedRunListItem) => ['/feeds', this.feedId, 'runs', row.id];
@@ -151,7 +150,7 @@ export class FeedDetailComponent implements OnInit {
     }));
   });
 
-  outputSchemaColumns: DataTableColumn<any>[] = [
+  outputSchemaColumns: AppColumn<any>[] = [
     { field: 'name', header: 'Column', cellType: 'monospace', width: 200 },
     { field: 'dtype', header: 'Type', cellType: 'monospace', width: 160 },
     { field: 'nullable', header: 'Nullable', width: 100 },

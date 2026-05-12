@@ -5,7 +5,7 @@ export interface StrategyListItem {
   description: string | null;
   strategy_ref: string;
   parameters: any;
-  portfolio_id: string;
+  base_asset_id: string | null;
   is_active: boolean;
   is_paused: boolean;
   total_trades: number;
@@ -18,7 +18,7 @@ export interface StrategyListItem {
 }
 
 export interface StrategyDetail extends StrategyListItem {
-  portfolio_name: string | null;
+  base_asset_name: string | null;
   parameter_schema: JsonSchema | null;
   created_at: string | null;
 }

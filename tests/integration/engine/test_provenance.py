@@ -88,9 +88,7 @@ def seeded(db_session: Session) -> dict:
     db_session.flush()
 
     btc_usd = Instrument(
-        **make_instrument(
-            instrument_type.id, provider.id, btc.id, usd.id, name="KRAKEN_BTC_USD"
-        )
+        **make_instrument(instrument_type.id, provider.id, btc.id, usd.id, name="KRAKEN_BTC_USD")
     )
     db_session.add(btc_usd)
     db_session.commit()
@@ -299,17 +297,13 @@ async def test_trade_feed_runs_endpoint_surfaces_provenance(
     # the exchange path since provenance is the concern.
     with Session(postgres_engine) as db:
         strategy_run_id = db.execute(
-            text(
-                "SELECT strategy_run_id FROM strategy_run_feed_run "
-                "WHERE feed_id = :fid LIMIT 1"
-            ),
+            text("SELECT strategy_run_id FROM strategy_run_feed_run WHERE feed_id = :fid LIMIT 1"),
             {"fid": feed_id},
         ).scalar_one()
 
         trade = Trade(
             strategy_id=strategy_id,
             strategy_run_id=strategy_run_id,
-            portfolio_id=portfolio.id,
             current_status_type_id=pending_status.id,
             is_paper=True,
         )
@@ -395,7 +389,6 @@ async def test_feed_run_trades_endpoint_lists_caused_trades(
         trade = Trade(
             strategy_id=strategy_id,
             strategy_run_id=strategy_run_id,
-            portfolio_id=portfolio.id,
             current_status_type_id=pending_status.id,
             is_paper=True,
         )

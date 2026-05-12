@@ -57,10 +57,53 @@ export interface ContextSeries {
   points: SeriesPoint[];
 }
 
+export type ColorToken =
+  | 'primary'
+  | 'secondary'
+  | 'success'
+  | 'info'
+  | 'warning'
+  | 'danger'
+  | 'neutral'
+  | 'muted';
+
+export type LineStyle = 'solid' | 'dashed' | 'dotted';
+
+export type PointStyle = 'circle' | 'cross' | 'triangle' | 'rect' | 'rectRot';
+
+export interface SeriesStyle {
+  color: ColorToken | null;
+  line_style: LineStyle;
+  line_width: number;
+  opacity: number;
+  point_radius: number;
+  point_style: PointStyle;
+  fill: boolean;
+}
+
+export interface PlotSeries {
+  name: string;
+  label: string | null;
+  style: SeriesStyle;
+}
+
+export type LegendPosition = 'top' | 'bottom' | 'left' | 'right';
+
+export interface Plot {
+  id: string;
+  title: string;
+  series: PlotSeries[];
+  main_series_name: string | null;
+  show_legend: boolean;
+  legend_position: LegendPosition;
+  y_axis_label: string | null;
+  plot_type: 'line';
+}
+
 export interface TradeView {
-  series: string[];
-  series_labels: Record<string, string>;
+  plots: Plot[];
   show_trade_markers: boolean;
+  show_trade_status_overlay: boolean;
 }
 
 export interface ContextResponse {

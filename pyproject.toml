@@ -83,9 +83,16 @@ Documentation = "https://github.com/manning-capital/ascent#readme"
 Repository = "https://github.com/manning-capital/ascent"
 Issues = "https://github.com/manning-capital/ascent/issues"
 
+# The Angular UI bundle is gitignored (built by `ng build`) so hatch would
+# normally skip it. `artifacts` overrides VCS-ignore for both the sdist and
+# the wheel so `uv build`'s sdist->wheel flow finds the bundle in both steps.
+# The release workflow runs `ng build` before `uv build` so this directory is
+# populated in CI.
+[tool.hatch.build]
+artifacts = ["src/ascent/server/ui/**"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/ascent"]
-artifacts = ["src/ascent/server/ui/**"]
 
 [tool.hatch.build.targets.sdist]
 include = [

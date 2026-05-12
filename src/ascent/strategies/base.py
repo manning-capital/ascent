@@ -41,6 +41,14 @@ from typing import TYPE_CHECKING, ClassVar, Literal
 import pandas as pd
 from pydantic import BaseModel
 
+from ascent.domain.trade_view import (
+    ColorToken,
+    Plot,
+    PlotSeries,
+    SeriesStyle,
+    TradeView,
+)
+
 if TYPE_CHECKING:
     from ascent.application.context_builder import Context
     from ascent.application.route_trade import TradeDraft, TradeRouter
@@ -48,20 +56,15 @@ if TYPE_CHECKING:
 
 Scope = Literal["instrument", "composite"]
 
-
-class TradeView(BaseModel):
-    """Per-strategy trade-detail chart configuration.
-
-    Declared as a class attribute on a ``Strategy`` subclass and persisted as
-    JSONB on the strategy DB row at deploy time, mirroring the
-    ``parameter_schema`` flow. The trade-detail UI uses this to pick which
-    context series to plot by default and whether to overlay vertical
-    reference lines at the trade's entry/exit timestamps.
-    """
-
-    series: list[str] = []
-    series_labels: dict[str, str] = {}
-    show_trade_markers: bool = True
+__all__ = [
+    "ColorToken",
+    "Plot",
+    "PlotSeries",
+    "Scope",
+    "SeriesStyle",
+    "Strategy",
+    "TradeView",
+]
 
 
 class Strategy(ABC):
@@ -111,17 +114,20 @@ class Strategy(ABC):
     #: Optional long description shown in the UI.
     description: ClassVar[str | None] = None
 
-    #: Portfolio name or UUID.  Resolved to a UUID at deploy time.
-    portfolio: ClassVar[str | None] = None
+    #: Asset name or UUID used as the strategy's reporting / accounting base
+    #: (e.g. "USD"). Resolved to a UUID at deploy time. Optional.
+    base_asset: ClassVar[str | None] = None
 
     #: Exchanges this strategy can use for order execution.  Each entry
     #: can be an exchange name (string) or a UUID.
     exchanges: ClassVar[list[str] | None] = None
 
-    #: Trade-detail chart configuration.  When set, the trade-detail UI
-    #: uses ``series`` to pick default series to plot and overlays
-    #: vertical entry/exit reference lines when ``show_trade_markers`` is
-    #: true. Persisted as JSONB on the strategy DB row at deploy time.
+    #: Trade-detail chart configuration. When set, the trade-detail UI
+    #: renders one tab per ``Plot``, each with curated series, per-series
+    #: styling (color/line-style/opacity/width), an optional designated
+    #: ``main_series_name`` that receives a trade-lifecycle status overlay,
+    #: and progressive-line animation. Persisted as JSONB on the strategy
+    #: DB row at deploy time.
     trade_view: ClassVar[TradeView | None] = None
 
     def __init__(self, parameters: Parameters | dict | None = None) -> None:
@@ -222,6 +228,7 @@ class Strategy(ABC):
         *,
         scope: Literal["instrument", "composite"] = "instrument",
         composite_instrument_ids: list[uuid.UUID] | None = None,
+        composite_leg_ratios: list[float] | None = None,
         price: float | None = None,
         order_type: str = "MARKET",
     ) -> TradeDraft:
@@ -231,6 +238,14 @@ class Strategy(ABC):
         ordered list of member instrument UUIDs (leg 1 first, leg 2 second,
         ...). The router creates one leg per instrument; the first leg takes
         the submitted direction and subsequent legs alternate.
+
+        ``composite_leg_ratios`` (optional, same length as
+        ``composite_instrument_ids``) scales the per-leg share quantity:
+        leg ``i`` trades ``quantity * composite_leg_ratios[i]`` shares.
+        For a pairs trade with hedge ratio ``beta``, pass ``[1.0, beta]``
+        so leg B trades ``beta`` shares for every 1 share of leg A — the
+        share ratio that makes spread moves translate cleanly to dollar PnL.
+        Default ``None`` gives every leg the same number of shares.
 
         Returns a :class:`~ascent.application.route_trade.TradeDraft` dataclass
         with ``trade_id`` (UUID), ``state`` (:class:`TradeState`), and
@@ -253,6 +268,9 @@ class Strategy(ABC):
             composite_spec = CompositeSpec(
                 composite_id=id,
                 ordered_instrument_ids=list(composite_instrument_ids),
+                leg_quantity_ratios=(
+                    list(composite_leg_ratios) if composite_leg_ratios is not None else None
+                ),
             )
 
         return router.submit(

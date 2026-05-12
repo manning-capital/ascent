@@ -5,19 +5,20 @@ import { map } from 'rxjs/operators';
 import { Select } from 'primeng/select';
 import { DatePicker } from 'primeng/datepicker';
 import { InputText } from 'primeng/inputtext';
-import { Card } from 'primeng/card';
 import { Button } from 'primeng/button';
 import { SelectButton } from 'primeng/selectbutton';
 import { StrategyService } from '../../services/strategy.service';
 import { ApiService } from '../../services/api.service';
 import { PaginatedResponse, TradeListItem } from '../../models/trade.model';
-import { ServerFetchFn } from '../shared/data-table/data-table.model';
+import { AppFetchFn } from '../ui/data-table/app-column.model';
+import { DEFAULT_PAGE_SIZE } from '../../constants/pagination';
 import { TradeTableComponent } from '../trade-table/trade-table.component';
+import { AppPageHeaderComponent } from '../ui/page-header/app-page-header.component';
 
 @Component({
   selector: 'app-trade-list',
   standalone: true,
-  imports: [FormsModule, Select, DatePicker, InputText, Card, Button, SelectButton, TradeTableComponent],
+  imports: [FormsModule, Select, DatePicker, InputText, Button, SelectButton, TradeTableComponent, AppPageHeaderComponent],
   templateUrl: './trade-list.component.html',
 })
 export class TradeListComponent implements OnInit {
@@ -33,7 +34,7 @@ export class TradeListComponent implements OnInit {
   startDate = signal<Date | null>(null);
   endDate = signal<Date | null>(null);
   page = signal(1);
-  pageSize = signal(25);
+  pageSize = signal(DEFAULT_PAGE_SIZE);
   sortField = signal('entry_at');
   sortOrder = signal('desc');
 
@@ -50,7 +51,7 @@ export class TradeListComponent implements OnInit {
     { label: 'Error', value: 'ERROR' },
   ];
 
-  fetchPageFn = computed<ServerFetchFn<TradeListItem>>(() => {
+  fetchPageFn = computed<AppFetchFn<TradeListItem>>(() => {
     const search = this.search();
     const status = this.status();
     const strategyId = this.selectedStrategyId();

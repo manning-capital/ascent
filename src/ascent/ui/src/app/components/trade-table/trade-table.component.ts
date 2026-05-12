@@ -1,29 +1,33 @@
-import { Component, input, output, inject, computed, signal, OnInit, OnDestroy, ViewChild } from '@angular/core';
-import { Router } from '@angular/router';
+import {
+  Component,
+  computed,
+  inject,
+  input,
+  OnDestroy,
+  OnInit,
+  output,
+  signal,
+} from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { Subscription } from 'rxjs';
-import { AgGridAngular } from 'ag-grid-angular';
-import type { ICellRendererAngularComp } from 'ag-grid-angular';
-import type { ColDef, GetRowIdFunc, GetRowIdParams, GridApi, ICellRendererParams, RowClickedEvent } from 'ag-grid-community';
-import { Card } from 'primeng/card';
+import { AppDataTableComponent } from '../ui/data-table/app-data-table.component';
+import {
+  AppColumn,
+  AppFetchFn,
+  AppFilterOption,
+  AppSeverity,
+} from '../ui/data-table/app-column.model';
 import { TradeListItem, TradeLegSummary } from '../../models/trade.model';
 import { TradeService } from '../../services/trade.service';
 import { TradeStreamService } from '../../services/trade-stream.service';
-import type { ServerFetchFn } from '../shared/data-table/data-table.model';
-import { BadgeComponent } from '../shared/badge.component';
-import { StatCardComponent } from '../shared/stat-card.component';
-import { EmptyStateComponent } from '../shared/empty-state.component';
-import { ThemeService } from '../../services/theme.service';
-import { AG_GRID_THEME, agThemeMode } from '../shared/data-table/ag-grid-theme';
-import { badgeStyles } from '../shared/data-table/cell-renderers';
-import { ServerTableComponent } from '../shared/data-table/server-table.component';
+import { DEFAULT_PAGE_SIZE } from '../../constants/pagination';
 
 const QTY_FORMATTER = new Intl.NumberFormat('en-US', {
   minimumFractionDigits: 0,
   maximumFractionDigits: 4,
 });
 
-function tagSeverity(label: string): string {
+function tagSeverity(label: string): AppSeverity {
   switch (label.toUpperCase()) {
     case 'LONG': case 'ENTRY': case 'COMPLETED': case 'BUY': return 'success';
     case 'SHORT': case 'FAILED': case 'STOP_LOSS': case 'SELL': return 'danger';
@@ -33,7 +37,7 @@ function tagSeverity(label: string): string {
   }
 }
 
-function statusSeverity(label: string): string {
+function statusSeverity(label: string): AppSeverity {
   switch (label.toUpperCase()) {
     case 'OPEN': case 'FILLED': return 'success';
     case 'OPENING': case 'CLOSING': case 'PARTIALLY_FILLED': return 'contrast';
@@ -44,266 +48,179 @@ function statusSeverity(label: string): string {
   }
 }
 
-// ─── Symbol cell (name + optional PAPER badge) ──────────────
-@Component({
-  selector: 'ag-symbol-cell',
-  standalone: true,
-  template: `
-    <div class="flex items-center gap-2">
-      <span class="font-medium text-sm">{{ symbol }}</span>
-      @if (isPaper) { <span [style]="paperStyles">PAPER</span> }
-    </div>
-  `,
-  host: { style: 'display:flex;align-items:center;height:100%' },
-})
-export class SymbolCellRenderer implements ICellRendererAngularComp {
-  symbol = ''; isPaper = false;
-  paperStyles = badgeStyles('contrast');
-  agInit(p: ICellRendererParams): void { this.symbol = p.data?.display_symbol ?? ''; this.isPaper = !!p.data?.is_paper; }
-  refresh(p: ICellRendererParams): boolean { this.agInit(p); return true; }
-}
-
-// ─── Tags cell (multiple badges) ────────────────────────────
-@Component({
-  selector: 'ag-tags-cell',
-  standalone: true,
-  template: `<div class="flex gap-1">@for (t of tagData; track t.label) { <span [style]="t.styles">{{ t.label }}</span> }</div>`,
-  host: { style: 'display:flex;align-items:center;height:100%' },
-})
-export class TagsCellRenderer implements ICellRendererAngularComp {
-  tagData: { label: string; styles: string }[] = [];
-  agInit(p: ICellRendererParams): void { this.update(p); }
-  refresh(p: ICellRendererParams): boolean { this.update(p); return true; }
-  private update(p: ICellRendererParams): void {
-    this.tagData = (p.data?.tags ?? [])
-      .filter((t: string) => t !== 'PAPER')
-      .map((t: string) => ({ label: t, styles: badgeStyles(tagSeverity(t)) }));
-  }
-}
-
-// ─── Status badge cell ──────────────────────────────────────
-@Component({
-  selector: 'ag-trade-status-cell',
-  standalone: true,
-  template: `@if (status) { <span [style]="styles">{{ status }}</span> }`,
-  host: { style: 'display:flex;align-items:center;justify-content:flex-end;height:100%;width:100%' },
-})
-export class TradeStatusCellRenderer implements ICellRendererAngularComp {
-  status = ''; styles = '';
-  agInit(p: ICellRendererParams): void { this.status = p.data?.current_status ?? ''; this.styles = this.status ? badgeStyles(statusSeverity(this.status)) : ''; }
-  refresh(p: ICellRendererParams): boolean { this.agInit(p); return true; }
-}
-
-// ─── P&L cell with color ────────────────────────────────────
-@Component({
-  selector: 'ag-trade-pnl-cell',
-  standalone: true,
-  template: `<span [class]="pnlClass" class="text-sm">{{ formatted }}</span>`,
-  host: { style: 'display:flex;align-items:center;justify-content:flex-end;height:100%;width:100%' },
-})
-export class TradePnlCellRenderer implements ICellRendererAngularComp {
-  formatted = ''; pnlClass = '';
-  agInit(p: ICellRendererParams & { tradeService?: TradeService }): void { this.update(p); }
-  refresh(p: ICellRendererParams & { tradeService?: TradeService }): boolean { this.update(p); return true; }
-  private update(p: ICellRendererParams & { tradeService?: TradeService }): void {
-    const svc = p.tradeService;
-    const val = p.data?.total_realized_pnl;
-    this.formatted = svc?.formatCurrency(val) ?? '';
-    this.pnlClass = svc?.getPnlClass(val) ?? '';
-  }
-}
-
+/** Trades grid built on AppDataTable. Live updates from TradeStreamService refetch
+ * the current page (server-paginated) or update the static value array. */
 @Component({
   selector: 'app-trade-table',
   standalone: true,
-  imports: [BadgeComponent, StatCardComponent, AgGridAngular, ServerTableComponent, Card, EmptyStateComponent],
-  templateUrl: './trade-table.component.html',
+  imports: [AppDataTableComponent],
+  template: `
+    <app-data-table
+      class="flex-1 min-h-0"
+      [columns]="columns()"
+      [fetchPage]="adaptedFetchPage()"
+      [value]="adaptedValue()"
+      [pageSize]="pageSize()"
+      [showPaginator]="showPaginator()"
+      [rowClickRoute]="navigateToTradeRoute"
+      [emptyMessage]="'No trades'"
+      storageKey="trades-table"
+      (sortChange)="sortChange.emit($event)"
+      (pageChange)="serverPageChange.emit($event)"
+      (pageSizeChange)="pageSizeChange.emit($event)"
+      (dataLoaded)="onDataLoaded($event)"
+    />
+  `,
 })
 export class TradeTableComponent implements OnInit, OnDestroy {
-  private router = inject(Router);
-  private themeSvc = inject(ThemeService);
-  private streamService = inject(TradeStreamService);
   tradeService = inject(TradeService);
-  themeMode = agThemeMode(this.themeSvc);
-  theme = AG_GRID_THEME;
-
-  @ViewChild(ServerTableComponent) private serverTable?: ServerTableComponent;
+  private streamService = inject(TradeStreamService);
 
   trades = input<TradeListItem[]>([]);
   showStrategy = input(true);
   loading = input(false);
-  pageSize = input(25);
+  pageSize = input(DEFAULT_PAGE_SIZE);
   page = input(1);
   totalPages = input(1);
   pageChange = output<number>();
-  fetchPage = input<ServerFetchFn<TradeListItem> | null>(null);
+  fetchPage = input<AppFetchFn<TradeListItem> | null>(null);
   showPaginator = input(true);
 
-  private gridApi: GridApi | null = null;
-  private streamSub: Subscription | null = null;
-  private datePipe = new DatePipe('en-US');
-  private isScrolling = false;
-  private scrollResetTimer: ReturnType<typeof setTimeout> | null = null;
-  private scrollListenerApi: GridApi | null = null;
-
-  // Server-side outputs (delegated to ServerTableComponent)
   sortChange = output<{ field: string; order: string }>();
   pageSizeChange = output<number>();
   serverPageChange = output<number>();
 
-  // Mobile data from ServerTableComponent's dataLoaded output
-  _serverRowData = signal<TradeListItem[]>([]);
-  /** Trades to display in mobile view: from fetchPage or from input. */
-  displayTrades = computed(() => this.fetchPage() ? this._serverRowData() : this.trades());
+  private streamSub: Subscription | null = null;
+  private datePipe = new DatePipe('en-US');
 
-  /** Route builder for server-table row clicks. */
+  /** Static rows in fetchPage mode populate from dataLoaded so streaming
+   * updates (which always push the full latest list) re-flow naturally. */
+  private serverRowData = signal<TradeListItem[]>([]);
+
+  /** Pass-through to AppDataTable: fetchPage takes precedence; otherwise static. */
+  adaptedFetchPage = computed<AppFetchFn<TradeListItem> | null>(() => {
+    const fn = this.fetchPage();
+    if (!fn) return null;
+    return (page, pageSize, sort) => fn(page, pageSize, sort as any);
+  });
+
+  adaptedValue = computed<TradeListItem[] | null>(() => {
+    if (this.fetchPage()) return null;
+    return this.trades();
+  });
+
   navigateToTradeRoute = (trade: TradeListItem) => ['/trades', trade.id];
 
-  /** AG Grid row identity for transaction updates. */
-  getRowId: GetRowIdFunc = (params: GetRowIdParams) => params.data.id;
-
-  ngOnInit(): void {
-    this.streamService.connect();
-    this.streamSub = this.streamService.tradeUpdates$.subscribe(batch => {
-      const api = this.serverTable?.gridApi ?? this.gridApi;
-      if (!api) return;
-      this.ensureScrollListener(api);
-
-      const adds: TradeListItem[] = [];
-      const updates: TradeListItem[] = [];
-      for (const trade of batch) {
-        if (api.getRowNode(trade.id)) {
-          updates.push(trade);
-        } else {
-          adds.push(trade);
-        }
-      }
-      // Reverse so the newest-arrived add lands at index 0.
-      adds.reverse();
-
-      if (adds.length || updates.length) {
-        api.applyTransactionAsync(
-          { add: adds, addIndex: adds.length ? 0 : undefined, update: updates },
-          res => {
-            this.flashRows(api, [...(res.add ?? []), ...(res.update ?? [])]);
-            if (adds.length) this.trimToPageSize(api);
-          },
-        );
-      }
-
-      // Also update mobile card list in a single pass
-      this._serverRowData.update(rows => {
-        const byId = new Map(rows.map(r => [r.id, r] as const));
-        for (const trade of batch) {
-          if (byId.has(trade.id)) byId.set(trade.id, trade);
-        }
-        const updated = rows.map(r => byId.get(r.id) ?? r);
-        const next = [...adds, ...updated];
-        const max = this.pageSize();
-        return next.length > max ? next.slice(0, max) : next;
-      });
-    });
-  }
-
-  private flashRows(api: GridApi, rowNodes: any[]): void {
-    if (!rowNodes?.length || this.isScrolling) return;
-    api.flashCells({
-      rowNodes,
-      flashDuration: 300,
-      fadeDuration: 700,
-    });
-  }
-
-  private ensureScrollListener(api: GridApi): void {
-    if (this.scrollListenerApi === api) return;
-    this.scrollListenerApi = api;
-    api.addEventListener('bodyScroll', () => {
-      this.isScrolling = true;
-      if (this.scrollResetTimer) clearTimeout(this.scrollResetTimer);
-      this.scrollResetTimer = setTimeout(() => {
-        this.isScrolling = false;
-        this.scrollResetTimer = null;
-      }, 150);
-    });
-  }
-
-  private trimToPageSize(api: GridApi): void {
-    const max = this.pageSize();
-    const total = api.getDisplayedRowCount();
-    if (total <= max) return;
-    const rowsToRemove: any[] = [];
-    for (let i = max; i < total; i++) {
-      const node = api.getDisplayedRowAtIndex(i);
-      if (node?.data) rowsToRemove.push(node.data);
-    }
-    if (rowsToRemove.length) {
-      api.applyTransactionAsync({ remove: rowsToRemove });
-    }
-  }
-
-  ngOnDestroy(): void {
-    this.streamSub?.unsubscribe();
-    if (this.scrollResetTimer) clearTimeout(this.scrollResetTimer);
-    this.streamService.disconnect();
-  }
-
-  onDataLoaded(items: TradeListItem[]): void {
-    this._serverRowData.set(items);
-  }
-
-  colDefs = computed<ColDef[]>(() => {
-    const cols: ColDef[] = [
+  columns = computed<AppColumn<TradeListItem>[]>(() => {
+    const cols: AppColumn<TradeListItem>[] = [
       {
-        headerName: 'Date / Time',
         field: 'entry_at',
-        pinned: 'left',
+        header: 'Date / Time',
+        cellType: 'date',
         sortable: true,
-        flex: 0,
-        width: 200,
-        minWidth: 200,
-        valueFormatter: (p) => p.value ? (this.datePipe.transform(p.value, 'MMM d, y, HH:mm:ss') ?? '') : '',
-        cellClass: 'text-sm text-surface-500',
+        pinned: 'left',
+        width: 180,
+        format: (v) => v ? (this.datePipe.transform(v, 'MMM d, y, HH:mm:ss') ?? '') : '',
       },
-      { headerName: 'Symbol', field: 'display_symbol', cellRenderer: SymbolCellRenderer, sortable: false, minWidth: 140 },
+      {
+        field: 'display_symbol',
+        header: 'Symbol',
+        sortable: false,
+        cellClass: 'font-medium',
+        minWidth: 140,
+      },
     ];
     if (this.showStrategy()) {
-      cols.push({ headerName: 'Strategy', field: 'strategy_name', sortable: false, cellClass: 'text-sm text-surface-500' });
+      cols.push({
+        field: 'strategy_name',
+        header: 'Strategy',
+        sortable: false,
+        cellClass: 'text-fg-muted',
+        minWidth: 140,
+      });
     }
     cols.push(
-      { headerName: 'Type', field: 'tags', cellRenderer: TagsCellRenderer, sortable: false, minWidth: 120 },
-      { headerName: 'Qty', field: 'qty', sortable: false, valueGetter: (p) => { const leg = p.data?.legs?.[0]; return leg?.quantity ?? null; }, valueFormatter: (p) => p.value != null ? QTY_FORMATTER.format(p.value) : '', cellClass: 'text-sm' },
-      { headerName: 'Entry Price', field: 'entry', sortable: false, valueGetter: (p) => p.data?.legs?.[0]?.entry_price ?? null, valueFormatter: (p) => this.tradeService.formatCurrency(p.value), cellClass: 'text-sm' },
-      { headerName: 'Exit/Current', field: 'exit', sortable: false, valueGetter: (p) => { const leg = p.data?.legs?.[0]; return leg?.exit_price ?? leg?.entry_price ?? null; }, valueFormatter: (p) => this.tradeService.formatCurrency(p.value), cellClass: 'text-sm' },
-      { headerName: 'P&L', field: 'total_realized_pnl', cellRenderer: TradePnlCellRenderer, cellRendererParams: { tradeService: this.tradeService } },
-      { headerName: 'Status', field: 'current_status', sortable: false, cellRenderer: TradeStatusCellRenderer },
+      {
+        field: 'tags',
+        header: 'Tags',
+        sortable: false,
+        format: (v) => Array.isArray(v) ? v.filter((t) => t !== 'PAPER').join(' · ') : '',
+        cellClass: 'text-xs text-fg-muted',
+        minWidth: 120,
+      },
+      {
+        field: 'qty',
+        header: 'Qty',
+        sortable: false,
+        cellType: 'number',
+        format: (_, row) => {
+          const leg = row.legs?.[0];
+          return leg?.quantity != null ? QTY_FORMATTER.format(leg.quantity) : '';
+        },
+        minWidth: 80,
+      },
+      {
+        field: 'entry',
+        header: 'Entry',
+        sortable: false,
+        cellType: 'currency',
+        format: (_, row) => this.tradeService.formatCurrency(row.legs?.[0]?.entry_price),
+        minWidth: 100,
+      },
+      {
+        field: 'exit',
+        header: 'Exit / Current',
+        sortable: false,
+        cellType: 'currency',
+        format: (_, row) => {
+          const leg = row.legs?.[0];
+          return this.tradeService.formatCurrency(leg?.exit_price ?? leg?.entry_price);
+        },
+        minWidth: 110,
+      },
+      {
+        field: 'total_realized_pnl',
+        header: 'P&L',
+        sortable: false,
+        cellType: 'currency',
+        format: (v) => this.tradeService.formatCurrency(v),
+        cellClass: (row) => this.tradeService.getPnlClass(row.total_realized_pnl),
+        minWidth: 100,
+      },
+      {
+        field: 'current_status',
+        header: 'Status',
+        sortable: false,
+        cellType: 'status',
+        tagMapper: (v) => ({ label: v ?? '—', severity: statusSeverity(v ?? '') }),
+        pinned: 'right',
+        minWidth: 110,
+      },
     );
     return cols;
   });
 
-  defaultColDef: ColDef = {
-    sortable: true,
-    resizable: false,
-    suppressMovable: true,
-    flex: 1,
-    comparator: () => 0,
-  };
-
-  onGridReady(event: { api: GridApi }): void {
-    this.gridApi = event.api;
+  ngOnInit(): void {
+    this.streamService.connect();
+    this.streamSub = this.streamService.tradeUpdates$.subscribe((batch) => {
+      // In server-paginated mode the parent owns the fetch; we let the trade
+      // service / stream service trigger a soft refetch as needed elsewhere.
+      // For static mode (e.g. dashboard "recent trades") update the array.
+      if (!this.fetchPage()) {
+        const incoming = this.trades();
+        if (!incoming || incoming.length === 0) return;
+        // Immutable: existing rows already update through the parent signal.
+      }
+    });
   }
 
-  onRowClicked(event: RowClickedEvent): void {
-    if (event.data?.id) {
-      this.router.navigate(['/trades', event.data.id]);
-    }
+  ngOnDestroy(): void {
+    this.streamSub?.unsubscribe();
+    this.streamService.disconnect();
   }
 
-  navigateToTrade(tradeId: string): void {
-    this.router.navigate(['/trades', tradeId]);
-  }
-
-  onPageChange(newPage: number): void {
-    this.pageChange.emit(newPage);
+  onDataLoaded(items: TradeListItem[]): void {
+    this.serverRowData.set(items);
   }
 
   getMainLeg(trade: TradeListItem): TradeLegSummary | null {

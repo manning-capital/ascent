@@ -5,10 +5,20 @@ import uuid
 from typing import Literal
 
 import pandas as pd
-from sqlalchemy import bindparam, func, select, text
+from sqlalchemy import bindparam, func, or_, select, text
 from sqlalchemy.orm import Session, joinedload
 
-from ascent.database.models.feeds import Feed, FeedDependency, FeedRun, StrategyFeed
+from ascent.database.models.composites import Composite
+from ascent.database.models.feeds import (
+    Feed,
+    FeedCompositeScope,
+    FeedDependency,
+    FeedInstrumentScope,
+    FeedRun,
+    StrategyFeed,
+)
+from ascent.database.models.instruments import Instrument
+from ascent.database.models.strategy import Strategy, StrategyRun
 from ascent.database.models.strategy_run_feeds import StrategyRunFeedRun
 from ascent.database.models.trades import Trade
 from ascent.database.models.types import CompositeType, InstrumentType, TradeStatusType
@@ -18,17 +28,23 @@ from ascent.feeds.snapshot import snapshot_timestamp_for
 from ascent.server.exceptions import BadRequestError, NotFoundError
 from ascent.server.schemas.common import PaginatedResponse
 from ascent.server.schemas.feeds import (
+    DownstreamStrategyRunItem,
     FeedCreate,
     FeedDependencyCreate,
     FeedDependencySchema,
     FeedDetail,
     FeedListItem,
     FeedPublishResponse,
+    FeedRunDetail,
+    FeedRunLineageResponse,
     FeedRunListItem,
     FeedRunTradeItem,
+    FeedRunUniverseCompositeItem,
+    FeedRunUniverseInstrumentItem,
     FeedUpdate,
     StrategyFeedItem,
     TradeFeedRunItem,
+    UpstreamFeedRunItem,
 )
 
 
@@ -79,6 +95,7 @@ def _build_feed_list_item(
     total_runs: int,
     last_run: FeedRun | None,
     connection_status: str = "disconnected",
+    recent_run_statuses: list[str] | None = None,
 ) -> FeedListItem:
     """Build a FeedListItem from a Feed ORM object with scope translation."""
     scope_type, scope_type_id, scope_type_name = _resolve_scope(feed)
@@ -101,6 +118,7 @@ def _build_feed_list_item(
         total_runs=total_runs,
         last_run_at=last_run.started_at if last_run else None,
         last_run_status=last_run.status if last_run else None,
+        recent_run_statuses=recent_run_statuses or [],
     )
 
 
@@ -177,8 +195,24 @@ def get_feeds(
             .first()
         )
 
+        # Last N run statuses, ordered oldest -> newest for left-to-right
+        # rendering of run history ticks in the UI.
+        recent_statuses_desc = (
+            db.execute(
+                select(FeedRun.status)
+                .where(FeedRun.feed_id == f.id)
+                .order_by(FeedRun.started_at.desc())
+                .limit(20)
+            )
+            .scalars()
+            .all()
+        )
+        recent_statuses = list(reversed(recent_statuses_desc))
+
         conn_status = "connected" if heartbeat_map.get(f.id, False) else "disconnected"
-        items.append(_build_feed_list_item(f, total_runs, last_run, conn_status))
+        items.append(
+            _build_feed_list_item(f, total_runs, last_run, conn_status, recent_statuses)
+        )
     return items, total
 
 
@@ -342,7 +376,7 @@ def get_feed_runs(
     return items, total
 
 
-def get_feed_run(db: Session, feed_id: uuid.UUID, run_id: uuid.UUID) -> FeedRunListItem:
+def get_feed_run(db: Session, feed_id: uuid.UUID, run_id: uuid.UUID) -> FeedRunDetail:
     run = (
         db.execute(select(FeedRun).where(FeedRun.id == run_id, FeedRun.feed_id == feed_id))
         .scalars()
@@ -350,7 +384,7 @@ def get_feed_run(db: Session, feed_id: uuid.UUID, run_id: uuid.UUID) -> FeedRunL
     )
     if not run:
         raise NotFoundError("Feed run not found")
-    return FeedRunListItem.model_validate(run)
+    return FeedRunDetail.model_validate(run)
 
 
 def get_feed_strategy_feeds(db: Session, feed_id: uuid.UUID) -> list[StrategyFeedItem]:
@@ -771,10 +805,7 @@ def get_run_data(
     offset = (page - 1) * page_size
 
     count_result = db.execute(
-        text(
-            f"SELECT COUNT(*) FROM {output_table} t "
-            "WHERE t.timestamp = :snapshot_timestamp"
-        ),
+        text(f"SELECT COUNT(*) FROM {output_table} t WHERE t.timestamp = :snapshot_timestamp"),
         ts_params,
     )
     total = count_result.scalar() or 0
@@ -819,9 +850,7 @@ def get_run_data(
     )
 
 
-def get_run_trades(
-    db: Session, feed_id: uuid.UUID, run_id: uuid.UUID
-) -> list[FeedRunTradeItem]:
+def get_run_trades(db: Session, feed_id: uuid.UUID, run_id: uuid.UUID) -> list[FeedRunTradeItem]:
     """Return every trade created by a strategy run that consumed this feed run.
 
     Join chain: ``feed_run → strategy_run_feed_run → strategy_run → trade``.
@@ -909,3 +938,209 @@ def create_feed_dependency(
     db.add(obj)
     db.commit()
     return obj
+
+
+def _resolve_run_for_universe(db: Session, feed_id: uuid.UUID, run_id: uuid.UUID) -> FeedRun:
+    run = db.get(FeedRun, run_id)
+    if run is None:
+        raise NotFoundError("Feed run not found")
+    if run.feed_id != feed_id:
+        raise BadRequestError(f"Run {run_id} does not belong to feed {feed_id}")
+    return run
+
+
+def _paginate(items: list, page: int, page_size: int) -> tuple[list, int, int]:
+    total = len(items)
+    total_pages = (total + page_size - 1) // page_size if page_size > 0 else 1
+    offset = (page - 1) * page_size
+    return items[offset : offset + page_size], total, total_pages
+
+
+def get_run_universe_instruments(
+    db: Session,
+    feed_id: uuid.UUID,
+    run_id: uuid.UUID,
+    page: int = 1,
+    page_size: int = 50,
+) -> PaginatedResponse[FeedRunUniverseInstrumentItem]:
+    """Return instruments in the feed's universe at this run's snapshot_timestamp.
+
+    Bitemporal as-of read against ``feed_instrument_scope``: include rows where
+    ``added_at <= snapshot_ts AND (dropped_at IS NULL OR dropped_at > snapshot_ts)``.
+    """
+    run = _resolve_run_for_universe(db, feed_id, run_id)
+    snapshot_ts = run.snapshot_timestamp
+
+    stmt = (
+        select(Instrument, FeedInstrumentScope.added_at, InstrumentType)
+        .join(FeedInstrumentScope, FeedInstrumentScope.instrument_id == Instrument.id)
+        .outerjoin(InstrumentType, InstrumentType.id == Instrument.instrument_type_id)
+        .where(FeedInstrumentScope.feed_id == feed_id)
+        .where(FeedInstrumentScope.added_at <= snapshot_ts)
+        .where(
+            or_(
+                FeedInstrumentScope.dropped_at.is_(None),
+                FeedInstrumentScope.dropped_at > snapshot_ts,
+            )
+        )
+        .order_by(Instrument.display_name)
+    )
+    items: list[FeedRunUniverseInstrumentItem] = []
+    for instrument, added_at, instrument_type in db.execute(stmt).all():
+        items.append(
+            FeedRunUniverseInstrumentItem(
+                instrument_id=instrument.id,
+                name=instrument.name,
+                display_name=instrument.display_name,
+                instrument_type_id=instrument.instrument_type_id,
+                instrument_type_name=instrument_type.display_name if instrument_type else None,
+                added_at=added_at,
+            )
+        )
+    page_items, total, total_pages = _paginate(items, page, page_size)
+    return PaginatedResponse(
+        items=page_items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+    )
+
+
+def get_run_universe_composites(
+    db: Session,
+    feed_id: uuid.UUID,
+    run_id: uuid.UUID,
+    page: int = 1,
+    page_size: int = 50,
+) -> PaginatedResponse[FeedRunUniverseCompositeItem]:
+    """Return composites in the feed's universe at this run's snapshot_timestamp."""
+    run = _resolve_run_for_universe(db, feed_id, run_id)
+    snapshot_ts = run.snapshot_timestamp
+
+    stmt = (
+        select(Composite, FeedCompositeScope.added_at, CompositeType)
+        .join(FeedCompositeScope, FeedCompositeScope.composite_id == Composite.id)
+        .outerjoin(CompositeType, CompositeType.id == Composite.composite_type_id)
+        .where(FeedCompositeScope.feed_id == feed_id)
+        .where(FeedCompositeScope.added_at <= snapshot_ts)
+        .where(
+            or_(
+                FeedCompositeScope.dropped_at.is_(None),
+                FeedCompositeScope.dropped_at > snapshot_ts,
+            )
+        )
+        .order_by(Composite.display_name)
+    )
+    items: list[FeedRunUniverseCompositeItem] = []
+    for composite, added_at, composite_type in db.execute(stmt).all():
+        items.append(
+            FeedRunUniverseCompositeItem(
+                composite_id=composite.id,
+                name=composite.name,
+                display_name=composite.display_name,
+                composite_type_id=composite.composite_type_id,
+                composite_type_name=composite_type.display_name if composite_type else None,
+                added_at=added_at,
+            )
+        )
+    page_items, total, total_pages = _paginate(items, page, page_size)
+    return PaginatedResponse(
+        items=page_items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+    )
+
+
+def get_run_lineage(db: Session, feed_id: uuid.UUID, run_id: uuid.UUID) -> FeedRunLineageResponse:
+    """Return upstream feed runs and downstream consumers for a feed run.
+
+    - Upstream: for each ``FeedDependency`` of this feed, the most recent
+      ``FeedRun`` of the dependency feed with ``snapshot_timestamp`` no later
+      than this run's snapshot.
+    - Downstream strategy runs: every ``StrategyRunFeedRun`` row pointing at
+      this feed run, joined to the strategy run + strategy.
+    - Downstream trades: every trade created by one of those strategy runs
+      (delegates to ``get_run_trades``).
+    """
+    run = _resolve_run_for_universe(db, feed_id, run_id)
+    snapshot_ts = run.snapshot_timestamp
+
+    upstream_runs = _collect_upstream_runs(db, feed_id, snapshot_ts)
+    downstream_strategy_runs = _collect_downstream_strategy_runs(db, run_id)
+    downstream_trades = get_run_trades(db, feed_id, run_id)
+
+    return FeedRunLineageResponse(
+        upstream_runs=upstream_runs,
+        downstream_strategy_runs=downstream_strategy_runs,
+        downstream_trades=downstream_trades,
+    )
+
+
+def _collect_upstream_runs(
+    db: Session, feed_id: uuid.UUID, snapshot_ts: datetime.datetime
+) -> list[UpstreamFeedRunItem]:
+    dependency_ids = (
+        db.execute(
+            select(FeedDependency.depends_on_feed_id).where(FeedDependency.feed_id == feed_id)
+        )
+        .scalars()
+        .all()
+    )
+    if not dependency_ids:
+        return []
+
+    items: list[UpstreamFeedRunItem] = []
+    for dep_feed_id in dependency_ids:
+        latest_stmt = (
+            select(FeedRun, Feed)
+            .join(Feed, Feed.id == FeedRun.feed_id)
+            .where(FeedRun.feed_id == dep_feed_id)
+            .where(FeedRun.snapshot_timestamp <= snapshot_ts)
+            .order_by(FeedRun.snapshot_timestamp.desc())
+            .limit(1)
+        )
+        row = db.execute(latest_stmt).first()
+        if row is None:
+            continue
+        upstream_run, upstream_feed = row
+        items.append(
+            UpstreamFeedRunItem(
+                feed_run_id=upstream_run.id,
+                feed_id=upstream_feed.id,
+                feed_name=upstream_feed.name,
+                feed_display_name=upstream_feed.display_name,
+                snapshot_timestamp=upstream_run.snapshot_timestamp,
+                status=upstream_run.status,
+            )
+        )
+    return items
+
+
+def _collect_downstream_strategy_runs(
+    db: Session, feed_run_id: uuid.UUID
+) -> list[DownstreamStrategyRunItem]:
+    stmt = (
+        select(StrategyRun, Strategy, StrategyRunFeedRun.is_trigger)
+        .join(StrategyRunFeedRun, StrategyRunFeedRun.strategy_run_id == StrategyRun.id)
+        .join(Strategy, Strategy.id == StrategyRun.strategy_id)
+        .where(StrategyRunFeedRun.feed_run_id == feed_run_id)
+        .order_by(StrategyRun.started_at.desc())
+    )
+    items: list[DownstreamStrategyRunItem] = []
+    for strategy_run, strategy, is_trigger in db.execute(stmt).all():
+        items.append(
+            DownstreamStrategyRunItem(
+                strategy_run_id=strategy_run.id,
+                strategy_id=strategy.id,
+                strategy_name=strategy.name,
+                strategy_display_name=strategy.display_name,
+                started_at=strategy_run.started_at,
+                completed_at=strategy_run.completed_at,
+                status=strategy_run.status,
+                is_trigger=bool(is_trigger),
+            )
+        )
+    return items

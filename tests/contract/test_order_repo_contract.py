@@ -28,7 +28,6 @@ def _spec(
         quantity=quantity,
         price=100.0,
         exchange_id=exchange_id or uuid.uuid4(),
-        portfolio_id=uuid.uuid4(),
         instrument_id=uuid.uuid4(),
         trade_leg_id=trade_leg_id,
     )

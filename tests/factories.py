@@ -215,18 +215,6 @@ def make_composite_member(
     return defaults
 
 
-def make_portfolio(**overrides) -> dict:
-    n = _next_id()
-    defaults = {
-        "name": f"PORTFOLIO_{n}",
-        "display_name": f"Portfolio {n}",
-        "description": f"Test portfolio {n}",
-        "is_active": True,
-    }
-    defaults.update(overrides)
-    return defaults
-
-
 def make_feed(
     provider_id: uuid.UUID,
     instrument_type_id: uuid.UUID | None = None,
@@ -251,12 +239,12 @@ def make_feed(
 
 
 def make_strategy(
-    portfolio_id: uuid.UUID,
+    base_asset_id: uuid.UUID | None = None,
     **overrides,
 ) -> dict:
     n = _next_id()
     defaults = {
-        "portfolio_id": portfolio_id,
+        "base_asset_id": base_asset_id,
         "name": f"STRATEGY_{n}",
         "display_name": f"Strategy {n}",
         "description": f"Test strategy {n}",
@@ -269,12 +257,10 @@ def make_strategy(
 
 def make_trade(
     strategy_id: uuid.UUID,
-    portfolio_id: uuid.UUID,
     **overrides,
 ) -> dict:
     defaults = {
         "strategy_id": strategy_id,
-        "portfolio_id": portfolio_id,
         "is_paper": False,
     }
     defaults.update(overrides)

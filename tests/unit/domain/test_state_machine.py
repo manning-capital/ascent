@@ -13,11 +13,11 @@ from datetime import UTC, datetime
 import pytest
 
 from ascent.domain import (
-    Direction,
     FillEvent,
     Order,
     OrderSide,
     OrderState,
+    PositionType,
     Trade,
     TradeLeg,
     TradeState,
@@ -44,7 +44,7 @@ def _order(state: OrderState = OrderState.SUBMITTED, **overrides) -> Order:
 def _leg(
     entry: Order | None = None,
     exit: Order | None = None,
-    direction: Direction = Direction.LONG,
+    direction: PositionType = PositionType.LONG,
     entry_price: float | None = None,
     quantity: float = 1.0,
 ) -> TradeLeg:
@@ -63,7 +63,6 @@ def _trade(state: TradeState, legs: list[TradeLeg]) -> Trade:
     return Trade(
         id=uuid.uuid4(),
         strategy_id=uuid.uuid4(),
-        portfolio_id=uuid.uuid4(),
         state=state,
         is_paper=True,
         legs=tuple(legs),
@@ -149,7 +148,7 @@ class TestOpeningFills:
 
     def test_filled_entry_records_entry_price(self):
         e1 = _order()
-        trade = _trade(TradeState.OPENING, [_leg(entry=e1, direction=Direction.LONG)])
+        trade = _trade(TradeState.OPENING, [_leg(entry=e1, direction=PositionType.LONG)])
         transition = apply_fill(
             trade,
             FillEvent(e1.id, OrderState.FILLED, 1.0, 105.5),
@@ -171,7 +170,7 @@ class TestClosingFills:
         leg = _leg(
             entry=_order(OrderState.FILLED),
             exit=exit_order,
-            direction=Direction.LONG,
+            direction=PositionType.LONG,
             entry_price=100.0,
             quantity=2.0,
         )
@@ -196,7 +195,7 @@ class TestClosingFills:
         leg = _leg(
             entry=_order(OrderState.FILLED),
             exit=exit_order,
-            direction=Direction.SHORT,
+            direction=PositionType.SHORT,
             entry_price=100.0,
             quantity=1.0,
         )
@@ -216,7 +215,7 @@ class TestClosingFills:
         leg = _leg(
             entry=_order(OrderState.FILLED),
             exit=xo,
-            direction=Direction.LONG,
+            direction=PositionType.LONG,
             entry_price=100.0,
         )
         trade = _trade(TradeState.CLOSING, [leg])
@@ -233,7 +232,7 @@ class TestClosingFills:
         leg = _leg(
             entry=_order(OrderState.FILLED),
             exit=xo,
-            direction=Direction.LONG,
+            direction=PositionType.LONG,
             entry_price=100.0,
         )
         trade = _trade(TradeState.CLOSING, [leg])

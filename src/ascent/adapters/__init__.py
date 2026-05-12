@@ -13,6 +13,8 @@ from ascent.adapters.redis_asyncio import (
     RedisStateStore,
 )
 from ascent.adapters.sqlalchemy.feed_run_repo import SqlAlchemyFeedRunRepository
+from ascent.adapters.sqlalchemy.holdings_repo import SqlAlchemyHoldingsRepository
+from ascent.adapters.sqlalchemy.instrument_repo import SqlAlchemyInstrumentRepository
 from ascent.adapters.sqlalchemy.mappers import OrmMappers
 from ascent.adapters.sqlalchemy.order_repo import SqlAlchemyOrderRepository
 from ascent.adapters.sqlalchemy.outbox import (
@@ -25,6 +27,7 @@ from ascent.adapters.sqlalchemy.run_tracker import SqlAlchemyRunTracker
 from ascent.adapters.sqlalchemy.strategy_run_repo import SqlAlchemyStrategyRunRepository
 from ascent.adapters.sqlalchemy.strategy_universe_repo import SqlAlchemyStrategyUniverseRepository
 from ascent.adapters.sqlalchemy.trade_repo import SqlAlchemyTradeRepository
+from ascent.adapters.sqlalchemy.transaction_repo import SqlAlchemyTransactionRepository
 from ascent.adapters.sqlalchemy.type_cache import TypeCache
 from ascent.adapters.sqlalchemy.unit_of_work import (
     SqlAlchemyUnitOfWork,
@@ -43,6 +46,8 @@ __all__ = [
     "RedisHeartbeat",
     "RedisStateStore",
     "SqlAlchemyFeedRunRepository",
+    "SqlAlchemyHoldingsRepository",
+    "SqlAlchemyInstrumentRepository",
     "SqlAlchemyOrderRepository",
     "SqlAlchemyOutboxPublisher",
     "SqlAlchemyOutboxReader",
@@ -51,6 +56,7 @@ __all__ = [
     "SqlAlchemyStrategyRunRepository",
     "SqlAlchemyStrategyUniverseRepository",
     "SqlAlchemyTradeRepository",
+    "SqlAlchemyTransactionRepository",
     "SqlAlchemyUnitOfWork",
     "SqlAlchemyUnitOfWorkFactory",
     "SystemClock",

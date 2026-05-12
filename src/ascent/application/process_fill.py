@@ -4,7 +4,10 @@ Given a ``FillEvent`` on one of a trade's orders, this:
 1. Persists the order-side changes (status, fill qty, price, external id).
 2. Asks :func:`ascent.domain.apply_fill` what the trade should transition to.
 3. Persists the leg and trade updates.
-4. Publishes a UI notification post-commit.
+4. Records a ``Transaction`` row and adjusts the strategy's
+   ``StrategyAssetHolding`` (the double-entry counterparts) when a fill
+   actually moves units.
+5. Publishes a UI notification post-commit.
 
 All DB mutations run inside one :class:`UnitOfWork` so a partial failure
 rolls back cleanly — we never leave an order row updated without the
@@ -17,9 +20,19 @@ import dataclasses
 import logging
 import uuid
 from datetime import datetime
+from decimal import Decimal
 
-from ascent.domain import FillEvent, OrderState, Trade, apply_fill
-from ascent.ports import EventBus, OrderRepository, TradeRepository, UnitOfWorkFactory
+from ascent.domain import FillEvent, OrderState, PositionType, Trade, apply_fill
+from ascent.ports import (
+    EventBus,
+    HoldingsRepository,
+    InstrumentRepository,
+    NewTransactionSpec,
+    OrderRepository,
+    TradeRepository,
+    TransactionRepository,
+    UnitOfWorkFactory,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +80,25 @@ def _find_ordered_quantity(trade: Trade, order_id: uuid.UUID) -> float | None:
     return None
 
 
+def _locate_leg_for_event(trade: Trade, order_id: uuid.UUID):
+    """Return ``(leg, is_entry)`` for the leg this order belongs to.
+
+    Returns ``(None, False)`` if the order is not on any leg.
+    """
+    for leg in trade.legs:
+        if leg.entry_order and leg.entry_order.id == order_id:
+            return leg, True
+        if leg.exit_order and leg.exit_order.id == order_id:
+            return leg, False
+    return None, False
+
+
+def _exchange_id_for_event(trade: Trade, order_id: uuid.UUID):
+    """Return the exchange_id of the leg the order belongs to."""
+    leg, _ = _locate_leg_for_event(trade, order_id)
+    return None if leg is None else leg.exchange_id
+
+
 class FillProcessor:
     def __init__(
         self,
@@ -75,11 +107,20 @@ class FillProcessor:
         order_repo: OrderRepository,
         event_bus: EventBus,
         uow_factory: UnitOfWorkFactory,
+        holdings_repo: HoldingsRepository | None = None,
+        transactions_repo: TransactionRepository | None = None,
+        instrument_repo: InstrumentRepository | None = None,
     ) -> None:
         self._trades = trade_repo
         self._orders = order_repo
         self._bus = event_bus
         self._uow_factory = uow_factory
+        # Holdings + transactions are optional — when any is missing the
+        # double-entry side is silently skipped. Production callers wire
+        # all three; lighter-weight tests can opt out.
+        self._holdings = holdings_repo
+        self._transactions = transactions_repo
+        self._instruments = instrument_repo
 
     async def process(
         self,
@@ -137,7 +178,97 @@ class FillProcessor:
                     total_realized_pnl=transition.total_realized_pnl,
                 )
 
+            await self._write_double_entry(uow.session, trade=trade, event=event, now=now)
+
         await self._bus.publish(UI_CHANNEL, {"event": "trade_updated", "trade_id": str(trade_id)})
+
+    async def _write_double_entry(
+        self, session, *, trade: Trade, event: FillEvent, now: datetime
+    ) -> None:
+        """Record a Transaction row + adjust StrategyAssetHolding for this fill.
+
+        Skipped when:
+        - any of holdings_repo / transactions_repo / instrument_repo is unwired
+          (lighter-weight tests run that way),
+        - the fill carried no actual quantity movement (status-only event),
+        - the leg can't be located on the trade,
+        - the instrument's asset metadata isn't available.
+        """
+        if self._holdings is None or self._transactions is None or self._instruments is None:
+            return
+        if not event.filled_quantity:
+            return
+
+        leg, is_entry = _locate_leg_for_event(trade, event.order_id)
+        if leg is None:
+            return
+
+        assets = await self._instruments.get_asset_ids(session, [leg.instrument_id])
+        info = assets.get(leg.instrument_id)
+        if info is None:
+            logger.warning(
+                "FillProcessor: no asset metadata for instrument %s; "
+                "skipping holdings/transaction write",
+                leg.instrument_id,
+            )
+            return
+
+        quantity = Decimal(str(event.filled_quantity))
+        # On an entry fill the strategy gains exposure (delta = +qty); on an
+        # exit fill it bleeds back out (delta = -qty). The sign is on
+        # quantity_delta, never on position_type — we always update the row
+        # the original leg booked into.
+        delta = quantity if is_entry else -quantity
+        position_type = leg.direction
+        # Side: BUY when entering LONG or exiting SHORT; SELL otherwise.
+        side = (
+            "BUY"
+            if (is_entry and position_type == PositionType.LONG)
+            or (not is_entry and position_type == PositionType.SHORT)
+            else "SELL"
+        )
+        # from_asset / to_asset ordering on Transaction follows the trade
+        # action: a BUY moves quote → base, a SELL moves base → quote.
+        if side == "BUY":
+            tx_from_asset, tx_to_asset = info.to_asset_id, info.from_asset_id
+        else:
+            tx_from_asset, tx_to_asset = info.from_asset_id, info.to_asset_id
+
+        await self._transactions.record(
+            session,
+            NewTransactionSpec(
+                timestamp=now,
+                transaction_type=side,
+                from_asset_id=tx_from_asset,
+                to_asset_id=tx_to_asset,
+                quantity=event.filled_quantity,
+                price=event.average_fill_price or 0.0,
+                strategy_id=trade.strategy_id,
+                trade_leg_id=leg.id,
+            ),
+        )
+
+        # The order/leg's exchange is the one the position settles on; we
+        # need it to key the holding row. Pull from the entry/exit Order
+        # since neither the leg domain type nor the FillEvent carries the
+        # exchange id directly.
+        exchange_id = _exchange_id_for_event(trade, event.order_id)
+        if exchange_id is None:
+            logger.warning(
+                "FillProcessor: cannot resolve exchange for order %s; skipping holdings update",
+                event.order_id,
+            )
+            return
+
+        await self._holdings.apply_delta(
+            session,
+            strategy_id=trade.strategy_id,
+            exchange_id=exchange_id,
+            asset_id=info.from_asset_id,
+            position_type=position_type,
+            quantity_delta=delta,
+            at=now,
+        )
 
     async def _apply_order_side_updates(self, session, *, event: FillEvent, now: datetime) -> None:
         await self._orders.record_status(

@@ -11,7 +11,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from ascent.domain import Direction, OrderState, OrderType, TradeState
+from ascent.domain import PositionType, OrderState, OrderType, TradeState
 from ascent.ports.trade_repo import NewLegSpec, NewOrderSpec
 
 NOW = datetime(2026, 4, 16, 12, 0, tzinfo=UTC)
@@ -26,14 +26,13 @@ async def test_set_entry_order_links_leg_to_order_on_reload(
         trade = await sql_trade_repo.create(
             uow.session,
             strategy_id=seeded_ids.strategy_id,
-            portfolio_id=seeded_ids.portfolio_id,
             is_paper=True,
             entry_at=NOW,
             strategy_run_id=None,
             legs=[
                 NewLegSpec(
                     instrument_id=seeded_ids.instrument_id_a,
-                    direction=Direction.LONG,
+                    direction=PositionType.LONG,
                     quantity=1.0,
                     expected_entry_price=None,
                     exchange_id=seeded_ids.exchange_id,
@@ -50,7 +49,6 @@ async def test_set_entry_order_links_leg_to_order_on_reload(
                 quantity=1.0,
                 price=100.0,
                 exchange_id=seeded_ids.exchange_id,
-                portfolio_id=seeded_ids.portfolio_id,
                 instrument_id=seeded_ids.instrument_id_a,
                 trade_leg_id=trade.legs[0].id,
             ),
@@ -70,14 +68,13 @@ async def test_set_state_persists_close_reason(sql_trade_repo, sql_uow_factory, 
         trade = await sql_trade_repo.create(
             uow.session,
             strategy_id=seeded_ids.strategy_id,
-            portfolio_id=seeded_ids.portfolio_id,
             is_paper=True,
             entry_at=NOW,
             strategy_run_id=None,
             legs=[
                 NewLegSpec(
                     instrument_id=seeded_ids.instrument_id_a,
-                    direction=Direction.LONG,
+                    direction=PositionType.LONG,
                     quantity=1.0,
                     expected_entry_price=None,
                     exchange_id=seeded_ids.exchange_id,
@@ -113,7 +110,6 @@ async def test_set_external_id_is_idempotent(sql_order_repo, sql_uow_factory, se
                 quantity=1.0,
                 price=100.0,
                 exchange_id=seeded_ids.exchange_id,
-                portfolio_id=seeded_ids.portfolio_id,
                 instrument_id=seeded_ids.instrument_id_a,
                 trade_leg_id=None,
             ),
@@ -138,7 +134,6 @@ async def test_record_status_latest_wins(sql_order_repo, sql_uow_factory, seeded
                 quantity=1.0,
                 price=100.0,
                 exchange_id=seeded_ids.exchange_id,
-                portfolio_id=seeded_ids.portfolio_id,
                 instrument_id=seeded_ids.instrument_id_a,
                 trade_leg_id=None,
             ),

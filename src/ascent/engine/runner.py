@@ -175,12 +175,16 @@ class Runner:
             order_repo=persistence.order_repo,
             event_bus=messaging.event_bus,
             uow_factory=persistence.uow_factory,
+            holdings_repo=persistence.holdings_repo,
+            transactions_repo=persistence.transaction_repo,
+            instrument_repo=persistence.instrument_repo,
         )
         reconciler = OrderReconciler(
             order_repo=persistence.order_repo,
             fill_processor=fill_processor,
             trade_repo=persistence.trade_repo,
             uow_factory=persistence.uow_factory,
+            event_bus=messaging.event_bus,
         )
         persister = FeedPersister(
             latest_store=messaging.feed_cache,

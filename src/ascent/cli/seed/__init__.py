@@ -24,8 +24,8 @@ def run(
         - ``full`` (default) — everything including feeds, strategies,
           exchanges, and trades.
         - ``base`` — types, assets, descriptors, metadata, providers,
-          portfolios, instruments, and composites only (no feeds,
-          strategies, exchanges, or trades).
+          instruments, and composites only (no feeds, strategies,
+          exchanges, or trades).
     """
     import datetime
     import os
@@ -48,7 +48,6 @@ def run(
     from ascent.cli.seed.feeds import seed_feeds
     from ascent.cli.seed.instruments import seed_instruments
     from ascent.cli.seed.metadata import seed_asset_metadata
-    from ascent.cli.seed.portfolios import seed_portfolios
     from ascent.cli.seed.providers import seed_providers
     from ascent.cli.seed.strategies import seed_strategies
     from ascent.cli.seed.trades import seed_trades
@@ -93,7 +92,6 @@ def run(
         ("Type-metadata fields", seed_type_metadata),
         ("Asset metadata", seed_asset_metadata),
         ("Providers & exchanges", seed_providers),
-        ("Portfolios", seed_portfolios),
         ("Instruments", seed_instruments),
         ("Composites", seed_composites),
     ]

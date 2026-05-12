@@ -75,7 +75,7 @@ export class TradeService {
 
   getPnlClass(value: number | null | undefined): string {
     if (value == null || value === 0) return 'text-surface-500';
-    return value > 0 ? 'text-green-500' : 'text-red-500';
+    return value > 0 ? 'text-positive' : 'text-negative';
   }
 
   formatCurrency(value: number | null | undefined): string {

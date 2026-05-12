@@ -24,7 +24,14 @@ from pydantic import BaseModel, Field
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
-from ascent.strategies import Context, Strategy, TradeView
+from ascent.strategies import (
+    Context,
+    Plot,
+    PlotSeries,
+    SeriesStyle,
+    Strategy,
+    TradeView,
+)
 
 
 class PairsOUStrategy(Strategy):
@@ -51,8 +58,38 @@ class PairsOUStrategy(Strategy):
         "entry/exit levels published by the OU parameter feed."
     )
     trade_view = TradeView(
-        series=["OU_SPREAD", "OU_THETA", "OU_ENTRY", "OU_EXIT"],
+        plots=[
+            Plot(
+                id="spread",
+                title="OU Spread",
+                y_axis_label="Log Spread",
+                main_series_name="OU_SPREAD",
+                series=[
+                    PlotSeries(
+                        name="OU_SPREAD",
+                        label="Spread",
+                        style=SeriesStyle(color="primary", line_width=2.5, opacity=1.0),
+                    ),
+                    PlotSeries(
+                        name="OU_THETA",
+                        label="Mean (θ)",
+                        style=SeriesStyle(color="info", line_style="dashed", opacity=0.5),
+                    ),
+                    PlotSeries(
+                        name="OU_ENTRY",
+                        label="Entry Threshold",
+                        style=SeriesStyle(color="warning", line_style="dashed", opacity=0.4),
+                    ),
+                    PlotSeries(
+                        name="OU_EXIT",
+                        label="Exit Threshold",
+                        style=SeriesStyle(color="warning", line_style="dashed", opacity=0.4),
+                    ),
+                ],
+            ),
+        ],
         show_trade_markers=True,
+        show_trade_status_overlay=True,
     )
 
     _composite_legs: ClassVar[dict[uuid.UUID, tuple[uuid.UUID, uuid.UUID]]] = {}
@@ -313,44 +350,46 @@ class PairsOUStrategy(Strategy):
                 continue
 
             if trade_status == "WAITING":
-                # Beta-hedged sizing: gross notional of a same-quantity pair
-                # is qty*(price_a + beta*price_b), so quantity that consumes
-                # `capital_per_trade` dollars of gross exposure is:
-                gross_per_unit = price_a + beta * price_b
-                if gross_per_unit <= 0:
-                    logger.info(
-                        "%s skip: non-positive gross_per_unit=%s", composite_str[:8], gross_per_unit
-                    )
-                    continue
-                quantity = params.capital_per_trade / gross_per_unit
+                # Strict dollar-neutral sizing: each leg gets exactly half of
+                # `capital_per_trade` in dollar exposure, regardless of the OU
+                # hedge ratio. With long_shares = (cash/2) / price_a, leg A's
+                # notional is cash/2 and leg B's notional is also cash/2 when
+                # leg B trades long_shares * (price_a / price_b) units.
+                long_shares = (params.capital_per_trade / 2.0) / price_a
+                leg_b_ratio = price_a / price_b
+                leg_ratios = [1.0, leg_b_ratio]
 
                 if spread <= entry_level:
                     self.open_trade(
                         composite_id,
                         direction="LONG",
-                        quantity=quantity,
+                        quantity=long_shares,
                         scope="composite",
                         composite_instrument_ids=[inst_a, inst_b],
+                        composite_leg_ratios=leg_ratios,
                     )
                     logger.info(
-                        "OPEN LONG composite=%s spread=%+.6f qty=%.6f",
+                        "OPEN LONG composite=%s spread=%+.6f qty_a=%.6f qty_b=%.6f",
                         composite_str[:8],
                         spread,
-                        quantity,
+                        long_shares,
+                        long_shares * leg_b_ratio,
                     )
                 elif spread >= entry_short:
                     self.open_trade(
                         composite_id,
                         direction="SHORT",
-                        quantity=quantity,
+                        quantity=long_shares,
                         scope="composite",
                         composite_instrument_ids=[inst_a, inst_b],
+                        composite_leg_ratios=leg_ratios,
                     )
                     logger.info(
-                        "OPEN SHORT composite=%s spread=%+.6f qty=%.6f",
+                        "OPEN SHORT composite=%s spread=%+.6f qty_a=%.6f qty_b=%.6f",
                         composite_str[:8],
                         spread,
-                        quantity,
+                        long_shares,
+                        long_shares * leg_b_ratio,
                     )
                 continue
 

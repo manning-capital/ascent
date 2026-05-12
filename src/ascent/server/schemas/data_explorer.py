@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import uuid
 
 from pydantic import BaseModel
@@ -24,3 +25,14 @@ class DataSourceInfo(BaseModel):
     entity_type: str
     descriptor_type: str
     has_period: bool
+
+
+class DataSeriesPoint(BaseModel):
+    timestamp: datetime.datetime
+    value: float | None
+
+
+class DataSeriesResponse(BaseModel):
+    points: list[DataSeriesPoint]
+    entity_label: str
+    descriptor_label: str

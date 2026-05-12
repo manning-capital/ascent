@@ -15,7 +15,7 @@ class StrategyListItem(BaseModel):
     description: str | None = None
     strategy_ref: str
     parameters: dict | list | str | int | float | bool | None = None
-    portfolio_id: uuid.UUID
+    base_asset_id: uuid.UUID | None = None
     is_active: bool
     is_paused: bool = False
     connection_status: str = "disconnected"
@@ -33,7 +33,7 @@ class StrategyCreate(BaseModel):
     name: Identifier
     display_name: str
     strategy_ref: str
-    portfolio_id: uuid.UUID
+    base_asset_id: uuid.UUID | None = None
     description: str | None = None
     parameters: dict | list | str | int | float | bool | None = None
     parameter_schema: dict | None = None
@@ -56,7 +56,7 @@ class PauseStrategyRequest(BaseModel):
 
 
 class StrategyDetail(StrategyListItem):
-    portfolio_name: str | None = None
+    base_asset_name: str | None = None
     parameter_schema: dict | None = None
     created_at: datetime.datetime | None = None
 

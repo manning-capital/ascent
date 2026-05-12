@@ -43,7 +43,13 @@ from pydantic import BaseModel
 
 
 class OrderRequest(BaseModel):
-    """Data submitted to an exchange for order execution."""
+    """Data submitted to an exchange for order execution.
+
+    ``from_asset_symbol`` and ``to_asset_symbol`` carry the instrument's base
+    and quote asset symbols. They're optional on the wire (older callers may
+    omit them) but exchanges that maintain a ledger — like ``PaperExchange``
+    — require them to debit/credit the right balances on fill.
+    """
 
     order_type: str
     side: str
@@ -52,6 +58,8 @@ class OrderRequest(BaseModel):
     price: float | None = None
     time_in_force: str | None = None
     client_order_id: str | None = None
+    from_asset_symbol: str | None = None
+    to_asset_symbol: str | None = None
 
 
 class OrderResponse(BaseModel):

@@ -25,11 +25,11 @@ import pytest
 
 from ascent.application import FillProcessor
 from ascent.domain import (
-    Direction,
     FillEvent,
     Order,
     OrderSide,
     OrderState,
+    PositionType,
     Trade,
     TradeLeg,
     TradeState,
@@ -78,14 +78,13 @@ def _seed_opening_trade(
     leg = TradeLeg(
         id=uuid.uuid4(),
         instrument_id=entry.instrument_id,
-        direction=Direction.LONG,
+        direction=PositionType.LONG,
         quantity=quantity,
         entry_order=entry,
     )
     trade = Trade(
         id=uuid.uuid4(),
         strategy_id=uuid.uuid4(),
-        portfolio_id=uuid.uuid4(),
         state=TradeState.OPENING,
         is_paper=True,
         legs=(leg,),
@@ -123,7 +122,7 @@ def _seed_closing_trade(
     leg = TradeLeg(
         id=uuid.uuid4(),
         instrument_id=entry.instrument_id,
-        direction=Direction.LONG,
+        direction=PositionType.LONG,
         quantity=quantity,
         entry_order=entry,
         exit_order=exit_,
@@ -132,7 +131,6 @@ def _seed_closing_trade(
     trade = Trade(
         id=uuid.uuid4(),
         strategy_id=uuid.uuid4(),
-        portfolio_id=uuid.uuid4(),
         state=TradeState.CLOSING,
         is_paper=True,
         legs=(leg,),

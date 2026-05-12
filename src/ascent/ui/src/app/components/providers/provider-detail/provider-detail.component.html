@@ -65,7 +65,7 @@
       <a routerLink="/settings/providers" class="text-sm text-primary hover:underline">&larr; Providers</a>
       <span class="text-surface-300">|</span>
       <h1 class="text-lg font-bold truncate">{{ provider.display_name }}</h1>
-      <span class="w-2 h-2 rounded-full shrink-0" [class]="provider.is_active ? 'bg-green-500' : 'bg-surface-400'"></span>
+      <span class="w-2 h-2 rounded-full shrink-0" [class]="provider.is_active ? 'bg-positive' : 'bg-edge'"></span>
       @if (provider.provider_type_name) {
         <p-tag [value]="provider.provider_type_name!" severity="secondary"/>
       }
@@ -128,8 +128,8 @@
             <p-panel header="Mapped Assets">
               <app-data-table
                 [columns]="mappedAssetsColumns"
-                [rowData]="provider.asset_links"
-                [pagination]="false"
+                [value]="provider.asset_links"
+                [showPaginator]="false"
                 emptyMessage="No asset mappings for this provider."/>
             </p-panel>
           }
@@ -155,17 +155,13 @@
       <!-- ==================== SETTINGS TAB ==================== -->
       } @else if (activeTab() === 'Settings') {
         <div class="p-6">
-          <div class="border border-red-500/30 rounded-lg overflow-hidden max-w-3xl">
-            <div class="px-5 py-4 border-b border-red-500/30 bg-red-500/5">
-              <h3 class="text-lg font-semibold text-red-500">Danger Zone</h3>
-            </div>
-            <div class="px-5 py-4 flex items-center justify-between">
-              <div>
-                <p class="font-medium">Delete this provider</p>
-                <p class="text-sm text-surface-400 mt-1">Once deleted, all associated metadata and asset links will be permanently removed.</p>
-              </div>
-              <p-button (onClick)="openDelete()" severity="danger" [outlined]="true" size="small" label="Delete provider"/>
-            </div>
+          <div class="max-w-3xl">
+            <app-danger-zone
+              title="Delete this provider"
+              description="Once deleted, all associated metadata and asset links will be permanently removed."
+              actionLabel="Delete provider"
+              (confirmed)="openDelete()"
+            />
           </div>
         </div>
       }

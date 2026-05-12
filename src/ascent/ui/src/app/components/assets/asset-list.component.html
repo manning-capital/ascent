@@ -1,56 +1,85 @@
-<div class="flex flex-col h-[calc(100vh-3.5rem)] md:h-screen">
-  <div class="p-6 flex flex-col flex-1 min-h-0 gap-4">
-    <div class="flex items-center justify-between shrink-0">
-      <h1 class="text-2xl font-bold">Assets</h1>
-      <p-button (onClick)="openCreate()" severity="primary" [outlined]="true" label="+ New Asset"/>
-    </div>
+<app-page-header title="Assets">
+  <div actions>
+    <p-button
+      label="New asset"
+      severity="primary"
+      size="small"
+      icon="pi pi-plus"
+      (onClick)="openCreate()"
+    />
+  </div>
+</app-page-header>
 
-    <!-- Create Form -->
-    @if (showCreateForm()) {
-      <p-card styleClass="shrink-0">
-        <h3 class="font-semibold mb-4">New Asset</h3>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label class="block text-xs text-surface-500 mb-1">Display Name *</label>
-            <input type="text" pInputText [(ngModel)]="newAssetDisplayName" class="w-full"/>
-          </div>
-          <div>
-            <label class="block text-xs text-surface-500 mb-1">Name *</label>
-            <input type="text" pInputText [(ngModel)]="newAssetName" class="w-full"/>
-          </div>
-          <div>
-            <label class="block text-xs text-surface-500 mb-1">Type *</label>
-            <p-select [(ngModel)]="newAssetTypeId" [options]="assetService.assetTypes()" optionLabel="display_name" optionValue="id" placeholder="Select type"/>
-          </div>
-          <div>
-            <label class="block text-xs text-surface-500 mb-1">Description</label>
-            <input type="text" pInputText [(ngModel)]="newAssetDescription" class="w-full"/>
-          </div>
-        </div>
-        <div class="flex gap-2 mt-4">
-          <p-button (onClick)="submitCreate()" severity="success" [outlined]="true" label="Create"/>
-          <p-button (onClick)="cancelCreate()" severity="secondary" [text]="true" label="Cancel"/>
-        </div>
-      </p-card>
-    }
-
-    <!-- Filters -->
-    <div class="rounded-lg border border-edge bg-surface p-4 shrink-0">
-      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        <input type="text" pInputText placeholder="Search assets..."
-          [ngModel]="search()" (ngModelChange)="onSearch($event)">
-        <p-select [ngModel]="statusFilter()" (ngModelChange)="onStatusChange($event)"
-          [options]="statusOptions" optionLabel="label" optionValue="value"
-          placeholder="All Statuses" [showClear]="true"/>
-        <p-button (onClick)="clearFilters()" severity="secondary" [outlined]="true" label="Clear Filters"/>
+@if (showCreateForm()) {
+  <div class="border-b border-edge bg-canvas p-4 shrink-0">
+    <h3 class="text-sm font-semibold mb-3">New Asset</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div>
+        <label class="block text-[11px] uppercase tracking-wider text-fg-muted mb-1">Display Name *</label>
+        <input type="text" pInputText [(ngModel)]="newAssetDisplayName" class="w-full text-xs" />
+      </div>
+      <div>
+        <label class="block text-[11px] uppercase tracking-wider text-fg-muted mb-1">Name *</label>
+        <input type="text" pInputText [(ngModel)]="newAssetName" class="w-full text-xs" />
+      </div>
+      <div>
+        <label class="block text-[11px] uppercase tracking-wider text-fg-muted mb-1">Type *</label>
+        <p-select [(ngModel)]="newAssetTypeId" [options]="assetService.assetTypes()" optionLabel="display_name" optionValue="id" placeholder="Select type" size="small" styleClass="w-full text-xs" />
+      </div>
+      <div>
+        <label class="block text-[11px] uppercase tracking-wider text-fg-muted mb-1">Description</label>
+        <input type="text" pInputText [(ngModel)]="newAssetDescription" class="w-full text-xs" />
       </div>
     </div>
-
-    <app-server-table class="flex-1 min-h-0"
-      [columns]="columns"
-      [fetchPage]="fetchPage()"
-      [rowClickRoute]="navigateToAsset"
-      [pageSize]="25"
-      emptyMessage="No assets found."/>
+    <div class="flex justify-end gap-2 mt-3">
+      <p-button label="Cancel" severity="secondary" [text]="true" size="small" (onClick)="cancelCreate()" />
+      <p-button label="Create" severity="primary" size="small" icon="pi pi-check" (onClick)="submitCreate()" />
+    </div>
   </div>
+}
+
+<div class="flex flex-wrap items-center gap-2 px-3 py-2 border-b border-edge bg-canvas shrink-0">
+  <span class="relative">
+    <i class="pi pi-search absolute left-2 top-1/2 -translate-y-1/2 text-fg-faint text-xs"></i>
+    <input
+      type="text"
+      pInputText
+      placeholder="Search assets"
+      class="pl-7 text-xs"
+      style="width: 14rem;"
+      [ngModel]="search()"
+      (ngModelChange)="onSearch($event)"
+    />
+  </span>
+
+  <p-select
+    [ngModel]="statusFilter()"
+    (ngModelChange)="onStatusChange($event)"
+    [options]="statusOptions"
+    optionLabel="label"
+    optionValue="value"
+    placeholder="All statuses"
+    [showClear]="true"
+    size="small"
+    [style]="{ width: '11rem' }"
+  />
+
+  <p-button
+    label="Clear filters"
+    severity="secondary"
+    [text]="true"
+    size="small"
+    icon="pi pi-filter-slash"
+    (onClick)="clearFilters()"
+  />
 </div>
+
+<app-data-table
+  class="flex-1 min-h-0"
+  [columns]="columns"
+  [fetchPage]="fetchPage()"
+  [rowClickRoute]="navigateToAsset"
+  storageKey="assets-list"
+  emptyMessage="No assets found."
+  [edgeToEdge]="true"
+/>

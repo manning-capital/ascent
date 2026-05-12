@@ -46,7 +46,7 @@ export interface ReparentConfirmEvent {
                 <p class="text-sm font-semibold mb-2">Metadata Field Conflicts</p>
                 <div class="flex flex-col gap-1 text-sm">
                   @for (c of preview.conflicts; track c.metadata_id) {
-                    <div class="flex items-center justify-between px-3 py-1.5 rounded bg-yellow-500/5 border border-yellow-500/10">
+                    <div class="flex items-center justify-between px-3 py-1.5 rounded bg-warning/5 border border-warning/10">
                       <div class="flex items-center gap-2">
                         <span class="font-medium">{{ c.metadata_display_name || c.metadata_name }}</span>
                         <span class="font-mono text-xs text-surface-400">{{ c.metadata_name }}</span>
@@ -65,7 +65,7 @@ export interface ReparentConfirmEvent {
                 <p class="text-sm font-semibold mb-2">Provider-Asset Field Conflicts</p>
                 <div class="flex flex-col gap-1 text-sm">
                   @for (c of preview.provider_asset_conflicts; track c.metadata_id) {
-                    <div class="flex items-center justify-between px-3 py-1.5 rounded bg-yellow-500/5 border border-yellow-500/10">
+                    <div class="flex items-center justify-between px-3 py-1.5 rounded bg-warning/5 border border-warning/10">
                       <div class="flex items-center gap-2">
                         <span class="font-medium">{{ c.metadata_display_name || c.metadata_name }}</span>
                         <span class="font-mono text-xs text-surface-400">{{ c.metadata_name }}</span>

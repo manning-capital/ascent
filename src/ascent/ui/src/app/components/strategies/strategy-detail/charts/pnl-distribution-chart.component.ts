@@ -1,7 +1,7 @@
 import { Component, computed, input } from '@angular/core';
 import { UIChart } from 'primeng/chart';
 import { ChartData, ChartOptions } from 'chart.js';
-import { DARK_THEME, CHART_COLORS } from './chart-defaults';
+import { useChartTheme, withAlpha, formatPnlTick } from './chart-defaults';
 
 @Component({
   selector: 'app-pnl-distribution-chart',
@@ -9,9 +9,9 @@ import { DARK_THEME, CHART_COLORS } from './chart-defaults';
   imports: [UIChart],
   styles: [`:host { display: block; height: 100%; }`],
   template: `
-    <div class="h-full w-full min-h-[200px]">
+    <div class="h-full w-full">
       @if (pnls().length > 0) {
-        <p-chart type="bar" [data]="chartData()" [options]="chartOptions" [style]="{'width': '100%', 'height': '100%'}"/>
+        <p-chart type="bar" [data]="chartData()" [options]="chartOptions()" [style]="{'width': '100%', 'height': '100%'}" />
       } @else {
         <div class="flex items-center justify-center h-full text-fg-faint text-sm">No trade data available</div>
       }
@@ -20,6 +20,8 @@ import { DARK_THEME, CHART_COLORS } from './chart-defaults';
 })
 export class PnlDistributionChartComponent {
   pnls = input.required<number[]>();
+
+  private theme = useChartTheme();
 
   private histogram = computed(() => {
     const values = this.pnls();
@@ -41,52 +43,63 @@ export class PnlDistributionChartComponent {
     return { centers, counts, width };
   });
 
-  chartOptions: ChartOptions<'bar'> = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        backgroundColor: DARK_THEME.tooltipBg,
-        borderColor: DARK_THEME.tooltipBorder,
-        borderWidth: 1,
-        titleColor: DARK_THEME.tooltipTitle,
-        bodyColor: DARK_THEME.tooltipBody,
-        padding: 10,
-        cornerRadius: 8,
-        callbacks: {
-          title: (items) => {
-            const val = items[0]?.label ?? '';
-            return `PnL: $${val}`;
+  chartOptions = computed<ChartOptions<'bar'>>(() => {
+    const t = this.theme();
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: t.tooltipBg,
+          borderColor: t.tooltipBorder,
+          borderWidth: 1,
+          titleColor: t.tooltipTitle,
+          bodyColor: t.tooltipBody,
+          padding: 10,
+          cornerRadius: 8,
+          callbacks: {
+            title: (items) => {
+              const idx = items[0]?.dataIndex ?? 0;
+              const center = this.histogram().centers[idx];
+              return center != null ? `PnL: ${formatPnlTick(center)}` : '';
+            },
+            label: (item) => `Count: ${item.raw}`,
           },
-          label: (item) => `Count: ${item.raw}`,
         },
       },
-    },
-    scales: {
-      x: {
-        ticks: {
-          color: DARK_THEME.tickColor,
-          maxTicksLimit: 10,
+      scales: {
+        x: {
+          ticks: {
+            color: t.tickColor,
+            maxTicksLimit: 6,
+            font: { size: 10 },
+          },
+          grid: { color: t.gridColor },
         },
-        grid: { color: DARK_THEME.gridColor },
-        title: { display: true, text: 'PnL ($)', color: DARK_THEME.labelColor },
+        y: {
+          ticks: {
+            color: t.tickColor,
+            maxTicksLimit: 5,
+            font: { size: 10 },
+          },
+          grid: { color: t.gridColor },
+        },
       },
-      y: {
-        ticks: { color: DARK_THEME.tickColor },
-        grid: { color: DARK_THEME.gridColor },
-        title: { display: true, text: 'Count', color: DARK_THEME.labelColor },
+      layout: {
+        padding: { top: 4, right: 4 },
       },
-    },
-  };
+    };
+  });
 
   chartData = computed<ChartData<'bar'>>(() => {
+    const t = this.theme();
     const { centers, counts } = this.histogram();
     return {
-      labels: centers.map(c => `$${c.toFixed(0)}`),
+      labels: centers.map((c) => formatPnlTick(c)),
       datasets: [{
         data: counts,
-        backgroundColor: centers.map(c => c >= 0 ? 'rgba(34, 197, 94, 0.7)' : 'rgba(239, 68, 68, 0.7)'),
+        backgroundColor: centers.map((c) => withAlpha(c >= 0 ? t.positive : t.negative, 0.7)),
         borderRadius: 2,
         barPercentage: 1.0,
         categoryPercentage: 1.0,

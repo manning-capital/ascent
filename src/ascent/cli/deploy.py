@@ -155,7 +155,7 @@ def deploy_strategy(
     strategy_ref: str,
     *,
     name: str | None = None,
-    portfolio_id: uuid.UUID | None = None,
+    base_asset_id: uuid.UUID | None = None,
     database_url: str = "postgresql://localhost:5432/ascent",
     update: bool = False,
 ):
@@ -168,8 +168,8 @@ def deploy_strategy(
         ``ascent.strategies.examples.momentum.MomentumStrategy``.
     name
         Display name for the strategy. Defaults to the strategy's display_name.
-    portfolio_id
-        Portfolio to associate with the strategy.
+    base_asset_id
+        Asset used as the strategy's reporting / accounting base. Optional.
     database_url
         PostgreSQL connection string.
     update
@@ -225,7 +225,7 @@ def deploy_strategy(
                 name=display_name,
                 description=description,
                 strategy_ref=canonical_ref,
-                portfolio_id=portfolio_id,
+                base_asset_id=base_asset_id,
                 parameters=defaults,
                 parameter_schema=param_schema,
                 is_active=True,

@@ -15,11 +15,12 @@ import { Tag } from 'primeng/tag';
 import { Panel } from 'primeng/panel';
 import { Button } from 'primeng/button';
 import { Tabs, TabList, Tab } from 'primeng/tabs';
-import { DataTableComponent } from '../../shared/data-table/data-table.component';
-import type { DataTableColumn } from '../../shared/data-table/data-table.model';
+import { AppDataTableComponent } from '../../ui/data-table/app-data-table.component';
+import type { AppColumn } from '../../ui/data-table/app-column.model';
 import { MetadataHistoryTableComponent } from '../../shared/metadata-history-table.component';
 import { SafeDeleteDialogComponent } from '../../shared/safe-delete-dialog.component';
 import { FieldPanelComponent, PanelField } from '../../shared/field-panel.component';
+import { AppDangerZoneComponent } from '../../ui/danger-zone/app-danger-zone.component';
 
 @Component({
   selector: 'app-provider-detail',
@@ -33,10 +34,11 @@ import { FieldPanelComponent, PanelField } from '../../shared/field-panel.compon
     Button,
     Skeleton,
     Tabs, TabList, Tab,
-    DataTableComponent,
+    AppDataTableComponent,
     MetadataHistoryTableComponent,
     SafeDeleteDialogComponent,
     FieldPanelComponent,
+    AppDangerZoneComponent,
   ],
   templateUrl: './provider-detail.component.html',
 })
@@ -59,9 +61,9 @@ export class ProviderDetailComponent implements OnInit {
   });
 
   // Mapped assets table columns
-  mappedAssetsColumns: DataTableColumn[] = [
-    { field: 'asset_name', header: 'Asset', cellType: 'link', linkRoute: (row: any) => ['/settings/assets', row.asset_id] },
-    { field: 'asset_symbol', header: 'Symbol', cellType: 'monospace', valueGetter: (params: any) => params.data?.asset_symbol || '-' },
+  mappedAssetsColumns: AppColumn[] = [
+    { field: 'asset_name', header: 'Asset', cellType: 'link', linkRoute: (row: any) => ['/settings/master-data/assets', row.asset_id] },
+    { field: 'asset_symbol', header: 'Symbol', cellType: 'monospace', format: (v) => v || '-' },
     { field: 'identifier', header: 'Identifier', cellType: 'monospace' },
     { field: 'created_at', header: 'Created', cellType: 'date' },
   ];

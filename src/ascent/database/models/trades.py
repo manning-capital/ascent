@@ -7,7 +7,6 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ascent.database.models.base import Base
-from ascent.database.models.portfolio import Portfolio
 from ascent.database.models.types import TradeStatusType
 
 if TYPE_CHECKING:
@@ -57,13 +56,6 @@ class Trade(Base):
             "have to infer the composite from leg-membership matching."
         ),
     )
-    portfolio_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid,
-        ForeignKey("portfolio.id"),
-        nullable=False,
-        comment="The identifier of the portfolio this trade belongs to",
-    )
-    portfolio: Mapped["Portfolio"] = relationship("Portfolio")
     is_paper: Mapped[bool] = mapped_column(
         default=False,
         comment="Whether this is a paper/simulated trade (True) or a live trade (False)",
@@ -135,7 +127,7 @@ class Trade(Base):
     )
 
     def __repr__(self):
-        return f"{Trade.__name__}(id={self.id}, strategy_id={self.strategy_id}, portfolio_id={self.portfolio_id}, is_paper={self.is_paper})"
+        return f"{Trade.__name__}(id={self.id}, strategy_id={self.strategy_id}, is_paper={self.is_paper})"
 
 
 class TradeLeg(Base):

@@ -1,11 +1,12 @@
 @if (feedService.loading()) {
   <div class="flex flex-col h-[calc(100vh-3.5rem)] md:h-screen">
-    <div class="flex items-center gap-3 px-4 py-2 border-b border-surface shrink-0 bg-emphasis">
-      <p-skeleton width="4rem" height="0.875rem"/>
-      <span class="text-surface-300">|</span>
-      <p-skeleton width="10rem" height="1.125rem"/>
-      <p-skeleton width="3.5rem" height="1.375rem" borderRadius="1rem"/>
-      <p-skeleton width="3rem" height="0.75rem"/>
+    <div class="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-edge shrink-0 bg-canvas">
+      <div class="flex items-center gap-2 min-w-0">
+        <p-skeleton width="4rem" height="0.75rem"/>
+        <span class="text-fg-faint">/</span>
+        <p-skeleton width="10rem" height="1rem"/>
+      </div>
+      <p-skeleton width="3.5rem" height="1.25rem" borderRadius="1rem"/>
     </div>
     <div class="flex gap-2 px-4 py-3 border-b border-surface">
       @for (_ of [1,2,3,4]; track $index) {
@@ -33,52 +34,67 @@
   @let feed = feedService.selectedFeed();
   @if (feed) {
   <div class="flex flex-col h-[calc(100vh-3.5rem)] md:h-screen">
-    <!-- Header Bar -->
-    <div class="flex items-center gap-3 px-4 py-2 border-b border-surface shrink-0 bg-emphasis">
-      <a routerLink="/feeds" class="text-sm text-primary hover:underline">&larr; Feeds</a>
-      <span class="text-surface-300">|</span>
-      <h1 class="text-lg font-bold truncate">{{ feed.display_name }}</h1>
-      <p-tag [value]="feed.is_active ? 'Active' : 'Inactive'" [severity]="feed.is_active ? 'success' : 'secondary'" [rounded]="true"/>
-      <span class="text-xs text-surface-500 shrink-0">{{ scheduleLabel(feed.schedule) }}</span>
-    </div>
+    <app-page-header
+      [title]="feed.display_name"
+      [subtitle]="scheduleLabel(feed.schedule)"
+      [breadcrumb]="[{ label: 'Feeds', routerLink: '/feeds' }]"
+    >
+      <div actions>
+        <p-tag
+          [value]="feed.is_active ? 'Active' : 'Inactive'"
+          [severity]="feed.is_active ? 'success' : 'secondary'"
+          [rounded]="true"
+        />
+      </div>
+    </app-page-header>
 
-    <!-- Tab Bar -->
-    <p-tabs class="shrink-0" [value]="activeTab()" (valueChange)="onTabChange($any($event))">
-      <p-tablist>
-        @for (tab of tabs; track tab) {
-          <p-tab [value]="tab">{{ tab }}</p-tab>
-        }
-      </p-tablist>
-    </p-tabs>
+    <div class="flex-1 min-h-0 overflow-y-auto">
+      <!-- ─── Compact metric strip — always visible, hairline dividers ─── -->
+      @let f = feedService.selectedFeed();
+      @if (f) {
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-px bg-edge border-b border-edge">
+          <div class="bg-canvas px-4 py-3">
+            <div class="text-[10px] uppercase tracking-wider text-fg-faint mb-1">Last Run</div>
+            <div class="flex items-center gap-2">
+              <span class="text-lg font-mono tabular-nums font-semibold">{{ lastRunRelative() || '—' }}</span>
+              @if (f.last_run_status) {
+                <p-tag [value]="f.last_run_status" [severity]="statusSeverity(f.last_run_status)" [rounded]="true"/>
+              }
+            </div>
+          </div>
+          <div class="bg-canvas px-4 py-3">
+            <div class="text-[10px] uppercase tracking-wider text-fg-faint mb-1">Success Rate</div>
+            <div class="text-lg font-mono tabular-nums font-semibold">{{ successRate() }}</div>
+          </div>
+          <div class="bg-canvas px-4 py-3">
+            <div class="text-[10px] uppercase tracking-wider text-fg-faint mb-1">Avg Duration</div>
+            <div class="text-lg font-mono tabular-nums font-semibold">{{ runStats().avgDuration }}</div>
+          </div>
+          <div class="bg-canvas px-4 py-3">
+            <div class="text-[10px] uppercase tracking-wider text-fg-faint mb-1">Avg Records</div>
+            <div class="text-lg font-mono tabular-nums font-semibold">{{ runStats().avgRecords }}</div>
+          </div>
+        </div>
+      }
 
-    <!-- Tab Content -->
-    <div class="flex-1 flex flex-col min-h-0">
+      <!-- ─── Tabs — full-width strip aligned with content below.
+           Metric strip above provides border-b; no extra border-t needed. -->
+      <div class="sticky top-0 bg-canvas z-10">
+        <p-tabs [value]="activeTab()" (valueChange)="onTabChange($any($event))">
+          <p-tablist>
+            @for (tab of tabs; track tab) {
+              <p-tab [value]="tab">{{ tab }}</p-tab>
+            }
+          </p-tablist>
+        </p-tabs>
+      </div>
 
       <!-- Overview Tab -->
       @if (activeTab() === 'Overview') {
-        @let f = feedService.selectedFeed();
-        <div class="overflow-y-auto h-full p-6 space-y-6">
-
-          <!-- Hero: 4 primary KPIs -->
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <!-- Last Run (inline because it pairs a tag with the value) -->
-            <p-card>
-              <p class="text-xs font-medium text-surface-500 uppercase tracking-wider mb-1">Last Run</p>
-              <p class="text-2xl font-bold">{{ lastRunRelative() }}</p>
-              <div class="mt-2 min-h-[1.5rem]">
-                @if (f?.last_run_status) {
-                  <p-tag [value]="f!.last_run_status!" [severity]="statusSeverity(f!.last_run_status!)" [rounded]="true"/>
-                }
-              </div>
-            </p-card>
-            <app-stat-card label="Success Rate" [value]="successRate()"/>
-            <app-stat-card label="Avg Duration" [value]="runStats().avgDuration"/>
-            <app-stat-card label="Avg Records" [value]="runStats().avgRecords"/>
-          </div>
-
-          <!-- Secondary counters: inline run of text, no flex children -->
-          <p class="text-sm text-surface-500">
-            Total <span class="font-semibold text-fg">{{ f?.total_runs ?? 0 }}</span>@if (recentRuns().length > 0) {<span class="mx-3 text-surface-300">·</span>Of last {{ recentRuns().length }}: <span class="font-semibold text-positive">{{ overviewStats().completed }}</span> completed, <span class="font-semibold text-negative">{{ overviewStats().failed }}</span> failed@if (overviewStats().running > 0) {, <span class="font-semibold text-warning">{{ overviewStats().running }}</span> running}}
+        <div class="px-4 lg:px-6 py-4 lg:py-6 space-y-4">
+          <!-- Run breakdown summary line -->
+          <p class="text-sm text-fg-muted">
+            Total <span class="font-semibold text-fg">{{ f?.total_runs ?? 0 }}</span>@if (recentRuns().length > 0) {<span class="mx-3 text-fg-faint">·</span>Of last {{ recentRuns().length }}: <span class="font-semibold text-positive">{{ overviewStats().completed }}</span> completed, <span class="font-semibold text-negative">{{ overviewStats().failed }}</span> failed@if (overviewStats().running > 0) {, <span class="font-semibold text-warning">{{ overviewStats().running }}</span> running}}
           </p>
 
           <!-- Activity: day-grouped run pills -->
@@ -86,7 +102,7 @@
             <div class="flex items-center justify-between mb-3">
               <span class="font-semibold">Activity</span>
               @if (recentRuns().length > 0) {
-                <span class="text-xs text-surface-500">Last {{ recentRuns().length }} runs</span>
+                <span class="text-xs text-fg-muted">Last {{ recentRuns().length }} runs</span>
               }
             </div>
             @if (runsLoading()) {
@@ -99,27 +115,26 @@
                 [runs]="recentRuns()"
                 (runClick)="onPillClick($event)"/>
             } @else {
-              <div class="text-sm text-surface-500 py-4 text-center">
+              <div class="text-sm text-fg-muted py-4 text-center">
                 No runs yet. This feed may be triggered externally or has not run.
               </div>
             }
           </p-card>
 
-          <!-- Lineage placeholder (full-width; real viz lands later) -->
           <p-card header="Lineage">
             <div class="flex flex-col items-center justify-center h-40 text-center gap-2">
-              <span class="text-sm text-surface-500">Upstream &amp; downstream viz</span>
-              <span class="text-xs text-surface-400">Coming soon</span>
+              <span class="text-sm text-fg-muted">Upstream &amp; downstream viz</span>
+              <span class="text-xs text-fg-faint">Coming soon</span>
             </div>
           </p-card>
 
-          <!-- Issues: conditional — only when errors exist -->
           @if (hasErrors()) {
             <p-card header="Recent Errors">
               <app-data-table
                 [columns]="errorColumns"
-                [rowData]="runStats().recentErrors"
-                [pagination]="false"
+                [value]="runStats().recentErrors"
+                [showPaginator]="false"
+                [fillHeight]="false"
                 [rowClickRoute]="navigateToError"
                 emptyMessage="No recent errors"/>
             </p-card>
@@ -150,9 +165,7 @@
 
       <!-- Configuration Tab -->
       @if (activeTab() === 'Configuration') {
-        <div class="overflow-y-auto h-full">
-          <div class="max-w-5xl mx-auto p-6 space-y-6">
-
+        <div class="max-w-5xl mx-auto px-4 lg:px-6 py-4 lg:py-6 space-y-4">
           @if (feed.description) {
             <p-card header="Description">
               <p class="text-sm">{{ feed.description }}</p>
@@ -160,9 +173,7 @@
           }
 
           <app-field-panel header="Identity" [fields]="identityFields()"/>
-
           <app-field-panel header="Source &amp; Scope" [fields]="sourceScopeFields()"/>
-
           <app-field-panel header="Schedule" [fields]="scheduleFields()"/>
 
           @if (feed.parameters || feed.parameter_schema) {
@@ -173,7 +184,7 @@
                   [data]="feed.parameters"
                   [readonly]="true"/>
               } @else {
-                <pre class="text-xs font-mono text-surface-500 overflow-x-auto">{{ feed.parameters | json }}</pre>
+                <pre class="text-xs font-mono text-fg-muted overflow-x-auto">{{ feed.parameters | json }}</pre>
               }
             </p-card>
           }
@@ -183,22 +194,22 @@
               @if (outputSchemaRows().length > 0) {
                 <app-data-table
                   [columns]="outputSchemaColumns"
-                  [rowData]="outputSchemaRows()"
-                  [pagination]="false"/>
+                  [value]="outputSchemaRows()"
+                  [showPaginator]="false"
+                  [fillHeight]="false"/>
               } @else {
-                <p class="text-sm text-surface-500">Schema metadata not available in tabular form.</p>
+                <p class="text-sm text-fg-muted">Schema metadata not available in tabular form.</p>
               }
               <details class="mt-4">
-                <summary class="cursor-pointer text-xs text-surface-500 select-none hover:text-surface-400">
+                <summary class="cursor-pointer text-xs text-fg-muted select-none hover:text-fg">
                   Raw schema JSON
                 </summary>
-                <pre class="text-xs font-mono text-surface-500 overflow-x-auto mt-2">{{ feed.data_schema | json }}</pre>
+                <pre class="text-xs font-mono text-fg-muted overflow-x-auto mt-2">{{ feed.data_schema | json }}</pre>
               </details>
             </p-card>
           }
 
           <app-field-panel header="Audit" [fields]="auditFields()"/>
-          </div>
         </div>
       }
 

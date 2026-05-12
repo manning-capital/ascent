@@ -1,4 +1,4 @@
-import { Component, computed, EventEmitter, inject, input, OnInit, Output, signal, viewChild } from '@angular/core';
+import { Component, computed, EventEmitter, inject, input, OnInit, Output, signal, TemplateRef, viewChild } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { map } from 'rxjs/operators';
@@ -8,100 +8,18 @@ import { ApiService } from '../../services/api.service';
 import { Instrument, UniverseItem } from '../../models/asset.model';
 import { Composite, CompositeUniverseItem } from '../../models/composite.model';
 import { PaginatedResponse } from '../../models/trade.model';
-import type { ICellRendererAngularComp } from 'ag-grid-angular';
-import type { ColDef, ICellRendererParams } from 'ag-grid-community';
 import { InputText } from 'primeng/inputtext';
 import { Select } from 'primeng/select';
 import { SelectButton } from 'primeng/selectbutton';
 import { Button } from 'primeng/button';
 import { Card } from 'primeng/card';
-import { badgeStyles } from './data-table/cell-renderers';
-import { ServerTableComponent } from './data-table/server-table.component';
-import type { DataTableColumn, ServerFetchFn } from './data-table/data-table.model';
+import { AppDataTableComponent } from '../ui/data-table/app-data-table.component';
+import type { AppColumn, AppFetchFn, AppSeverity } from '../ui/data-table/app-column.model';
 
-// ─── Stage/Unstage button cell renderer ─────────────────────
-@Component({
-  selector: 'ag-stage-cell',
-  standalone: true,
-  template: `
-    @if (staged) {
-      <button (click)="onClick($event)" class="text-xs text-green-500 hover:underline">Staged</button>
-    } @else {
-      <button (click)="onClick($event)" class="text-xs text-primary hover:underline">Add</button>
-    }
-  `,
-  host: { style: 'display:flex;align-items:center;height:100%' },
-})
-export class StageCellRenderer implements ICellRendererAngularComp {
-  staged = false;
-  private params!: any;
-
-  agInit(params: ICellRendererParams): void { this.params = params; this.staged = params.context?.isStaged(params.data?.id ?? params.data?.instrument_id ?? params.data?.composite_id); }
-  refresh(params: ICellRendererParams): boolean { this.params = params; this.staged = params.context?.isStaged(params.data?.id ?? params.data?.instrument_id ?? params.data?.composite_id); return true; }
-
-  onClick(e: Event): void {
-    e.stopPropagation();
-    const id = this.params.data?.id ?? this.params.data?.instrument_id ?? this.params.data?.composite_id;
-    this.params.context?.toggleStage(id);
-    this.params.api?.redrawRows();
-  }
-}
-
-// ─── Status badge cell renderer ─────────────────────────────
-@Component({
-  selector: 'ag-status-badge',
-  standalone: true,
-  template: `<span [style]="styles">{{ label }}</span>`,
-  host: { style: 'display:flex;align-items:center;height:100%' },
-})
-export class StatusBadgeCellRenderer implements ICellRendererAngularComp {
-  label = ''; styles = '';
-  agInit(p: ICellRendererParams): void { this.label = p.value ? 'Active' : 'Inactive'; this.styles = badgeStyles(p.value ? 'success' : 'secondary'); }
-  refresh(p: ICellRendererParams): boolean { this.agInit(p); return true; }
-}
-
-// ─── Remove button cell renderer ────────────────────────────
-@Component({
-  selector: 'ag-remove-cell',
-  standalone: true,
-  template: `<button (click)="onClick($event)" class="text-xs text-red-500 hover:underline">Remove</button>`,
-  host: { style: 'display:flex;align-items:center;justify-content:flex-end;height:100%;width:100%' },
-})
-export class RemoveCellRenderer implements ICellRendererAngularComp {
-  private params!: any;
-  agInit(params: ICellRendererParams): void { this.params = params; }
-  refresh(params: ICellRendererParams): boolean { this.params = params; return true; }
-  onClick(e: Event): void {
-    e.stopPropagation();
-    const id = this.params.data?.instrument_id ?? this.params.data?.composite_id ?? this.params.data?.exchange_id;
-    this.params.context?.onRemove(id);
-  }
-}
-
-// ─── Enable/Disable toggle cell renderer ────────────────────
-@Component({
-  selector: 'ag-toggle-active-cell',
-  standalone: true,
-  template: `
-    <button
-      (click)="onClick($event)"
-      [class]="active ? 'text-xs text-yellow-500 hover:underline' : 'text-xs text-green-500 hover:underline'">
-      {{ active ? 'Disable' : 'Enable' }}
-    </button>
-  `,
-  host: { style: 'display:flex;align-items:center;justify-content:flex-end;height:100%;width:100%' },
-})
-export class ToggleActiveCellRenderer implements ICellRendererAngularComp {
-  active = true;
-  private params!: any;
-  agInit(params: ICellRendererParams): void { this.params = params; this.active = !!params.data?.is_active; }
-  refresh(params: ICellRendererParams): boolean { this.params = params; this.active = !!params.data?.is_active; return true; }
-  onClick(e: Event): void {
-    e.stopPropagation();
-    const id = this.params.data?.instrument_id ?? this.params.data?.composite_id ?? this.params.data?.exchange_id;
-    this.params.context?.onToggleActive?.(id, !this.active);
-  }
-}
+const ACTIVE_TAG = (v: boolean) => ({
+  label: v ? 'Active' : 'Disabled',
+  severity: (v ? 'success' : 'secondary') as AppSeverity,
+});
 
 @Component({
   selector: 'app-universe-panel',
@@ -113,10 +31,35 @@ export class ToggleActiveCellRenderer implements ICellRendererAngularComp {
     SelectButton,
     Button,
     Card,
-    ServerTableComponent,
+    AppDataTableComponent,
   ],
   host: { style: 'display:flex;flex-direction:column;flex:1;min-height:0' },
   template: `
+    <ng-template #toggleActiveTpl let-row>
+      @if (row.is_active) {
+        <button (click)="onToggleActive($event, row, false)"
+                class="text-xs text-warning hover:underline">Disable</button>
+      } @else {
+        <button (click)="onToggleActive($event, row, true)"
+                class="text-xs text-positive hover:underline">Enable</button>
+      }
+    </ng-template>
+
+    <ng-template #removeTpl let-row>
+      <button (click)="onRemove($event, row)"
+              class="text-xs text-negative hover:underline">Remove</button>
+    </ng-template>
+
+    <ng-template #stageTpl let-row>
+      @if (stagedIds().has(row.id)) {
+        <button (click)="onToggleStage($event, row.id)"
+                class="text-xs text-positive hover:underline">Staged</button>
+      } @else {
+        <button (click)="onToggleStage($event, row.id)"
+                class="text-xs text-primary hover:underline">Add</button>
+      }
+    </ng-template>
+
     <div class="flex flex-col flex-1 min-h-0 p-6">
       @if (!showForm()) {
         <!-- Universe view -->
@@ -124,7 +67,7 @@ export class ToggleActiveCellRenderer implements ICellRendererAngularComp {
           <div class="flex items-center gap-4">
             <div>
               <h3 class="font-semibold text-sm">Universe</h3>
-              <p class="text-xs text-surface-400 mt-1">{{ subtitle() }}</p>
+              <p class="text-xs text-fg-faint mt-1">{{ subtitle() }}</p>
             </div>
             @if (!restrictMode()) {
               <p-selectButton
@@ -148,25 +91,21 @@ export class ToggleActiveCellRenderer implements ICellRendererAngularComp {
         @if (!hasExchanges()) {
           <div class="flex items-center justify-center flex-1 min-h-0">
             <div class="text-center p-8">
-              <p class="text-sm text-muted-color mb-1">No exchanges configured</p>
-              <p class="text-xs text-surface-400">Add exchanges to this strategy before adding instruments or composites to the universe.</p>
+              <p class="text-sm text-fg-muted mb-1">No exchanges configured</p>
+              <p class="text-xs text-fg-faint">Add exchanges to this strategy before adding instruments or composites to the universe.</p>
             </div>
           </div>
         } @else if (mode() === 'instruments') {
-          <app-server-table class="flex-1 min-h-0"
-            [columns]="instrumentUniverseColumns"
+          <app-data-table class="flex-1 min-h-0"
+            [columns]="instrumentUniverseColumns()"
             [fetchPage]="instrumentUniverseFetchFn()"
-            [pageSize]="25"
-            [gridContext]="universeContext"
-            [getRowStyle]="getUniverseRowStyle"
+            [rowClass]="universeRowClass"
             emptyMessage="No instruments in universe."/>
         } @else {
-          <app-server-table class="flex-1 min-h-0"
-            [columns]="compositeUniverseColumns"
+          <app-data-table class="flex-1 min-h-0"
+            [columns]="compositeUniverseColumns()"
             [fetchPage]="compositeUniverseFetchFn()"
-            [pageSize]="25"
-            [gridContext]="universeContext"
-            [getRowStyle]="getUniverseRowStyle"
+            [rowClass]="universeRowClass"
             emptyMessage="No composites in universe."/>
         }
       } @else {
@@ -174,7 +113,7 @@ export class ToggleActiveCellRenderer implements ICellRendererAngularComp {
         <div class="flex items-center justify-between mb-4 shrink-0">
           <div>
             <h3 class="font-semibold text-sm">{{ mode() === 'instruments' ? 'Select Instruments' : 'Select Composites' }}</h3>
-            <p class="text-xs text-surface-400 mt-1">{{ stagedIds().size }} staged</p>
+            <p class="text-xs text-fg-faint mt-1">{{ stagedIds().size }} staged</p>
           </div>
           <div class="flex items-center gap-2">
             <p-button label="Cancel" severity="secondary" [text]="true" size="small" (onClick)="cancelForm()"/>
@@ -228,13 +167,11 @@ export class ToggleActiveCellRenderer implements ICellRendererAngularComp {
           </div>
         </p-card>
 
-        <!-- Available items server table -->
-        <app-server-table class="flex-1 min-h-0"
-          [columnDefs]="mode() === 'instruments' ? instrumentPickerColDefs : compositePickerColDefs"
+        <!-- Available items table -->
+        <app-data-table class="flex-1 min-h-0"
+          [columns]="mode() === 'instruments' ? instrumentPickerColumns() : compositePickerColumns()"
           [fetchPage]="pickerFetchFn()"
-          [pageSize]="25"
-          [gridContext]="pickerContext"
-          [getRowStyle]="getRowStyle"
+          [rowClass]="pickerRowClass"
           [emptyMessage]="mode() === 'instruments' ? 'No instruments found.' : 'No composites found.'"/>
       }
     </div>
@@ -246,7 +183,10 @@ export class UniversePanelComponent implements OnInit {
   private router = inject(Router);
   assetService = inject(AssetService);
   compositeService = inject(CompositeService);
-  private serverTable = viewChild(ServerTableComponent);
+
+  private toggleActiveTpl = viewChild<TemplateRef<{ $implicit: any }>>('toggleActiveTpl');
+  private removeTpl = viewChild<TemplateRef<{ $implicit: any }>>('removeTpl');
+  private stageTpl = viewChild<TemplateRef<{ $implicit: any }>>('stageTpl');
 
   ngOnInit(): void {
     this.assetService.loadInstrumentTypes();
@@ -325,121 +265,131 @@ export class UniversePanelComponent implements OnInit {
     { label: 'Inactive', value: false },
   ];
 
+  // ─── Cell template handlers ───────────────────────────────
+  onToggleActive(e: Event, row: any, isActive: boolean): void {
+    e.stopPropagation();
+    const id = row?.instrument_id ?? row?.composite_id ?? row?.exchange_id ?? row?.id;
+    if (this.mode() === 'instruments') {
+      this.toggleInstrumentActive.emit({ id, isActive });
+    } else {
+      this.toggleCompositeActive.emit({ id, isActive });
+    }
+  }
+
+  onRemove(e: Event, row: any): void {
+    e.stopPropagation();
+    const id = row?.instrument_id ?? row?.composite_id ?? row?.exchange_id ?? row?.id;
+    if (this.mode() === 'instruments') {
+      this.removeInstrument.emit(id);
+    } else {
+      this.removeComposite.emit(id);
+    }
+  }
+
+  onToggleStage(e: Event, id: string): void {
+    e.stopPropagation();
+    this.stagedIds.update(s => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  }
+
   // ─── Universe view columns ────────────────────────────────
-  instrumentUniverseColumns: DataTableColumn[] = [
-    { field: 'instrument_display_name', header: 'Instrument', sortable: false },
-    { field: 'instrument_name', header: 'Name', sortable: false, cellClass: 'font-mono text-surface-500' },
-    { field: 'is_active', header: 'Status', sortable: false, cellType: 'tag', tagMapper: (v: boolean) => ({ label: v ? 'Active' : 'Disabled', severity: v ? 'success' : 'secondary' }) },
-    { field: 'toggle', header: '', sortable: false, cellType: 'custom', cellRenderer: ToggleActiveCellRenderer, width: 90 },
-    { field: 'remove', header: '', sortable: false, cellType: 'custom', cellRenderer: RemoveCellRenderer, width: 80 },
-  ];
+  instrumentUniverseColumns = computed<AppColumn<UniverseItem>[]>(() => {
+    const toggleTpl = this.toggleActiveTpl();
+    const removeTpl = this.removeTpl();
+    if (!toggleTpl || !removeTpl) return [];
+    return [
+      { field: 'instrument_display_name', header: 'Instrument', sortable: false },
+      { field: 'instrument_name', header: 'Name', sortable: false, cellClass: 'font-mono text-fg-muted' },
+      { field: 'is_active', header: 'Status', sortable: false, cellType: 'tag', tagMapper: (v: boolean) => ACTIVE_TAG(v) },
+      { field: '__toggle', header: '', sortable: false, cellTemplate: toggleTpl, width: 90 },
+      { field: '__remove', header: '', sortable: false, cellTemplate: removeTpl, width: 80 },
+    ];
+  });
 
-  compositeUniverseColumns: DataTableColumn[] = [
-    { field: 'composite_display_name', header: 'Composite', sortable: false },
-    { field: 'composite_name', header: 'Name', sortable: false, cellClass: 'font-mono text-surface-500' },
-    { field: 'is_active', header: 'Status', sortable: false, cellType: 'tag', tagMapper: (v: boolean) => ({ label: v ? 'Active' : 'Disabled', severity: v ? 'success' : 'secondary' }) },
-    { field: 'toggle', header: '', sortable: false, cellType: 'custom', cellRenderer: ToggleActiveCellRenderer, width: 90 },
-    { field: 'remove', header: '', sortable: false, cellType: 'custom', cellRenderer: RemoveCellRenderer, width: 80 },
-  ];
+  compositeUniverseColumns = computed<AppColumn<CompositeUniverseItem>[]>(() => {
+    const toggleTpl = this.toggleActiveTpl();
+    const removeTpl = this.removeTpl();
+    if (!toggleTpl || !removeTpl) return [];
+    return [
+      { field: 'composite_display_name', header: 'Composite', sortable: false },
+      { field: 'composite_name', header: 'Name', sortable: false, cellClass: 'font-mono text-fg-muted' },
+      { field: 'is_active', header: 'Status', sortable: false, cellType: 'tag', tagMapper: (v: boolean) => ACTIVE_TAG(v) },
+      { field: '__toggle', header: '', sortable: false, cellTemplate: toggleTpl, width: 90 },
+      { field: '__remove', header: '', sortable: false, cellTemplate: removeTpl, width: 80 },
+    ];
+  });
 
-  // ─── Picker columns ──────────────────────────────────────
-  instrumentPickerColDefs: ColDef[] = [
-    { headerName: 'Display Name', field: 'display_name', minWidth: 160 },
-    { headerName: 'Name', field: 'name', cellClass: 'font-mono text-surface-500', minWidth: 140 },
-    { headerName: 'Type', field: 'instrument_type_id', sortable: false, valueFormatter: (p) => this.getInstrumentTypeName(p.value) },
-    { headerName: 'Pair', field: 'pair', cellClass: 'font-mono text-surface-500', sortable: false, valueGetter: (p) => `${p.data?.from_asset_name ?? ''}/${p.data?.to_asset_name ?? ''}` },
-    { headerName: 'Status', field: 'is_active', cellRenderer: StatusBadgeCellRenderer },
-    { headerName: '', field: '', cellRenderer: StageCellRenderer, sortable: false, maxWidth: 80 },
-  ];
+  // ─── Picker columns ───────────────────────────────────────
+  instrumentPickerColumns = computed<AppColumn<any>[]>(() => {
+    const stageTpl = this.stageTpl();
+    if (!stageTpl) return [];
+    return [
+      { field: 'display_name', header: 'Display Name', minWidth: 160 },
+      { field: 'name', header: 'Name', cellClass: 'font-mono text-fg-muted', minWidth: 140 },
+      { field: 'instrument_type_id', header: 'Type', sortable: false, format: (v) => this.getInstrumentTypeName(v) },
+      {
+        field: 'pair', header: 'Pair', sortable: false, cellClass: 'font-mono text-fg-muted',
+        format: (_, row) => `${row?.from_asset_name ?? ''}/${row?.to_asset_name ?? ''}`,
+      },
+      { field: 'is_active', header: 'Status', sortable: false, cellType: 'tag', tagMapper: (v: boolean) => ACTIVE_TAG(v) },
+      { field: '__stage', header: '', sortable: false, cellTemplate: stageTpl, width: 80 },
+    ];
+  });
 
-  compositePickerColDefs: ColDef[] = [
-    { headerName: 'Display Name', field: 'display_name', minWidth: 160 },
-    { headerName: 'Name', field: 'name', cellClass: 'font-mono text-surface-500', minWidth: 140 },
-    { headerName: 'Type', field: 'composite_type_id', sortable: false, valueFormatter: (p) => this.getCompositeTypeName(p.value) },
-    { headerName: 'Status', field: 'is_active', cellRenderer: StatusBadgeCellRenderer },
-    { headerName: '', field: '', cellRenderer: StageCellRenderer, sortable: false, maxWidth: 80 },
-  ];
+  compositePickerColumns = computed<AppColumn<any>[]>(() => {
+    const stageTpl = this.stageTpl();
+    if (!stageTpl) return [];
+    return [
+      { field: 'display_name', header: 'Display Name', minWidth: 160 },
+      { field: 'name', header: 'Name', cellClass: 'font-mono text-fg-muted', minWidth: 140 },
+      { field: 'composite_type_id', header: 'Type', sortable: false, format: (v) => this.getCompositeTypeName(v) },
+      { field: 'is_active', header: 'Status', sortable: false, cellType: 'tag', tagMapper: (v: boolean) => ACTIVE_TAG(v) },
+      { field: '__stage', header: '', sortable: false, cellTemplate: stageTpl, width: 80 },
+    ];
+  });
 
-  // ─── Grid contexts ────────────────────────────────────────
-  universeContext = {
-    onRemove: (id: string) => {
-      if (this.mode() === 'instruments') {
-        this.removeInstrument.emit(id);
-      } else {
-        this.removeComposite.emit(id);
-      }
-    },
-    onToggleActive: (id: string, isActive: boolean) => {
-      if (this.mode() === 'instruments') {
-        this.toggleInstrumentActive.emit({ id, isActive });
-      } else {
-        this.toggleCompositeActive.emit({ id, isActive });
-      }
-    },
-  };
+  // ─── Row classes ──────────────────────────────────────────
+  universeRowClass = (row: any) => row?.is_active === false ? 'opacity-55' : '';
 
-  getUniverseRowStyle = (params: any) => {
-    if (params.data && params.data.is_active === false) {
-      return { opacity: '0.55' };
-    }
-    return undefined;
-  };
-
-  pickerContext = {
-    isStaged: (id: string) => this.stagedIds().has(id),
-    toggleStage: (id: string) => {
-      this.stagedIds.update(s => {
-        const n = new Set(s);
-        if (n.has(id)) n.delete(id); else n.add(id);
-        return n;
-      });
-    },
-  };
-
-  getRowStyle = (params: any) => {
-    const id = params.data?.id;
-    if (id && this.stagedIds().has(id)) {
-      return {
-        background: 'rgba(34, 197, 94, 0.08)',
-        borderLeft: '3px solid rgb(34, 197, 94)',
-      };
-    }
-    return undefined;
+  pickerRowClass = (row: any) => {
+    const id = row?.id;
+    return id && this.stagedIds().has(id) ? 'app-picker-row-staged' : '';
   };
 
   // ─── Universe fetch functions ─────────────────────────────
-  instrumentUniverseFetchFn = computed<ServerFetchFn<UniverseItem> | null>(() => {
+  instrumentUniverseFetchFn = computed<AppFetchFn<UniverseItem> | null>(() => {
     const baseUrl = this.universeBaseUrl();
     if (!baseUrl) return null;
-    this.mode(); // track mode changes to force re-evaluation
-    this.refreshTrigger(); // force refetch when refresh() is called
-    return (page: number, pageSize: number) => {
-      return this.api.get<PaginatedResponse<UniverseItem>>(`${baseUrl}/universe/search`, { page, page_size: pageSize }).pipe(
+    this.mode();
+    this.refreshTrigger();
+    return (page, pageSize) =>
+      this.api.get<PaginatedResponse<UniverseItem>>(`${baseUrl}/universe/search`, { page, page_size: pageSize }).pipe(
         map(res => {
           this.instrumentCount.set(res.total);
           return { items: res.items, total: res.total };
-        })
+        }),
       );
-    };
   });
 
-  compositeUniverseFetchFn = computed<ServerFetchFn<CompositeUniverseItem> | null>(() => {
+  compositeUniverseFetchFn = computed<AppFetchFn<CompositeUniverseItem> | null>(() => {
     const baseUrl = this.universeBaseUrl();
     if (!baseUrl) return null;
-    this.mode(); // track mode changes
-    this.refreshTrigger(); // force refetch when refresh() is called
-    return (page: number, pageSize: number) => {
-      return this.api.get<PaginatedResponse<CompositeUniverseItem>>(`${baseUrl}/composite-universe/search`, { page, page_size: pageSize }).pipe(
+    this.mode();
+    this.refreshTrigger();
+    return (page, pageSize) =>
+      this.api.get<PaginatedResponse<CompositeUniverseItem>>(`${baseUrl}/composite-universe/search`, { page, page_size: pageSize }).pipe(
         map(res => {
           this.compositeCount.set(res.total);
           return { items: res.items, total: res.total };
-        })
+        }),
       );
-    };
   });
 
   // ─── Picker fetch functions ───────────────────────────────
-  pickerFetchFn = computed<ServerFetchFn<any> | null>(() => {
+  pickerFetchFn = computed<AppFetchFn<any> | null>(() => {
     const currentMode = this.mode();
     const search = this.searchFilter();
     const typeId = this.typeFilter();
@@ -459,7 +409,7 @@ export class UniversePanelComponent implements OnInit {
 
     if (currentMode === 'instruments') {
       if (typeId) params['instrument_type_id'] = typeId;
-      return (page: number, pageSize: number, sort?: { field: string; order: string }) => {
+      return (page, pageSize, sort) => {
         const p: Record<string, any> = { ...params, page, page_size: pageSize };
         if (sort) { p['sort_field'] = sort.field; p['sort_order'] = sort.order; }
         return this.api.get<PaginatedResponse<Instrument>>('/instruments/search', p).pipe(
@@ -468,7 +418,7 @@ export class UniversePanelComponent implements OnInit {
       };
     } else {
       if (typeId) params['composite_type_id'] = typeId;
-      return (page: number, pageSize: number, sort?: { field: string; order: string }) => {
+      return (page, pageSize, sort) => {
         const p: Record<string, any> = { ...params, page, page_size: pageSize };
         if (sort) { p['sort_field'] = sort.field; p['sort_order'] = sort.order; }
         return this.api.get<PaginatedResponse<Composite>>('/composites/search', p).pipe(
@@ -515,7 +465,6 @@ export class UniversePanelComponent implements OnInit {
 
   unstageAll(): void {
     this.stagedIds.set(new Set());
-    this.serverTable()?.gridApi?.redrawRows();
   }
 
   stageAllFiltered(): void {
@@ -547,7 +496,6 @@ export class UniversePanelComponent implements OnInit {
           return n;
         });
         this.stagingAll.set(false);
-        this.serverTable()?.gridApi?.redrawRows();
       },
       error: () => this.stagingAll.set(false),
     });

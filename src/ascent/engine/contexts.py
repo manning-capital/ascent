@@ -35,6 +35,8 @@ if TYPE_CHECKING:
     from ascent.ports.event_bus import EventBus
     from ascent.ports.feed_store import LatestFeedStore
     from ascent.ports.heartbeat import HeartbeatStore
+    from ascent.ports.holdings_repo import HoldingsRepository
+    from ascent.ports.instrument_repo import InstrumentRepository
     from ascent.ports.outbox import OutboxPublisher
     from ascent.ports.route_gate import RouteGate
     from ascent.ports.run_tracker import RunTrackerPort
@@ -45,6 +47,7 @@ if TYPE_CHECKING:
         StrategyRunRepository,
         TradeRepository,
     )
+    from ascent.ports.transaction_repo import TransactionRepository
     from ascent.ports.unit_of_work import UnitOfWorkFactory
 
 
@@ -58,6 +61,9 @@ class PersistenceContext:
     mappers: OrmMappers
     trade_repo: TradeRepository
     order_repo: OrderRepository
+    holdings_repo: HoldingsRepository
+    transaction_repo: TransactionRepository
+    instrument_repo: InstrumentRepository
     universe_repo: StrategyUniverseRepository
     route_gate: RouteGate
     uow_factory: UnitOfWorkFactory

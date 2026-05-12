@@ -1,424 +1,226 @@
 @if (strategyService.loading()) {
   <div class="flex flex-col h-[calc(100vh-3.5rem)] md:h-screen">
-    <!-- Header skeleton -->
-    <div class="flex items-center gap-3 px-4 py-2 border-b border-surface shrink-0 bg-emphasis">
+    <div class="flex items-center gap-3 px-4 py-2 border-b border-edge shrink-0">
       <p-skeleton width="5rem" height="0.875rem"/>
-      <span class="text-surface-300">|</span>
       <p-skeleton width="10rem" height="1.125rem"/>
-      <p-skeleton width="3.5rem" height="1.375rem" borderRadius="1rem"/>
-      <p-skeleton width="4rem" height="0.75rem"/>
     </div>
-    <!-- Tab bar skeleton -->
-    <div class="flex gap-2 px-4 py-3 border-b border-surface">
-      @for (_ of [1,2,3,4,5,6,7]; track $index) {
-        <p-skeleton width="5rem" height="1rem"/>
-      }
-    </div>
-
-    <!-- Tab-specific content skeleton -->
-    @if (activeTab() === 'Overview') {
-      <div class="flex-1 overflow-y-auto p-6">
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-          <p-card><p-skeleton width="8rem" height="1rem" class="mb-4"/><p-skeleton width="100%" height="16rem"/></p-card>
-          <p-card><p-skeleton width="8rem" height="1rem" class="mb-4"/><p-skeleton width="100%" height="16rem"/></p-card>
-        </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-0 border border-surface rounded-lg overflow-hidden">
-          @for (_ of [1,2]; track $index) {
-            <div class="p-5 border-b md:border-r border-surface">
-              <div class="mb-3 pb-2 border-b border-surface"><p-skeleton width="40%" height="0.75rem"/></div>
-              <div class="space-y-3">
-                @for (_ of [1,2,3,4,5,6,7,8]; track $index) {
-                  <div class="flex justify-between"><p-skeleton width="35%" height="1.25rem"/><p-skeleton width="25%" height="1.25rem"/></div>
-                }
-              </div>
-            </div>
-          }
-          <div class="p-5 border-b md:border-b-0 md:border-r border-surface">
-            <div class="mb-3 pb-2 border-b border-surface"><p-skeleton width="38%" height="0.75rem"/></div>
-            <div class="space-y-3">
-              @for (_ of [1,2,3,4,5,6,7]; track $index) {
-                <div class="flex justify-between"><p-skeleton width="35%" height="1.25rem"/><p-skeleton width="25%" height="1.25rem"/></div>
-              }
-            </div>
-          </div>
-          <div class="p-5">
-            <div class="mb-3 pb-2 border-b border-surface"><p-skeleton width="42%" height="0.75rem"/></div>
-            <div class="space-y-3">
-              @for (_ of [1,2,3,4,5,6]; track $index) {
-                <div class="flex justify-between"><p-skeleton width="35%" height="1.25rem"/><p-skeleton width="25%" height="1.25rem"/></div>
-              }
-            </div>
-          </div>
-        </div>
-      </div>
-    } @else if (activeTab() === 'Trades' || activeTab() === 'Orders') {
-      <div class="flex-1 flex flex-col min-h-0 p-6">
-        <div class="flex items-center gap-2 mb-3">
-          <p-skeleton width="8rem" height="1.125rem"/>
-        </div>
-        <div class="flex-1 flex flex-col min-h-0 rounded-lg border border-surface overflow-clip">
-          <div class="flex items-center gap-4 px-4 border-b border-surface shrink-0" style="height:48px">
-            @for (_ of skeletonRows(7); track $index) { <p-skeleton width="4rem" height="0.75rem"/> }
-          </div>
-          <div class="flex-1 overflow-hidden">
-            @for (_ of skeletonRows(10); track $index) {
-              <div class="flex items-center gap-4 px-4 border-b border-surface" style="height:42px">
-                <p-skeleton width="5rem" height="1rem"/>
-                <p-skeleton width="4rem" height="1.5rem" borderRadius="1rem"/>
-                <p-skeleton width="6rem" height="1rem"/>
-                <p-skeleton width="4rem" height="1rem"/>
-                <p-skeleton width="5rem" height="1rem"/>
-                <div class="flex-1"></div>
-                <p-skeleton width="4rem" height="1.5rem" borderRadius="1rem"/>
-              </div>
-            }
-          </div>
-        </div>
-        <div class="flex items-center justify-center gap-1 mt-4 shrink-0">
-          <p-skeleton width="10rem" height="0.875rem"/>
-          @for (_ of [1,2]; track $index) { <p-skeleton width="2.5rem" height="2.5rem" borderRadius="50%"/> }
-          @for (_ of [1,2,3]; track $index) { <p-skeleton width="2.5rem" height="2.5rem" borderRadius="50%"/> }
-          @for (_ of [1,2]; track $index) { <p-skeleton width="2.5rem" height="2.5rem" borderRadius="50%"/> }
-          <p-skeleton width="4rem" height="2.5rem" borderRadius="6px"/>
-        </div>
-      </div>
-    } @else if (activeTab() === 'Universe') {
-      <div class="flex-1 overflow-y-auto p-6">
-        <div class="flex items-center justify-between mb-4">
-          <div>
-            <p-skeleton width="8rem" height="1rem" class="mb-1"/>
-            <p-skeleton width="16rem" height="0.75rem"/>
-          </div>
-          <p-skeleton width="4rem" height="2rem" borderRadius="6px"/>
-        </div>
-        <p-card>
-          <div class="flex gap-4 pb-3 border-b border-surface">
-            @for (_ of [1,2,3,4,5,6]; track $index) {
-              <p-skeleton width="5rem" height="0.75rem"/>
-            }
-          </div>
-          @for (_ of [1,2,3,4,5]; track $index) {
-            <div class="flex gap-4 py-3 border-b border-surface">
-              <p-skeleton width="2rem" height="1rem"/>
-              <p-skeleton width="6rem" height="1rem"/>
-              <p-skeleton width="5rem" height="1rem"/>
-              <p-skeleton width="5rem" height="1rem"/>
-              <p-skeleton width="3rem" height="1rem"/>
-              <p-skeleton width="4rem" height="1rem"/>
-            </div>
-          }
-        </p-card>
-      </div>
-    } @else if (activeTab() === 'Configuration') {
-      <div class="flex-1 overflow-y-auto p-6 max-w-3xl mx-auto">
-        @for (_ of [1,2,3]; track $index) {
-          <p-card class="mb-6">
-            <p-skeleton width="6rem" height="1rem" class="mb-4"/>
-            <div class="space-y-3">
-              @for (_ of [1,2,3,4]; track $index) {
-                <div class="flex justify-between">
-                  <p-skeleton width="30%" height="1rem"/>
-                  <p-skeleton width="40%" height="1rem"/>
-                </div>
-              }
-            </div>
-          </p-card>
+    <div class="flex-1 overflow-y-auto p-6 space-y-4">
+      <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+        @for (_ of [1,2,3,4,5,6]; track $index) {
+          <p-card><p-skeleton width="60%" height="0.625rem"/><p-skeleton width="80%" height="1.5rem"/></p-card>
         }
       </div>
-    }
+      <p-skeleton width="100%" height="22rem"/>
+      <p-skeleton width="100%" height="20rem"/>
+    </div>
   </div>
 } @else {
   @let strategy = strategyService.selectedStrategy();
   @if (strategy) {
-  <div class="flex flex-col h-[calc(100vh-3.5rem)] md:h-screen">
-    <!-- Header Bar -->
-    <div class="flex items-center gap-3 px-4 py-2 border-b border-surface shrink-0 bg-emphasis">
-      <a routerLink="/strategies" class="text-sm text-primary hover:underline">&larr; Strategies</a>
-      <span class="text-surface-300">|</span>
-      <h1 class="text-lg font-bold truncate">{{ strategy.display_name }}</h1>
-      <p-tag [value]="strategy.is_active ? 'Active' : 'Inactive'" [severity]="strategy.is_active ? 'success' : 'secondary'" [rounded]="true"/>
+  <app-page-header
+    [title]="strategy.display_name"
+    [breadcrumb]="[{ label: 'Strategies', routerLink: '/strategies' }]"
+  >
+    <div actions class="flex items-center gap-2">
+      <p-tag
+        [value]="strategy.is_active ? 'Active' : 'Inactive'"
+        [severity]="strategy.is_active ? 'success' : 'secondary'"
+        [rounded]="true"
+      />
       @if (strategy.is_paused) {
-        <p-tag value="Paused" severity="warn" [rounded]="true"/>
+        <p-tag value="Paused" severity="warn" [rounded]="true" />
       }
-      <div class="flex-1"></div>
       <p-button
         size="small"
         [outlined]="true"
         [severity]="strategy.is_paused ? 'success' : 'warn'"
         [label]="strategy.is_paused ? 'Resume' : 'Pause'"
         [loading]="pauseBusy()"
-        (onClick)="togglePause(strategy.is_paused)"/>
+        (onClick)="togglePause(strategy.is_paused)"
+      />
     </div>
+  </app-page-header>
 
-    @if (strategy.is_paused) {
-      <div class="px-4 py-2 bg-yellow-500/10 border-b border-yellow-500/20 text-xs text-yellow-300 shrink-0">
-        Strategy is paused — new trades blocked. Open trades can still be managed and exited normally.
+  @if (strategy.is_paused) {
+    <div class="px-4 py-2 bg-warning/10 border-b border-warning/20 text-xs text-warning shrink-0">
+      Strategy is paused — new trades blocked. Open trades can still be managed and exited normally.
+    </div>
+  }
+
+  <div class="flex-1 min-h-0 overflow-y-auto">
+    <!-- ─── Compact metric strip — CoinMarketCap-style horizontal info bar ─── -->
+    @if (stats(); as s) {
+      <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-px bg-edge border-b border-edge">
+        <div class="bg-canvas px-4 py-3">
+          <div class="text-[10px] uppercase tracking-wider text-fg-faint mb-1">Net P&L</div>
+          <div [class]="'text-lg font-mono tabular-nums font-semibold ' + pnlClass(s.net_pnl)">
+            {{ formatCurrency(s.net_pnl) }}
+          </div>
+        </div>
+        <div class="bg-canvas px-4 py-3">
+          <div class="text-[10px] uppercase tracking-wider text-fg-faint mb-1">Total P&L</div>
+          <div [class]="'text-lg font-mono tabular-nums font-semibold ' + pnlClass(s.total_pnl)">
+            {{ formatCurrency(s.total_pnl) }}
+          </div>
+        </div>
+        <div class="bg-canvas px-4 py-3">
+          <div class="text-[10px] uppercase tracking-wider text-fg-faint mb-1">Trades</div>
+          <div class="text-lg font-mono tabular-nums font-semibold">
+            {{ s.total_trades }}
+            <span class="text-xs text-fg-faint font-normal ml-1">{{ s.open_trades }} open</span>
+          </div>
+        </div>
+        <div class="bg-canvas px-4 py-3">
+          <div class="text-[10px] uppercase tracking-wider text-fg-faint mb-1">Win Rate</div>
+          <div class="text-lg font-mono tabular-nums font-semibold">{{ s.win_rate }}%</div>
+        </div>
+        <div class="bg-canvas px-4 py-3">
+          <div class="text-[10px] uppercase tracking-wider text-fg-faint mb-1">Sharpe</div>
+          <div [class]="'text-lg font-mono tabular-nums font-semibold ' + pnlClass(s.sharpe_ratio)">
+            {{ s.sharpe_ratio.toFixed(2) }}
+          </div>
+        </div>
+        <div class="bg-canvas px-4 py-3">
+          <div class="text-[10px] uppercase tracking-wider text-fg-faint mb-1">Max DD</div>
+          <div class="text-lg font-mono tabular-nums font-semibold text-negative">
+            {{ formatCurrency(s.max_drawdown) }}
+          </div>
+        </div>
       </div>
     }
 
-    <!-- Tab Bar -->
-    <p-tabs class="shrink-0" [value]="activeTab()" (valueChange)="onTabChange($any($event))">
-      <p-tablist>
-        @for (tab of tabs; track tab) {
-          <p-tab [value]="tab">{{ tab }}</p-tab>
-        }
-      </p-tablist>
-    </p-tabs>
+    <!-- ─── Bento: Cumulative P&L hero (left) + Distribution / Win-Loss stack (right).
+         Edge-to-edge — no outer padding, no gaps between panels. The metric
+         strip above already supplies the top divider, so this section only
+         adds border-b for the divider against the tab strip below. The
+         left column has border-r as the column divider; the top-right
+         distribution panel has border-b as the row divider. -->
+    <div class="grid grid-cols-1 lg:grid-cols-[3fr_2fr] border-b border-edge" style="height: 32rem;">
+      <!-- LEFT: Cumulative P&L -->
+      <div class="bg-surface flex flex-col min-w-0 min-h-0 lg:border-r lg:border-edge">
+        <div class="flex items-center justify-between gap-2 px-3 py-2 border-b border-edge shrink-0">
+          <h3 class="text-[11px] font-semibold uppercase tracking-wider text-fg-muted">Cumulative P&L</h3>
+          <p-selectButton
+            [(ngModel)]="pnlLookback"
+            [options]="lookbackOptions"
+            optionLabel="label"
+            optionValue="value"
+            [allowEmpty]="false"
+            size="small"/>
+        </div>
+        <div class="flex-1 min-h-0 p-3">
+          <app-cumulative-pnl-chart [data]="cumulativePnlData()" [(lookback)]="pnlLookback"/>
+        </div>
+      </div>
 
-    <!-- Tab Content -->
-    <div class="flex-1 flex flex-col min-h-0">
+      <!-- RIGHT: 2 stacked panels — explicit minmax(0,1fr) rows so panels
+           can shrink rather than push their content past the container.
+           Edge-to-edge — no gap; row divider is the top panel's border-b. -->
+      <div class="grid min-w-0 min-h-0" style="grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);">
+        <!-- Top-right: PnL Distribution -->
+        <div class="bg-surface flex flex-col min-h-0 overflow-hidden border-b border-edge">
+          <div class="px-3 py-2 border-b border-edge shrink-0">
+            <h3 class="text-[11px] font-semibold uppercase tracking-wider text-fg-muted">P&L Distribution</h3>
+          </div>
+          <div class="flex-1 min-h-0 p-2">
+            <app-pnl-distribution-chart [pnls]="pnlDistributionData()"/>
+          </div>
+        </div>
 
-      <!-- Performance Tab -->
-      @if (activeTab() === 'Overview') {
-        <div class="overflow-y-auto h-full">
-          @if (strategyService.statsLoading()) {
-            <!-- Charts skeleton -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 px-6 pt-6">
-              <p-card>
-                <p-skeleton width="8rem" height="1rem" class="mb-4"/>
-                <p-skeleton width="100%" height="16rem"/>
-              </p-card>
-              <p-card>
-                <p-skeleton width="8rem" height="1rem" class="mb-4"/>
-                <p-skeleton width="100%" height="16rem"/>
-              </p-card>
-            </div>
-            <!-- Stats skeleton -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-0 mx-6 mt-6 border border-surface rounded-lg overflow-hidden">
-              @for (_ of [1,2]; track $index) {
-                <div class="p-5 border-b md:border-r border-surface">
-                  <div class="mb-3 pb-2 border-b border-surface"><p-skeleton width="40%" height="0.75rem"/></div>
-                  <div class="space-y-3">
-                    @for (_ of [1,2,3,4,5,6,7,8]; track $index) {
-                      <div class="flex justify-between"><p-skeleton width="35%" height="1.25rem"/><p-skeleton width="25%" height="1.25rem"/></div>
-                    }
-                  </div>
-                </div>
-              }
-              <div class="p-5 border-b md:border-b-0 md:border-r border-surface">
-                <div class="mb-3 pb-2 border-b border-surface"><p-skeleton width="38%" height="0.75rem"/></div>
-                <div class="space-y-3">
-                  @for (_ of [1,2,3,4,5,6,7]; track $index) {
-                    <div class="flex justify-between"><p-skeleton width="35%" height="1.25rem"/><p-skeleton width="25%" height="1.25rem"/></div>
-                  }
-                </div>
+        <!-- Bottom-right: Win/Loss donut + key trade stats -->
+        <div class="bg-surface flex flex-col min-h-0 overflow-hidden">
+          <div class="px-3 py-2 border-b border-edge shrink-0">
+            <h3 class="text-[11px] font-semibold uppercase tracking-wider text-fg-muted">Win / Loss</h3>
+          </div>
+          @if (stats(); as s) {
+            <div class="flex-1 min-h-0 flex items-center gap-3 p-3 overflow-hidden">
+              <div class="shrink-0 h-full" style="width: 7rem;">
+                <app-win-loss-chart
+                  [wins]="s.wins"
+                  [losses]="s.losses"
+                  [breakeven]="s.breakeven"
+                  [showLegend]="false"/>
               </div>
-              <div class="p-5">
-                <div class="mb-3 pb-2 border-b border-surface"><p-skeleton width="42%" height="0.75rem"/></div>
-                <div class="space-y-3">
-                  @for (_ of [1,2,3,4,5,6]; track $index) {
-                    <div class="flex justify-between"><p-skeleton width="35%" height="1.25rem"/><p-skeleton width="25%" height="1.25rem"/></div>
-                  }
+              <div class="flex-1 min-w-0 flex flex-col justify-center text-xs gap-y-1.5">
+                <div class="flex justify-between gap-3">
+                  <span class="text-fg-muted">Avg win</span>
+                  <span class="font-mono tabular-nums text-positive">{{ formatCurrency(s.avg_win) }}</span>
                 </div>
-              </div>
-            </div>
-          } @else if (stats(); as s) {
-            <!-- Charts -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 px-6 pt-6">
-              <p-card>
-                <ng-template #header>
-                  <div class="flex items-center justify-between gap-3 p-5 pb-0">
-                    <h3 class="font-semibold text-base">Cumulative P&L</h3>
-                    <p-selectButton
-                      [(ngModel)]="pnlLookback"
-                      [options]="lookbackOptions"
-                      optionLabel="label"
-                      optionValue="value"
-                      [allowEmpty]="false"
-                      size="small"/>
-                  </div>
-                </ng-template>
-                <div class="h-64">
-                  <app-cumulative-pnl-chart [data]="cumulativePnlData()" [(lookback)]="pnlLookback"/>
+                <div class="flex justify-between gap-3">
+                  <span class="text-fg-muted">Avg loss</span>
+                  <span class="font-mono tabular-nums text-negative">{{ formatCurrency(s.avg_loss) }}</span>
                 </div>
-              </p-card>
-              <p-card header="PnL Distribution">
-                <div class="h-64">
-                  <app-pnl-distribution-chart [pnls]="pnlDistributionData()"/>
+                <div class="flex justify-between gap-3">
+                  <span class="text-fg-muted">Best streak</span>
+                  <span class="font-mono tabular-nums text-positive">{{ s.max_win_streak }}</span>
                 </div>
-              </p-card>
-            </div>
-
-            <!-- Summary Dashboard -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-0 mx-6 mt-6 mb-6 border border-surface rounded-lg overflow-hidden">
-              <!-- Performance -->
-              <div class="p-5 border-b md:border-r border-surface">
-                <div class="text-xs font-bold uppercase tracking-widest text-primary mb-3 pb-2 border-b border-surface">Performance</div>
-                <div class="space-y-2">
-                  <div class="flex justify-between text-sm">
-                    <span class="text-muted-color">Total PnL</span>
-                    <span [class]="'font-semibold ' + pnlClass(s.total_pnl)">{{ formatCurrency(s.total_pnl) }}</span>
-                  </div>
-                  <div class="flex justify-between text-sm">
-                    <span class="text-muted-color">Total Fees</span>
-                    <span class="font-semibold">{{ formatCurrency(s.total_fees) }}</span>
-                  </div>
-                  <div class="flex justify-between text-sm">
-                    <span class="text-muted-color">Net PnL</span>
-                    <span [class]="'font-semibold ' + pnlClass(s.net_pnl)">{{ formatCurrency(s.net_pnl) }}</span>
-                  </div>
-                  <div class="flex justify-between text-sm">
-                    <span class="text-muted-color">Avg Trade PnL</span>
-                    <span [class]="'font-semibold ' + pnlClass(s.avg_trade_pnl)">{{ formatCurrency(s.avg_trade_pnl) }}</span>
-                  </div>
-                  <div class="flex justify-between text-sm">
-                    <span class="text-muted-color">Median PnL</span>
-                    <span [class]="'font-semibold ' + pnlClass(s.median_pnl)">{{ formatCurrency(s.median_pnl) }}</span>
-                  </div>
-                  <div class="flex justify-between text-sm">
-                    <span class="text-muted-color">Profit Factor</span>
-                    <span [class]="'font-semibold ' + (s.profit_factor > 1 ? 'text-positive' : s.profit_factor > 0 ? 'text-negative' : '')">{{ s.profit_factor.toFixed(2) }}</span>
-                  </div>
-                  <div class="flex justify-between text-sm">
-                    <span class="text-muted-color">Payoff Ratio</span>
-                    <span class="font-semibold">{{ s.payoff_ratio.toFixed(2) }}</span>
-                  </div>
-                  <div class="flex justify-between text-sm">
-                    <span class="text-muted-color">Expectancy</span>
-                    <span [class]="'font-semibold ' + pnlClass(s.expectancy)">{{ formatCurrency(s.expectancy) }}</span>
-                  </div>
+                <div class="flex justify-between gap-3">
+                  <span class="text-fg-muted">Worst streak</span>
+                  <span class="font-mono tabular-nums text-negative">{{ s.max_loss_streak }}</span>
                 </div>
-              </div>
-
-              <!-- Risk Metrics -->
-              <div class="p-5 border-b border-surface">
-                <div class="text-xs font-bold uppercase tracking-widest text-primary mb-3 pb-2 border-b border-surface">Risk Metrics</div>
-                <div class="space-y-2">
-                  <div class="flex justify-between text-sm">
-                    <span class="text-muted-color">Sharpe Ratio</span>
-                    <span [class]="'font-semibold ' + pnlClass(s.sharpe_ratio)">{{ s.sharpe_ratio.toFixed(3) }}</span>
-                  </div>
-                  <div class="flex justify-between text-sm">
-                    <span class="text-muted-color">Sortino Ratio</span>
-                    <span [class]="'font-semibold ' + pnlClass(s.sortino_ratio)">{{ s.sortino_ratio.toFixed(3) }}</span>
-                  </div>
-                  <div class="flex justify-between text-sm">
-                    <span class="text-muted-color">Max Drawdown</span>
-                    <span class="font-semibold text-negative">{{ formatCurrency(s.max_drawdown) }}</span>
-                  </div>
-                  <div class="flex justify-between text-sm">
-                    <span class="text-muted-color">Max DD Duration</span>
-                    <span class="font-semibold">{{ s.max_drawdown_duration }} trades</span>
-                  </div>
-                  <div class="flex justify-between text-sm">
-                    <span class="text-muted-color">Avg Win</span>
-                    <span class="font-semibold text-positive">{{ formatCurrency(s.avg_win) }}</span>
-                  </div>
-                  <div class="flex justify-between text-sm">
-                    <span class="text-muted-color">Avg Loss</span>
-                    <span class="font-semibold text-negative">{{ formatCurrency(s.avg_loss) }}</span>
-                  </div>
-                  <div class="flex justify-between text-sm">
-                    <span class="text-muted-color">Max Win</span>
-                    <span class="font-semibold text-positive">{{ formatCurrency(s.max_win) }}</span>
-                  </div>
-                  <div class="flex justify-between text-sm">
-                    <span class="text-muted-color">Max Loss</span>
-                    <span class="font-semibold text-negative">{{ formatCurrency(s.max_loss) }}</span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Trade Analysis -->
-              <div class="p-5 border-b md:border-b-0 md:border-r border-surface">
-                <div class="text-xs font-bold uppercase tracking-widest text-primary mb-3 pb-2 border-b border-surface">Trade Analysis</div>
-                <div class="space-y-2">
-                  <div class="flex justify-between text-sm">
-                    <span class="text-muted-color">Total Trades</span>
-                    <span class="font-semibold">{{ s.total_trades }}</span>
-                  </div>
-                  <div class="flex justify-between text-sm">
-                    <span class="text-muted-color">Open</span>
-                    <span class="font-semibold">{{ s.open_trades }}</span>
-                  </div>
-                  <div class="flex justify-between text-sm">
-                    <span class="text-muted-color">Winning</span>
-                    <span class="font-semibold text-positive">{{ s.wins }}</span>
-                  </div>
-                  <div class="flex justify-between text-sm">
-                    <span class="text-muted-color">Losing</span>
-                    <span class="font-semibold text-negative">{{ s.losses }}</span>
-                  </div>
-                  <div class="flex justify-between text-sm">
-                    <span class="text-muted-color">Win Rate</span>
-                    <span class="font-semibold">{{ s.win_rate }}%</span>
-                  </div>
-                  <div class="flex justify-between text-sm">
-                    <span class="text-muted-color">Best Streak</span>
-                    <span class="font-semibold text-positive">{{ s.max_win_streak }} trades</span>
-                  </div>
-                  <div class="flex justify-between text-sm">
-                    <span class="text-muted-color">Worst Streak</span>
-                    <span class="font-semibold text-negative">{{ s.max_loss_streak }} trades</span>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Holding Periods & Distribution -->
-              <div class="p-5">
-                <div class="text-xs font-bold uppercase tracking-widest text-primary mb-3 pb-2 border-b border-surface">Time & Distribution</div>
-                <div class="space-y-2">
-                  <div class="flex justify-between text-sm">
-                    <span class="text-muted-color">Avg Holding</span>
-                    <span class="font-semibold">{{ formatDuration(s.avg_holding_seconds) }}</span>
-                  </div>
-                  <div class="flex justify-between text-sm">
-                    <span class="text-muted-color">Avg Hold (Wins)</span>
-                    <span class="font-semibold text-positive">{{ formatDuration(s.avg_holding_wins_seconds) }}</span>
-                  </div>
-                  <div class="flex justify-between text-sm">
-                    <span class="text-muted-color">Avg Hold (Losses)</span>
-                    <span class="font-semibold text-negative">{{ formatDuration(s.avg_holding_losses_seconds) }}</span>
-                  </div>
-                  <div class="flex justify-between text-sm">
-                    <span class="text-muted-color">Std Dev PnL</span>
-                    <span class="font-semibold">{{ formatCurrency(s.std_dev_pnl) }}</span>
-                  </div>
-                  <div class="flex justify-between text-sm">
-                    <span class="text-muted-color">Skewness</span>
-                    <span class="font-semibold">{{ s.skewness.toFixed(3) }}</span>
-                  </div>
-                  <div class="flex justify-between text-sm">
-                    <span class="text-muted-color">Kurtosis</span>
-                    <span class="font-semibold">{{ s.kurtosis.toFixed(3) }}</span>
-                  </div>
+                <div class="flex justify-between gap-3">
+                  <span class="text-fg-muted">Profit factor</span>
+                  <span class="font-mono tabular-nums">{{ s.profit_factor.toFixed(2) }}</span>
                 </div>
               </div>
             </div>
+          } @else {
+            <div class="flex-1 flex items-center justify-center text-xs text-fg-faint">No data</div>
           }
         </div>
-      }
+      </div>
+    </div>
 
-      <!-- Trades Tab -->
-      @if (activeTab() === 'Trades') {
-        <div class="flex flex-col flex-1 min-h-0 p-6">
-          <h2 class="text-lg font-semibold flex items-center gap-2 mb-3 shrink-0">
-            Trade History
-            <a [routerLink]="['/trades']" [queryParams]="{strategy_id: strategy.id}" class="text-xs font-normal text-primary hover:underline ml-auto">View All</a>
-          </h2>
-          <app-trade-table class="flex-1 min-h-0"
-            [showStrategy]="false"
-            [fetchPage]="tradesFetchPage()"/>
+    <!-- ─── Tabs — full-width strip aligned with content below.
+         Bento above provides border-b; no extra border-t needed. -->
+    <div class="sticky top-0 bg-canvas z-10">
+      <p-tabs [value]="activeTab()" (valueChange)="onTabChange($any($event))">
+        <p-tablist>
+          @for (tab of tabs; track tab) {
+            <p-tab [value]="tab">{{ tab }}</p-tab>
+          }
+        </p-tablist>
+      </p-tabs>
+    </div>
+
+    <!-- Trades Tab -->
+    @if (activeTab() === 'Trades') {
+      <div class="px-4 lg:px-6 py-4 lg:py-6 flex flex-col" style="min-height: 30rem;">
+        <div class="flex items-center justify-between mb-3 shrink-0">
+          <h3 class="text-sm font-semibold">Trade History</h3>
+          <a [routerLink]="['/trades']" [queryParams]="{strategy_id: strategy.id}" class="text-xs text-primary hover:underline">View all in Trades</a>
         </div>
-      }
+        <app-trade-table
+          class="flex-1 min-h-0"
+          [showStrategy]="false"
+          [fetchPage]="tradesFetchPage()"/>
+      </div>
+    }
 
-      <!-- Orders Tab -->
-      @if (activeTab() === 'Orders') {
-        <div class="flex flex-col flex-1 min-h-0 p-6">
-          <h2 class="text-lg font-semibold flex items-center gap-2 mb-3 shrink-0">
-            Open Orders
-          </h2>
-          <app-server-table class="flex-1 min-h-0"
-            [columns]="orderColumns"
-            [fetchPage]="ordersFetchPage()"
-            [pageSize]="25"
-            emptyMessage="No orders."/>
-        </div>
-      }
+    <!-- Orders Tab -->
+    @if (activeTab() === 'Orders') {
+      <div class="px-4 lg:px-6 py-4 lg:py-6 flex flex-col" style="min-height: 30rem;">
+        <h3 class="text-sm font-semibold mb-3 shrink-0">Open Orders</h3>
+        <app-data-table
+          class="flex-1 min-h-0"
+          [columns]="orderColumns"
+          [fetchPage]="ordersFetchPage()"
+          emptyMessage="No orders."/>
+      </div>
+    }
 
-      <!-- Universe Tab -->
-      @if (activeTab() === 'Universe') {
+    <!-- Runs Tab -->
+    @if (activeTab() === 'Runs') {
+      <div class="flex flex-col" style="min-height: 30rem;">
+        <app-strategy-runs-tab class="flex-1 min-h-0" [strategyId]="strategyId"/>
+      </div>
+    }
+
+    <!-- Universe Tab -->
+    @if (activeTab() === 'Universe') {
+      <div class="flex flex-col" style="min-height: 30rem;">
         <app-universe-panel
+          class="flex-1 min-h-0"
           [universeBaseUrl]="'/strategies/' + strategyId"
           [excludeStrategyId]="strategyId"
           [restrictToStrategyId]="strategyId"
@@ -430,114 +232,173 @@
           (removeComposite)="removeCompositeItem($event)"
           (toggleInstrumentActive)="onToggleInstrumentActive($event)"
           (toggleCompositeActive)="onToggleCompositeActive($event)"/>
-      }
+      </div>
+    }
 
-      <!-- Exchanges Tab -->
-      @if (activeTab() === 'Exchanges') {
-        <div class="flex flex-col flex-1 min-h-0 p-6">
-          @if (!showExchangePicker()) {
-            <div class="flex items-center justify-between mb-4 shrink-0">
-              <div>
-                <h3 class="font-semibold text-sm">Exchanges</h3>
-                <p class="text-xs text-surface-400 mt-1">Exchanges this strategy can use for order execution.</p>
-              </div>
-              <p-button label="+ Add Exchanges" [outlined]="true" size="small" (onClick)="openExchangePicker()"/>
+    <!-- Exchanges Tab -->
+    @if (activeTab() === 'Exchanges') {
+      <ng-template #exchangeRemoveTpl let-row>
+        <button (click)="onRemoveExchangeClick($event, row)"
+                class="text-xs text-negative hover:underline">Remove</button>
+      </ng-template>
+
+      <ng-template #exchangeStageTpl let-row>
+        @if (stagedExchangeIds().has(row.id)) {
+          <button (click)="onToggleStageExchange($event, row.id)"
+                  class="text-xs text-positive hover:underline">Staged</button>
+        } @else {
+          <button (click)="onToggleStageExchange($event, row.id)"
+                  class="text-xs text-primary hover:underline">Add</button>
+        }
+      </ng-template>
+
+      <div class="px-4 lg:px-6 py-4 lg:py-6 flex flex-col" style="min-height: 30rem;">
+        @if (!showExchangePicker()) {
+          <div class="flex items-center justify-between mb-4 shrink-0">
+            <div>
+              <h3 class="text-sm font-semibold">Exchanges</h3>
+              <p class="text-xs text-fg-faint mt-1">Exchanges this strategy can use for order execution.</p>
             </div>
-            <app-server-table class="flex-1 min-h-0"
-              [columns]="exchangeColumns"
-              [fetchPage]="exchangesFetchPage()"
-              [pageSize]="25"
-              [gridContext]="exchangeGridContext"
-              emptyMessage="No exchanges configured for this strategy."/>
-          } @else {
-            <div class="flex items-center justify-between mb-4 shrink-0">
-              <div>
-                <h3 class="font-semibold text-sm">Select Exchanges</h3>
-                <p class="text-xs text-surface-400 mt-1">{{ stagedExchangeIds().size }} staged</p>
-              </div>
-              <div class="flex items-center gap-2">
-                <p-button label="Cancel" severity="secondary" [text]="true" size="small" (onClick)="cancelExchangePicker()"/>
-                <p-button
-                  [label]="'Add ' + stagedExchangeIds().size + ' Exchange' + (stagedExchangeIds().size === 1 ? '' : 's')"
-                  size="small"
-                  (onClick)="submitStagedExchanges()"
-                  [disabled]="stagedExchangeIds().size === 0"/>
-              </div>
+            <p-button label="+ Add Exchanges" [outlined]="true" size="small" (onClick)="openExchangePicker()"/>
+          </div>
+          <app-data-table
+            class="flex-1 min-h-0"
+            [columns]="exchangeColumns()"
+            [fetchPage]="exchangesFetchPage()"
+            emptyMessage="No exchanges configured for this strategy."/>
+        } @else {
+          <div class="flex items-center justify-between mb-4 shrink-0">
+            <div>
+              <h3 class="text-sm font-semibold">Select Exchanges</h3>
+              <p class="text-xs text-fg-faint mt-1">{{ stagedExchangeIds().size }} staged</p>
             </div>
-            <app-server-table class="flex-1 min-h-0"
-              [columnDefs]="exchangePickerColDefs"
-              [fetchPage]="exchangePickerFetchPage()"
-              [pageSize]="25"
-              [gridContext]="exchangePickerContext"
-              [getRowStyle]="getExchangeRowStyle"
-              emptyMessage="No exchanges found."/>
-          }
-        </div>
-      }
+            <div class="flex items-center gap-2">
+              <p-button label="Cancel" severity="secondary" [text]="true" size="small" (onClick)="cancelExchangePicker()"/>
+              <p-button
+                [label]="'Add ' + stagedExchangeIds().size + ' Exchange' + (stagedExchangeIds().size === 1 ? '' : 's')"
+                size="small"
+                (onClick)="submitStagedExchanges()"
+                [disabled]="stagedExchangeIds().size === 0"/>
+            </div>
+          </div>
+          <app-data-table
+            class="flex-1 min-h-0"
+            [columns]="exchangePickerColumns()"
+            [fetchPage]="exchangePickerFetchPage()"
+            [rowClass]="exchangePickerRowClass"
+            emptyMessage="No exchanges found."/>
+        }
+      </div>
+    }
 
-      <!-- Runs Tab -->
-      @if (activeTab() === 'Runs') {
-        <app-strategy-runs-tab [strategyId]="strategyId"/>
-      }
+    <!-- Configuration Tab — keep narrow centering for forms (full width form would be unreadable) -->
+    @if (activeTab() === 'Configuration') {
+      <div class="max-w-3xl mx-auto py-4 lg:py-6 px-4 lg:px-6 space-y-4">
+        <p-card header="Info">
+          <div class="space-y-2 text-sm">
+            <div class="flex justify-between"><span class="text-fg-muted">Base asset</span><span>{{ strategy.base_asset_name ?? '—' }}</span></div>
+            <div class="flex justify-between"><span class="text-fg-muted">Strategy</span><span class="font-mono text-xs">{{ strategy.strategy_ref }}</span></div>
+            <div class="flex justify-between"><span class="text-fg-muted">Active</span><span>{{ strategy.is_active ? 'Yes' : 'No' }}</span></div>
+            @if (strategy.created_at) {
+              <div class="flex justify-between"><span class="text-fg-muted">Created</span><span>{{ strategy.created_at | date:'mediumDate' }}</span></div>
+            }
+            @if (strategy.last_trade_at) {
+              <div class="flex justify-between"><span class="text-fg-muted">Last Trade</span><span>{{ strategy.last_trade_at | date:'medium' }}</span></div>
+            }
+          </div>
+        </p-card>
 
-      <!-- Configuration Tab -->
-      @if (activeTab() === 'Configuration') {
-        <div class="max-w-3xl mx-auto p-6 space-y-6 overflow-y-auto h-full">
-          <!-- Info Card -->
-          <p-card header="Info">
-            <div class="space-y-2 text-sm">
-              <div class="flex justify-between"><span class="text-surface-500">Portfolio</span><span>{{ strategy.portfolio_name }}</span></div>
-              <div class="flex justify-between"><span class="text-surface-500">Strategy</span><span>{{ strategy.strategy_ref }}</span></div>
-              <div class="flex justify-between"><span class="text-surface-500">Active</span><span>{{ strategy.is_active ? 'Yes' : 'No' }}</span></div>
-              @if (strategy.created_at) {
-                <div class="flex justify-between"><span class="text-surface-500">Created</span><span>{{ strategy.created_at | date:'mediumDate' }}</span></div>
-              }
-              @if (strategy.last_trade_at) {
-                <div class="flex justify-between"><span class="text-surface-500">Last Trade</span><span>{{ strategy.last_trade_at | date:'medium' }}</span></div>
-              }
+        @if (strategy.description) {
+          <p-card header="Description">
+            <p class="text-sm text-fg-muted">{{ strategy.description }}</p>
+          </p-card>
+        }
+
+        @if (strategy.parameters) {
+          <p-card>
+            <ng-template #header>
+              <div class="flex items-center justify-between px-5 pt-4">
+                <span class="font-semibold">Parameters</span>
+                @if (strategy.parameter_schema) {
+                  @if (!editing()) {
+                    <p-button label="Edit" [link]="true" size="small" (onClick)="startEditing()"/>
+                  } @else {
+                    <div class="flex items-center gap-2">
+                      <p-button label="Cancel" severity="secondary" [text]="true" size="small" (onClick)="cancelEditing()"/>
+                      <p-button label="Save" severity="primary" size="small" [loading]="strategyService.saving()" (onClick)="saveParameters()"/>
+                    </div>
+                  }
+                }
+              </div>
+            </ng-template>
+            @if (strategy.parameter_schema) {
+              <app-schema-form
+                [schema]="strategy.parameter_schema"
+                [data]="editing() ? editedParameters() : strategy.parameters"
+                [readonly]="!editing()"
+                (valuesChange)="onParametersChange($event)"/>
+            } @else {
+              <pre class="text-xs text-fg-muted overflow-x-auto font-mono">{{ strategy.parameters | json }}</pre>
+            }
+          </p-card>
+        }
+
+        <!-- Detailed metrics — keeps the dense stats from the previous Overview tab,
+             tucked at the bottom so the chart-hero stays the focus. -->
+        @if (stats(); as s) {
+          <p-card header="Detailed Metrics">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div>
+                <div class="text-[10px] font-bold uppercase tracking-widest text-primary mb-2 pb-1 border-b border-edge">Performance</div>
+                <div class="space-y-1.5">
+                  <div class="flex justify-between"><span class="text-fg-muted">Total PnL</span><span [class]="pnlClass(s.total_pnl)">{{ formatCurrency(s.total_pnl) }}</span></div>
+                  <div class="flex justify-between"><span class="text-fg-muted">Total Fees</span><span>{{ formatCurrency(s.total_fees) }}</span></div>
+                  <div class="flex justify-between"><span class="text-fg-muted">Net PnL</span><span [class]="pnlClass(s.net_pnl)">{{ formatCurrency(s.net_pnl) }}</span></div>
+                  <div class="flex justify-between"><span class="text-fg-muted">Avg Trade</span><span [class]="pnlClass(s.avg_trade_pnl)">{{ formatCurrency(s.avg_trade_pnl) }}</span></div>
+                  <div class="flex justify-between"><span class="text-fg-muted">Median</span><span [class]="pnlClass(s.median_pnl)">{{ formatCurrency(s.median_pnl) }}</span></div>
+                  <div class="flex justify-between"><span class="text-fg-muted">Profit Factor</span><span>{{ s.profit_factor.toFixed(2) }}</span></div>
+                  <div class="flex justify-between"><span class="text-fg-muted">Payoff</span><span>{{ s.payoff_ratio.toFixed(2) }}</span></div>
+                  <div class="flex justify-between"><span class="text-fg-muted">Expectancy</span><span [class]="pnlClass(s.expectancy)">{{ formatCurrency(s.expectancy) }}</span></div>
+                </div>
+              </div>
+              <div>
+                <div class="text-[10px] font-bold uppercase tracking-widest text-primary mb-2 pb-1 border-b border-edge">Risk</div>
+                <div class="space-y-1.5">
+                  <div class="flex justify-between"><span class="text-fg-muted">Sortino</span><span [class]="pnlClass(s.sortino_ratio)">{{ s.sortino_ratio.toFixed(3) }}</span></div>
+                  <div class="flex justify-between"><span class="text-fg-muted">Max DD</span><span class="text-negative">{{ formatCurrency(s.max_drawdown) }}</span></div>
+                  <div class="flex justify-between"><span class="text-fg-muted">Max DD Duration</span><span>{{ s.max_drawdown_duration }} trades</span></div>
+                  <div class="flex justify-between"><span class="text-fg-muted">Avg Win</span><span class="text-positive">{{ formatCurrency(s.avg_win) }}</span></div>
+                  <div class="flex justify-between"><span class="text-fg-muted">Avg Loss</span><span class="text-negative">{{ formatCurrency(s.avg_loss) }}</span></div>
+                  <div class="flex justify-between"><span class="text-fg-muted">Max Win</span><span class="text-positive">{{ formatCurrency(s.max_win) }}</span></div>
+                  <div class="flex justify-between"><span class="text-fg-muted">Max Loss</span><span class="text-negative">{{ formatCurrency(s.max_loss) }}</span></div>
+                  <div class="flex justify-between"><span class="text-fg-muted">Std Dev</span><span>{{ formatCurrency(s.std_dev_pnl) }}</span></div>
+                </div>
+              </div>
+              <div>
+                <div class="text-[10px] font-bold uppercase tracking-widest text-primary mb-2 pb-1 border-b border-edge">Trades</div>
+                <div class="space-y-1.5">
+                  <div class="flex justify-between"><span class="text-fg-muted">Wins</span><span class="text-positive">{{ s.wins }}</span></div>
+                  <div class="flex justify-between"><span class="text-fg-muted">Losses</span><span class="text-negative">{{ s.losses }}</span></div>
+                  <div class="flex justify-between"><span class="text-fg-muted">Best Streak</span><span class="text-positive">{{ s.max_win_streak }}</span></div>
+                  <div class="flex justify-between"><span class="text-fg-muted">Worst Streak</span><span class="text-negative">{{ s.max_loss_streak }}</span></div>
+                </div>
+              </div>
+              <div>
+                <div class="text-[10px] font-bold uppercase tracking-widest text-primary mb-2 pb-1 border-b border-edge">Time / Distribution</div>
+                <div class="space-y-1.5">
+                  <div class="flex justify-between"><span class="text-fg-muted">Avg Holding</span><span>{{ formatDuration(s.avg_holding_seconds) }}</span></div>
+                  <div class="flex justify-between"><span class="text-fg-muted">Avg Hold (Win)</span><span class="text-positive">{{ formatDuration(s.avg_holding_wins_seconds) }}</span></div>
+                  <div class="flex justify-between"><span class="text-fg-muted">Avg Hold (Loss)</span><span class="text-negative">{{ formatDuration(s.avg_holding_losses_seconds) }}</span></div>
+                  <div class="flex justify-between"><span class="text-fg-muted">Skewness</span><span>{{ s.skewness.toFixed(3) }}</span></div>
+                  <div class="flex justify-between"><span class="text-fg-muted">Kurtosis</span><span>{{ s.kurtosis.toFixed(3) }}</span></div>
+                </div>
+              </div>
             </div>
           </p-card>
+        }
+      </div>
+    }
 
-          <!-- Description -->
-          @if (strategy.description) {
-            <p-card header="Description">
-              <p class="text-sm text-surface-500">{{ strategy.description }}</p>
-            </p-card>
-          }
-
-          <!-- Parameters -->
-          @if (strategy.parameters) {
-            <p-card>
-              <ng-template #header>
-                <div class="flex items-center justify-between px-5 pt-4">
-                  <span class="font-semibold">Parameters</span>
-                  @if (strategy.parameter_schema) {
-                    @if (!editing()) {
-                      <p-button label="Edit" [link]="true" size="small" (onClick)="startEditing()"/>
-                    } @else {
-                      <div class="flex items-center gap-2">
-                        <p-button label="Cancel" severity="secondary" [text]="true" size="small" (onClick)="cancelEditing()"/>
-                        <p-button label="Save" severity="primary" size="small" [loading]="strategyService.saving()" (onClick)="saveParameters()"/>
-                      </div>
-                    }
-                  }
-                </div>
-              </ng-template>
-              @if (strategy.parameter_schema) {
-                <app-schema-form
-                  [schema]="strategy.parameter_schema"
-                  [data]="editing() ? editedParameters() : strategy.parameters"
-                  [readonly]="!editing()"
-                  (valuesChange)="onParametersChange($event)"/>
-              } @else {
-                <pre class="text-xs text-surface-500 overflow-x-auto">{{ strategy.parameters | json }}</pre>
-              }
-            </p-card>
-          }
-        </div>
-      }
-
-    </div>
   </div>
 
   <!-- Impact dialog: covers universe-instrument, composite-universe, and strategy-exchange remove flows -->
