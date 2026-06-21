@@ -40,21 +40,21 @@ class StrategyAssetHolding(Base):
         primary_key=True,
         nullable=False,
     )
-    strategy: Mapped["Strategy"] = relationship("Strategy")
+    strategy: Mapped[Strategy] = relationship("Strategy")
     exchange_id: Mapped[uuid.UUID] = mapped_column(
         Uuid,
         ForeignKey("exchange.id"),
         primary_key=True,
         nullable=False,
     )
-    exchange: Mapped["Exchange"] = relationship("Exchange")
+    exchange: Mapped[Exchange] = relationship("Exchange")
     asset_id: Mapped[uuid.UUID] = mapped_column(
         Uuid,
         ForeignKey("asset.id"),
         primary_key=True,
         nullable=False,
     )
-    asset: Mapped["Asset"] = relationship("Asset")
+    asset: Mapped[Asset] = relationship("Asset")
     position_type: Mapped[str] = mapped_column(
         String(50),
         primary_key=True,

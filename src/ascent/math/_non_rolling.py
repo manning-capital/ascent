@@ -1,11 +1,11 @@
 import warnings
+from typing import Literal
 
 import numpy as np
 import statsmodels.api as sm
 from scipy.integrate import quad
-from scipy.special import pbdv, gammaln
+from scipy.special import gammaln, pbdv
 from scipy.stats import norm
-from typing import Literal
 
 # Default step size for finite difference approximations in prime calculations
 H = 1e-6
@@ -238,9 +238,9 @@ def newton_with_multiple_guesses(
 
 from .base import (
     DELTA_T,
-    StochasticModel,
     GeometricBrownianMotionResult,
     OrnsteinUhlenbeckResult,
+    StochasticModel,
 )
 
 
@@ -1576,7 +1576,7 @@ class OrnsteinUhlenbeck(StochasticModel):
         if n_unconverged > 0:
             warnings.warn(
                 f"get_optimal_exit_level: {n_unconverged} roots did not converge "
-                f"within {max_iter} iterations."
+                f"within {max_iter} iterations.", stacklevel=2
             )
             x_spread[active] = np.nan
 
@@ -1775,7 +1775,7 @@ class OrnsteinUhlenbeck(StochasticModel):
         if n_unconverged > 0:
             warnings.warn(
                 f"get_optimal_entry_level: {n_unconverged} roots did not converge "
-                f"within {max_iter} iterations."
+                f"within {max_iter} iterations.", stacklevel=2
             )
             x_spread[active] = np.nan
 

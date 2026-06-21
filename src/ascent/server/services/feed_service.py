@@ -210,9 +210,7 @@ def get_feeds(
         recent_statuses = list(reversed(recent_statuses_desc))
 
         conn_status = "connected" if heartbeat_map.get(f.id, False) else "disconnected"
-        items.append(
-            _build_feed_list_item(f, total_runs, last_run, conn_status, recent_statuses)
-        )
+        items.append(_build_feed_list_item(f, total_runs, last_run, conn_status, recent_statuses))
     return items, total
 
 

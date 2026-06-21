@@ -11,7 +11,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from ascent.domain import PositionType, OrderState, OrderType, TradeState
+from ascent.domain import OrderState, OrderType, PositionType, TradeState
 from ascent.ports.trade_repo import NewLegSpec, NewOrderSpec
 
 NOW = datetime(2026, 4, 16, 12, 0, tzinfo=UTC)

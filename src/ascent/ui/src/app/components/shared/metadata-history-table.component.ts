@@ -1,5 +1,12 @@
-import { Component, inject, input, output, signal, computed, effect, ViewChild } from '@angular/core';
+import { Component, computed, effect, input, output, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Button } from 'primeng/button';
+import { Tag } from 'primeng/tag';
+import { Select } from 'primeng/select';
+import { DatePicker } from 'primeng/datepicker';
+import { InputNumber } from 'primeng/inputnumber';
+import { InputText } from 'primeng/inputtext';
+import { Table, TableModule } from 'primeng/table';
 import {
   MetadataFieldInfo,
   MetadataSnapshotRow,
@@ -8,27 +15,23 @@ import {
   BulkHistoryInsertEntry,
   BulkHistoryDeleteEntry,
 } from '../../models/asset.model';
-import { ThemeService } from '../../services/theme.service';
-import { Button } from 'primeng/button';
-import { Tag } from 'primeng/tag';
-import { AgGridAngular } from 'ag-grid-angular';
-import type { ICellRendererAngularComp, ICellEditorAngularComp } from 'ag-grid-angular';
-import { TrashIcon } from 'primeng/icons/trash';
-import { UndoIcon } from 'primeng/icons/undo';
-import { Select } from 'primeng/select';
-import { DatePicker } from 'primeng/datepicker';
-import {
-  type ColDef,
-  type GridApi,
-  type GridReadyEvent,
-  type CellValueChangedEvent,
-  type GetRowIdParams,
-  type CellStyleFunc,
-} from 'ag-grid-community';
-import { AG_GRID_THEME, agThemeMode } from './metadata-history-ag-grid-theme';
+
+/** Stable internal-row shape with change-tracking metadata. */
+interface GridRow {
+  __id: string;
+  __originalTimestamp: string;
+  __isNew: boolean;
+  __isDeleted: boolean;
+  __modifiedCells: Set<string>;
+  __timestampModified: boolean;
+  __originalValues: Record<string, string>;
+  /** Local-time display string for the timestamp column. */
+  timestamp: string;
+  [key: string]: any;
+}
 
 function formatLocalDateTime(d: Date): string {
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const mo = months[d.getMonth()];
   const day = d.getDate();
   const y = d.getFullYear();
@@ -38,341 +41,54 @@ function formatLocalDateTime(d: Date): string {
   return `${mo} ${day}, ${y} ${h}:${mi}:${s}`;
 }
 
-// ─── Row shape ───────────────────────────────────────────
-interface GridRow {
-  __id: string;
-  __originalTimestamp: string;
-  __isNew: boolean;
-  __isDeleted: boolean;
-  __modifiedCells: Set<string>;
-  __timestampModified: boolean;
-  __originalValues: Record<string, string>;
-  timestamp: string;
-  [key: string]: any;
+function toDate(value: string): Date | null {
+  if (!value) return null;
+  const d = new Date(value);
+  return isNaN(d.getTime()) ? null : d;
 }
 
-// ─── Shared styles for PrimeNG cell editors inside AG Grid
-const agSelectStyles = `
-  :host {
-    display: flex; align-items: center; width: 100%; height: 100%; overflow: visible;
-    padding-left: var(--ag-cell-horizontal-padding, 12px);
-    background: var(--ag-background-color);
-  }
-  :host ::ng-deep .ag-cell-select { width: 100%; border: none; }
-  :host ::ng-deep .ag-cell-select .p-select {
-    border: none; border-radius: 0; background: transparent; box-shadow: none;
-    min-height: unset; height: 100%; padding: 0; font-size: inherit;
-  }
-  :host ::ng-deep .ag-cell-select .p-select-label { font-size: inherit; padding: 0; }
-`;
-
-const agDatePickerStyles = `
-  :host { display: flex; align-items: center; width: 100%; height: 100%; overflow: visible; }
-  :host ::ng-deep .ag-cell-date { width: 100%; }
-  :host ::ng-deep .ag-cell-date .p-datepicker {
-    border: none; border-radius: 0; background: transparent; box-shadow: none;
-    min-height: unset; height: 100%; font-size: inherit;
-  }
-  :host ::ng-deep .ag-cell-date .p-datepicker input {
-    border: none; background: transparent; box-shadow: none; padding: 0 0.5rem;
-    font-size: inherit; height: 100%;
-  }
-`;
-
-// ─── Custom cell editor for reference fields (searchable) ─
-@Component({
-  selector: 'ref-cell-editor',
-  standalone: true,
-  imports: [FormsModule, Select],
-  template: `
-    <p-select
-      #sel
-      [ngModel]="value"
-      (ngModelChange)="onSelect($event)"
-      [options]="options"
-      optionLabel="label"
-      optionValue="value"
-      [filter]="true"
-      filterPlaceholder="Search..."
-      [appendTo]="'body'"
-      placeholder="Select..."
-      styleClass="ag-cell-select"
-      (onHide)="onDropdownClose()"/>
-  `,
-  styles: [agSelectStyles],
-})
-export class RefCellEditorComponent implements ICellEditorAngularComp {
-  @ViewChild('sel') selectEl!: Select;
-  value: string = '';
-  options: { label: string; value: string }[] = [];
-  private params!: any;
-  private committed = false;
-
-  agInit(params: any): void {
-    this.params = params;
-    this.value = params.value ?? '';
-    this.options = [{ label: '(none)', value: '' }, ...(params.options ?? [])];
-    setTimeout(() => this.selectEl?.show());
-  }
-
-  getValue(): string {
-    return this.value;
-  }
-
-  isPopup(): boolean {
-    return false;
-  }
-
-  onSelect(val: string): void {
-    this.value = val;
-    this.committed = true;
-    this.params.stopEditing();
-  }
-
-  onDropdownClose(): void {
-    if (!this.committed) {
-      this.params.stopEditing(true); // cancel — keep old value
-    }
-  }
-}
-
-// ─── Custom cell editor for date fields (PrimeNG DatePicker) ─
-@Component({
-  selector: 'date-cell-editor',
-  standalone: true,
-  imports: [FormsModule, DatePicker],
-  template: `
-    <p-datepicker
-      #dp
-      [(ngModel)]="dateValue"
-      dateFormat="yy-mm-dd"
-      [appendTo]="'body'"
-      [style]="{ width: '100%' }"
-      styleClass="ag-cell-date"
-      (onSelect)="onSelect()"
-      (onClose)="onClose()"/>
-  `,
-  styles: [agDatePickerStyles],
-})
-export class DateCellEditorComponent implements ICellEditorAngularComp {
-  @ViewChild('dp') datePicker!: DatePicker;
-  dateValue: Date | null = null;
-  private params!: any;
-  private committed = false;
-
-  agInit(params: any): void {
-    this.params = params;
-    const v = params.value;
-    if (v) {
-      const parts = String(v).substring(0, 10).split('-');
-      this.dateValue = new Date(+parts[0], +parts[1] - 1, +parts[2]);
-    }
-  }
-
-  afterGuiAttached(): void {
-    // DatePicker needs a tick to be fully initialized, then click its input to open
-    setTimeout(() => {
-      const input = this.datePicker?.el?.nativeElement?.querySelector('input');
-      input?.click();
-    });
-  }
-
-  getValue(): string {
-    if (!this.dateValue) return '';
-    const y = this.dateValue.getFullYear();
-    const m = String(this.dateValue.getMonth() + 1).padStart(2, '0');
-    const d = String(this.dateValue.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  }
-
-  isPopup(): boolean {
-    return false;
-  }
-
-  onSelect(): void {
-    this.committed = true;
-    this.params.stopEditing();
-  }
-
-  onClose(): void {
-    if (!this.committed) {
-      this.params.stopEditing(true);
-    }
-  }
-}
-
-// ─── Custom cell editor for datetime fields (PrimeNG DatePicker + time) ─
-@Component({
-  selector: 'datetime-cell-editor',
-  standalone: true,
-  imports: [FormsModule, DatePicker],
-  template: `
-    <p-datepicker
-      #dp
-      [(ngModel)]="dateValue"
-      [showTime]="true"
-      [showSeconds]="true"
-      dateFormat="yy-mm-dd"
-      hourFormat="24"
-      [appendTo]="'body'"
-      [style]="{ width: '100%' }"
-      styleClass="ag-cell-date"
-      (onSelect)="onSelect()"
-      (onClose)="onClose()"/>
-  `,
-  styles: [agDatePickerStyles],
-})
-export class DateTimeCellEditorComponent implements ICellEditorAngularComp {
-  @ViewChild('dp') datePicker!: DatePicker;
-  dateValue: Date | null = null;
-  private params!: any;
-  private originalValue = '';
-  private userSelected = false;
-  private committed = false;
-
-  agInit(params: any): void {
-    this.params = params;
-    this.originalValue = params.value ?? '';
-    const v = params.value;
-    if (v) {
-      this.dateValue = new Date(v);
-      if (isNaN(this.dateValue.getTime())) this.dateValue = null;
-    }
-  }
-
-  afterGuiAttached(): void {
-    setTimeout(() => {
-      const input = this.datePicker?.el?.nativeElement?.querySelector('input');
-      input?.click();
-    });
-  }
-
-  getValue(): string {
-    if (!this.userSelected) return this.originalValue;
-    if (!this.dateValue) return '';
-    return formatLocalDateTime(this.dateValue);
-  }
-
-  isPopup(): boolean {
-    return false;
-  }
-
-  onSelect(): void {
-    this.userSelected = true;
-  }
-
-  onClose(): void {
-    if (this.userSelected) {
-      this.params.stopEditing();
-    } else {
-      this.params.stopEditing(true);
-    }
-  }
-}
-
-// ─── Custom cell editor for enum fields (PrimeNG Select) ─
-@Component({
-  selector: 'enum-cell-editor',
-  standalone: true,
-  imports: [FormsModule, Select],
-  template: `
-    <p-select
-      #sel
-      [ngModel]="value"
-      (ngModelChange)="onSelect($event)"
-      [options]="options"
-      [appendTo]="'body'"
-      placeholder="Select..."
-      styleClass="ag-cell-select"
-      (onHide)="onDropdownClose()"/>
-  `,
-  styles: [agSelectStyles],
-})
-export class EnumCellEditorComponent implements ICellEditorAngularComp {
-  @ViewChild('sel') selectEl!: Select;
-  value: string = '';
-  options: string[] = [];
-  private params!: any;
-  private committed = false;
-
-  agInit(params: any): void {
-    this.params = params;
-    this.value = params.value ?? '';
-    this.options = ['', ...(params.values ?? [])];
-    setTimeout(() => this.selectEl?.show());
-  }
-
-  getValue(): string {
-    return this.value;
-  }
-
-  isPopup(): boolean {
-    return false;
-  }
-
-  onSelect(val: string): void {
-    this.value = val;
-    this.committed = true;
-    this.params.stopEditing();
-  }
-
-  onDropdownClose(): void {
-    if (!this.committed) {
-      this.params.stopEditing(true);
-    }
-  }
-}
-
-// ─── Custom cell renderer for actions column ─────────────
-@Component({
-  selector: 'action-cell',
-  standalone: true,
-  imports: [TrashIcon, UndoIcon],
-  template: `
-    @if (isDeleted) {
-      <button (click)="onUndelete($event)" style="background:none;border:none;cursor:pointer" title="Undo delete">
-        <svg data-p-icon="undo" />
-      </button>
-    } @else {
-      <button (click)="onDelete($event)" style="background:none;border:none;cursor:pointer;color:var(--p-red-400)" title="Delete row">
-        <svg data-p-icon="trash" />
-      </button>
-    }
-  `,
-  host: { style: 'display:flex;align-items:center;justify-content:center;height:100%' },
-})
-export class ActionCellRendererComponent implements ICellRendererAngularComp {
-  isDeleted = false;
-  private params!: any;
-
-  agInit(params: any): void {
-    this.params = params;
-    this.isDeleted = !!params.data?.__isDeleted;
-  }
-
-  refresh(params: any): boolean {
-    this.params = params;
-    this.isDeleted = !!params.data?.__isDeleted;
-    return true;
-  }
-
-  onDelete(e: Event): void {
-    e.stopPropagation();
-    this.params.context.componentParent.deleteRow(this.params.node);
-  }
-
-  onUndelete(e: Event): void {
-    e.stopPropagation();
-    this.params.context.componentParent.undeleteRow(this.params.node);
-  }
-}
-
-// ─── Main component ──────────────────────────────────────
+/**
+ * Editable metadata-history grid built on PrimeNG ``p-table`` with cell-level
+ * edit mode. Inputs: ``[fields] / [snapshots] / [loading] / [referenceOptions]``.
+ * Output: ``(save)`` emits a ``BulkHistoryUpdate``.
+ *
+ * Each cell renders one of seven editors based on the field's ``value_type``
+ * (boolean / integer / float / date / time / datetime / enum / reference /
+ * text). Modified cells, modified timestamps, and new rows get tinted with
+ * the primary color; deleted rows fade. Insert / Delete / Discard / Save
+ * actions live in the toolbar above the table.
+ */
 @Component({
   selector: 'app-metadata-history-table',
   standalone: true,
-  imports: [AgGridAngular, Button, Tag],
+  imports: [
+    FormsModule,
+    TableModule,
+    Button,
+    Tag,
+    Select,
+    DatePicker,
+    InputNumber,
+    InputText,
+  ],
   host: { class: 'block' },
+  styles: [`
+    /* Tint background of cells that are pending changes (insert / modify). */
+    :host ::ng-deep td.history-cell--modified {
+      background: color-mix(in srgb, var(--p-primary-color) 12%, transparent);
+    }
+    :host ::ng-deep tr.history-row--deleted > td {
+      opacity: 0.4;
+      text-decoration: line-through;
+    }
+    /* Compact editors so they fit a single row height. */
+    :host ::ng-deep td .p-select,
+    :host ::ng-deep td .p-datepicker,
+    :host ::ng-deep td .p-inputtext,
+    :host ::ng-deep td .p-inputnumber {
+      width: 100%;
+    }
+  `],
   template: `
     <!-- Toolbar -->
     <div class="flex items-center justify-between mb-4">
@@ -390,267 +106,283 @@ export class ActionCellRendererComponent implements ICellRendererAngularComp {
       </div>
     </div>
 
-    <!-- AG Grid -->
-    <div [attr.data-ag-theme-mode]="themeMode()" class="rounded-lg overflow-clip border border-edge"
-         [style.height.px]="gridHeight()">
-      <ag-grid-angular
-        style="width: 100%; height: 100%"
-        [theme]="theme"
+    <!-- Table -->
+    <div class="border border-edge rounded-md overflow-hidden">
+      <p-table
+        [value]="rowData()"
         [loading]="loading()"
-        [rowData]="rowData()"
-        [columnDefs]="colDefs()"
-        [defaultColDef]="defaultColDef"
-        [rowHeight]="48"
-        [headerHeight]="48"
-        [getRowId]="getRowId"
-        [getRowStyle]="getRowStyle"
-        [context]="gridContext"
-        [singleClickEdit]="true"
-        [suppressCellFocus]="true"
-        [overlayNoRowsTemplate]="noRowsTemplate"
-        (gridReady)="onGridReady($event)"
-        (cellValueChanged)="onCellValueChanged($event)"/>
+        dataKey="__id"
+        styleClass="text-xs"
+      >
+        <ng-template pTemplate="header">
+          <tr>
+            <th class="text-[11px] uppercase tracking-wider font-semibold text-fg-muted px-3 py-2" style="width: 220px;">
+              Timestamp
+            </th>
+            @for (f of fields(); track f.metadata_id) {
+              <th class="text-[11px] uppercase tracking-wider font-semibold text-fg-muted px-3 py-2" style="min-width: 140px;">
+                {{ f.metadata_display_name }}
+              </th>
+            }
+            <th class="px-2 py-2" style="width: 48px;"></th>
+          </tr>
+        </ng-template>
+
+        <ng-template pTemplate="body" let-row let-rowIndex="rowIndex">
+          <tr [class.history-row--deleted]="row.__isDeleted">
+            <!-- Timestamp column — always-visible datetime picker. PrimeNG's
+                 p-cellEditor + appendTo="body" overlay combo deadlocks (every
+                 click inside the body-mounted calendar registers as "outside
+                 the cell" and the editor tries to exit while the overlay is
+                 still alive). Rendering each editor inline avoids that
+                 click-outside dance entirely. -->
+            <td
+              [class.history-cell--modified]="row.__isNew || row.__timestampModified"
+              class="px-3 py-2"
+            >
+              <p-datepicker
+                [ngModel]="toDate(row.timestamp)"
+                (ngModelChange)="onTimestampChange(row, $event)"
+                [showTime]="true"
+                [showSeconds]="true"
+                [disabled]="row.__isDeleted"
+                appendTo="body"
+                dateFormat="M d, yy"
+                size="small"
+                styleClass="w-full"
+              />
+            </td>
+
+            <!-- One cell per metadata field; editor chosen by value_type -->
+            @for (f of fields(); track f.metadata_id) {
+              <td
+                [class.history-cell--modified]="row.__isNew || row.__modifiedCells.has(f.metadata_id)"
+                class="px-3 py-2"
+              >
+                @switch (f.value_type) {
+                  @case ('boolean') {
+                    <p-select
+                      [options]="booleanOptions"
+                      optionLabel="label"
+                      optionValue="value"
+                      [ngModel]="row[f.metadata_id]"
+                      (ngModelChange)="onCellChange(row, f, $event)"
+                      [disabled]="row.__isDeleted"
+                      appendTo="body"
+                      size="small"
+                      styleClass="w-full"
+                    />
+                  }
+                  @case ('integer') {
+                    <p-inputNumber
+                      [ngModel]="numberValue(row[f.metadata_id])"
+                      (ngModelChange)="onCellChange(row, f, $event)"
+                      [disabled]="row.__isDeleted"
+                      [showButtons]="false"
+                      [step]="1"
+                      size="small"
+                      styleClass="w-full"
+                    />
+                  }
+                  @case ('float') {
+                    <p-inputNumber
+                      [ngModel]="numberValue(row[f.metadata_id])"
+                      (ngModelChange)="onCellChange(row, f, $event)"
+                      [disabled]="row.__isDeleted"
+                      [showButtons]="false"
+                      [minFractionDigits]="0"
+                      [maxFractionDigits]="10"
+                      mode="decimal"
+                      size="small"
+                      styleClass="w-full"
+                    />
+                  }
+                  @case ('date') {
+                    <p-datepicker
+                      [ngModel]="toDate(row[f.metadata_id])"
+                      (ngModelChange)="onCellChange(row, f, $event)"
+                      [disabled]="row.__isDeleted"
+                      dateFormat="yy-mm-dd"
+                      appendTo="body"
+                      size="small"
+                      styleClass="w-full"
+                    />
+                  }
+                  @case ('datetime') {
+                    <p-datepicker
+                      [ngModel]="toDate(row[f.metadata_id])"
+                      (ngModelChange)="onCellChange(row, f, $event)"
+                      [disabled]="row.__isDeleted"
+                      [showTime]="true"
+                      [showSeconds]="true"
+                      dateFormat="M d, yy"
+                      appendTo="body"
+                      size="small"
+                      styleClass="w-full"
+                    />
+                  }
+                  @case ('enum') {
+                    <p-select
+                      [options]="enumOptionsFor(f)"
+                      [ngModel]="row[f.metadata_id]"
+                      (ngModelChange)="onCellChange(row, f, $event)"
+                      [disabled]="row.__isDeleted"
+                      [filter]="true"
+                      appendTo="body"
+                      size="small"
+                      styleClass="w-full"
+                    />
+                  }
+                  @case ('reference') {
+                    <p-select
+                      [options]="referenceOptionsFor(f)"
+                      optionLabel="label"
+                      optionValue="value"
+                      [ngModel]="row[f.metadata_id]"
+                      (ngModelChange)="onCellChange(row, f, $event)"
+                      [disabled]="row.__isDeleted"
+                      [filter]="true"
+                      appendTo="body"
+                      size="small"
+                      styleClass="w-full"
+                    />
+                  }
+                  @default {
+                    <input
+                      pInputText
+                      type="text"
+                      [ngModel]="row[f.metadata_id]"
+                      (ngModelChange)="onCellChange(row, f, $event)"
+                      [readOnly]="row.__isDeleted"
+                      class="w-full text-xs"
+                    />
+                  }
+                }
+              </td>
+            }
+
+            <!-- Action column: delete / undo -->
+            <td class="px-2 py-2 text-right">
+              @if (row.__isDeleted) {
+                <p-button
+                  icon="pi pi-undo"
+                  severity="secondary"
+                  [text]="true"
+                  [rounded]="true"
+                  size="small"
+                  pTooltip="Undo delete"
+                  (onClick)="undeleteRow(row, $event)"
+                />
+              } @else {
+                <p-button
+                  icon="pi pi-trash"
+                  severity="danger"
+                  [text]="true"
+                  [rounded]="true"
+                  size="small"
+                  pTooltip="Delete row"
+                  (onClick)="deleteRow(row, $event)"
+                />
+              }
+            </td>
+          </tr>
+        </ng-template>
+
+        <ng-template pTemplate="emptymessage">
+          <tr>
+            <td [attr.colspan]="fields().length + 2" class="text-center text-xs text-fg-faint py-6">
+              No history entries. Click + Insert Row to add one.
+            </td>
+          </tr>
+        </ng-template>
+      </p-table>
     </div>
   `,
 })
 export class MetadataHistoryTableComponent {
-  // ─── Inputs / Outputs (same API as before) ─────────────
+  // ─── Inputs / outputs ─────────────────────────────────
   fields = input.required<MetadataFieldInfo[]>();
   snapshots = input.required<MetadataSnapshotRow[]>();
   referenceOptions = input<Record<string, { label: string; value: string }[]>>({});
   loading = input(false);
   save = output<BulkHistoryUpdate>();
 
-  // ─── Theme (shared across all AG Grid tables) ──
-  private themeSvc = inject(ThemeService);
-  themeMode = agThemeMode(this.themeSvc);
-  theme = AG_GRID_THEME;
-
-  defaultColDef: ColDef = {
-    sortable: true,
-    filter: false,
-    resizable: false,
-    suppressMovable: true,
-    flex: 1,
-  };
-
-  noRowsTemplate =
-    '<span style="font-size: 12px; opacity: 0.5;">No history entries. Click + Insert Row to add one.</span>';
-  gridContext = { componentParent: this };
-  getRowId = (params: GetRowIdParams) => params.data.__id;
-
-  getRowStyle = (params: any) => {
-    if (params.data?.__isDeleted) {
-      return { opacity: '0.4', textDecoration: 'line-through' };
-    }
-    return undefined;
-  };
-
-  // ─── State ─────────────────────────────────────────────
+  // ─── State ────────────────────────────────────────────
   rowData = signal<GridRow[]>([]);
   changeCount = signal(0);
-
-  /** Grid height: header (48px) + rows (48px each) + borders (4px buffer), capped at 600px. */
-  gridHeight = computed(() => {
-    const headerHeight = 48;
-    const rowHeight = 48;
-    const rows = this.rowData().length;
-    const natural = headerHeight + Math.max(rows, 1) * rowHeight + 4;
-    return Math.min(natural, 600);
-  });
-
-  private gridApi: GridApi | null = null;
   private newRowCounter = 0;
   private initialized = false;
 
+  booleanOptions: { label: string; value: string }[] = [
+    { label: '—', value: '' },
+    { label: 'True', value: 'true' },
+    { label: 'False', value: 'false' },
+  ];
+
+  // Expose helpers to the template
+  readonly toDate = toDate;
+  readonly numberValue = (v: any): number | null => {
+    if (v === '' || v == null) return null;
+    const n = Number(v);
+    return isNaN(n) ? null : n;
+  };
+
   constructor() {
-    // Re-render cells when reference options arrive asynchronously
+    // Rebuild rows when fields / snapshots change AND there are no pending
+    // unsaved changes. (Preserve user edits across reactive parent updates.)
     effect(() => {
-      this.referenceOptions(); // track
-      this.gridApi?.refreshCells({ force: true });
+      this.fields();
+      this.snapshots();
+      untracked(() => {
+        if (!this.initialized || this.changeCount() === 0) {
+          this.rowData.set(this.buildRows());
+          this.updateChangeCount();
+          this.initialized = true;
+        }
+      });
     });
   }
 
-  // ─── Computed column definitions ───────────────────────
-  colDefs = computed<ColDef[]>(() => {
-    const fields = this.fields();
-    const refOpts = this.referenceOptions();
-
-    const cellStyle: CellStyleFunc = (params) => {
-      const data = params.data as GridRow;
-      if (!data) return null;
-      if (data.__isNew) return { backgroundColor: 'rgba(59, 130, 246, 0.1)' };
-      const field = params.colDef?.field;
-      if (field === 'timestamp' && data.__timestampModified) {
-        return { backgroundColor: 'rgba(59, 130, 246, 0.1)' };
-      }
-      if (field && data.__modifiedCells?.has(field)) {
-        return { backgroundColor: 'rgba(59, 130, 246, 0.1)' };
-      }
-      return null;
-    };
-
-    const editableWhenNotDeleted = (params: any) => !params.data?.__isDeleted;
-
-    return [
-      {
-        headerName: 'Timestamp',
-        field: 'timestamp',
-        pinned: 'left' as const,
-        width: 220,
-        editable: editableWhenNotDeleted,
-        cellEditor: DateTimeCellEditorComponent,
-        cellStyle,
-        valueFormatter: (params: any) => {
-          const v = params.value;
-          if (!v) return '';
-          const d = new Date(v);
-          if (isNaN(d.getTime())) return v;
-          return formatLocalDateTime(d);
-        },
-      },
-      ...fields.map((f): ColDef => {
-        const base: ColDef = {
-          headerName: f.metadata_display_name,
-          field: f.metadata_id,
-          minWidth: 140,
-          editable: editableWhenNotDeleted,
-          cellStyle,
-        };
-
-        switch (f.value_type) {
-          case 'boolean':
-            return {
-              ...base,
-              cellEditor: 'agSelectCellEditor',
-              cellEditorParams: { values: ['', 'true', 'false'] },
-            };
-          case 'integer':
-            return {
-              ...base,
-              cellEditor: 'agNumberCellEditor',
-              cellEditorParams: { step: 1 },
-              valueGetter: (p) => {
-                const v = p.data?.[f.metadata_id];
-                return v === '' || v == null ? null : Number(v);
-              },
-              valueSetter: (p) => {
-                p.data[f.metadata_id] = p.newValue == null ? '' : String(p.newValue);
-                return true;
-              },
-            };
-          case 'float':
-            return {
-              ...base,
-              cellEditor: 'agNumberCellEditor',
-              cellEditorParams: { step: 0.001 },
-              valueGetter: (p) => {
-                const v = p.data?.[f.metadata_id];
-                return v === '' || v == null ? null : Number(v);
-              },
-              valueSetter: (p) => {
-                p.data[f.metadata_id] = p.newValue == null ? '' : String(p.newValue);
-                return true;
-              },
-            };
-          case 'date':
-            return {
-              ...base,
-              cellEditor: DateCellEditorComponent,
-              valueGetter: (p) => {
-                const v = p.data?.[f.metadata_id];
-                if (!v) return '';
-                return String(v).substring(0, 10);
-              },
-              valueSetter: (p) => {
-                p.data[f.metadata_id] = p.newValue
-                  ? String(p.newValue).substring(0, 10)
-                  : '';
-                return true;
-              },
-            };
-          case 'time':
-            return { ...base, cellEditor: 'agTextCellEditor' };
-          case 'datetime':
-            return { ...base, cellEditor: DateTimeCellEditorComponent };
-          case 'enum':
-            return {
-              ...base,
-              cellEditor: EnumCellEditorComponent,
-              cellEditorParams: {
-                values: (f.config?.['options'] as string[]) ?? [],
-              },
-            };
-          case 'reference': {
-            const metaId = f.metadata_id;
-            return {
-              ...base,
-              cellEditor: RefCellEditorComponent,
-              cellEditorParams: () => ({
-                options: this.referenceOptions()[metaId] ?? [],
-              }),
-              valueFormatter: (p: any) => {
-                const opts = this.referenceOptions()[metaId] ?? [];
-                const opt = opts.find((o: any) => o.value === p.value);
-                return opt ? opt.label : (p.value || '');
-              },
-            };
-          }
-          default:
-            return { ...base, cellEditor: 'agTextCellEditor' };
+  // ─── Event handlers ───────────────────────────────────
+  onCellChange(row: GridRow, field: MetadataFieldInfo, value: any): void {
+    const id = field.metadata_id;
+    const current = this.formatForStorage(value, field.value_type);
+    this.rowData.update((rows) =>
+      rows.map((r) => {
+        if (r.__id !== row.__id) return r;
+        const next: GridRow = { ...r, [id]: current };
+        if (next.__isNew) {
+          // New rows are entirely "modified" — no need to track per-cell.
+          return next;
         }
+        const original = r.__originalValues[id] ?? '';
+        const modified = new Set(r.__modifiedCells);
+        if (current !== original) modified.add(id);
+        else modified.delete(id);
+        next.__modifiedCells = modified;
+        return next;
       }),
-      {
-        headerName: '',
-        pinned: 'right' as const,
-        width: 60,
-        maxWidth: 60,
-        editable: false,
-        sortable: false,
-        cellRenderer: ActionCellRendererComponent,
-      },
-    ];
-  });
-
-  // ─── Lifecycle ─────────────────────────────────────────
-  ngOnChanges(): void {
-    if (!this.initialized || this.changeCount() === 0) {
-      this.rowData.set(this.buildRows());
-      this.updateChangeCount();
-      this.initialized = true;
-    }
-  }
-
-  onGridReady(event: GridReadyEvent): void {
-    this.gridApi = event.api;
-  }
-
-  onCellValueChanged(event: CellValueChangedEvent): void {
-    const data = event.data as GridRow;
-    const field = event.colDef.field;
-    if (!field || data.__isNew) {
-      this.updateChangeCount();
-      return;
-    }
-
-    if (field === 'timestamp') {
-      data.__timestampModified = data.timestamp !== data.__originalTimestamp;
-    } else {
-      const original = data.__originalValues[field] ?? '';
-      const current = String(data[field] ?? '');
-      if (current !== original) {
-        data.__modifiedCells.add(field);
-      } else {
-        data.__modifiedCells.delete(field);
-      }
-    }
-
-    this.gridApi?.refreshCells({ force: true });
+    );
     this.updateChangeCount();
   }
 
-  // ─── Row operations ────────────────────────────────────
+  onTimestampChange(row: GridRow, value: Date | null): void {
+    const newDisplay = value ? formatLocalDateTime(value) : '';
+    this.rowData.update((rows) =>
+      rows.map((r) => {
+        if (r.__id !== row.__id) return r;
+        const next: GridRow = { ...r, timestamp: newDisplay };
+        next.__timestampModified = newDisplay !== r.__originalTimestamp;
+        return next;
+      }),
+    );
+    this.updateChangeCount();
+  }
+
+  // ─── Row operations ───────────────────────────────────
   addRow(): void {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
     const newRow: GridRow = {
       __id: `new-${this.newRowCounter++}`,
       __originalTimestamp: '',
@@ -659,7 +391,7 @@ export class MetadataHistoryTableComponent {
       __modifiedCells: new Set<string>(),
       __timestampModified: false,
       __originalValues: {},
-      timestamp: (() => { const d = new Date(); d.setHours(0, 0, 0, 0); return formatLocalDateTime(d); })(),
+      timestamp: formatLocalDateTime(now),
     };
     for (const f of this.fields()) {
       newRow[f.metadata_id] = '';
@@ -668,21 +400,23 @@ export class MetadataHistoryTableComponent {
     this.updateChangeCount();
   }
 
-  deleteRow(node: any): void {
-    const data = node.data as GridRow;
-    if (data.__isNew) {
-      this.rowData.update((rows) => rows.filter((r) => r.__id !== data.__id));
+  deleteRow(row: GridRow, event: Event): void {
+    event.stopPropagation();
+    if (row.__isNew) {
+      this.rowData.update((rows) => rows.filter((r) => r.__id !== row.__id));
     } else {
-      data.__isDeleted = true;
-      this.gridApi?.redrawRows({ rowNodes: [node] });
+      this.rowData.update((rows) =>
+        rows.map((r) => (r.__id === row.__id ? { ...r, __isDeleted: true } : r)),
+      );
     }
     this.updateChangeCount();
   }
 
-  undeleteRow(node: any): void {
-    const data = node.data as GridRow;
-    data.__isDeleted = false;
-    this.gridApi?.redrawRows({ rowNodes: [node] });
+  undeleteRow(row: GridRow, event: Event): void {
+    event.stopPropagation();
+    this.rowData.update((rows) =>
+      rows.map((r) => (r.__id === row.__id ? { ...r, __isDeleted: false } : r)),
+    );
     this.updateChangeCount();
   }
 
@@ -692,10 +426,8 @@ export class MetadataHistoryTableComponent {
     this.updateChangeCount();
   }
 
-  // ─── Save logic (matches original) ────────────────────
+  // ─── Save (same shape as previous emit) ───────────────
   emitSave(): void {
-    this.gridApi?.stopEditing();
-
     const updates: BulkHistoryUpdateEntry[] = [];
     const inserts: BulkHistoryInsertEntry[] = [];
     const deletes: BulkHistoryDeleteEntry[] = [];
@@ -705,7 +437,6 @@ export class MetadataHistoryTableComponent {
         deletes.push({ timestamp: row.__originalTimestamp, metadata_id: null });
         continue;
       }
-
       if (row.__isNew) {
         for (const f of this.fields()) {
           const val = row[f.metadata_id];
@@ -719,7 +450,6 @@ export class MetadataHistoryTableComponent {
         }
         continue;
       }
-
       if (row.__timestampModified || row.__modifiedCells.size > 0) {
         const newTs = row.__timestampModified ? row.timestamp : null;
         const fieldsToUpdate = row.__timestampModified
@@ -758,7 +488,47 @@ export class MetadataHistoryTableComponent {
     this.save.emit({ updates, inserts, deletes });
   }
 
-  // ─── Private helpers ───────────────────────────────────
+  // ─── Template helpers ─────────────────────────────────
+  enumOptionsFor(field: MetadataFieldInfo): string[] {
+    return (field.config?.['options'] as string[]) ?? [];
+  }
+
+  referenceOptionsFor(field: MetadataFieldInfo): { label: string; value: string }[] {
+    return this.referenceOptions()[field.metadata_id] ?? [];
+  }
+
+  displayValue(row: GridRow, field: MetadataFieldInfo): string {
+    const raw = row[field.metadata_id];
+    if (raw == null || raw === '') return '';
+    if (field.value_type === 'reference') {
+      const opts = this.referenceOptions()[field.metadata_id] ?? [];
+      const opt = opts.find((o) => o.value === raw);
+      return opt ? opt.label : String(raw);
+    }
+    if (field.value_type === 'boolean') {
+      return raw === 'true' ? 'True' : raw === 'false' ? 'False' : '';
+    }
+    return String(raw);
+  }
+
+  /** Convert an editor's raw output back to a canonical storage string so
+   *  modified-vs-original comparisons stay consistent. */
+  private formatForStorage(raw: any, valueType: string): string {
+    if (raw == null || raw === '') return '';
+    if (valueType === 'datetime' && raw instanceof Date) return raw.toISOString();
+    if (valueType === 'date' && raw instanceof Date) {
+      const y = raw.getFullYear();
+      const m = String(raw.getMonth() + 1).padStart(2, '0');
+      const d = String(raw.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+    if (valueType === 'time' && raw instanceof Date) return raw.toTimeString().slice(0, 8);
+    if (typeof raw === 'number') return String(raw);
+    if (typeof raw === 'boolean') return raw ? 'true' : 'false';
+    return String(raw);
+  }
+
+  // ─── Private helpers ──────────────────────────────────
   private buildRows(): GridRow[] {
     return this.snapshots().map((s, i) => {
       const row: GridRow = {
@@ -771,7 +541,6 @@ export class MetadataHistoryTableComponent {
         __originalValues: {},
         timestamp: s.timestamp,
       };
-
       for (const [key, val] of Object.entries(s.values)) {
         const strVal =
           val === null || val === undefined
@@ -782,14 +551,12 @@ export class MetadataHistoryTableComponent {
         row[key] = strVal;
         row.__originalValues[key] = strVal;
       }
-
       for (const f of this.fields()) {
         if (!(f.metadata_id in s.values)) {
           row[f.metadata_id] = '';
           row.__originalValues[f.metadata_id] = '';
         }
       }
-
       return row;
     });
   }
@@ -817,23 +584,6 @@ export class MetadataHistoryTableComponent {
     }
     if (valueType === 'boolean') {
       return String(raw) === 'true';
-    }
-    if (valueType === 'date') {
-      if (raw instanceof Date) {
-        const y = raw.getFullYear();
-        const m = String(raw.getMonth() + 1).padStart(2, '0');
-        const d = String(raw.getDate()).padStart(2, '0');
-        return `${y}-${m}-${d}`;
-      }
-      return String(raw);
-    }
-    if (valueType === 'datetime') {
-      if (raw instanceof Date) return raw.toISOString();
-      return String(raw);
-    }
-    if (valueType === 'time') {
-      if (raw instanceof Date) return raw.toTimeString().slice(0, 8);
-      return String(raw);
     }
     return typeof raw === 'string' ? raw : String(raw);
   }

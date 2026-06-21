@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import asyncio
 import datetime as _dt
-import uuid
 from datetime import UTC, datetime
 from typing import ClassVar
 
@@ -59,7 +58,6 @@ from tests.factories import (
     make_provider_type,
     make_trade_status_type,
 )
-
 
 # ---------------------------------------------------------------------------
 # Seeding
@@ -255,7 +253,7 @@ async def test_trade_feed_runs_endpoint_surfaces_provenance(
     created — that's the whole point of the refactor's UI payoff.
     """
     instrument_id = seeded["btc_usd"].id
-    portfolio = seeded["portfolio"]
+    seeded["portfolio"]
     pending_status = seeded["pending_status"]
 
     feed_id = deploy_feed(_ProvFeed, db_session)
@@ -339,7 +337,7 @@ async def test_feed_run_trades_endpoint_lists_caused_trades(
     create from evaluations that consulted it?
     """
     instrument_id = seeded["btc_usd"].id
-    portfolio = seeded["portfolio"]
+    seeded["portfolio"]
     pending_status = seeded["pending_status"]
 
     feed_id = deploy_feed(_ProvFeed, db_session)

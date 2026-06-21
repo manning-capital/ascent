@@ -35,12 +35,10 @@ const TAILWIND_ALLOWLIST = new Set([
   'tools/check-no-hardcoded-colors.mjs',
 ]);
 
-// ag-grid's theme API requires raw color values; the metadata-history table
-// is the only remaining ag-grid consumer (kept for inline cell editing —
-// not yet supported in AppDataTable). The theme file lives next to it.
-const PATH_PREFIX_ALLOWLIST = [
-  'src/app/components/shared/metadata-history-ag-grid-theme.ts',
-];
+// Path-prefix allowlist for files that legitimately contain raw colors.
+// Currently empty — ag-grid was the last legitimate consumer of hex literals
+// outside app.config.ts and the metadata-history table has migrated.
+const PATH_PREFIX_ALLOWLIST = [];
 
 const SCAN_DIRS = ['src', 'tools'];
 const SKIP_DIRS = new Set(['node_modules', 'dist', '.angular', '.git']);

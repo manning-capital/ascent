@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+
 import numpy as np
 
 # Constants: These are the parameters that are used to estimate the GBM and OU processes they should never be changed.
